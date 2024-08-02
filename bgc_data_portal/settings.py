@@ -78,7 +78,8 @@ WSGI_APPLICATION = 'bgc_data_portal.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'bgc_database_DUMMY.db',
+        'NAME': '/Users/fragoso/Work/software/bgc_data_portal/bgc_database_DUMMY.db',
+        # 'NAME': BASE_DIR / 'bgc_database_DUMMY.db',
     }
 }
 

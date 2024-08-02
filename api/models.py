@@ -1,83 +1,120 @@
+# This is an auto-generated Django model module.
+# You'll have to do the following manually to clean this up:
+#   * Rearrange models' order
+#   * Make sure each model has one field with primary_key=True
+#   * Make sure each ForeignKey and OneToOneField has `on_delete` set to the desired behavior
+#   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
+# Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
 
-from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, String, ForeignKey, JSON, Boolean, Float
 
-Base = declarative_base()
+class Assembly(models.Model):
+    assembly_id = models.CharField(max_length=255,primary_key=True)
+    accession = models.CharField(max_length=255)
+    bgcdb_accession = models.CharField(max_length=255)
+    study = models.ForeignKey('Study', models.DO_NOTHING, blank=True, null=True)
+    biome = models.ForeignKey('Biome', models.DO_NOTHING, blank=True, null=True)
 
-""" BGC DATABASE EXTRA TABLES """
-class BGC(Base):
-    __tablename__ = 'bgc'
-    bgc_id = Column(Integer, primary_key=True, autoincrement=True)
-    mgyc = Column(Integer, ForeignKey('contig.mgyc'))
-    bgc_detector_id = Column(Integer, ForeignKey('bgc_detector.bgc_detector_id'))
-    bgc_class_id = Column(Integer, ForeignKey('bgc_class.bgc_class_id'))
-    bgc_accession = Column(String, nullable=False)
-    start_position = Column(Integer, nullable=False)
-    end_position = Column(Integer, nullable=False)
-    bgc_metadata = Column(JSON)
+    class Meta:
+        managed = False
+        db_table = 'assembly'
 
-class BGCClass(Base):
-    __tablename__ = 'bgc_class'
-    bgc_class_id = Column(Integer, primary_key=True, autoincrement=True)
-    bgc_class_name = Column(String)
 
-class BGCDetector(Base):
-    __tablename__ = 'bgc_detector'
-    bgc_detector_id = Column(Integer, primary_key=True, autoincrement=True)
-    bgc_detector_name = Column(String)
-    version = Column(String)
+class Bgc(models.Model):
+    bgc_id = models.IntegerField(primary_key=True)
+    mgyc = models.ForeignKey('Contig', models.DO_NOTHING, db_column='mgyc', blank=True, null=True)
+    bgc_detector = models.ForeignKey('BgcDetector', models.DO_NOTHING, blank=True, null=True)
+    bgc_class = models.ForeignKey('BgcClass', models.DO_NOTHING, blank=True, null=True)
+    bgc_accession = models.CharField(max_length=255)
+    start_position = models.IntegerField()
+    end_position = models.IntegerField()
+    bgc_metadata = models.TextField(blank=True, null=True)  # This field type is a guess.
 
-class FilesMD5(Base): # Control of what files have been processed
-    __tablename__ = 'file_md5'
-    file_md5_id = Column(Integer, primary_key=True, autoincrement=True)
-    file_path = Column(String)
-    file_md5 = Column(String)
+    class Meta:
+        managed = False
+        db_table = 'bgc'
 
-""" BGC DATABASE MODIFIED TABLES """
-class Contig(Base):
-    __tablename__ = 'contig'
-    mgyc = Column(String, primary_key=True, nullable=False)
-    assembly_id = Column(String, ForeignKey('assembly.assembly_id'), nullable=False)
-    contig_name = Column(String)
-    sequence_hash = Column(String)
-    contig_length = Column(Integer)
-    true_mgyc = Column(Boolean, unique=False, nullable=True) ## ADDED
-    sequence = Column(String, nullable=False)  ## ADDED
 
-class Assembly(Base):
-    __tablename__ = 'assembly'
-    assembly_id = Column(String, primary_key=True)
-    accession = Column(String, nullable=False)
-    bgcdb_accession = Column(String, nullable=False) ## ADDED
-    study_id = Column(Integer, ForeignKey('study.study_id'))
-    biome_id = Column(Integer, ForeignKey('biome.biome_id'))
-    
-""" PROTEIN DATABASE TABLES """
-class Protein(Base):
-    __tablename__ = 'protein'
-    mgyp = Column(String, primary_key=True, nullable=False)
-    sequence = Column(String)
-    cluster_representative = Column(String)
-    pfam = Column(JSON)
+class BgcClass(models.Model):
+    bgc_class_id = models.IntegerField(primary_key=True)
+    bgc_class_name = models.CharField(max_length=255,blank=True, null=True)
 
-class Study(Base):
-    __tablename__ = 'study'
-    study_id = Column(Integer, primary_key=True, nullable=False)
-    accession = Column(String, nullable=False)
+    class Meta:
+        managed = False
+        db_table = 'bgc_class'
 
-class Biome(Base):
-    __tablename__ = 'biome'
-    biome_id = Column(Integer, primary_key=True, nullable=False)
-    lineage = Column(String)
 
-class Metadata(Base):
-    __tablename__ = 'metadata'
-    mgyp = Column(String,ForeignKey('protein.mgyp'), primary_key=True)
-    mgyc = Column(String, ForeignKey('contig.mgyc'))
-    assembly_id = Column(String, ForeignKey('assembly.assembly_id'))
-    start_position = Column(Integer)
-    end_position = Column(Integer)
-    strand = Column(Integer)
-  
-# Create your models here.
+class BgcDetector(models.Model):
+    bgc_detector_id = models.IntegerField(primary_key=True)
+    bgc_detector_name = models.CharField(max_length=255,blank=True, null=True)
+    version = models.CharField(max_length=255,blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'bgc_detector'
+
+
+class Biome(models.Model):
+    biome_id = models.IntegerField(primary_key=True)
+    lineage = models.CharField(max_length=255,blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'biome'
+
+
+class Contig(models.Model):
+    mgyc = models.CharField(max_length=255,primary_key=True)
+    assembly = models.ForeignKey(Assembly, models.DO_NOTHING)
+    contig_name = models.CharField(max_length=255,blank=True, null=True)
+    sequence_hash = models.CharField(max_length=255,blank=True, null=True)
+    contig_length = models.IntegerField(blank=True, null=True)
+    true_mgyc = models.BooleanField(blank=True, null=True)
+    sequence = models.TextField()
+
+    class Meta:
+        managed = False
+        db_table = 'contig'
+
+
+class FileMd5(models.Model):
+    file_md5_id = models.IntegerField(primary_key=True)
+    file_path = models.CharField(max_length=255,blank=True, null=True)
+    file_md5 = models.CharField(max_length=255,blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'file_md5'
+
+
+class Metadata(models.Model):
+    mgyp = models.OneToOneField('Protein', models.DO_NOTHING, db_column='mgyp',primary_key=True)
+    mgyc = models.ForeignKey(Contig, models.DO_NOTHING, db_column='mgyc', blank=True, null=True)
+    assembly = models.ForeignKey(Assembly, models.DO_NOTHING, blank=True, null=True)
+    start_position = models.IntegerField(blank=True, null=True)
+    end_position = models.IntegerField(blank=True, null=True)
+    strand = models.IntegerField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'metadata'
+
+
+class Protein(models.Model):
+    mgyp = models.CharField(max_length=255,primary_key=True)
+    sequence = models.CharField(max_length=255,blank=True, null=True)
+    cluster_representative = models.CharField(max_length=255,blank=True, null=True)
+    pfam = models.TextField(blank=True, null=True)  # This field type is a guess.
+
+    class Meta:
+        managed = False
+        db_table = 'protein'
+
+
+class Study(models.Model):
+    study_id = models.IntegerField(primary_key=True)
+    accession = models.CharField(max_length=255)
+
+    class Meta:
+        managed = False
+        db_table = 'study'
