@@ -1,7 +1,10 @@
 from ninja import Schema
-from typing import Optional, List
+from typing import Optional, List, Set
+from enum import Enum
+from .models import BgcDetector
 
-class BGCOutputSchema(Schema):
+class BgcSearchInputSchema(Schema):
+    bgc_id: int
     bgc_accession: str
     assembly_accession: str
     contig_mgyc: str
@@ -10,13 +13,31 @@ class BGCOutputSchema(Schema):
     bgc_detector_name: str
     bgc_class_name: str
 
-class BGCSearchSchema(Schema):
-    bgc_detector_name: Optional[str] = None
-    bgc_class_name: Optional[str] = None
-    bgc_accession: Optional[str] = None
-    assembly_accession: Optional[str] = None
-    contig_mgyc: Optional[str] = None
-    bgc_partial: Optional[int] = None
-    biome_lineage: Optional[str] = None
-    keyword: Optional[str] = None
-    protein_pfam: Optional[str] = None
+class BgcSearchOutputSchema(Schema):
+    bgc_ids: List[int]
+    bgc_accessions: List[str]
+    assembly_accession: str
+    contig_mgyc: str
+    start_position: int
+    end_position: int
+    bgc_detector_names: List[str]
+    bgc_class_names: List[str]
+
+class BgcSearchUserOutputSchema(Schema):
+    bgc_accessions: List[str]
+    assembly_accession: str
+    contig_mgyc: str
+    start_position: int
+    end_position: int
+    bgc_detector_names: List[str]
+    bgc_class_names: List[str]
+
+
+class PfamStrategy(Enum):
+    union: str = 'union'
+    intersection: str = 'intersection'
+    
+class Aggregate(Enum):
+    single: str = 'single'
+    union: str = 'union'
+    intersection: str = 'intersection'

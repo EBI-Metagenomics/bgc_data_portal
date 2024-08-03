@@ -8,3 +8,7 @@ python manage.py inspectdb > models.py
 - Add primary_keys
 - python manage.py makemigrations
 - python manage.py migrate
+
+
+Question to conclave
+- How to have MultiChoiceCheckbox for API

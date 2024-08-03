@@ -45,6 +45,11 @@ class BgcClass(models.Model):
 
 
 class BgcDetector(models.Model):
+    
+    ANTISMASH = "antiSMASH"
+    GECCO = "GECCO"
+    SANNTIS = "SanntiS"
+    
     bgc_detector_id = models.IntegerField(primary_key=True)
     bgc_detector_name = models.CharField(max_length=255,blank=True, null=True)
     version = models.CharField(max_length=255,blank=True, null=True)
