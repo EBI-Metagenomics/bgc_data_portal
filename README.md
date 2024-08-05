@@ -12,3 +12,8 @@ python manage.py inspectdb > models.py
 
 Question to conclave
 - How to have MultiChoiceCheckbox for API
+
+
+
+requiements:
+Biopython

@@ -41,3 +41,8 @@ class Aggregate(Enum):
     single: str = 'single'
     union: str = 'union'
     intersection: str = 'intersection'
+    
+class OutputType(Enum):
+    genbank: str = 'gbk'
+    json: str = 'json'
+    fasta: str = 'fasta'

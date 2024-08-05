@@ -6,10 +6,13 @@ from typing import List, Optional,Union
 from enum import Enum
 from django.db.models import Q
 from ninja import Query
-from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein
+from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein, Metadata
 from .schemas import Aggregate,PfamStrategy
-from .schemas import BgcSearchOutputSchema, BgcSearchUserOutputSchema, BgcSearchInputSchema
+from .schemas import BgcSearchOutputSchema, BgcSearchUserOutputSchema, BgcSearchInputSchema, OutputType
+from .generate_outputs import WriteRegion#, generate_json, generate_fasta
 from .aggregate_bgcs import BgcAggregator
+from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 
 api = NinjaAPI()
 
@@ -25,9 +28,9 @@ def custom_error_handler(request, exc):
 _detectors = ['antiSMASH','GECCO','SanntiS']
 _partials = ['complete','single_truncated','double_truncated']
 
-@api.get("/bgc/", response=List[BgcSearchUserOutputSchema])
+@api.get("/bgcs/", response=List[BgcSearchUserOutputSchema])
 @paginate
-def search_bgc(request, 
+def search_bgcs(request, 
               antismash: bool = True, 
               gecco: bool = True, 
               sanntis: bool = True, 
@@ -43,7 +46,7 @@ def search_bgc(request,
               protein_pfam: Optional[List[str]] = Query(None), # TODO
               pfam_strategy: PfamStrategy = None, # TODO
               aggragate_strategy: Aggregate = Aggregate.single,
-              ):
+    ):
 
     qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
 
@@ -115,4 +118,40 @@ def search_bgc(request,
         )
         for aggregated_bgc in aggregated_bgcs
     ]
+
+
+@api.get("/contig_region/")
+def dowload_bgcs(request, 
+              mgyc: str = None, 
+              start_position: int = None, 
+              end_position: int = None,
+              output_type: OutputType = OutputType.fasta,
+    ):
+
+    # Query the database to get the contig and associated assembly
+    contig = get_object_or_404(Contig, pk=mgyc)
+    assembly_accession = contig.assembly.accession
+
+    # Retrieve BGCs that are within or partially overlap with the specified region
+    bgcs = Bgc.objects.filter(
+        mgyc=mgyc,
+        start_position__lte=end_position,
+        end_position__gte=start_position
+    )
+
+    # Retrieve proteins within or partially overlapping the specified region
+    protein_metadata = Metadata.objects.filter(
+        mgyc=mgyc,
+        start_position__lte=end_position,
+        end_position__gte=start_position
+    ).select_related('mgyp')
+
+    # Generate GenBank file
+    write_output_function = getattr(WriteRegion,output_type.value)
+    output_content = write_output_function(contig, start_position, end_position, assembly_accession, bgcs, protein_metadata)
+
+    # Return the GenBank file as a response
+    response = HttpResponse(output_content, content_type=f'contig_region/{output_type}')
+    response['Content-Disposition'] = f'attachment; filename="{mgyc}_{start_position}_{end_position}.{output_type.value}"'
+    return response
 
