@@ -1,6 +1,8 @@
 
 from functools import reduce
 import operator
+
+from api.schemas import PfamStrategy
 from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein, Metadata
 from typing import List, Optional,Union
 from django.db.models import Q,F
@@ -70,55 +72,57 @@ def complex_bgc_search(
               _double_truncated: bool = True, 
               _biome_lineage: Optional[str] = None, 
             #   _keyword: Optional[str] = None, 
-              _protein_pfam: str = None, # TODO
+              _protein_pfam: list = None, # TODO
               _pfam_strategy: Optional[str] = None # TODO
               ):
 
-    
-    qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
+    try: 
+        qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
 
-    if _detectors:
-        qs = qs.filter(Q(bgc_detector__bgc_detector_name__in=_detectors))
-    
-    if _bgc_class_name:
-        qs = qs.filter(bgc_class__bgc_class_name__icontains=_bgc_class_name)
-    
-    if _bgc_accession:
-        qs = qs.filter(bgc_accession__icontains=_bgc_accession)
-    
-    if _assembly_accession:
-        qs = qs.filter(mgyc__assembly__accession__icontains=_assembly_accession)
-    
-    if _contig_mgyc:
-        qs = qs.filter(mgyc__mgyc__icontains=_contig_mgyc)
-    
-    if _biome_lineage:
-        qs = qs.filter(mgyc__assembly__biome__lineage__icontains=_biome_lineage)
+        if _detectors:
+            qs = qs.filter(Q(bgc_detector__bgc_detector_name__in=_detectors))
+        
+        if _bgc_class_name:
+            qs = qs.filter(bgc_class__bgc_class_name__icontains=_bgc_class_name)
+        
+        if _bgc_accession:
+            qs = qs.filter(bgc_accession__icontains=_bgc_accession)
+        
+        if _assembly_accession:
+            qs = qs.filter(mgyc__assembly__accession__icontains=_assembly_accession)
+        
+        if _contig_mgyc:
+            qs = qs.filter(mgyc__mgyc__icontains=_contig_mgyc)
+        
+        if _biome_lineage:
+            qs = qs.filter(mgyc__assembly__biome__lineage__icontains=_biome_lineage)
 
-    # TODO
-    """
-    partials = [name for name,value in zip(_partials,[complete,single_truncated,double_truncated]) if value!=False]    
-    if partials:
-        qs = qs.filter(Q(partial__partial_name__in=partials))
-    """
+        # TODO
+        """
+        partials = [name for name,value in zip(_partials,[complete,single_truncated,double_truncated]) if value!=False]    
+        if partials:
+            qs = qs.filter(Q(partial__partial_name__in=partials))
+        """
 
-    
-    if _protein_pfam:
-        # Define the Pfam queries
-        pfam_queries = [
-            Q(
-                mgyc__metadata__protein__pfam__icontains=pfam,
-                mgyc__metadata__start_position__lte=F('end_position'),  # Metadata start is before or at BGC end
-                mgyc__metadata__end_position__gte=F('start_position')   # Metadata end is after or at BGC start
-            )
-            for pfam in _protein_pfam
-        ]
+        
+        if _protein_pfam:
+            # Define the Pfam queries
+            pfam_queries = [
+                Q(
+                    mgyc__metadata__protein__pfam__icontains=pfam,
+                    mgyc__metadata__start_position__lte=F('end_position'),  # Metadata start is before or at BGC end
+                    mgyc__metadata__end_position__gte=F('start_position')   # Metadata end is after or at BGC start
+                )
+                for pfam in _protein_pfam
+            ]
 
-        # Combine the queries using the specified strategy
-        if _pfam_strategy == 'AND':
-            qs = qs.filter(reduce(operator.and_, pfam_queries))
-        elif _pfam_strategy == 'OR':
-            qs = qs.filter(reduce(operator.or_, pfam_queries))
+            # Combine the queries using the specified strategy
+            if _pfam_strategy == PfamStrategy.intersection:
+                qs = qs.filter(reduce(operator.and_, pfam_queries))
+            elif _pfam_strategy == PfamStrategy.union:
+                qs = qs.filter(reduce(operator.or_, pfam_queries))
+    except Exception as e:
+        print(e)
 
     return qs
 

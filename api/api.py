@@ -15,8 +15,14 @@ from .generate_outputs import WriteRegion#, generate_json, generate_fasta
 from .aggregate_bgcs import BgcAggregator
 from django.http import Http404, HttpResponse
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
+from bgc_data_portal import __version__,__name__,__description__
 
-api = NinjaAPI()
+
+api = NinjaAPI(
+    title=__name__,
+    description=__description__,
+    version=__version__
+)
 
 @api.exception_handler(HttpError)
 def custom_error_handler(request, exc):
@@ -29,10 +35,13 @@ def custom_error_handler(request, exc):
 _partials = ['complete','single_truncated','double_truncated']
 _detectors = ['antiSMASH','GECCO','SanntiS']
 
-def perform_keyword_search(keyword: str):
+def perform_keyword_search(keyword: Optional[str] = None):
     """Core logic to search BGCs by keyword"""
-    matching_bgcs = search_keyword_in_models(keyword)
-    bgcs = Bgc.objects.filter(bgc_id__in=matching_bgcs)
+    if keyword==None:
+        bgcs = Bgc.objects.all()
+    else:
+        matching_bgcs = search_keyword_in_models(keyword)
+        bgcs = Bgc.objects.filter(bgc_id__in=matching_bgcs)
 
     return [
         BgcSearchUserOutputSchema(
@@ -49,7 +58,7 @@ def perform_keyword_search(keyword: str):
 
 def perform_complex_search(_params):
     """Core logic for complex BGC searches"""
-    detectors = [name for name, value in zip(_detectors, [_params.antismash, _params.gecco, _params.sanntis]) if value != False]
+    detectors = [name for name, value in zip(_detectors, [_params.antismash, _params.gecco, _params.sanntis]) if value]
     _pfams = re.split("[,\s]",_params.protein_pfam)
     bgcs = complex_bgc_search(
         detectors,
@@ -61,7 +70,7 @@ def perform_complex_search(_params):
         _params.single_truncated,
         _params.double_truncated,
         _params.biome_lineage,
-        _params.protein_pfam,
+        _pfams,
         _params.pfam_strategy.value,
     )
 
@@ -78,9 +87,10 @@ def perform_complex_search(_params):
         )
         for bgc in bgcs
     ]
+    
 
     # Aggregate strategy function
-    aggregate_function = getattr(BgcAggregator, _params.ggragate_strategy)
+    aggregate_function = getattr(BgcAggregator, _params.aggragate_strategy.value)
     aggregated_bgcs = aggregate_function(individual_bgcs, detectors)
 
     return [
@@ -106,10 +116,10 @@ def search_by_keyword(request, keyword: str):
 @api.get("/bgcs/", response=List[BgcSearchUserOutputSchema])
 @paginate
 def search_bgcs(request, params: BgcSearchCallSchema = Query(...)):
+    # print(params)
 # def search_bgcs(request, **kwargs):
     return perform_complex_search(params)
     # return perform_complex_search(**kwargs)
-
 
 
 @api.get("/contig_region/")

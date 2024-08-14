@@ -106,7 +106,6 @@ class ContigRegionViewer:
                 'legend_text': None,
                 'url': protein_url,
             })
-
             for pfam in json.loads(protein.pfam):
                 pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
                 pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
@@ -114,6 +113,7 @@ class ContigRegionViewer:
 
 
                 go_slim = pfamToGoSlim.get(pfam_id, ['Pfam annotation'])[0]
+                print(go_slim,pfam_id)
                 features.append({
                     'start': pfam_start,
                     'end': pfam_end,
@@ -165,7 +165,7 @@ class ContigRegionViewer:
                         show_legend: bool = True, legend_text_column: str = "legend_text", 
                         shape_height: float = 0.002, legend_rank_column: str = 'legend_rank', 
                         legend_trace_name_column: str = 'legend_trace_name', url_column: str = 'url',
-                        background_color: str = "white", method_track_offset: float = 0.00001, 
+                        background_color: str = "white", method_track_offset: float = 0.0005, 
                         **layout_kwargs):
         """
         Creates a plot for the biosynthetic gene cluster (BGC) features.
@@ -244,7 +244,7 @@ class ContigRegionViewer:
                 x=[row['start'], row['end']],
                 y=[method_positions[i], method_positions[i]],
                 mode="lines",
-                line=dict(color=row[color_column], width=4.),
+                line=dict(color=row[color_column], width=9.),
                 hoverinfo="text",
                 text=f"{row[names]}: {row['start']} - {row['end']}",
                 showlegend=row[legend_trace_name_column] not in added_legends,

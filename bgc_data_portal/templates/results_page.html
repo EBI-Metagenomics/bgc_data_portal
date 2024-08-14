@@ -82,8 +82,8 @@
       <div class="vf-form__item">
         <label for="pfam_strategy" class="vf-form__label">Pfam strategy</label>
         <select id="pfam_strategy" name="pfam_strategy" class="vf-form__select">
-            <option value="AND" {% if request.GET.pfam_strategy == "AND" %}selected{% endif %}>AND</option>
-            <option value="OR" {% if request.GET.pfam_strategy == "OR" %}selected{% endif %}>OR</option>
+            <option value="intersection" {% if request.GET.pfam_strategy == "intersection" %}selected{% endif %}>AND</option>
+            <option value="union" {% if request.GET.pfam_strategy == "union" %}selected{% endif %}>OR</option>
         </select>
       </div>
 

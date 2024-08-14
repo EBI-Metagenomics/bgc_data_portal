@@ -23,7 +23,7 @@ class BgcSearchCallSchema(Schema):
     gecco: Optional[bool] = True
     sanntis: Optional[bool] = True
     bgc_accession: Optional[str] = None
-    bgc_class_name: Optional[int] = None
+    bgc_class_name: Optional[str] = None
     assembly_accession: Optional[str] = None
     biome_lineage: Optional[str] = None
     contig_mgyc: Optional[str] = None
@@ -34,7 +34,7 @@ class BgcSearchCallSchema(Schema):
     double_truncated: Optional[bool] = True
     protein_pfam: Optional[str] = None
     pfam_strategy: Optional[PfamStrategy] = PfamStrategy.union
-    aggregate_strategy: Aggregate = Aggregate.single
+    aggragate_strategy: Aggregate = Aggregate.single
     
 class BgcSearchInputSchema(Schema):
     bgc_id: Optional[int] = None
