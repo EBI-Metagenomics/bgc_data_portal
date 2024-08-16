@@ -6,23 +6,54 @@
     <title>{% block title %}Biosynthetic Gene Cluster Portal{% endblock %}</title>
     <!-- Visual Framework CSS from CDN -->
     <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&display=swap" rel="stylesheet"/>
     {% load static %}
     <!-- Your custom CSS, if any -->
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
-<body>
+<body class="vf-body | vf-stack vf-stack--200">
     <header class="vf-header">
         <div class="vf-header__content">
-            <h1 class="vf-logo"><a href="{% url 'landing_page' %}">Biosynthetic Gene Cluster Portal</a></h1>
+            <h1 class="vf-logo">
+                <a href="{% url 'landing_page' %}">Biosynthetic Gene Cluster Portal</a>
+            </h1>
         </div>
     </header>
+
+    <!-- Hero Section (if needed) -->
+    {% block hero %}
+    <section class="vf-hero vf-hero--1200 | vf-u-fullbleed" style="--vf-hero--bg-image: url('https://via.placeholder.com/1200x600.png')">
+        <div class="vf-hero__content | vf-box | vf-stack vf-stack--400">
+            <img class="vf-hero__image" src="https://via.placeholder.com/150x50.png" alt="Placeholder Logo"/>
+            <h2 class="vf-hero__heading">Biosynthetic Gene Cluster Portal</h2>
+            <p class="vf-hero__text">Explore and analyse biosynthetic gene clusters.</p>
+            <form action="{% url 'results_page' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
+                <div class="vf-sidebar__inner">
+                    <div class="vf-form__item">
+                        <label class="vf-form__label vf-u-sr-only | vf-search__label" for="search-keyword">Search by Keyword</label>
+                        <input type="search" placeholder="Search data and docs" id="search-keyword" name="keyword" class="vf-form__input"/>
+                    </div>
+                    <button type="submit" class="vf-button vf-button--primary">Search</button>
+                </div>
+            </form>
+        </div>
+    </section>
+    {% endblock hero %}
 
     <main class="vf-main">
         {% block content %}{% endblock %}
     </main>
 
     <footer class="vf-footer">
-        <p>© 2024 Biosynthetic Gene Cluster Portal</p>
+        <div class="vf-footer__inner">
+            <p class="vf-footer__notice">
+                <a href="https://doi.org/10.0000/zenodo.000000"><img src="https://zenodo.org/badge/DOI/10.0000/zenodo.000000.svg" alt="DOI"/></a>
+            </p>
+            <p class="vf-footer__notice">© 2024 Biosynthetic Gene Cluster Portal</p>
+        </div>
     </footer>
 
     <!-- Visual Framework JS from CDN -->

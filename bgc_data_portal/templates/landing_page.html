@@ -1,31 +1,22 @@
 {% extends 'base.html' %}
-{% block title %}Home{% endblock %}
 
 {% block content %}
-<section class="vf-intro">
-  <div class="vf-grid">
-    <div class="vf-grid__col--span-12">
-      <h2 class="vf-intro__heading">Welcome to the Biosynthetic Gene Cluster Portal</h2>
-      <p class="vf-text">Search and explore the extensive database of biosynthetic gene clusters (BGCs).</p>
+<section class="vf-grid vf-grid__col-3 | vf-card-container | vf-u-fullbleed vf-u-background-color-ui--grey--light">
+    <div class="vf-section-header vf-grid__col--span-3">
+        <h2 class="vf-section-header__heading">BGC Data Resources</h2>
     </div>
-  </div>
-</section>
-
-<section class="vf-content vf-content--primary">
-  <div class="vf-grid">
-    <div class="vf-grid__col--span-12">
-      <form action="{% url 'results_page' %}" method="get">
-        <label for="search-keyword" class="vf-form__label">Search by Keyword</label>
-        <input type="text" id="search-keyword" name="keyword" class="vf-form__input" placeholder="Enter a keyword...">
-        <button type="submit" class="vf-button vf-button--primary">Search</button>
-      </form>
-
-      <form action="{% url 'results_page' %}" method="get">
-        <h3>Complex Query</h3>
-        <!-- Add input fields for complex query parameters similar to the API fields -->
-        <button type="submit" class="vf-button vf-button--secondary">Search BGCs</button>
-      </form>
+    <div class="vf-grid__col--span-2">
+        <div class="vf-grid vf-grid__col-2">
+            <article class="vf-card vf-card--brand vf-card--bordered">
+                <div class="vf-card__content | vf-stack vf-stack--400">
+                    <h3 class="vf-card__heading">
+                        <a class="vf-card__link" href="{% url 'results_page' %}">Browse Samples</a>
+                    </h3>
+                    <p class="vf-card__text">Explore our extensive collection of biosynthetic gene cluster samples.</p>
+                </div>
+            </article>
+            <!-- Repeat similar blocks for other resources -->
+        </div>
     </div>
-  </div>
 </section>
-{% endblock %}
+{% endblock content %}

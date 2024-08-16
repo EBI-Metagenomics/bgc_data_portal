@@ -224,7 +224,6 @@ class ContigRegionViewer:
                 legendrank=row[legend_rank_column],
                 customdata=(row[url_column],),
                 # url=row[url_column]
-                customdata=(row[url_column],)
             )
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
@@ -255,7 +254,6 @@ class ContigRegionViewer:
                 legendgrouptitle_text=row[legend_text_column],
                 legendrank=row[legend_rank_column],
                 customdata=(row[url_column],),
-                # customdata=(row[url_column],),
             )
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
