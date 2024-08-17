@@ -106,6 +106,7 @@ class ContigRegionViewer:
                 'legend_text': None,
                 'url': protein_url,
             })
+            print('PFAM',meta.assembly)
             pfam_json = json.loads(protein.pfam)
             if type(pfam_json)==list:
                 for pfam in pfam_json:

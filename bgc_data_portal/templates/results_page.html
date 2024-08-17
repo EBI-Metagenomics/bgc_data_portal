@@ -9,161 +9,226 @@
     </div>
   </div>
 </section>
+<style>
+  /* Tooltip container */
+  .tooltip-container {
+    position: relative;
+    display: inline-block;
+  }
+/* Superscript encircled "?" icon */
+.tooltip-container .tooltip-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 50%;
+  background-color: #007cbb; /* Customize color as needed */
+  color: #fff;
+  font-weight: bold;
+  font-size: 10px;
+  cursor: pointer;
+  vertical-align: super; /* Align as superscript */
+  margin-left: 5px; /* Space between label and icon */
+}
 
-<!-- Search Section -->
-<section class="vf-content vf-stack vf-stack--400">
-  <div class="vf-grid vf-grid__col--span-12">
+/* Tooltip text */
+.tooltip-container .tooltip-text {
+  visibility: hidden;
+  width: 200px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 5px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 150%; /* Position above the icon */
+  left: 50%;
+  margin-left: -100px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
 
-    <!-- Keyword Search -->
-    <div class="vf-grid__col--span-12">
-      <h4 class="vf-section-header__heading">Keyword Search</h4>
-      <form action="{% url 'results_page' %}" method="get" class="vf-stack vf-stack--400">
-        <div class="vf-grid vf-grid__col--span-12">
-          <label for="search-keyword" class="vf-form__label vf-grid__col--span-3">Enter Keyword</label>
-          <div class="vf-grid__col--span-6">
-            <input type="text" id="search-keyword" name="keyword" class="vf-form__input" placeholder="Enter a keyword..." value="{{ request.GET.keyword }}">
-          </div>
-          <div class="vf-grid__col--span-3">
-            <button type="submit" class="vf-button vf-button--primary">Search</button>
-          </div>
-        </div>
-      </form>
-    </div>
+/* Tooltip arrow */
+.tooltip-container .tooltip-text::after {
+  content: "";
+  position: absolute;
+  top: 100%; /* At the bottom of the tooltip */
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #555 transparent transparent transparent;
+}
 
-    <!-- Complex Search -->
-    <div class="vf-grid__col--span-12 vf-stack vf-stack--400">
-      <h4 class="vf-section-header__heading">Complex Search</h4>
-      <form action="{% url 'results_page' %}" method="get" class="vf-stack vf-stack--400">
+/* Show the tooltip text when hovering over the tooltip container */
+.tooltip-container:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+</style>
 
+<div class="vf-grid">
+  <!-- Search Sidebar -->
+  <aside class="vf-grid__col--span-3">
+    <form action="{% url 'results_page' %}" method="get" class="vf-form">
+      <h3>Advanced Search</h3>
+      
+      
+<!-- BGC Class Name -->
+<div class="vf-form__item">
+  <label for="bgc_class_name" class="vf-form__label">BGC Class Name
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">The BGC Class Name is used to classify the biosynthetic gene clusters based on their type.</span>
+    </span>
+  </label>
+  <input type="text" id="bgc_class_name" name="bgc_class_name" class="vf-form__input" value="{{ request.GET.bgc_class_name }}">
+</div>
 
-        <!-- Group 1: BGC Class Name, BGC Accession, Contig MGYC, Assembly Accession, Biome -->
-        <div class="vf-grid vf-grid__col--span-12" style="border: 1px solid #e1e1e1; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
-          <div class="vf-grid">
-            <div class="vf-grid__col--span-3">
-              <label for="bgc_class_name" class="vf-form__label">BGC Class Name</label>
-              <input type="text" id="bgc_class_name" name="bgc_class_name" class="vf-form__input" value="{{ request.GET.bgc_class_name }}">
-            </div>
-            <div class="vf-grid__col--span-3">
-              <label for="mgyb" class="vf-form__label">BGC Accession</label>
-              <input type="text" id="mgyb" name="mgyb" class="vf-form__input" value="{{ request.GET.mgyb }}">
-            </div>
-            <div class="vf-grid__col--span-3">
-              <label for="assembly_accession" class="vf-form__label">Assembly Accession</label>
-              <input type="text" id="assembly_accession" name="assembly_accession" class="vf-form__input" value="{{ request.GET.assembly_accession }}">
-            </div>
-            <div class="vf-grid__col--span-3">
-              <label for="contig_mgyc" class="vf-form__label">Contig MGYC</label>
-              <input type="text" id="contig_mgyc" name="contig_mgyc" class="vf-form__input" value="{{ request.GET.contig_mgyc }}">
-            </div>
-            <div class="vf-grid__col--span-3">
-              <label for="biome_lineage" class="vf-form__label">Biome</label>
-              <input type="text" id="biome_lineage" name="biome_lineage" class="vf-form__input" value="{{ request.GET.biome_lineage }}">
-            </div>
-            <div class="vf-grid__col--span-4">
-              <span class="vf-icon vf-icon__tooltip" data-vf-js-tooltip="true" aria-describedby="group1-tooltip">?</span>
-              <div id="group1-tooltip" role="tooltip" class="vf-tooltip">
-                This group allows you to search by BGC Class Name, BGC Accession, Assembly Accession, Contig MGYC, and Biome.
-              </div>
-            </div>
-          </div>
-        </div>
+<!-- BGC Accession -->
+<div class="vf-form__item">
+  <label for="mgyb" class="vf-form__label">BGC Accession
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">The BGC Accession is the unique identifier assigned to a biosynthetic gene cluster.</span>
+    </span>
+  </label>
+  <input type="text" id="mgyb" name="mgyb" class="vf-form__input" value="{{ request.GET.mgyb }}">
+</div>
 
-   <!-- Group 2: Contig Edges and BGC Detectors -->
-   <div class="vf-grid__col--span-12" style="border: 1px solid #e1e1e1; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
-    <div class="vf-grid">
-      <div class="vf-grid__col--span-6">
-        <label for="Edges" class="vf-form__label">Contig edges</label>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true" 
-                 {% if request.GET.complete == 'true' or request.GET.complete is None %}checked{% endif %}>
-          <label for="complete" class="vf-checkbox__label">Complete</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
-                 {% if request.GET.single_truncated == 'true' or request.GET.single_truncated is None %}checked{% endif %}>
-          <label for="single_truncated" class="vf-checkbox__label">Single</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true"
-                 {% if request.GET.double_truncated == 'true' or request.GET.double_truncated is None %}checked{% endif %}>
-          <label for="double_truncated" class="vf-checkbox__label">Double</label>
-        </div>
-      </div>
-      <div class="vf-grid__col--span-6">
-        <label for="detectors" class="vf-form__label">BGC Detectors</label>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true"
-                 {% if request.GET.antismash == 'true' or request.GET.antismash is None %}checked{% endif %}>
-          <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true"
-                 {% if request.GET.gecco == 'true' or request.GET.gecco is None %}checked{% endif %}>
-          <label for="gecco" class="vf-checkbox__label">GECCO</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true"
-                 {% if request.GET.sanntis == 'true' or request.GET.sanntis is None %}checked{% endif %}>
-          <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
-        </div>
-      </div>
-      <div class="vf-grid__col--span-12">
-        <span class="vf-icon vf-icon__tooltip" data-vf-js-tooltip="true" aria-describedby="group2-tooltip">?</span>
-        <div id="group2-tooltip" role="tooltip" class="vf-tooltip">
-          This group allows you to refine your search by contig edges and BGC detectors.
-        </div>
-      </div>
-    </div>
+<!-- Assembly Accession -->
+<div class="vf-form__item">
+  <label for="assembly_accession" class="vf-form__label">Assembly Accession
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">The Assembly Accession is the identifier for the assembled sequence from which the BGC was predicted.</span>
+    </span>
+  </label>
+  <input type="text" id="assembly_accession" name="assembly_accession" class="vf-form__input" value="{{ request.GET.assembly_accession }}">
+</div>
+
+<!-- Contig MGYC -->
+<div class="vf-form__item">
+  <label for="contig_mgyc" class="vf-form__label">Contig MGYC
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">The Contig MGYC is the identifier for the contig that contains the BGC.</span>
+    </span>
+  </label>
+  <input type="text" id="contig_mgyc" name="contig_mgyc" class="vf-form__input" value="{{ request.GET.contig_mgyc }}">
+</div>
+
+<!-- Biome lineage -->
+<div class="vf-form__item">
+  <label for="biome_lineage" class="vf-form__label">Biome
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">The Biome refers to the ecological community where the BGC was found.</span>
+    </span>
+  </label>
+  <input type="text" id="biome_lineage" name="biome_lineage" class="vf-form__input" value="{{ request.GET.biome_lineage }}">
+</div>
+
+<!-- Truncation -->
+<div class="vf-form__item">
+  <label for="Edges" class="vf-form__label">Contig edges
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">Contig edges indicate whether the BGC is complete, single-truncated, or double-truncated.</span>
+    </span>
+  </label>
+  <div class="vf-checkbox">
+    <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true"
+           {% if request.GET.complete == 'true' or request.GET.complete is None %}checked{% endif %}>
+    <label for="complete" class="vf-checkbox__label">Complete</label>
   </div>
+  <div class="vf-checkbox">
+    <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
+           {% if request.GET.single_truncated == 'true' or request.GET.single_truncated is None %}checked{% endif %}>
+    <label for="single_truncated" class="vf-checkbox__label">Single</label>
+  </div>
+  <div class="vf-checkbox">
+    <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true"
+           {% if request.GET.double_truncated == 'true' or request.GET.double_truncated is None %}checked{% endif %}>
+    <label for="double_truncated" class="vf-checkbox__label">Double</label>
+  </div>
+</div>
 
-    <!-- Group 3: Pfam and Pfam Strategy -->
-    <div class="vf-grid__col--span-12" style="border: 1px solid #e1e1e1; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
-      <div class="vf-grid">
-        <div class="vf-grid__col--span-6">
-          <label for="protein_pfam" class="vf-form__label">Pfam</label>
-          <input type="text" id="protein_pfam" name="protein_pfam" class="vf-form__input" value="{{ request.GET.protein_pfam }}">
-        </div>
-        <div class="vf-grid__col--span-6">
-          <label for="pfam_strategy" class="vf-form__label">Pfam strategy</label>
-          <select id="pfam_strategy" name="pfam_strategy" class="vf-form__select">
-            <option value="intersection" {% if request.GET.pfam_strategy == "intersection" %}selected{% endif %}>AND</option>
-            <option value="union" {% if request.GET.pfam_strategy == "union" %}selected{% endif %}>OR</option>
-          </select>
-        </div>
-        <div class="vf-grid__col--span-12">
-          <span class="vf-icon vf-icon__tooltip" data-vf-js-tooltip="true" aria-describedby="group3-tooltip">?</span>
-          <div id="group3-tooltip" role="tooltip" class="vf-tooltip">
-            This group allows you to search by Pfam and select the strategy (AND/OR) to combine Pfam results.
-          </div>
-        </div>
-      </div>
-    </div>
+<!-- Pfam -->
+<div class="vf-form__item">
+  <label for="protein_pfam" class="vf-form__label">Pfam
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).</span>
+    </span>
+  </label>
+  <input type="text" id="protein_pfam" name="protein_pfam" class="vf-form__input" value="{{ request.GET.protein_pfam }}">
+</div>
 
-    <!-- Group 4: Aggregate Strategy -->
-    <div class="vf-grid__col--span-12" style="border: 1px solid #e1e1e1; padding: 10px; border-radius: 4px;">
-      <div class="vf-grid">
-        <div class="vf-grid__col--span-6">
-          <label for="aggragate_strategy" class="vf-form__label">Aggregate strategy</label>
-          <select id="aggragate_strategy" name="aggragate_strategy" class="vf-form__select">
-            <option value="single" {% if request.GET.aggragate_strategy == "single" %}selected{% endif %}>Single</option>
-            <option value="union" {% if request.GET.aggragate_strategy == "union" %}selected{% endif %}>Union</option>
-            <option value="intersection" {% if request.GET.aggragate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
-          </select>
-        </div>
-        <div class="vf-grid__col--span-12">
-          <span class="vf-icon vf-icon__tooltip" data-vf-js-tooltip="true" aria-describedby="group4-tooltip">?</span>
-          <div id="group4-tooltip" role="tooltip" class="vf-tooltip">
-            This group allows you to choose the aggregate strategy for combining results.
-          </div>
-        </div>
+<!-- Pfam Strategy -->
+<div class="vf-form__item">
+  <label for="pfam_strategy" class="vf-form__label">Pfam strategy
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">Choose "AND" to include BGCs that match all Pfams, or "OR" to include BGCs that match any Pfam.</span>
+    </span>
+  </label>
+  <select id="pfam_strategy" name="pfam_strategy" class="vf-form__select">
+    <option value="intersection" {% if request.GET.pfam_strategy == "intersection" %}selected{% endif %}>AND</option>
+    <option value="union" {% if request.GET.pfam_strategy == "union" %}selected{% endif %}>OR</option>
+  </select>
+</div>
+
+<!-- Detectors -->
+<div class="vf-form__item">
+  <label for="detectors" class="vf-form__label">BGC Detectors
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">Select the detectors to filter BGCs by the tool used to identify them.</span>
+    </span>
+  </label>
+  <div class="vf-checkbox">
+    <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true"
+           {% if request.GET.antismash == 'true' or request.GET.antismash is None %}checked{% endif %}>
+    <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
+  </div>
+  <div class="vf-checkbox">
+    <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true"
+           {% if request.GET.gecco == 'true' or request.GET.gecco is None %}checked{% endif %}>
+    <label for="gecco" class="vf-checkbox__label">GECCO</label>
+  </div>
+  <div class="vf-checkbox">
+    <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true"
+           {% if request.GET.sanntis == 'true' or request.GET.sanntis is None %}checked{% endif %}>
+    <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
+  </div>
+</div>
+
+<!-- Aggregate Strategy -->
+<div class="vf-form__item">
+  <label for="aggragate_strategy" class="vf-form__label">Aggregate strategy
+    <span class="tooltip-container">
+      <span class="tooltip-icon">?</span>
+      <span class="tooltip-text">Select the aggregate strategy for how results should be combined.</span>
+    </span>
+  </label>
+  <select id="aggragate_strategy" name="aggragate_strategy" class="vf-form__select">
+    <option value="single" {% if request.GET.aggragate_strategy == "single" %}selected{% endif %}>Single</option>
+    <option value="union" {% if request.GET.aggragate_strategy == "union" %}selected{% endif %}>Union</option>
+    <option value="intersection" {% if request.GET.aggragate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
+  </select>
+</div>
+
+      
+      <!-- Submit Button -->
+      <div class="vf-form__item">
+        <button type="submit" class="vf-button vf-button--primary">Apply</button>
       </div>
-    </div>
-    <!-- Submit Button -->
-    <div class="vf-grid__col--span-12" style="margin-top: 20px;">
-      <button type="submit" class="vf-button vf-button--primary">Update Search</button>
-    </div>
-  </form>
-</section>
+    </form>
+  </aside>
+
 
 <!-- Results Section -->
 <section class="vf-content vf-stack vf-stack--400">
