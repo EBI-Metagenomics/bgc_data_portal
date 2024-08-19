@@ -1,0 +1,7 @@
+---
+title: "Welcome to My Django App Documentation"
+---
+
+## Introduction
+
+Welcome to the official documentation for My Django App. Here you'll find everything you need to know about using and developing the app.

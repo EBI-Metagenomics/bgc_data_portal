@@ -3,19 +3,43 @@
 {% block content %}
 <section class="vf-grid vf-grid__col-3 | vf-card-container | vf-u-fullbleed vf-u-background-color-ui--grey--light">
     <div class="vf-section-header vf-grid__col--span-3">
-        <h2 class="vf-section-header__heading">BGC Data Resources</h2>
+        <h2 class="vf-section-header__heading">Biosynthetic Gene Cluster (BGC) Data Portal</h2>
+        <p class="vf-section-header__text">Access and explore metagenomic BGC data.</p>
     </div>
     <div class="vf-grid__col--span-2">
         <div class="vf-grid vf-grid__col-2">
             <article class="vf-card vf-card--brand vf-card--bordered">
                 <div class="vf-card__content | vf-stack vf-stack--400">
                     <h3 class="vf-card__heading">
-                        <a class="vf-card__link" href="{% url 'results_page' %}">Browse Samples</a>
+                        <a class="vf-card__link" href="{% url 'results_page' %}">Search BGCs</a>
                     </h3>
-                    <p class="vf-card__text">Explore our extensive collection of biosynthetic gene cluster samples.</p>
+                    <p class="vf-card__text">Find and download metagenomic biosynthetic gene clusters using advanced search options.</p>
                 </div>
             </article>
-            <!-- Repeat similar blocks for other resources -->
+            <article class="vf-card vf-card--brand vf-card--bordered">
+                <div class="vf-card__content | vf-stack vf-stack--400">
+                    <h3 class="vf-card__heading">
+                        <a class="vf-card__link" href="/api/v1/docs">API Access</a>
+                    </h3>
+                    <p class="vf-card__text">Get documentation on how to use the API for accessing BGC data.</p>
+                </div>
+            </article>
+            <article class="vf-card vf-card--brand vf-card--bordered">
+                <div class="vf-card__content | vf-stack vf-stack--400">
+                    <h3 class="vf-card__heading">
+                        <a class="vf-card__link" href="docs">User Documentation</a>
+                    </h3>
+                    <p class="vf-card__text">View guides and examples on how to use the data portal.</p>
+                </div>
+            </article>
+            <article class="vf-card vf-card--brand vf-card--striped">
+                <div class="vf-card__content | vf-stack vf-stack--400">
+                    <h3 class="vf-card__heading">
+                        <a class="vf-card__link" href="{% url 'results_page' %}">About Us</a>
+                    </h3>
+                    <p class="vf-card__text">Learn about our team, our mission, and the EUREMAP project supporting marine bioprospecting research.</p>
+                </div>
+            </article>
         </div>
     </div>
 </section>

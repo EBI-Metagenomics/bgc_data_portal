@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,dowload_bgcs
@@ -7,7 +7,8 @@ from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
 
 # logging.basicConfig(level=logging.INFO)
 # logger = logging.getLogger(__name__)
-                           
+                        
+
 def landing_page(request):
     return render(request, 'landing_page.html')
 

@@ -1,0 +1,7 @@
+---
+title: "About"
+---
+
+## About This Project
+
+This project is built using Django and Quarto for the documentation.

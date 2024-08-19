@@ -1,0 +1,37 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Welcome to My Django App Documentation",
+    "section": "",
+    "text": "Welcome to the official documentation for My Django App. Here you’ll find everything you need to know about using and developing the app."
+  },
+  {
+    "objectID": "getting-started.html",
+    "href": "getting-started.html",
+    "title": "Getting Started",
+    "section": "",
+    "text": "Here’s how to get started with My Django App…"
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "About",
+    "section": "",
+    "text": "This project is built using Django and Quarto for the documentation."
+  },
+  {
+    "objectID": "api.html",
+    "href": "api.html",
+    "title": "API Reference",
+    "section": "",
+    "text": "Here is the API documentation for My Django App…"
+  },
+  {
+    "objectID": "usage.html",
+    "href": "usage.html",
+    "title": "Usage",
+    "section": "",
+    "text": "Detailed usage instructions for My Django App…"
+  }
+]

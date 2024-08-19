@@ -30,6 +30,12 @@ setup(
         # '',
         # '',
     ],
+    extras_require={
+        'dev': [
+            'jupyter',
+            'quatro',
+        ]
+    },
     classifiers=[
         "Development Status :: 3 - Alpha",  # Adjust as per your project's status
         "Environment :: Web Environment",

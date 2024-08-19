@@ -1,0 +1,7 @@
+---
+title: "Getting Started"
+---
+
+## Getting Started
+
+Here’s how to get started with My Django App...

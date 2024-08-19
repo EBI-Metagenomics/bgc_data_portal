@@ -14,17 +14,24 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.shortcuts import redirect
+from django.urls import path, include, re_path
 from api.api import api
 from . import views
 from django.conf import settings
+from django.views.static import serve
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
+
 
 handler404 = 'bgc_data_portal.views.custom_404_view'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/v1/", api.urls,name='api'),
+    path('docs/', lambda request: redirect('/docs/index.html', permanent=True)),
+
+    re_path(r'^docs/(?P<path>.*)$', serve, {'document_root': settings.BASE_DIR / 'docs/_site'}, name='docs'),
     path('', views.landing_page, name='landing_page'),
     path('results/', views.results_page, name='results_page'),
     path('bgc/<str:mgyc>/<int:start_position>/<int:end_position>/', views.bgc_page, name='bgc_page'),  # Updated URL pattern

@@ -1,0 +1,40 @@
+project:
+  type: website
+
+website:
+  title: "Biosynthetic Gene Cluster (BGC) Data Portal"
+  navbar:
+    background: primary
+    left:
+      - text: "Home"
+        href: index.qmd
+      - text: "About"
+        href: about.qmd
+      - text: "API"
+        href: api.qmd
+  sidebar:
+    style: "docked"
+    search: true
+    contents:
+      - text: "Introduction"
+        href: index.qmd
+      - text: "Getting Started"
+        href: getting-started.qmd
+      - text: "Usage"
+        href: usage.qmd
+      - text: "API"
+        href: api.qmd
+
+format:
+  html:
+    theme: flatly
+    css: styles.css
+
+# format:
+#   html:
+#     theme: cosmo
+#     css: styles.css
+#     toc: true
+
+
+
