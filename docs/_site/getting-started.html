@@ -88,8 +88,13 @@ ul.task-list li input[type="checkbox"] {
     <a class="nav-link active" href="./getting-started.html" aria-current="page">
  <span class="menu-text">Getting Started</span></a>
   </li>  
-  <li class="dropdown-header">
- <span class="menu-text">Using the Portal</span></li>
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/Finn-Lab/bgc_data_portal"><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
 </ul>
               <div id="quarto-search" class="" title="Search"></div>
           </div> <!-- /navcollapse -->
@@ -117,7 +122,7 @@ ul.task-list li input[type="checkbox"] {
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page Features</a>
+  <a href="./using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page</a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -193,7 +198,7 @@ ul.task-list li input[type="checkbox"] {
 <h3 class="anchored" data-anchor-id="home-page">1. Home Page</h3>
 <p>The Home Page is your entry point to the BGC Portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:</p>
 <ul>
-<li><strong>Keyword Search</strong>: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data.</li>
+<li><strong>Keyword Search</strong>: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the <code>GET /api/v1/search/</code> endpoint of the API.</li>
 <li><strong>Access and Explore Options</strong>:
 <ul>
 <li><strong>Search BGCs</strong>: Directs you to the Explore BGCs page for more detailed queries.</li>
@@ -207,8 +212,8 @@ ul.task-list li input[type="checkbox"] {
 <h3 class="anchored" data-anchor-id="explore-bgcs-page">2. Explore BGCs Page</h3>
 <p>The Explore BGCs Page is where users can perform detailed searches and view the results. It includes:</p>
 <ul>
-<li><strong>Advanced Search Sidebar</strong>: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more.</li>
-<li><strong>Results Table</strong>: Displays the outcomes of your search in a paginated format, with options to download the data in TSV or Bash script formats. The table includes key details such as BGC accession, assembly accession, contig information, and detector names.</li>
+<li><strong>Advanced Search Sidebar</strong>: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more. This is equivalent to calling the <code>GET /api/v1/bgcs/</code> endpoint of the API.</li>
+<li><strong>Results Table</strong>: Displays the outcomes of your search in a paginated format, with options to download the data in TSV. The table includes key details such as BGC accession, assembly accession, contig information, and detector names. This results are equivalent to the results of calling the <code>GET /api/v1/search/</code> or <code>GET /api/v1/bgcs/</code> endpoints of the API.</li>
 </ul>
 </section>
 <section id="bgc-details-page" class="level3">
@@ -218,7 +223,7 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Aggregated Region Basic Information</strong>: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.</li>
 <li><strong>BGC Plot</strong>: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors.</li>
 <li><strong>CDS Data</strong>: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.</li>
-<li><strong>Download Options</strong>: Allows you to download data related to the BGC in various formats, including GeneBank, JSON, FASTA, and GFF3.</li>
+<li><strong>Download Options</strong>: Allows you to download data related to the BGC in various formats, including GeneBank, JSON, FASTA, and GFF3. This is equivalent to calling the <code>GET /api/v1/contig_region/</code> endpoint of the API using the MGYC and start/end positions of the aggregated region.</li>
 </ul>
 </section>
 </section>
