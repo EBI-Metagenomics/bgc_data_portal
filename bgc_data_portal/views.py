@@ -3,11 +3,12 @@ from django.core.paginator import Paginator
 from django.http import HttpResponse
 from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,download_bgcs
 from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
-# import logging
+import logging
 
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-                        
+from bgc_plots.contig_region_visualisation import ContigRegionViewer
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def landing_page(request):
     return render(request, 'landing_page.html')
@@ -54,15 +55,39 @@ def bgc_page(request, mgyc,start_position,end_position):
         start_position = int(start_position)
         end_position = int(end_position)
 
-
         # Call the API function to get the plot HTML
-        plot_html = get_contig_region_plot(request, mgyc=mgyc, start_position=start_position, end_position=end_position)
-        # print(mgyc,start_position,end_position)
-        # print(mgyc,start_position,end_position)
+        plot_html, features_df = ContigRegionViewer.plot_contig_region(mgyc=mgyc, start_position=start_position, end_position=end_position)
+        # Get summary details regarding
+        cds_attribs = dict(features_df[features_df['type']=='CDS'].iloc[0]['attrib'])
+        assembly_accession = cds_attribs.get('assembly_accession')
+        assembly_url = "https://www.ebi.ac.uk/metagenomics/assemblies/{assembly_accession}"
+        biome_lineage=cds_attribs.get('biome_lineage','').replace('root:','')
+        
+        aggr_df = features_df[ (features_df.start>=start_position) & (features_df.end<=end_position)]
+
+        # predicted classes
+        _predicted_classes_dict = {detector:sorted({individual_class for attrib in gr['attrib'] for individual_class in attrib['BGC_CLASS'].split(',') }) for detector,gr in aggr_df[aggr_df['type']=='CLUSTER'].sort_values('source').groupby('source')}
+        predicted_classes_dict = {k:_predicted_classes_dict[k] for k in sorted(_predicted_classes_dict,key=lambda x:x.lower())}
+        print(predicted_classes_dict)
+        # functional_annotation_dict
+        MAX_GOSLIM_COLUM=7
+        functional_annotation_dict = {}
+        aggr_go_slims = sorted({term for attrib in aggr_df[aggr_df['type']=='ANNOT']['attrib'] for term in attrib.get('GOslim',[])} - {None})
+        col_name = 'GOslim description'
+        for i,term in enumerate(aggr_go_slims):
+            if i!=0 and i%MAX_GOSLIM_COLUM==0:
+                col_name+='_next'
+            functional_annotation_dict.setdefault(col_name,[]).append(f"- {term}")
+        
         # Render the BGC page with the plot
-        # return render(request, 'bgc_page.html', {'plot_html': plot_html})
         return render(request, 'bgc_page.html', {
             'plot_html': plot_html,
+            'assembly_accession': assembly_accession,
+            'assembly_url': assembly_url,
+            'biome_lineage':biome_lineage,
+            'predicted_classes_dict': predicted_classes_dict,
+            'functional_annotation_dict':functional_annotation_dict,
+            'mgyc': mgyc,
             'mgyc': mgyc,
             'start_position': start_position,
             'end_position': end_position,
@@ -91,7 +116,6 @@ def download_bgc_data(request, mgyc, start_position, end_position):
 
         return response
     except Exception as e:
-        print('eeee',e)
         logging.error(f"Error in bgc_page view: {e}")
         return HttpResponse(f"An error occurred: {e}", status=500)
 

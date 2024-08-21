@@ -85,6 +85,7 @@ class ContigRegionViewer:
                 'color': DETECTOR_COLORS[bgc.bgc_detector.bgc_detector_name],
                 'legend_text': f"BGC Class: {bgc.bgc_class.bgc_class_name if bgc.bgc_class else 'Unknown'}",
                 'url': None,
+                'attrib':{'BGC_CLASS':bgc.bgc_class.bgc_class_name if bgc.bgc_class else 'Unknown'},
             })
 
         # Protein features
@@ -105,8 +106,11 @@ class ContigRegionViewer:
                 'color': DEFAULT_CDS_COLOR,
                 'legend_text': None,
                 'url': protein_url,
+                'attrib':{'cluster_representative':protein.cluster_representative,
+                          'assembly_accession':assembly_accession,
+                          'biome_lineage':meta.assembly.biome.lineage,
+                          },
             })
-            print('PFAM',meta.assembly)
             pfam_json = json.loads(protein.pfam)
             if type(pfam_json)==list:
                 for pfam in pfam_json:
@@ -114,8 +118,8 @@ class ContigRegionViewer:
                     pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
                     pfam_id = pfam.get('PFAM')
 
-
-                    go_slim = pfamToGoSlim.get(pfam_id, ['Pfam annotation'])[0]
+                    go_slim = pfamToGoSlim.get(pfam_id, [None])
+                    print('PFAM:',go_slim)
                     features.append({
                         'start': pfam_start,
                         'end': pfam_end,
@@ -124,10 +128,11 @@ class ContigRegionViewer:
                         'ID': pfam_id,
                         'source': 'PFAM',
                         'legend_rank': 2,
-                        'legend_trace_name': go_slim,
-                        'color': GO_SLIM_COLORS.get(go_slim, DEFAULT_ANNOT_COLOR),
+                        'legend_trace_name': go_slim[0] or 'Pfam annotation',
+                        'color': GO_SLIM_COLORS.get(go_slim[0] or None, DEFAULT_ANNOT_COLOR),
                         'legend_text': pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
                         'url': f"https://www.ebi.ac.uk/interpro/entry/pfam/{pfam_id}/",
+                        'attrib':{'GOslim':go_slim},
                     })
 
         return pd.DataFrame(features)
@@ -272,7 +277,7 @@ class ContigRegionViewer:
         return go.Figure(data=traces, layout=layout)
 
     @staticmethod
-    def plot_contig_region(contig_name: str, start_position: int, end_position: int):
+    def plot_contig_region(mgyc: str, start_position: int, end_position: int):
         """
         Creates a plot given a contig name and location.
 
@@ -284,7 +289,8 @@ class ContigRegionViewer:
         Returns:
             plotly.graph_objs.Figure: The generated plotly figure.
         """
-        features_df = ContigRegionViewer.format_data_for_plot(contig_name, start_position, end_position)
+        # print('\n\n\njajajajaj')
+        features_df = ContigRegionViewer.format_data_for_plot(mgyc, start_position, end_position)
         fig =  ContigRegionViewer.create_bgc_plot(features_df)
         html_str = pio.to_html(fig, full_html=False, div_id='bgc-plot')  # full_html=False to embed in an existing HTML structure
         html_str += """
@@ -299,4 +305,4 @@ class ContigRegionViewer:
                 });
             </script>
         """
-        return html_str
+        return html_str,features_df

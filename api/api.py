@@ -179,5 +179,5 @@ def get_contig_region_plot(request,
     Provide the MGYC, start position, and end position to view the BGC region. 
     The plot includes coding regions, Pfam annotations, and BGC predictions from various detectors.
     """
-    plot_html = ContigRegionViewer.plot_contig_region(mgyc, start_position, end_position)
+    plot_html,_ = ContigRegionViewer.plot_contig_region(mgyc, start_position, end_position)
     return plot_html
