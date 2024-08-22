@@ -1,13 +1,14 @@
 
 from functools import reduce
+import json
 import operator
-
-from api.schemas import PfamStrategy
-from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein, Metadata
-from typing import List, Optional,Union
+from django.http import Http404
+import pandas as pd
+from .schemas import PfamStrategy
+from .models import Bgc, Contig, Protein, Metadata
+from .pfam_annots import pfamToGoSlim,pfam_desc
+from typing import Optional
 from django.db.models import Q,F
-import re
-
 
 class RegionFeatureError(Exception):
     """Custom exception for errors related to region features."""
@@ -129,95 +130,7 @@ def complex_bgc_search(
     return qs
 
 
-# def complex_bgc_search(
-#               _detectors : Optional[list] = None,
-#               _bgc_class_name: Optional[str] = None, 
-#               _mgyb: Optional[str] = None, 
-#               _assembly_accession: Optional[str] = None, 
-#               _contig_mgyc: Optional[str] = None, 
-#               _complete: bool = True, # TODO, FUNCTION WRITEN BUT NEEDS DB MODEL AND POPULATE
-#               _single_truncated: bool = True, 
-#               _double_truncated: bool = True, 
-#               _biome_lineage: Optional[str] = None, 
-#             #   _keyword: Optional[str] = None, 
-#               _protein_pfam: str = None, # TODO
-#               _pfam_strategy: Optional[str] = None # TODO
-#               ):
-
-#     qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
-
-#     if _detectors:
-#         qs = qs.filter(Q(bgc_detector__bgc_detector_name__in=_detectors))
-    
-#     if _bgc_class_name:
-#         qs = qs.filter(bgc_class__bgc_class_name__icontains=_bgc_class_name)
-    
-#     if _mgyb:
-#         qs = qs.filter(mgyb__icontains=_mgyb)
-    
-#     if _assembly_accession:
-#         qs = qs.filter(mgyc__assembly__accession__icontains=_assembly_accession)
-    
-#     if _contig_mgyc:
-#         qs = qs.filter(mgyc__mgyc__icontains=_contig_mgyc)
-    
-
-#     # TODO
-#     """
-#     partials = [name for name,value in zip(_partials,[full_length,single_truncated,double_truncated]) if value!=False]    
-#     if partials:
-#         qs = qs.filter(Q(partial__partial_name__in=partials))
-#     """
-
-#     if _biome_lineage:
-#         qs = qs.filter(mgyc__assembly__biome__lineage__icontains=_biome_lineage)
-    
-#     if _protein_pfam:
-        
-#         pfam_queries = [Q(mgyc__metadata__protein__pfam__icontains=pfam) for pfam in _protein_pfam]
-
-#         if pfam_strategy == 'AND':
-#             qs = qs.filter(reduce(operator.and_, pfam_queries))
-#         elif pfam_strategy == 'OR':
-#             qs = qs.filter(reduce(operator.or_, pfam_queries))
-
-#         # qs = qs.filter(mgyc__metadata__protein__pfam__icontains=_protein_pfam)
-
-#     return qs
-def get_modified_positions(bgcs, protein_metadata, global_start_position, global_end_position):
-    # List to store modified BGC objects
-    modified_bgcs = []
-    modified_protein_metadata = []
-
-    for bgc in bgcs:
-        # Calculate the new start and end positions for each BGC object
-        new_start = max(bgc.start_position, global_start_position)
-        new_end = min(bgc.end_position, global_end_position)
-        
-        # Create a copy of the object with modified attributes
-        modified_bgc = bgc
-        modified_bgc.start_position = new_start
-        modified_bgc.end_position = new_end
-        
-        # Append the modified object to the list
-        modified_bgcs.append(modified_bgc)
-
-    for protein in protein_metadata:
-        # Calculate the new start and end positions for each ProteinMetadata object
-        new_start = max(protein.start_position, global_start_position)
-        new_end = min(protein.end_position, global_end_position)
-        
-        # Create a copy of the object with modified attributes
-        modified_protein = protein
-        modified_protein.start_position = new_start
-        modified_protein.end_position = new_end
-        
-        # Append the modified object to the list
-        modified_protein_metadata.append(modified_protein)
-    
-    return modified_bgcs, modified_protein_metadata
-
-def get_region_features( 
+def find_region_features( 
               mgyc: str = None, 
               start_position: int = None, 
               end_position: int = None,
@@ -249,3 +162,116 @@ def get_region_features(
 
     return contig,assembly_accession,bgcs,protein_metadata
     # return contig,assembly_accession,modified_bgcs,modified_protein_metadata
+def get_region_features(               
+        mgyc: str = None, 
+        start_position: int = None, 
+        end_position: int = None,
+        extended_window=0
+):
+        """
+        Retrieves and formats data into a df with gff3 style for a contig region.
+
+        Args:
+            contig_name (str): The name of the contig.
+            start_position (int): The start position of the region.
+            end_position (int): The end position of the region.
+            extended_window (int): define if want to extend the retrived features, but not modifying the aggregated region
+        Returns:
+            pd.DataFrame: DataFrame containing the formatted feature data.
+        """
+        try:
+            contig, assembly_accession, bgcs, protein_metadata = find_region_features(
+                mgyc=mgyc,
+                start_position=start_position - extended_window,
+                end_position=end_position + extended_window,
+            )
+        except RegionFeatureError as e:
+            raise Http404(str(e))
+
+        features = []
+
+        mgyb_template = "MGYB{:012}"
+
+        # BGC features
+        for bgc in bgcs:
+            features.append({
+                'seqid':mgyc,
+                'source': bgc.bgc_detector.bgc_detector_name,
+                'type': 'CLUSTER',
+                'start': bgc.start_position,
+                'end': bgc.end_position,
+                'score':None,
+                'strand': 0,
+                'attrib':{
+                    'ID': mgyb_template.format(bgc.mgyb),
+                    'BGC_CLASS':bgc.bgc_class.bgc_class_name if bgc.bgc_class else 'Unknown',
+                    'detector_version': bgc.bgc_detector.version
+                },
+            })
+        # Add aggregated region
+        features.append({
+            'seqid':mgyc,
+            'source': "Aggregated region",
+            'type': 'CLUSTER',
+            'start': start_position,
+            'end': end_position,
+            'score': None,
+            'strand': 0,
+            'attrib':{
+                'ID': f"{mgyc}_{start_position}-{end_position}",
+                'BGC_CLASS':"Aggregated region"},
+        })
+
+        # Protein features
+        for meta in protein_metadata:
+
+            protein = meta.mgyp
+            pfam_json = json.loads(protein.pfam) if protein.pfam !='NaN' else []
+
+            features.append({
+                'seqid':mgyc,
+                'source': 'Prodigal', # TODO change for gene_caller.gene_calle
+                'type': 'CDS',
+                'start': meta.start_position,
+                'end': meta.end_position,
+                'score':None,
+                'strand': meta.strand,
+                'attrib':{
+                    'cluster_representative':protein.cluster_representative,
+                    'ID': meta.mgyp.mgyp,
+                    'assembly_accession':assembly_accession,
+                    'biome_lineage':meta.assembly.biome.lineage,
+                    'mgyp':meta.mgyp.mgyp,
+                    'sequence':protein.sequence,
+                    'cluster_representative':protein.cluster_representative or meta.mgyp.mgyp,
+                    'pfam':pfam_json,
+                    'gene_caller':'Prodigal',# meta.gene_caller.gene_caller TODO
+                    'start':meta.start_position,
+                    'end':meta.end_position,
+                    'strand':meta.strand,
+                },
+            })
+            for pfam in pfam_json:
+                pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
+                pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
+                pfam_id = pfam.get('PFAM')
+
+                go_slim = pfamToGoSlim.get(pfam_id, [None])
+                features.append({
+                    'seqid':mgyc,
+                    'source': 'PFAM',
+                    'type': 'ANNOT',
+                    'start': pfam_start,
+                    'end': pfam_end,
+                    'score':None,
+                    'strand': meta.strand,
+                    'attrib':{
+                        'ID': pfam_id,
+                        'GOslim':go_slim,
+                        'mgyp':meta.mgyp.mgyp,
+                        'description':pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
+                        # 'PFAM':pfam_id,
+                        },
+                })
+        return contig, assembly_accession,pd.DataFrame(features)
+

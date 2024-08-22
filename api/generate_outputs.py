@@ -1,80 +1,94 @@
 import io
 import json
+import pandas as pd
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from Bio import SeqIO
-from bgc_data_portal import __version__,__name__,__description__
+from bgc_data_portal import __description__,__name__,__version__
 
 class WriteRegion:
     @staticmethod
-    def gbk(contig, start_position, end_position,assembly_accession, bgcs, protein_metadata):
-        # Create a SeqRecord for the contig sequence
+    def gbk(contig, start_position: int, end_position: int, assembly_accession: str, region_df: pd.DataFrame):
+        """
+        Write the region data to GenBank format using the provided DataFrame.
+
+        Args:
+            region_df (pd.DataFrame): DataFrame containing region features.
+            mgyc (str): Contig name.
+            start_position (int): Start position.
+            end_position (int): End position.
+            assembly_accession (str): Assembly accession.
+
+        Returns:
+            str: GenBank data as a string.
+        """
+        mgyc= contig.mgyc
         contig_seq = Seq(contig.sequence[start_position-1:end_position])
         description = (
             f"Nucleotide sequence extracted from "
             f"Assembly: {assembly_accession}, "
-            f"Contig: {contig.mgyc}, "
+            f"Contig: {mgyc}, "
             f"Region: {start_position}-{end_position}, "
             f"Generated using {__name__} version {__version__}."
         )
         record = SeqRecord(
-            contig_seq, 
-            id=f"{contig.mgyc}:{start_position}-{end_position}", 
+            contig_seq,
+            id=f"{mgyc}:{start_position}-{end_position}",
             description=description,
             annotations={"molecule_type": "DNA"}
         )
 
-        # Add features for each BGC
-        for bgc in bgcs:
-            feature = SeqFeature(
-                location=FeatureLocation(
-                    max(bgc.start_position,start_position), 
-                    min(bgc.end_position,end_position)
+        for _, row in region_df.iterrows():
+            if row['type'] == 'CLUSTER':
+
+
+                feature = SeqFeature(
+                    location=FeatureLocation(
+                        max(row['start'], start_position),
+                        min(row['end'], end_position)
                     ),
-                type="BGC",
-                qualifiers={
-                    "mgyb": bgc.mgyb,
-                    "bgc_class": bgc.bgc_class.bgc_class_name if bgc.bgc_class else "Unknown",
-                    "bgc_detector": bgc.bgc_detector.bgc_detector_name if bgc.bgc_detector else "Unknown",
-                }
-            )
-            record.features.append(feature)
+                    type=row['type'],
+                    qualifiers={
+                        "ID": row['attrib'].get('ID'),
+                        "bgc_class": row['attrib'].get('BGC_CLASS') if pd.notna(row['attrib'].get('BGC_CLASS')) else "Unknown",
+                        "bgc_detector": row['source'] if pd.notna(row['source']) else "Unknown",
+                    }
+                )
+                record.features.append(feature)
 
-        # Add features for each protein with strand information
-        for meta in protein_metadata:
-            protein = meta.mgyp
-            meta_start_position = max(meta.start_position,start_position)
-            meta_end_position = min(meta.end_position,end_position)
-            feature = SeqFeature(
-                location=FeatureLocation(
-                    meta_start_position, 
-                    meta_end_position,
-                    strand=meta.strand),
-                type="CDS",
-                qualifiers={
-                    "protein_id": protein.mgyp,
-                    "translation": protein.sequence,
-                    "pfam": protein.pfam,
-                }
-            )
-            record.features.append(feature)
-            pfam_json = json.loads(protein.pfam)
-            if type(pfam_json)==list:
-                for pfam in json.loads(protein.pfam):
-                    pfam_start_postiion = meta.start_position + (pfam.get('envelope_start')*3)
-                    pfam_end_position = meta.start_position + (pfam.get('envelope_end')*3)
-                    qualifiers = dict(pfam)
-                    qualifiers.update({"protein_id": protein.mgyp})
-                    feature = SeqFeature(
-                        location=FeatureLocation(pfam_start_postiion, pfam_end_position, strand=meta.strand),
-                        type="PFAM",
-                        qualifiers=qualifiers
-                    )
+            if row['type'] == 'CDS':
+                protein = row['attrib']
+                feature = SeqFeature(
+                    location=FeatureLocation(
+                        max(row['start'], start_position),
+                        min(row['end'], end_position),
+                        strand=row['strand']),
+                    type="CDS",
+                    qualifiers={
+                        "protein_id": protein['mgyp'],
+                        "translation": protein['sequence'],
+                        "pfam": protein['pfam'],
+                    }
+                )
+                record.features.append(feature)
 
-            record.features.append(feature)
+            if row['type'] == 'ANNOT':
+                protein = row['attrib']
+                feature = SeqFeature(
+                    location=FeatureLocation(
+                        max(row['start'], start_position),
+                        min(row['end'], end_position),
+                        strand=row['strand']),
+                    type=row['type'],
+                    qualifiers={
+                        "ID": protein['ID'],
+                        "source": row['source'],
+                        "description": protein['description'],
+                    }
+                )
+                record.features.append(feature)
 
-        # Create a file-like object to store the GenBank data
         genbank_io = io.StringIO()
         SeqIO.write(record, genbank_io, "genbank")
         genbank_data = genbank_io.getvalue()
@@ -83,83 +97,100 @@ class WriteRegion:
         return genbank_data
 
     @staticmethod
-    def json(contig, start_position, end_position,assembly_accession, bgcs, protein_metadata):
+    def json(contig, start_position: int, end_position: int, assembly_accession: str, region_df: pd.DataFrame):
         """
-        Generate an output follwing the antiSMASH JSON format dor sideloading
+        Generate output following the antiSMASH JSON format for sideloading.
+
+        Args:
+            region_df (pd.DataFrame): DataFrame containing region features.
+            mgyc (str): Contig name.
+            start_position (int): Start position.
+            end_position (int): End position.
+            assembly_accession (str): Assembly accession.
+
+        Returns:
+            str: JSON data as a string.
         """
-        
+        mgyc= contig.mgyc
         tool_info = {
             "name": __name__,
             "version": __version__,
             "description": f"{__description__} This subregion was created using the portal module to generate JSON files for antiSMASH sideloading.",
         }
 
-        # Consolidate BGC details
         contig_description = (
             f"Nucleotide sequence extracted from "
             f"Assembly: {assembly_accession}, "
-            f"Contig: {contig.mgyc}, "
+            f"Contig: {mgyc}, "
             f"Region: {start_position}-{end_position}, "
             f"Generated using {__name__} version {__version__}."
         )
-        details = {'Detected BGCs':[],'Sequence description':"".join(contig_description)}
-        for bgc in bgcs:
-            bgc_key_prefix = f"bgc_{bgc.mgyb}"
-            mgyb = bgc.mgyb
-            detector = bgc.bgc_detector.bgc_detector_name if bgc.bgc_detector else "Unknown"
-            detector_version = bgc.bgc_detector.version if bgc.bgc_detector else "Unknown"
-            bgc_class = bgc.bgc_class.bgc_class_name if bgc.bgc_class else "Unknown"
-            start_position = str(max(bgc.start_position,start_position))
-            end_position = str(min(bgc.end_position,end_position))
-            details["Detected BGCs"].append(
-                f"Accession: {mgyb};Start {start_position}; End: {end_position}; Detector: {detector}v{detector_version};Class: {bgc_class}; "
-            )
-        # Prepare the single subregion with consolidated details
+
+        details = {'Detected BGCs': [], 'Sequence description': contig_description}
+        for _, row in region_df.iterrows():
+            if row['type'] == 'CLUSTER':
+                mgyb = row['mgyb']
+                detector = row['source'] if pd.notna(row['source']) else "Unknown"
+                detector_version = row['attrib'].get('detector_version', "Unknown")
+                bgc_class = row['attrib'].get('BGC_CLASS') if pd.notna(row['attrib'].get('BGC_CLASS')) else "Unknown"
+                start_position_str = str(max(row['start'], start_position))
+                end_position_str = str(min(row['end'], end_position))
+                details["Detected BGCs"].append(
+                    f"Accession: {mgyb};Start {start_position_str}; End: {end_position_str}; Detector: {detector}v{detector_version};Class: {bgc_class}; "
+                )
+
         subregion = {
             "start": start_position,
             "end": end_position,
-            "label": f"{contig.mgyc}:{start_position}-{end_position}",
+            "label": f"{mgyc}:{start_position}-{end_position}",
             "details": details
         }
 
-        # Prepare the record information with only one subregion
         record_info = {
-            "name": contig.mgyc,
+            "name": mgyc,
             "subregions": [subregion],
-            "protoclusters": []  # Assuming no protoclusters for this example; fill in if needed
+            "protoclusters": []
         }
 
-        # Combine tool and record information
         output_data = {
             "tool": tool_info,
             "record": record_info
         }
 
-        output_content = json.dumps(output_data, indent=4)
-        return output_content
-    
-    @staticmethod
-    def fasta(contig, start_position, end_position,assembly_accession, bgcs, protein_metadata):
-        # Extract the nucleotide sequence for the specified region
-        sequence_region = contig.sequence[start_position-1:end_position]  # Adjust for 0-based index
+        return json.dumps(output_data, indent=4)
 
-        # Create a description for the FASTA header
+    @staticmethod
+    def fasta(contig, start_position: int, end_position: int, assembly_accession: str, region_df: pd.DataFrame):
+        """
+        Generate the region sequence in FASTA format.
+
+        Args:
+            region_df (pd.DataFrame): DataFrame containing region features.
+            mgyc (str): Contig name.
+            start_position (int): Start position.
+            end_position (int): End position.
+            assembly_accession (str): Assembly accession.
+
+        Returns:
+            str: FASTA formatted string of the sequence region.
+        """
+        mgyc= contig.mgyc
+        contig_seq = Seq(contig.sequence[start_position-1:end_position])
+
         description = (
             f"Nucleotide sequence extracted from "
             f"Assembly: {assembly_accession}, "
-            f"Contig: {contig.mgyc}, "
+            f"Contig: {mgyc}, "
             f"Region: {start_position}-{end_position}, "
             f"Generated using {__name__} version {__version__}."
         )
 
-        # Create a SeqRecord for the FASTA file
         seq_record = SeqRecord(
-            Seq(sequence_region),
-            id=f"{contig.mgyc}:{start_position}-{end_position}",
+            Seq(contig_seq),
+            id=f"{mgyc}:{start_position}-{end_position}",
             description=description
         )
 
-        # Create a file-like object to store the FASTA data
         fasta_io = io.StringIO()
         SeqIO.write(seq_record, fasta_io, "fasta")
         fasta_data = fasta_io.getvalue()

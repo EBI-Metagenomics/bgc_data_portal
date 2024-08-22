@@ -5,10 +5,14 @@ from api.api import perform_keyword_search, perform_complex_search,get_contig_re
 from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
 import logging
 
+from api.utils import get_region_features
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+EXTENDED_NUCLEOTIDE_WINDOW = 7000
 
 def landing_page(request):
     return render(request, 'landing_page.html')
@@ -50,12 +54,23 @@ def results_page(request):
 
 def bgc_page(request, mgyc,start_position,end_position):
     # Extract the relevant parameters for the plot from the request or use defaults
+    # print('ksksksks')
     try:
         start_position = int(start_position)
         end_position = int(end_position)
 
+        contig, assembly_accession,features_df = get_region_features(
+            mgyc,
+            start_position,
+            end_position,
+            extended_window=EXTENDED_NUCLEOTIDE_WINDOW
+            )
+        
+        # remove tails to avoid ploting more that the desired EXTENDED_NUCLEOTIDE_WINDOW
+        features_df['start'] = features_df['start'].map(lambda x:max(start_position-EXTENDED_NUCLEOTIDE_WINDOW,x))
+        features_df['end'] = features_df['end'].map(lambda x:min(end_position+EXTENDED_NUCLEOTIDE_WINDOW,x))
         # Call the API function to get the plot HTML
-        plot_html, features_df = ContigRegionViewer.plot_contig_region(mgyc=mgyc, start_position=start_position, end_position=end_position)
+        plot_html = ContigRegionViewer.plot_contig_region(features_df)
         # Get summary details regarding
         cds_attribs = dict(features_df[features_df['type']=='CDS'].iloc[0]['attrib'])
         assembly_accession = cds_attribs.get('assembly_accession')
@@ -81,7 +96,7 @@ def bgc_page(request, mgyc,start_position,end_position):
 
         # cds_info_dict
         cds_info_dict = {attrib.get('mgyp'):attrib for attrib in features_df[features_df['type']=='CDS']['attrib']} 
-        pfam_info_dict = {attrib.get('PFAM'):attrib for attrib in features_df[features_df['type']=='ANNOT']['attrib']} 
+        pfam_info_dict = {attrib.get('ID'):attrib for attrib in features_df[features_df['type']=='ANNOT']['attrib']} 
         # add cluster_representative_url
         for p in cds_info_dict:
             cds_info_dict[p].update({
@@ -94,7 +109,12 @@ def bgc_page(request, mgyc,start_position,end_position):
                     'go_slim':";".join(go_slim) if go_slim[0] else "",
                     'description':pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('description',''),
                 })
+
             # print(cds_info_dict[p]['pfam'])
+        # format fetures for download
+        download_features = features_df[(features_df['start']<=end_position)&(features_df['end']>=start_position)]
+        download_features['start'] = download_features['start'].map(lambda x:max(start_position,x))
+        download_features['end'] = download_features['end'].map(lambda x:min(end_position,x))
         # cds_info_dict = {attrib.get('mgyp') for attrib in aggr_df[aggr_df['type']!='CLUSTER']['attrib']}
         # Render the BGC page with the plot
         return render(request, 'bgc_page.html', {
@@ -108,14 +128,14 @@ def bgc_page(request, mgyc,start_position,end_position):
             'mgyc': mgyc,
             'start_position': start_position,
             'end_position': end_position,
+            'precomuted_data': (contig, assembly_accession, download_features)
         })
     except Exception as e:
         logging.error(f"Error in bgc_page view: {e}")
         return HttpResponse(f"An error occurred: {e}", status=500)
 
-def download_bgc_data(request, mgyc, start_position, end_position):
-    try:
-        
+def download_bgc_data(request, mgyc, start_position, end_position, precomuted_data=False):
+    # try:
         start_position = int(start_position)
         end_position = int(end_position)
         
@@ -128,12 +148,13 @@ def download_bgc_data(request, mgyc, start_position, end_position):
             start_position=start_position,
             end_position=end_position,
             output_type=OutputType(output_type),
+            precomuted_data=precomuted_data,
         )
 
         return response
-    except Exception as e:
-        logging.error(f"Error in bgc_page view: {e}")
-        return HttpResponse(f"An error occurred: {e}", status=500)
+    # except Exception as e:
+        # logging.error(f"Error in bgc_page view: {e}")
+        # return HttpResponse(f"An error occurred: {e}", status=500)
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)

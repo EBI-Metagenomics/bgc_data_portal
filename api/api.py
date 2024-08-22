@@ -1,11 +1,12 @@
 import re
-from ninja import NinjaAPI, Router, Schema, ModelSchema
+from ninja import NinjaAPI
 from ninja.pagination import paginate
 from ninja.errors import HttpError
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union, Tuple
 from enum import Enum
 from django.db.models import Q
 from ninja import Query
+import pandas as pd
 from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein, Metadata
 from .schemas import Aggregate, PfamStrategy
 from .schemas import BgcSearchOutputSchema, BgcSearchUserOutputSchema, BgcSearchInputSchema, OutputType, BgcSearchCallSchema
@@ -147,21 +148,29 @@ def download_bgcs(request,
                  mgyc: str = None, 
                  start_position: int = None, 
                  end_position: int = None,
-                 output_type: OutputType = OutputType.fasta):
+                 output_type: OutputType = OutputType.fasta,
+                 precomuted_data: Optional[Any] = False # Leave as false
+                 ):
     """
     Download data related to a specific BGC region within a contig.
 
     Provide the MGYC, start position, and end position to retrieve the BGC data 
     in your desired format (FASTA, GeneBank, JSON, GFF3).
+    - **precomuted_data**: Should be set as false
     """
-    try:
-        contig, assembly_accession, bgcs, protein_metadata = get_region_features(mgyc, start_position, end_position)
-    except RegionFeatureError as e:
-        raise Http404(str(e))
+
+    print('jajaja',str(precomuted_data).lower()=='false')
+    if str(precomuted_data).lower()!='false':
+       contig, assembly_accession, features_df = precomuted_data
+    else:
+        try:
+            contig, assembly_accession, features_df = get_region_features(mgyc, start_position, end_position)
+        except RegionFeatureError as e:
+            raise Http404(str(e))
 
     # Generate the requested output format
     write_output_function = getattr(WriteRegion, output_type.value)
-    output_content = write_output_function(contig, start_position, end_position, assembly_accession, bgcs, protein_metadata)
+    output_content = write_output_function(contig, start_position, end_position, assembly_accession, features_df)
 
     # Return the file as an HTTP response
     response = HttpResponse(output_content, content_type=f'contig_region/{output_type}')
@@ -172,12 +181,20 @@ def download_bgcs(request,
 def get_contig_region_plot(request, 
                            mgyc: str = None, 
                            start_position: int = None, 
-                           end_position: int = None):
+                           end_position: int = None,
+                           precomuted_data: Optional[Any] = False # Leave as false
+                           ):
     """
     Generate and return a plot visualizing the BGC region within a contig.
 
     Provide the MGYC, start position, and end position to view the BGC region. 
     The plot includes coding regions, Pfam annotations, and BGC predictions from various detectors.
+    - **precomuted_data**: Should be set as false
     """
-    plot_html,_ = ContigRegionViewer.plot_contig_region(mgyc, start_position, end_position)
+    if str(precomuted_data).lower()!='false':
+        _, _, features_df = precomuted_data
+    else:
+        _, _, features_df = get_region_features(mgyc, start_position, end_position)
+    
+    plot_html,_ = ContigRegionViewer.plot_contig_region(features_df)
     return plot_html

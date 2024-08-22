@@ -1,40 +1,4 @@
-Add summary section at the top of the page with the following sections:
-- Sample information: Assembly accesison, Biome, Contig, star and end position
-- Aggregated region: Predicted classes, predictors
-- Functional annotation: List of GO slims in the BGC
-
-use the vf-summary-container component for it
-```html
-<section class="vf-summary-container | embl-grid">
-
-  <div class="vf-section-header">
-    <h2 class="vf-section-header__heading"> Projects</h2>
-  </div>
-  <div class="vf-section-content | vf-grid vf-grid__col-3">
-
-
-    <article class="vf-summary">
-      <h3 class="vf-summary__title">
-        <a href="" class="vf-summary__link">What is Cancer?</a>
-      </h3>
-      <p class="vf-summary__text">Cancer is a group of diseases involving abnormal cell growth with the potential to invade or spread to other parts of the body.</p>
-    </article>
-
-    <article class="vf-summary">
-      <h3 class="vf-summary__title">
-        <a href="" class="vf-summary__link">Cancer and EMBL</a>
-      </h3>
-      <p class="vf-summary__text">EMBL researchers use both computational and traditional lab research to try and understand why cancer happens and how cancer grows and spreads. They can sample and test how tumours and drugs react and find unique molecular data to identify diseases.</p>
-    </article>
-
-    <article class="vf-summary">
-      <h3 class="vf-summary__title">
-        <a href="" class="vf-summary__link">What does Cancer look like?</a>
-      </h3>
-      <p class="vf-summary__text">Cancer is caused by uncontrolled cell division. These cells are tiny, but but can quickly add up and cancerous cells can look very different from healthy ones.</p>
-    </article>
-
-  </div>
-
-</section>
-```
+==Refactor_get_region_feture -> now return a df with gff3 style
+==change Write_region according
+==change download_region function accoding
+==change plotting accordingly
