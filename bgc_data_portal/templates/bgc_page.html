@@ -70,7 +70,14 @@
         height: 38px; /* Set a fixed height to match the select */
         line-height: 1; /* Align text vertically */
     }
-    
+    #cds-info {
+    opacity: 0; /* Start with the content hidden */
+    transition: opacity 0.5s ease-in-out; /* Smooth transition for opacity */
+    }
+
+    #cds-info.show {
+        opacity: 1; /* Fade in the content */
+    }
 </style>
 
 <div class="vf-grid vf-grid__col--span-12">
@@ -174,8 +181,8 @@
         <!-- CDS Information Section -->
         <article class="vf-card vf-card--brand vf-card--bordered">
         <div class="vf-card__content | vf-stack vf-stack--400">
+        <h2 id="cds_header" class="vf-text vf-text-heading--3">Protein information</h2>
         <div id="cds-info" class="vf-grid vf-grid__col-12"></div>
-        <h2 id="cds_header" class="vf-text vf-text-heading--3">CDS information</h2>
         <p id="default-message">Click a CDS in the plot to display information.</p>
         <!-- <div id="cds-info" class="vf-section-content | vf-grid vf-grid__col-12"> -->
             <!-- CDS details will be dynamically loaded here -->   
@@ -204,67 +211,69 @@
             var cds_id = point.data.customdata[1]; // Assume this is the CDS ID or key
             // Retrieve the CDS information from the dictionary
             var cdsInfo = cdsInfoDict[cds_id];
+            var cdsInfoContainer = document.getElementById('cds-info');
             document.getElementById('default-message').style.display = 'none';
-            document.getElementById('cds_header').style.display = 'none';
+            // document.getElementById('cds_header').style.display = 'none';
 
-            if (cdsInfo) {
-                let pfamTableRows = cdsInfo.pfam.map(dct => `
-                    <tr class="vf-table__row">
-                        <td class="vf-table__cell">
-                            <a href="https://www.ebi.ac.uk/interpro/entry/pfam/${dct.PFAM}/" target="_blank">
-                                ${dct.PFAM}
-                            </a>
-                        </td>
-                        <td class="vf-table__cell">${dct.envelope_start}</td>
-                        <td class="vf-table__cell">${dct.envelope_end}</td>
-                        <!-- <td class="vf-table__cell">${dct.go_slim}</td>  Replace with actual GOslim data if available -->
-                        <td class="vf-table__cell">${dct['e-val']}</td>
-                    </tr>
-                `).join('');
+            // Hide the current content with a transition
+            cdsInfoContainer.classList.remove('show');
+            
+            // Use a timeout to allow the hide transition to complete before changing the content
+            setTimeout(function() {
+                if (cdsInfo) {
+                    let pfamTableRows = cdsInfo.pfam.map(dct => `
+                        <tr class="vf-table__row">
+                            <td class="vf-table__cell">
+                                <a href="https://www.ebi.ac.uk/interpro/entry/pfam/${dct.PFAM}/" target="_blank">
+                                    ${dct.PFAM}
+                                </a>
+                            </td>
+                            <td class="vf-table__cell">${dct.envelope_start}</td>
+                            <td class="vf-table__cell">${dct.envelope_end}</td>
+                            <!-- <td class="vf-table__cell">${dct.go_slim}</td>  Replace with actual GOslim data if available -->
+                            <td class="vf-table__cell">${dct['e-val']}</td>
+                        </tr>
+                    `).join('');
 
-                // Override the CDS info section with the retrieved data
-                document.getElementById('cds-info').innerHTML = `
-                    <h2 id="cds_header" class="vf-text vf-text-heading--3" style="font-weight: bold;">${cds_id}</h2>
-                    <div class="vf-summary">
-                    
-
-                        <!-- Summary Section -->
-                        <section class="vf-summary-container | embl-grid">
-                            <!-- Protein Information  -->
-                            <div class="vf-section-header">
-                                <h2 class="vf-section-header__heading">CDS Information</h2>
-                            </div>
-                            <div class="vf-section-content | vf-grid vf-grid__col-5">
-                                <article class="vf-summary">
-                                    <h3 class="vf-summary__title">Cluster representative</h3>
-                                    <p class="vf-summary__text">
-                                        <a href=${cdsInfo.cluster_representative_url} class="vf-summary__link">${cdsInfo.cluster_representative}</a>
-                                    </p>                
-                                </article>
-                                <article class="vf-summary">
-                                    <h3 class="vf-summary__title">Protein length</h3>
-                                    <p class="vf-summary__text">${cdsInfo.protein_length}</p>
-                                </article>
-                                <article class="vf-summary">
-                                    <h3 class="vf-summary__title">Gene caller</h3>
-                                    <p class="vf-summary__text">${cdsInfo.gene_caller}</p>
-                                </article>
-                                <article class="vf-summary">
-                                    <h3 class="vf-summary__title">Start</h3>
-                                    <p class="vf-summary__text">${cdsInfo.start}</p>
-                                </article>
-                                <article class="vf-summary">
-                                    <h3 class="vf-summary__title">End</h3>
-                                    <p class="vf-summary__text">${cdsInfo.end}</p>
-                                </article>
-                                <article class="vf-summary">
-                                    <h3 class="vf-summary__title">Strand</h3>
-                                    <p class="vf-summary__text">${cdsInfo.strand}</p>
-                                </article>
-                            </div>
-                        </section>
-
-                        
+                    // Override the CDS info section with the retrieved data
+                    cdsInfoContainer.innerHTML = `
+                        <div class="vf-summary">
+                            <!-- Summary Section -->
+                            <section class="vf-summary-container | embl-grid">
+                                <!-- Protein Information  -->
+                                <div class="vf-section-header">
+                                    <h2 class="vf-section-header__heading">${cds_id}</h2>
+                                </div>
+                                <div class="vf-section-content | vf-grid vf-grid__col-5">
+                                    <article class="vf-summary">
+                                        <h3 class="vf-summary__title">Cluster representative</h3>
+                                        <p class="vf-summary__text">
+                                            <a href=${cdsInfo.cluster_representative_url} class="vf-summary__link">${cdsInfo.cluster_representative}</a>
+                                        </p>                
+                                    </article>
+                                    <article class="vf-summary">
+                                        <h3 class="vf-summary__title">Protein length</h3>
+                                        <p class="vf-summary__text">${cdsInfo.protein_length}</p>
+                                    </article>
+                                    <article class="vf-summary">
+                                        <h3 class="vf-summary__title">Gene caller</h3>
+                                        <p class="vf-summary__text">${cdsInfo.gene_caller}</p>
+                                    </article>
+                                    <article class="vf-summary">
+                                        <h3 class="vf-summary__title">Start</h3>
+                                        <p class="vf-summary__text">${cdsInfo.start}</p>
+                                    </article>
+                                    <article class="vf-summary">
+                                        <h3 class="vf-summary__title">End</h3>
+                                        <p class="vf-summary__text">${cdsInfo.end}</p>
+                                    </article>
+                                    <article class="vf-summary">
+                                        <h3 class="vf-summary__title">Strand</h3>
+                                        <p class="vf-summary__text">${cdsInfo.strand}</p>
+                                    </article>
+                                </div>
+                            </section>
+                            
                             <div class="vf-card__content | vf-stack vf-stack--400 | sequenceViewerDiv">
                                 <h3 class="vf-card__heading">Sequence Viewer</h3>
                                 <div id="proteinSequenceContainer" class="protein-sequence-container">
@@ -275,7 +284,7 @@
                                 </div>
                             </div>
 
-                        <!-- PFAM Annotations Table -->
+                            <!-- PFAM Annotations Table -->
                             <div class="vf-card__content | vf-stack vf-stack--400">
                                 <h3 class="vf-card__heading">PFAM Annotations</h3>
                                 <table class="vf-table | vf-u-fullbleed">
@@ -293,35 +302,43 @@
                                     </tbody>
                                 </table>
                             </div>
-                        <!-- Add more fields as needed -->
-                    </div>
-                `;
+                        </div>
+                    `;
 
-                // Re-attach the event listener to the new copy button
-                document.getElementById('copy_button').addEventListener('click', function() {
-                    // Get the sequence text from the container and trim it to remove excess whitespace
-                    var sequenceText = document.getElementById('proteinSequenceContainer').textContent.trim();
+                    // Re-attach the event listener to the new copy button
+                    document.getElementById('copy_button').addEventListener('click', function() {
+                        // Get the sequence text from the container and trim it to remove excess whitespace
+                        var sequenceText = document.getElementById('proteinSequenceContainer').textContent.trim();
 
-                    // Use the Clipboard API to copy the trimmed text to the clipboard
-                    navigator.clipboard.writeText(sequenceText).then(function() {
-                        // Success feedback (optional)
-                        console.log('Sequence copied to clipboard!');
-                    }).catch(function(error) {
-                        // Error feedback (optional)
-                        console.error('Failed to copy text: ', error);
+                        // Use the Clipboard API to copy the trimmed text to the clipboard
+                        navigator.clipboard.writeText(sequenceText).then(function() {
+                            // Success feedback (optional)
+                            console.log('Sequence copied to clipboard!');
+                        }).catch(function(error) {
+                            // Error feedback (optional)
+                            console.error('Failed to copy text: ', error);
+                        });
                     });
-                });
-            } else {
-                // Handle case where no CDS information is found for the given ID
-                document.getElementById('cds-info').innerHTML = `
-                    <div class="vf-summary">
-                        <h3 class="vf-summary__title">CDS Information Not Found</h3>
-                    </div>
-                `;
-            }
+
+                    // Show the content with a fade-in effect
+                    setTimeout(function() {
+                        cdsInfoContainer.classList.add('show');
+                    }, 10); // Slight delay to trigger the CSS transition
+                } else {
+                    // Handle case where no CDS information is found for the given ID
+                    cdsInfoContainer.innerHTML = `
+                        <div class="vf-summary">
+                            <h3 class="vf-summary__title">CDS Information Not Found</h3>
+                        </div>
+                    `;
+                    cdsInfoContainer.classList.add('show');
+                }
+            }, 500); // Wait for the hide transition to complete
         }
     });
 </script>
+
+
 
 
 {% endblock %}
