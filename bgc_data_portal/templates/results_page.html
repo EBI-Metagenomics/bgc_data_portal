@@ -133,16 +133,16 @@
 
 <!-- Truncation -->
 <div class="vf-form__item">
-  <label for="Edges" class="vf-form__label">Contig edges
+  <label for="Edges" class="vf-form__label">BGC Completeness
     <span class="tooltip-container">
       <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">Contig edges indicate whether the BGC is complete, single-truncated, or double-truncated.</span>
+      <span class="tooltip-text">BGC Completeness indicate whether the BGC is full_length, single-truncated, or double-truncated.</span>
     </span>
   </label>
   <div class="vf-checkbox">
-    <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true"
-           {% if request.GET.complete == 'true' or request.GET.complete is None %}checked{% endif %}>
-    <label for="complete" class="vf-checkbox__label">Complete</label>
+    <input type="checkbox" id="full_length" name="full_length" class="vf-checkbox__input" value="true"
+           {% if request.GET.full_length == 'true' or request.GET.full_length is None %}checked{% endif %}>
+    <label for="full_length" class="vf-checkbox__label">Full-Length BGC</label>
   </div>
   <div class="vf-checkbox">
     <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
@@ -208,16 +208,16 @@
 
 <!-- Aggregate Strategy -->
 <div class="vf-form__item">
-  <label for="aggragate_strategy" class="vf-form__label">Aggregate strategy
+  <label for="aggregate_strategy" class="vf-form__label">Aggregate strategy
     <span class="tooltip-container">
       <span class="tooltip-icon">?</span>
       <span class="tooltip-text">Select the aggregate strategy for how results should be combined.</span>
     </span>
   </label>
-  <select id="aggragate_strategy" name="aggragate_strategy" class="vf-form__select">
-    <option value="single" {% if request.GET.aggragate_strategy == "single" %}selected{% endif %}>Single</option>
-    <option value="union" {% if request.GET.aggragate_strategy == "union" %}selected{% endif %}>Union</option>
-    <option value="intersection" {% if request.GET.aggragate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
+  <select id="aggregate_strategy" name="aggregate_strategy" class="vf-form__select">
+    <option value="single" {% if request.GET.aggregate_strategy == "single" %}selected{% endif %}>Single</option>
+    <option value="union" {% if request.GET.aggregate_strategy == "union" %}selected{% endif %}>Union</option>
+    <option value="intersection" {% if request.GET.aggregate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
   </select>
 </div>
 

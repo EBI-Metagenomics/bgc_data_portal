@@ -29,12 +29,12 @@ class BgcSearchCallSchema(Schema):
     contig_mgyc: Optional[str] = None
     start_position: Optional[int] = None
     end_position: Optional[int] = None
-    complete: Optional[bool] = True
+    full_length: Optional[bool] = True
     single_truncated: Optional[bool] = True
     double_truncated: Optional[bool] = True
     protein_pfam: Optional[str] = None
     pfam_strategy: Optional[PfamStrategy] = PfamStrategy.union
-    aggragate_strategy: Aggregate = Aggregate.single
+    aggregate_strategy: Aggregate = Aggregate.single
     
 class BgcSearchInputSchema(Schema):
     mgyb: Optional[int] = None

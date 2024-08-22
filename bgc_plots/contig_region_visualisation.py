@@ -38,6 +38,7 @@ GO_SLIM_COLORS = {go_slim: seaborn_to_rgb_string(color_palette('husl', len(sorte
 
 # Process detector colors
 DETECTOR_COLORS = {
+    "Aggregated region": seaborn_to_rgb_string(color_palette('Set3')[8]),
     'SanntiS': seaborn_to_rgb_string(color_palette('Set3')[0]),
     'GECCO': seaborn_to_rgb_string(color_palette('Set3')[1]),
     'antiSMASH': seaborn_to_rgb_string(color_palette('Set3')[3]),
@@ -85,14 +86,31 @@ class ContigRegionViewer:
                 'color': DETECTOR_COLORS[bgc.bgc_detector.bgc_detector_name],
                 'legend_text': f"BGC Class: {bgc.bgc_class.bgc_class_name if bgc.bgc_class else 'Unknown'}",
                 'url': None,
+                'attrib':{'BGC_CLASS':bgc.bgc_class.bgc_class_name if bgc.bgc_class else 'Unknown'},
             })
+        # Add aggregated region
+        features.append({
+            'start': start_position,
+            'end': end_position,
+            'strand': 0,
+            'type': 'CLUSTER',
+            'ID': f"{contig_name}_{start_position}-{end_position}",
+            'source': "Aggregated region",
+            'legend_rank': 0,
+            'legend_trace_name': "Aggregated region",
+            'color': DETECTOR_COLORS["Aggregated region"],
+            'legend_text': "Aggregated region",
+            'url': None,
+            'attrib':{'BGC_CLASS':"Aggregated region"},
+        })
 
         # Protein features
         for meta in protein_metadata:
 
             protein = meta.mgyp
-            
+            pfam_json = json.loads(protein.pfam) if protein.pfam !='NaN' else []
             protein_url = f"https://www.ebi.ac.uk/metagenomics/proteins/{meta.mgyp.mgyp}/" if meta.mgyp.mgyp.startswith('MGYP') else None
+
             features.append({
                 'start': meta.start_position,
                 'end': meta.end_position,
@@ -105,31 +123,44 @@ class ContigRegionViewer:
                 'color': DEFAULT_CDS_COLOR,
                 'legend_text': None,
                 'url': protein_url,
+                'attrib':{'cluster_representative':protein.cluster_representative,
+                          'assembly_accession':assembly_accession,
+                          'biome_lineage':meta.assembly.biome.lineage,
+                          'mgyp':meta.mgyp.mgyp,
+                          'sequence':protein.sequence,
+                          'cluster_representative':protein.cluster_representative or meta.mgyp.mgyp,
+                          'pfam':pfam_json,
+                          'gene_caller':'Prodigal',# meta.gene_caller.gene_caller TODO
+                          'start':meta.start_position,
+                          'end':meta.end_position,
+                          'strand':meta.strand,
+                          },
             })
-            print('PFAM',meta.assembly)
-            pfam_json = json.loads(protein.pfam)
-            if type(pfam_json)==list:
-                for pfam in pfam_json:
-                    pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
-                    pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
-                    pfam_id = pfam.get('PFAM')
+            for pfam in pfam_json:
+                pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
+                pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
+                pfam_id = pfam.get('PFAM')
 
-
-                    go_slim = pfamToGoSlim.get(pfam_id, ['Pfam annotation'])[0]
-                    features.append({
-                        'start': pfam_start,
-                        'end': pfam_end,
-                        'strand': meta.strand,
-                        'type': 'ANNOT',
-                        'ID': pfam_id,
-                        'source': 'PFAM',
-                        'legend_rank': 2,
-                        'legend_trace_name': go_slim,
-                        'color': GO_SLIM_COLORS.get(go_slim, DEFAULT_ANNOT_COLOR),
-                        'legend_text': pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
-                        'url': f"https://www.ebi.ac.uk/interpro/entry/pfam/{pfam_id}/",
-                    })
-
+                go_slim = pfamToGoSlim.get(pfam_id, [None])
+                features.append({
+                    'start': pfam_start,
+                    'end': pfam_end,
+                    'strand': meta.strand,
+                    'type': 'ANNOT',
+                    'ID': pfam_id,
+                    'source': 'PFAM',
+                    'legend_rank': 2,
+                    'legend_trace_name': go_slim[0] or 'Pfam annotation',
+                    'color': GO_SLIM_COLORS.get(go_slim[0] or None, DEFAULT_ANNOT_COLOR),
+                    'legend_text': pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
+                    'url': f"https://www.ebi.ac.uk/interpro/entry/pfam/{pfam_id}/",
+                    'attrib':{
+                        'GOslim':go_slim,
+                        'mgyp':meta.mgyp.mgyp,
+                        'description':pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
+                        'PFAM':pfam_id,
+                        },
+                })
         return pd.DataFrame(features)
 
     @staticmethod
@@ -193,7 +224,9 @@ class ContigRegionViewer:
         non_method_data = features_df[features_df['type'] != 'CLUSTER']
         sequence_length = max(features_df["end"])
         sequence_start = min(features_df["start"])
+        xaxis_range = [sequence_start - (sequence_length * 0.02), max(sequence_length, 23000)]
 
+        # shape_height*=0.5
         # Compute trace data
         non_method_data[["xs", "ys", "types"]] = non_method_data.apply(
             lambda row: pd.Series(ContigRegionViewer.create_trace_data(
@@ -216,16 +249,19 @@ class ContigRegionViewer:
                 mode="lines",
                 line=dict(color='black', width=3. if row['type'] == 'CDS' else 1.),
                 fillcolor=color,
-                # hoverinfo="text",
-                # text="""<a href="https://plot.ly/">{}</a>""".format("Text"),#row[names],
-                name=row[legend_trace_name_column],
+                text=f"{row['ID']}" + (f": {row['legend_text']}" if row['type'] != 'CDS' else '') ,#row[names],
+                hoverinfo="text+x+y",
+                name=row[legend_trace_name_column] if row['type'] != 'CDS' else 'Arrow',
                 showlegend=row[legend_trace_name_column] not in added_legends,
-                legendgroup=row[legend_text_column],
-                legendgrouptitle_text=row[legend_text_column],
+                legendgroup='GO slim' if row['type'] != 'CDS' else 'CDS',#row[legend_text_column],
+                legendgrouptitle_text='Pfam - GO slim' if row['type'] != 'CDS' else 'CDS',#row[legend_text_column],
                 legendrank=row[legend_rank_column],
-                customdata=(row[url_column],),
+                customdata=(row[url_column],row['attrib'].get('mgyp')),
                 # url=row[url_column]
             )
+            if row['type']== 'ANNOT':
+                print(row)
+                print(row[legend_trace_name_column] not in added_legends or row['type'] != 'CDS')
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
             
@@ -242,7 +278,7 @@ class ContigRegionViewer:
 
         # Plot method tracks
         method_positions = [-(shape_height * 1.2) - i * method_track_offset for i in range(len(method_data))]
-        for i, (_,row) in enumerate(method_data.sort_values(legend_rank_column).iterrows()):
+        for i, (_,row) in enumerate(method_data.sort_values([legend_rank_column,'source']).iterrows()):
             trace = go.Scatter(
                 x=[row['start'], row['end']],
                 y=[method_positions[i], method_positions[i]],
@@ -250,19 +286,22 @@ class ContigRegionViewer:
                 line=dict(color=row[color_column], width=9.),
                 hoverinfo="text",
                 text=f"{row[names]}: {row['start']} - {row['end']}",
-                showlegend=row[legend_trace_name_column] not in added_legends,
-                legendgroup=row[legend_text_column],
-                legendgrouptitle_text=row[legend_text_column],
+                showlegend= True,#row[legend_trace_name_column] not in added_legends,
+                legendgroup='BGCs',#row[legend_text_column],
+                legendgrouptitle_text='BGC',#row[legend_text_column],
                 legendrank=row[legend_rank_column],
-                customdata=(row[url_column],),
+                name=row['source'],
+                customdata=(row[url_column],row['attrib'].get('mgyp')),
             )
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
 
         # Layout adjustments
         layout = go.Layout(
-            xaxis=dict(showgrid=False, zeroline=False, range=[sequence_start - (sequence_length * 0.02), sequence_length]),
-            yaxis=dict(showgrid=False, zeroline=False, range=[min(method_positions) - shape_height, shape_height]),
+            # xaxis=dict(showgrid=False, zeroline=False, range=[sequence_start - (sequence_length * 0.02), sequence_length]),
+            xaxis=dict(showgrid=False, zeroline=False, range=xaxis_range),
+
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[min(method_positions) - shape_height, shape_height]),
             showlegend=show_legend,
             plot_bgcolor=background_color,
             paper_bgcolor=background_color,
@@ -272,7 +311,7 @@ class ContigRegionViewer:
         return go.Figure(data=traces, layout=layout)
 
     @staticmethod
-    def plot_contig_region(contig_name: str, start_position: int, end_position: int):
+    def plot_contig_region(mgyc: str, start_position: int, end_position: int):
         """
         Creates a plot given a contig name and location.
 
@@ -284,19 +323,19 @@ class ContigRegionViewer:
         Returns:
             plotly.graph_objs.Figure: The generated plotly figure.
         """
-        features_df = ContigRegionViewer.format_data_for_plot(contig_name, start_position, end_position)
+        features_df = ContigRegionViewer.format_data_for_plot(mgyc, start_position, end_position)
         fig =  ContigRegionViewer.create_bgc_plot(features_df)
         html_str = pio.to_html(fig, full_html=False, div_id='bgc-plot')  # full_html=False to embed in an existing HTML structure
-        html_str += """
-            <script>
-                var plot = document.getElementById('bgc-plot');
-                plot.on('plotly_click', function(data){
-                    var point = data.points[0];
-                    if (point.data.customdata.length) {
-                        var url = point.data.customdata[0];
-                        window.open(url, '_blank');  // Open the URL in a new tab
-                    }
-                });
-            </script>
-        """
-        return html_str
+        # html_str += """
+        #     <script>
+        #         var plot = document.getElementById('bgc-plot');
+        #         plot.on('plotly_click', function(data){
+        #             var point = data.points[0];
+        #             if (point.data.customdata.length) {
+        #                 var url = point.data.customdata[0];
+        #                 window.open(url, '_blank');  // Open the URL in a new tab
+        #             }
+        #         });
+        #     </script>
+        # """
+        return html_str,features_df
