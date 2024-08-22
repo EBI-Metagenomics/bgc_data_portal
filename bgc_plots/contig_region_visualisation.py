@@ -141,6 +141,8 @@ class ContigRegionViewer:
                     'attrib':{
                         'GOslim':go_slim,
                         'mgyp':meta.mgyp.mgyp,
+                        'description':pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
+                        'PFAM':pfam_id,
                         },
                 })
         return pd.DataFrame(features)

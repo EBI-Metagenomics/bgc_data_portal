@@ -81,13 +81,20 @@ def bgc_page(request, mgyc,start_position,end_position):
 
         # cds_info_dict
         cds_info_dict = {attrib.get('mgyp'):attrib for attrib in features_df[features_df['type']=='CDS']['attrib']} 
+        pfam_info_dict = {attrib.get('PFAM'):attrib for attrib in features_df[features_df['type']=='ANNOT']['attrib']} 
         # add cluster_representative_url
         for p in cds_info_dict:
             cds_info_dict[p].update({
                 'cluster_representative_url':f"https://www.ebi.ac.uk/metagenomics/proteins/{cds_info_dict[p]['cluster_representative']}/" if cds_info_dict[p]['cluster_representative'] else None,
                 'protein_length':len(cds_info_dict[p]['sequence']),
             })
-            print(cds_info_dict[p]['pfam'])
+            for _pfam_dct in cds_info_dict[p]['pfam']:
+                go_slim = pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('GOslim',[None])
+                _pfam_dct.update({
+                    'go_slim':";".join(go_slim) if go_slim[0] else "",
+                    'description':pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('description',''),
+                })
+            # print(cds_info_dict[p]['pfam'])
         # cds_info_dict = {attrib.get('mgyp') for attrib in aggr_df[aggr_df['type']!='CLUSTER']['attrib']}
         # Render the BGC page with the plot
         return render(request, 'bgc_page.html', {

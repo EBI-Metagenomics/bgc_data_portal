@@ -228,9 +228,10 @@
                                     ${dct.PFAM}
                                 </a>
                             </td>
+                            <td class="vf-table__cell">${dct.description}</td>
+                            <td class="vf-table__cell">${dct.go_slim}</td>
                             <td class="vf-table__cell">${dct.envelope_start}</td>
                             <td class="vf-table__cell">${dct.envelope_end}</td>
-                            <!-- <td class="vf-table__cell">${dct.go_slim}</td>  Replace with actual GOslim data if available -->
                             <td class="vf-table__cell">${dct['e-val']}</td>
                         </tr>
                     `).join('');
@@ -291,9 +292,10 @@
                                     <thead class="vf-table__header">
                                         <tr class="vf-table__row">
                                             <th class="vf-table__heading" scope="col">PFAM</th>
+                                            <th class="vf-table__heading" scope="col">Description</th>
+                                            <th class="vf-table__heading" scope="col">GO slim</th>
                                             <th class="vf-table__heading" scope="col">Envelope Start</th>
                                             <th class="vf-table__heading" scope="col">Envelope End</th>
-                                            <!-- <th class="vf-table__heading" scope="col">GOslim</th> -->
                                             <th class="vf-table__heading" scope="col">E-value</th>
                                         </tr>
                                     </thead>
