@@ -26,6 +26,11 @@ def explore(request):
     page = request.GET.get('page', 1)
     keyword = request.GET.get('keyword', None)
     plot_html = None
+    total_regions = None
+    bgc_class_dist = None
+    default_bgc_class_dist = {'TERPENE': 1001, 'NRPS': 1233, 'SACCHARIDE': 5824, 'POLYKETIDE': 637, 'NRP': 21310, 'RIPP': 417, 'UNKNOWN': 3342, 'ALKALOID': 124, 'OTHER': 540}
+    defeult_total_regions = 50012
+
     if request.GET:
         try:
             complex_query_params = BgcSearchCallSchema(
@@ -51,10 +56,12 @@ def explore(request):
                 _results = perform_complex_search(complex_query_params)
                 
             # generate class dist plots
-            bgc_class_dist = Counter([str(bgc.bgc_class_names).split(',')[0] for bgc in _results])
+            total_regions = len(_results)
+            bgc_class_dist = dict(Counter([bgc.bgc_class_names[0].split(',')[0] for bgc in _results]))
+
             # partials_dist = Counter([str(bgc.bgc_class_names).split(',')[0] for bgc in results])
             counters = [bgc_class_dist,bgc_class_dist]
-            titles = ['Class distribution', 'Partials distribution']
+            titles = ['', '']
 
             if not plot_html:
                 plot_html = generate_horizontal_bar_plot_html(counters, titles)
@@ -72,10 +79,13 @@ def explore(request):
             print('error:', e)
             results = None  # Ensure results is always defined even in case of an error
 
+    print(bgc_class_dist)
     context = {
         'results': results,
         'request_params': request.GET,
-        'plot_html':plot_html
+        'plot_html':plot_html,
+        'total_regions': total_regions or defeult_total_regions,
+        'bgc_class_dist': bgc_class_dist or default_bgc_class_dist
     }
 
     # If it's an AJAX request, return the partial table

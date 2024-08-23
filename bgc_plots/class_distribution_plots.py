@@ -38,19 +38,19 @@ def generate_horizontal_bar_plot_html(counter_list, titles):
     
     # Update layout to meet the styling and size requirements
     fig.update_layout(
-        height=400,  # 30% vertical
-        width=900,  # 70% horizontal
+        height=200,  # Adjust the height for more rectangular plots
+        width=800,  # Adjust the width to ensure plots are rectangular
         plot_bgcolor='white',  # White background
         paper_bgcolor='white',  # White surrounding background
-        title_text="Multiple Horizontal Barplot Subplots",
+        # title_text="Multiple Horizontal Barplot Subplots",
         showlegend=False,
         margin=dict(l=40, r=40, t=40, b=40),
-        font=dict(color='black')  # Black font for titles and axes
+        font=dict(color='black'),  # Black font for titles and axes
     )
     
-    # Adjust subplot spacing
-    fig.update_yaxes(showline=True, linecolor='black', gridcolor='lightgrey')  # Black axis lines
-    fig.update_xaxes(showline=True, linecolor='black', gridcolor='lightgrey')  # Black axis lines
+    # Remove grids and Y-axis ticks
+    fig.update_xaxes(showgrid=False, zeroline=False, showticklabels=False)
+    fig.update_yaxes(showgrid=False, zeroline=False, showline=True, linecolor='black')
     
     # Generate the HTML for the plot
     plot_html = plot(fig, output_type='div')

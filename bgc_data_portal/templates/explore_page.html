@@ -1,155 +1,170 @@
+
 {% extends 'base.html' %}
 {% block title %}Search Results{% endblock %}
 
 {% block content %}
-<section class="vf-intro">
-  <div class="vf-grid">
-    <div class="vf-grid__col--span-5">
-      <h2 class="vf-intro__heading">Search BGC</h2>
-    </div>
-  </div>
-</section>
+
 <style>
   /* Tooltip container */
   .tooltip-container {
     position: relative;
     display: inline-block;
   }
-/* Superscript encircled "?" icon */
-.tooltip-container .tooltip-icon {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  line-height: 14px;
-  text-align: center;
-  border-radius: 50%;
-  background-color: #007cbb; /* Customize color as needed */
-  color: #fff;
-  font-weight: bold;
-  font-size: 10px;
-  cursor: pointer;
-  vertical-align: super; /* Align as superscript */
-  margin-left: 5px; /* Space between label and icon */
-}
 
-/* Tooltip text */
-.tooltip-container .tooltip-text {
-  visibility: hidden;
-  width: 200px;
-  background-color: #555;
-  color: #fff;
-  text-align: center;
-  border-radius: 5px;
-  padding: 5px;
-  position: absolute;
-  z-index: 1;
-  bottom: 150%; /* Position above the icon */
-  left: 50%;
-  margin-left: -100px;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
+  /* Superscript encircled "?" icon */
+  .tooltip-container .tooltip-icon {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 50%;
+    background-color: #007cbb;
+    color: #fff;
+    font-weight: bold;
+    font-size: 10px;
+    cursor: pointer;
+    vertical-align: super;
+    margin-left: 5px;
+  }
 
-/* Tooltip arrow */
-.tooltip-container .tooltip-text::after {
-  content: "";
-  position: absolute;
-  top: 100%; /* At the bottom of the tooltip */
-  left: 50%;
-  margin-left: -5px;
-  border-width: 5px;
-  border-style: solid;
-  border-color: #555 transparent transparent transparent;
-}
+  /* Tooltip text */
+  .tooltip-container .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    border-radius: 5px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 150%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
 
-/* Show the tooltip text when hovering over the tooltip container */
-.tooltip-container:hover .tooltip-text {
-  visibility: visible;
-  opacity: 1;
-}
-.page-container {
-  display: flex;
-  gap: 20px; /* Space between the sidebar and the content section */
-}
+  /* Tooltip arrow */
+  .tooltip-container .tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #555 transparent transparent transparent;
+  }
 
-.search-sidebar {
-  flex: 0 0 30%; /* Sidebar occupies 30% of the width */
-  max-width: 300px; /* Ensures the sidebar doesn't get too wide */
-  background-color: #f7f7f7; /* Optional: Add a background color to distinguish the sidebar */
-  padding: 20px; /* Optional: Add padding inside the sidebar */
-  box-sizing: border-box;
-}
+  /* Show the tooltip text when hovering over the tooltip container */
+  .tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+  }
 
-.content-section {
-  flex: 1; /* Content section takes the remaining 70% of the width */
-  display: flex;
-  flex-direction: column;
-  gap: 20px; /* Space between the plot and the results */
-}
+  .page-container {
+    display: flex;
+    gap: 20px;
+  }
 
-.plot-container {
-  height: 400px; /* Fixed height for the plot area */
-  background-color: #fff; /* Background color for the plot area */
-  border: 1px solid #ddd; /* Optional: Border around the plot area */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+  .search-sidebar {
+    flex: 0 0 30%;
+    max-width: 300px;
+    background-color: #fff;
+    padding: 20px;
+    box-sizing: border-box;
+  }
 
-.results-container {
-  flex: 1; /* Results container takes up remaining space in the column */
-  background-color: #fff; /* Background color for the results area */
-  border: 1px solid #ddd; /* Optional: Border around the results area */
-  overflow-y: auto; /* Allows scrolling if the table content exceeds the container height */
-}
+  .content-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
 
-.default-message {
-  text-align: center; /* Center the default message */
-  margin: auto; /* Ensure it is centered within the container */
-  padding: 20px; /* Padding around the text */
-  font-size: 16px;
-  color: #666;
-}
-.vf-table {
-  width: 100%; /* Ensure the table takes up the full width of the container */
-  table-layout: fixed; /* Forces fixed layout for columns */
-  border-collapse: collapse; /* Ensures there are no gaps between table cells */
-}
+  .vf-summary-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    background-color: #f7f7f7;
+    padding: 20px;
+  }
 
-.vf-table__header th,
-.vf-table__cell {
-  padding: 8px; /* Add padding to table cells */
-  white-space: nowrap; /* Prevent text from wrapping */
-  overflow: hidden; /* Hide overflowed text */
-  text-overflow: ellipsis; /* Show ellipsis (...) for truncated text */
-  max-width: 150px; /* Set a maximum width for table columns */
-  border: 1px solid #ddd; /* Add border to table cells */
-}
+  .vf-section-header {
+    margin-bottom: 20px;
+  }
 
-.vf-table__header th {
-  background-color: #f7f7f7; /* Optional: background color for header cells */
-  font-weight: bold;
-}
+  .results-container {
+    flex: 1;
+    background-color: #fff;
+    padding: 20px;
+    overflow-y: auto;
+  }
 
-.vf-table__cell a {
-  text-decoration: none;
-  color: inherit; /* Ensure links inherit the text color */
-}
+  .vf-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
 
-.vf-table__cell a:hover {
-  text-decoration: underline;
-}
+  .vf-table__header th,
+  .vf-table__cell {
+    padding: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+    border: 1px solid #ddd;
+  }
 
-.vf-table__row:nth-child(even) {
-  background-color: #f9f9f9; /* Optional: background color for alternating rows */
-}
+  .vf-table__header th {
+    background-color: #f7f7f7;
+    font-weight: bold;
+  }
+
+  .vf-table__cell a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .vf-table__cell a:hover {
+    text-decoration: underline;
+  }
+
+  .vf-table__row:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+
+  #pag_button_as {
+    padding: 4px 8px;
+    font-size: 16px;
+    line-height: 1.8;
+  }
+
+  .vf-summary {
+    font-size: 0.875rem;
+    padding: 0.1rem;
+    margin: 0.1rem 0;
+  }
+
+  .vf-summary__title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .vf-summary__text {
+    font-size: 0.875rem;
+    margin-bottom: 0;
+  }
 </style>
 
 <div class="page-container">
   <!-- Search Sidebar -->
   <aside class="search-sidebar">
     <form id="search-form" action="{% url 'explore' %}" method="get" class="vf-form">
-      <h3>Advanced Search</h3>
+      <h2>Advanced Search</h2>
       
       
       <!-- BGC Class Name -->
@@ -300,67 +315,87 @@
       
       <!-- Submit Button -->
       <div class="vf-form__item">
-        <button type="submit" class="vf-button vf-button--primary">Apply</button>
+        <button id="pag_button_as" type="submit" class="vf-button vf-button--primary">Apply</button>
       </div>
     </form>
   </aside>
 
-  <!-- Plot and Results Section -->
-  <section class="content-section">
-    <!-- Plot Section -->
-    <div class="plot-container">
-      {% if plot_html %}
-        {{ plot_html|safe }}
-      {% else %}
-        <p class="default-message">Enter search criteria and click "Apply" to search for metadata.</p>
-      {% endif %}
-    </div>
-
+ 
     <!-- Results Table Section -->
     <div class="results-container">
       <div id="results">
         {% if results %}
           {% include 'explore_table.html' %}
         {% else %}
-          <p class="default-message">Enter search criteria and click "Apply" to search for metadata.</p>
+        <div class="content-section">
+          <!-- Summary Section -->
+          <div id="results_summary" class="vf-summary-container">
+            {% if not results %}
+              <div class="vf-section-header">
+                <h2 class="vf-section-header__heading">Explore the data</h2>
+              </div>
+            {% else %}
+              <div class="vf-section-header">
+                <h2 class="vf-section-header__heading">Your results</h2>
+              </div>
+            {% endif %}
+            <div class="vf-section-content | vf-grid vf-grid__col-2">
+              <article class="vf-summary">
+                <h3 class="vf-summary__title">Total BGC</h3>
+                <div class="vf-summary__text predictor-class-grid">
+                  <strong>{{total_regions}}</strong>
+                </div>
+              </article>
+              <article class="vf-summary">
+                <h3 class="vf-summary__title">Class distribution</h3>
+                <div class="vf-summary__text predictor-class-grid">
+                  {% for clss, counts in bgc_class_dist.items %}
+                    <div>
+                      <strong>{{clss}}</strong>: {{counts}}
+                    </div>
+                  {% endfor %}
+                </div>
+              </article>
+            </div>
+          </div>
+        
+          <p class="default-message">Enter search criteria and click "Apply" to search for database.</p>
         {% endif %}
       </div>
     </div>
-  </section>
+  </div>
 </div>
 
 <script>
- $(document).ready(function() {
+  $(document).ready(function() {
     // Handle form submission
     $('#search-form').on('submit', function(e) {
-        e.preventDefault();
-        loadResults(1);  // Load the first page of results
+      e.preventDefault();
+      loadResults(1);  // Load the first page of results
     });
 
     // Handle pagination button clicks
     $(document).on('click', '.pagination button', function(e) {
-        e.preventDefault();
-        var page = $(this).data('page');  // Get the page number from the button's data attribute
-        loadResults(page);
+      e.preventDefault();
+      var page = $(this).data('page');  // Get the page number from the button's data attribute
+      loadResults(page);
     });
 
     function loadResults(page) {
-        $.ajax({
-            url: "{% url 'explore' %}",
-            type: "GET",
-            data: $('#search-form').serialize() + '&page=' + page,
-            success: function(response) {
-                $('#results').html(response);
-            },
-            error: function(xhr, status, error) {
-                console.error("AJAX Error:", status, error);
-                $('#results').html('<p>An error occurred. Please try again.</p>');
-            }
-        });
+      $.ajax({
+        url: "{% url 'explore' %}",
+        type: "GET",
+        data: $('#search-form').serialize() + '&page=' + page,
+        success: function(response) {
+          $('#results').html(response);
+        },
+        error: function(xhr, status, error) {
+          console.error("AJAX Error:", status, error);
+          $('#results').html('<p>An error occurred. Please try again.</p>');
+        }
+      });
     }
-});
-
+  });
 </script>
 
 {% endblock %}
-

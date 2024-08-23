@@ -1,7 +1,35 @@
-<!-- Results Section -->
-<section class="vf-content vf-stack vf-stack--400">
-    <div class="vf-grid vf-grid__col--span-12">
-      <div class="vf-grid__col--span-12">
+<div class="content-section">
+  <!-- Summary Section -->
+  <div id="results_summary" class="vf-summary-container">
+    {% if not results %}
+      <div class="vf-section-header">
+        <h2 class="vf-section-header__heading">Explore the data</h2>
+      </div>
+    {% else %}
+      <div class="vf-section-header">
+        <h2 class="vf-section-header__heading">Your results</h2>
+      </div>
+    {% endif %}
+    <div class="vf-section-content | vf-grid vf-grid__col-2">
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Total BGC</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          <strong>{{total_regions}}</strong>
+        </div>
+      </article>
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Class distribution</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          {% for clss, counts in bgc_class_dist.items %}
+            <div>
+              <strong>{{clss}}</strong>: {{counts}}
+            </div>
+          {% endfor %}
+        </div>
+      </article>
+    </div>
+  </div>
+
 
 <h3 class="vf-section-header__heading">Results</h3>
 <table class="vf-table">
@@ -36,12 +64,12 @@
 </table>
 
 <style>
-    .vf-button.vf-button--primary {
+    #pag_button_p {
         padding: 4px 8px; /* Reduce padding */
         font-size: 12px;  /* Decrease font size */
         line-height: 1.2; /* Adjust line height */
     }
-    .vf-button.vf-button--secondary {
+    #pag_button_s {
         padding: 4px 8px; /* Reduce padding */
         font-size: 14px;  /* Decrease font size */
         line-height: 1.4; /* Adjust line height */
@@ -51,24 +79,21 @@
 <!-- <div class="vf-pagination" style="text-align: center; margin-top: 20px;"> -->
 
 <div class="pagination" style="text-align: center; margin-top: 20px;">
-    <button class="vf-button vf-button--primary" data-page="1">First</button>
+    <button id="pag_button_p" class="vf-button vf-button--primary" data-page="1">First</button>
     {% if results.has_previous %}
-      <button class="vf-button vf-button--secondary" data-page="{{ results.previous_page_number }}">Previous</button>
+      <button id="pag_button_s" class="vf-button vf-button--secondary" data-page="{{ results.previous_page_number }}">Previous</button>
     {% else %}
-      <button class="vf-button vf-button--secondary" disabled>Previous</button>
+      <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Previous</button>
     {% endif %}
     <span class="vf-pagination__info">
         Page {{ results.number }} of {{ results.paginator.num_pages }}
     </span>
 
     {% if results.has_next %}
-      <button class="vf-button vf-button--secondary" data-page="{{ results.next_page_number }}">Next</button>
+      <button id="pag_button_s" class="vf-button vf-button--secondary" data-page="{{ results.next_page_number }}">Next</button>
     {% else %}
-      <button class="vf-button vf-button--secondary" disabled>Next</button>
+      <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Next</button>
     {% endif %}
-    <button class="vf-button vf-button--primary" data-page="{{ results.paginator.num_pages }}">Last</button>
+    <button id="pag_button_p" class="vf-button vf-button--primary" data-page="{{ results.paginator.num_pages }}">Last</button>
   </div>
 
-</div>
-</div>
-</section>
