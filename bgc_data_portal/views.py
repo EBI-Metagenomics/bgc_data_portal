@@ -17,6 +17,43 @@ EXTENDED_NUCLEOTIDE_WINDOW = 7000
 def landing_page(request):
     return render(request, 'landing_page.html')
 
+from django.shortcuts import render
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+from django.shortcuts import render
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from api.models import Metadata
+from .forms import MGYCSearchForm
+
+def metadata_search_view(request):
+    form = MGYCSearchForm()
+    metadata_list = None
+    page = request.GET.get('page', 1)
+    mgyc_value = request.GET.get('mgyc_value', None)
+
+    if mgyc_value:
+        # Query the database for the given MGYC value
+        metadata_list = Metadata.objects.filter(mgyc__mgyc__icontains=mgyc_value)
+        
+        # Paginate the results
+        paginator = Paginator(metadata_list, 10)  # Show 10 items per page
+        try:
+            metadata_list = paginator.page(page)
+        except PageNotAnInteger:
+            metadata_list = paginator.page(1)
+        except EmptyPage:
+            metadata_list = paginator.page(paginator.num_pages)
+
+    context = {
+        'form': form,
+        'metadata_list': metadata_list,
+        'mgyc_value': mgyc_value,
+    }
+
+    if request.is_ajax():
+        return render(request, 'metadata_table.html', context)
+
+    return render(request, 'metadata_search.html', context)
 def results_page(request):
     try:
         keyword = request.GET.get('keyword')
