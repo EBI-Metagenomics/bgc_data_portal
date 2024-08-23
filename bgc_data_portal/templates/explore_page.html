@@ -229,6 +229,19 @@
     </form>
   </aside>
 
+{% if plot_html %}
+  <section class="vf-content vf-stack vf-stack--400">
+    <div class="vf-grid vf-grid__col--span-12">
+      <div class="vf-grid__col--span-12">
+        {{ plot_html|safe }}
+      </div>
+    </div>
+  </section>
+{% else %}
+
+<p>Enter search criteria and click "Apply" to search for metadata.</p>
+
+{% endif %}
 
   <section class="vf-content vf-stack vf-stack--400">
     <div class="vf-grid vf-grid__col--span-12">
