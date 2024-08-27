@@ -53,8 +53,8 @@ def perform_keyword_search(keyword: Optional[str] = None):
         matching_bgcs = search_keyword_in_models(keyword)
         bgcs = Bgc.objects.filter(mgyb__in=matching_bgcs)
 
-    return [
-        BgcSearchUserOutputSchema(
+    return ( 
+        [ BgcSearchUserOutputSchema(
             mgybs=[bgc.mgyb],
             assembly_accession=bgc.mgyc.assembly.accession,
             contig_mgyc=bgc.mgyc.mgyc,
@@ -62,9 +62,9 @@ def perform_keyword_search(keyword: Optional[str] = None):
             end_position=bgc.end_position,
             bgc_detector_names=[bgc.bgc_detector.bgc_detector_name],
             bgc_class_names=[bgc.bgc_class.bgc_class_name]
-        )
-        for bgc in bgcs
-    ]
+        ) for bgc in bgcs ], 
+        bgcs
+    )
 
 def perform_complex_search(params: BgcSearchCallSchema):
     """
@@ -107,7 +107,7 @@ def perform_complex_search(params: BgcSearchCallSchema):
     aggregate_function = getattr(BgcAggregator, params.aggregate_strategy.value)
     aggregated_bgcs = aggregate_function(individual_bgcs, detectors)
 
-    return [
+    return ([
         BgcSearchUserOutputSchema(
             mgybs=aggregated_bgc.mgybs,
             assembly_accession=aggregated_bgc.assembly_accession,
@@ -116,9 +116,10 @@ def perform_complex_search(params: BgcSearchCallSchema):
             end_position=aggregated_bgc.end_position,
             bgc_detector_names=aggregated_bgc.bgc_detector_names,
             bgc_class_names=aggregated_bgc.bgc_class_names,
-        )
-        for aggregated_bgc in aggregated_bgcs
-    ]
+        ) for aggregated_bgc in aggregated_bgcs 
+        ], 
+        bgcs
+    )
 
 @api.get("/search/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Keyword search for BGCs")
 @paginate
@@ -129,7 +130,8 @@ def search_by_keyword(request, keyword: str):
     Use this endpoint to retrieve BGCs based on keywords or accession numbers.
     This is equivalent to the portal's keyword search.
     """
-    return perform_keyword_search(keyword)
+    aggregated_result, _ =  perform_keyword_search(keyword)
+    return aggregated_result
 
 @api.get("/bgcs/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Advanced search for BGCs")
 @paginate
@@ -141,7 +143,8 @@ def search_bgcs(request, params: BgcSearchCallSchema = Query(...)):
     detector names, biome lineage, Pfam domains, and more. 
     The search results reflect the data shown on the "Explore BGCs" page of the portal.
     """
-    return perform_complex_search(params)
+    aggregated_result, _ = perform_complex_search(params)
+    return aggregated_result
 
 @api.get("/contig_region/", tags=["Data download"], summary="Download BGC data by contig region")
 def download_bgcs(request, 
@@ -159,7 +162,6 @@ def download_bgcs(request,
     - **precomuted_data**: Should be set as false
     """
 
-    print('jajaja',str(precomuted_data).lower()=='false')
     if str(precomuted_data).lower()!='false':
        contig, assembly_accession, features_df = precomuted_data
     else:

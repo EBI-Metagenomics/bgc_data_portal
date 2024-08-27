@@ -10,17 +10,29 @@
         <h2 class="vf-section-header__heading">Your results</h2>
       </div>
     {% endif %}
-    <div class="vf-section-content | vf-grid vf-grid__col-2">
+    <div class="vf-section-content | vf-grid vf-grid__col-4">
       <article class="vf-summary">
         <h3 class="vf-summary__title">Total BGC</h3>
         <div class="vf-summary__text predictor-class-grid">
-          <strong>{{total_regions}}</strong>
+          <strong>{{result_stats.total_regions}}</strong>
+        </div>
+      </article>
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Total Studies</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          <strong>{{result_stats.n_studies}}</strong>
+        </div>
+      </article>
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Total Assemblies</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          <strong>{{result_stats.n_assemblies}}</strong>
         </div>
       </article>
       <article class="vf-summary">
         <h3 class="vf-summary__title">Class distribution</h3>
         <div class="vf-summary__text predictor-class-grid">
-          {% for clss, counts in bgc_class_dist.items %}
+          {% for clss, counts in result_stats.bgc_class_dist.items %}
             <div>
               <strong>{{clss}}</strong>: {{counts}}
             </div>
@@ -56,8 +68,8 @@
       <td class="vf-table__cell">{{ bgc.contig_mgyc }}</td>
       <td class="vf-table__cell">{{ bgc.start_position }}</td>
       <td class="vf-table__cell">{{ bgc.end_position }}</td>
-      <td class="vf-table__cell">{{ bgc.bgc_detector_names }}</td>
-      <td class="vf-table__cell">{{ bgc.bgc_class_names }}</td>
+      <td class="vf-table__cell">{{ bgc.bgc_detector_names|join:', ' }}</td>
+      <td class="vf-table__cell">{{ bgc.bgc_class_names|join:', ' }}</td>
     </tr>
     {% endfor %}
   </tbody>

@@ -26,10 +26,15 @@ def explore(request):
     page = request.GET.get('page', 1)
     keyword = request.GET.get('keyword', None)
     plot_html = None
+    
     total_regions = None
     bgc_class_dist = None
+    n_assemblies = None
+    n_studies = None
     default_bgc_class_dist = {'TERPENE': 1001, 'NRPS': 1233, 'SACCHARIDE': 5824, 'POLYKETIDE': 637, 'NRP': 21310, 'RIPP': 417, 'UNKNOWN': 3342, 'ALKALOID': 124, 'OTHER': 540}
     defeult_total_regions = 50012
+    default_n_studies= 4209
+    default_n_assemblies = 5200
 
     if request.GET:
         try:
@@ -51,14 +56,15 @@ def explore(request):
             )
 
             if keyword:
-                _results = perform_keyword_search(keyword)
+                _results,_bgcs = perform_keyword_search(keyword)
             elif request.GET:
-                _results = perform_complex_search(complex_query_params)
+                _results,_bgcs = perform_complex_search(complex_query_params)
                 
             # generate class dist plots
             total_regions = len(_results)
             bgc_class_dist = dict(Counter([bgc.bgc_class_names[0].split(',')[0] for bgc in _results]))
-
+            n_assemblies  = _bgcs.values('mgyc__assembly__accession').distinct().count()
+            n_studies  = _bgcs.values('mgyc__assembly__study').distinct().count()
             # partials_dist = Counter([str(bgc.bgc_class_names).split(',')[0] for bgc in results])
             counters = [bgc_class_dist,bgc_class_dist]
             titles = ['', '']
@@ -79,13 +85,20 @@ def explore(request):
             print('error:', e)
             results = None  # Ensure results is always defined even in case of an error
 
-    print(bgc_class_dist)
+    # stats dictionary
+    result_stats = {
+        'total_regions':total_regions or defeult_total_regions,
+        'bgc_class_dist': bgc_class_dist or default_bgc_class_dist,
+        'n_assemblies': n_assemblies or default_n_assemblies,
+        'n_studies': n_studies or default_n_studies,
+        }
+
+    print(result_stats)
     context = {
         'results': results,
         'request_params': request.GET,
         'plot_html':plot_html,
-        'total_regions': total_regions or defeult_total_regions,
-        'bgc_class_dist': bgc_class_dist or default_bgc_class_dist
+        'result_stats': result_stats,
     }
 
     # If it's an AJAX request, return the partial table
