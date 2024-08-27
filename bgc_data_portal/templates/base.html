@@ -10,6 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&display=swap" rel="stylesheet"/>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
     {% load static %}
     <!-- Your custom CSS, if any -->
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
@@ -30,7 +32,7 @@
             <img class="vf-hero__image" src="https://via.placeholder.com/150x50.png" alt="Placeholder Logo"/>
             <h2 class="vf-hero__heading">Biosynthetic Gene Cluster Portal</h2>
             <p class="vf-hero__text">Explore biosynthetic gene clusters.</p>
-            <form action="{% url 'results_page' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
+            <form action="{% url 'explore' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
                 <div class="vf-sidebar__inner">
                     <div class="vf-form__item">
                         <label class="vf-form__label vf-u-sr-only | vf-search__label" for="search-keyword">Search by Keyword</label>

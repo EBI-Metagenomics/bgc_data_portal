@@ -1,0 +1,111 @@
+<div class="content-section">
+  <!-- Summary Section -->
+  <div id="results_summary" class="vf-summary-container">
+    {% if not results %}
+      <div class="vf-section-header">
+        <h2 class="vf-section-header__heading">Explore the data</h2>
+      </div>
+    {% else %}
+      <div class="vf-section-header">
+        <h2 class="vf-section-header__heading">Your results</h2>
+      </div>
+    {% endif %}
+    <div class="vf-section-content | vf-grid vf-grid__col-4">
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Total BGC</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          <strong>{{result_stats.total_regions}}</strong>
+        </div>
+      </article>
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Total Studies</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          <strong>{{result_stats.n_studies}}</strong>
+        </div>
+      </article>
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Total Assemblies</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          <strong>{{result_stats.n_assemblies}}</strong>
+        </div>
+      </article>
+      <article class="vf-summary">
+        <h3 class="vf-summary__title">Class distribution</h3>
+        <div class="vf-summary__text predictor-class-grid">
+          {% for clss, counts in result_stats.bgc_class_dist.items %}
+            <div>
+              <strong>{{clss}}</strong>: {{counts}}
+            </div>
+          {% endfor %}
+        </div>
+      </article>
+    </div>
+  </div>
+
+
+<h3 class="vf-section-header__heading">Results</h3>
+<table class="vf-table">
+  <thead class="vf-table__header">
+    <tr class="vf-table__row">
+      <th class="vf-table__heading" scope="col">BGC Accession</th>
+      <th class="vf-table__heading" scope="col">Assembly Accession</th>
+      <th class="vf-table__heading" scope="col">Contig MGYC</th>
+      <th class="vf-table__heading" scope="col">Start Position</th>
+      <th class="vf-table__heading" scope="col">End Position</th>
+      <th class="vf-table__heading" scope="col">Detector Names</th>
+      <th class="vf-table__heading" scope="col">Class Names</th>
+    </tr>
+  </thead>
+  <tbody class="vf-table__body">
+    {% for bgc in results %}
+    <tr class="vf-table__row">
+      <td class="vf-table__cell">
+        <a href="{% url 'bgc_page' bgc.contig_mgyc bgc.start_position bgc.end_position %}">
+          {{ bgc.mgybs.0 }}
+        </a>
+      </td>
+      <td class="vf-table__cell">{{ bgc.assembly_accession }}</td>
+      <td class="vf-table__cell">{{ bgc.contig_mgyc }}</td>
+      <td class="vf-table__cell">{{ bgc.start_position }}</td>
+      <td class="vf-table__cell">{{ bgc.end_position }}</td>
+      <td class="vf-table__cell">{{ bgc.bgc_detector_names|join:', ' }}</td>
+      <td class="vf-table__cell">{{ bgc.bgc_class_names|join:', ' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<style>
+    #pag_button_p {
+        padding: 4px 8px; /* Reduce padding */
+        font-size: 12px;  /* Decrease font size */
+        line-height: 1.2; /* Adjust line height */
+    }
+    #pag_button_s {
+        padding: 4px 8px; /* Reduce padding */
+        font-size: 14px;  /* Decrease font size */
+        line-height: 1.4; /* Adjust line height */
+    }
+</style>
+
+<!-- <div class="vf-pagination" style="text-align: center; margin-top: 20px;"> -->
+
+<div class="pagination" style="text-align: center; margin-top: 20px;">
+    <button id="pag_button_p" class="vf-button vf-button--primary" data-page="1">First</button>
+    {% if results.has_previous %}
+      <button id="pag_button_s" class="vf-button vf-button--secondary" data-page="{{ results.previous_page_number }}">Previous</button>
+    {% else %}
+      <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Previous</button>
+    {% endif %}
+    <span class="vf-pagination__info">
+        Page {{ results.number }} of {{ results.paginator.num_pages }}
+    </span>
+
+    {% if results.has_next %}
+      <button id="pag_button_s" class="vf-button vf-button--secondary" data-page="{{ results.next_page_number }}">Next</button>
+    {% else %}
+      <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Next</button>
+    {% endif %}
+    <button id="pag_button_p" class="vf-button vf-button--primary" data-page="{{ results.paginator.num_pages }}">Last</button>
+  </div>
+

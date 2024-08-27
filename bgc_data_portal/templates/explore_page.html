@@ -1,0 +1,413 @@
+
+{% extends 'base.html' %}
+{% block title %}Search Results{% endblock %}
+
+{% block content %}
+
+<style>
+  /* Tooltip container */
+  .tooltip-container {
+    position: relative;
+    display: inline-block;
+  }
+
+  /* Superscript encircled "?" icon */
+  .tooltip-container .tooltip-icon {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 50%;
+    background-color: #007cbb;
+    color: #fff;
+    font-weight: bold;
+    font-size: 10px;
+    cursor: pointer;
+    vertical-align: super;
+    margin-left: 5px;
+  }
+
+  /* Tooltip text */
+  .tooltip-container .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    border-radius: 5px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 150%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  /* Tooltip arrow */
+  .tooltip-container .tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #555 transparent transparent transparent;
+  }
+
+  /* Show the tooltip text when hovering over the tooltip container */
+  .tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .page-container {
+    display: flex;
+    gap: 20px;
+  }
+
+  .search-sidebar {
+    flex: 0 0 30%;
+    max-width: 300px;
+    background-color: #fff;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .content-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .vf-summary-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    background-color: #f7f7f7;
+    padding: 20px;
+  }
+
+  .vf-section-header {
+    margin-bottom: 20px;
+  }
+
+  .results-container {
+    flex: 1;
+    background-color: #fff;
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  .vf-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+
+  .vf-table__header th,
+  .vf-table__cell {
+    padding: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+    border: 1px solid #ddd;
+  }
+
+  .vf-table__header th {
+    background-color: #f7f7f7;
+    font-weight: bold;
+  }
+
+  .vf-table__cell a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .vf-table__cell a:hover {
+    text-decoration: underline;
+  }
+
+  .vf-table__row:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+
+  #pag_button_as {
+    padding: 4px 8px;
+    font-size: 16px;
+    line-height: 1.8;
+  }
+
+  .vf-summary {
+    font-size: 0.875rem;
+    padding: 0.1rem;
+    margin: 0.1rem 0;
+  }
+
+  .vf-summary__title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .vf-summary__text {
+    font-size: 0.875rem;
+    margin-bottom: 0;
+  }
+</style>
+
+<div class="page-container">
+  <!-- Search Sidebar -->
+  <aside class="search-sidebar">
+    <form id="search-form" action="{% url 'explore' %}" method="get" class="vf-form">
+      <h2>Advanced Search</h2>
+      
+      
+      <!-- BGC Class Name -->
+      <div class="vf-form__item">
+        <label for="bgc_class_name" class="vf-form__label">BGC Class Name
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The BGC Class Name is used to classify the biosynthetic gene clusters based on their type.</span>
+          </span>
+        </label>
+        <input type="text" id="bgc_class_name" name="bgc_class_name" class="vf-form__input" value="{{ request.GET.bgc_class_name }}">
+      </div>
+
+      <!-- BGC Accession -->
+      <div class="vf-form__item">
+        <label for="mgyb" class="vf-form__label">BGC Accession
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The BGC Accession is the unique identifier assigned to a biosynthetic gene cluster.</span>
+          </span>
+        </label>
+        <input type="text" id="mgyb" name="mgyb" class="vf-form__input" value="{{ request.GET.mgyb }}">
+      </div>
+
+      <!-- Assembly Accession -->
+      <div class="vf-form__item">
+        <label for="assembly_accession" class="vf-form__label">Assembly Accession
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The Assembly Accession is the identifier for the assembled sequence from which the BGC was predicted.</span>
+          </span>
+        </label>
+        <input type="text" id="assembly_accession" name="assembly_accession" class="vf-form__input" value="{{ request.GET.assembly_accession }}">
+      </div>
+
+      <!-- Contig MGYC -->
+      <div class="vf-form__item">
+        <label for="contig_mgyc" class="vf-form__label">Contig MGYC
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The Contig MGYC is the identifier for the contig that contains the BGC.</span>
+          </span>
+        </label>
+        <input type="text" id="contig_mgyc" name="contig_mgyc" class="vf-form__input" value="{{ request.GET.contig_mgyc }}">
+      </div>
+
+      <!-- Biome lineage -->
+      <div class="vf-form__item">
+        <label for="biome_lineage" class="vf-form__label">Biome
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The Biome refers to the ecological community where the BGC was found.</span>
+          </span>
+        </label>
+        <input type="text" id="biome_lineage" name="biome_lineage" class="vf-form__input" value="{{ request.GET.biome_lineage }}">
+      </div>
+
+      <!-- Truncation -->
+      <div class="vf-form__item">
+        <label for="Edges" class="vf-form__label">BGC Completeness
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">BGC Completeness indicate whether the BGC is full_length, single-truncated, or double-truncated.</span>
+          </span>
+        </label>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="full_length" name="full_length" class="vf-checkbox__input" value="true"
+                 {% if request.GET.full_length == 'true' or request.GET.full_length is None %}checked{% endif %}>
+          <label for="full_length" class="vf-checkbox__label">Full-Length BGC</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
+                 {% if request.GET.single_truncated == 'true' or request.GET.single_truncated is None %}checked{% endif %}>
+          <label for="single_truncated" class="vf-checkbox__label">Single</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true"
+                 {% if request.GET.double_truncated == 'true' or request.GET.double_truncated is None %}checked{% endif %}>
+          <label for="double_truncated" class="vf-checkbox__label">Double</label>
+        </div>
+      </div>
+
+      <!-- Pfam -->
+      <div class="vf-form__item">
+        <label for="protein_pfam" class="vf-form__label">Pfam
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).</span>
+          </span>
+        </label>
+        <input type="text" id="protein_pfam" name="protein_pfam" class="vf-form__input" value="{{ request.GET.protein_pfam }}">
+      </div>
+
+      <!-- Pfam Strategy -->
+      <div class="vf-form__item">
+        <label for="pfam_strategy" class="vf-form__label">Pfam strategy
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Choose "AND" to include BGCs that match all Pfams, or "OR" to include BGCs that match any Pfam.</span>
+          </span>
+        </label>
+        <select id="pfam_strategy" name="pfam_strategy" class="vf-form__select">
+          <option value="intersection" {% if request.GET.pfam_strategy == "intersection" %}selected{% endif %}>AND</option>
+          <option value="union" {% if request.GET.pfam_strategy == "union" %}selected{% endif %}>OR</option>
+        </select>
+      </div>
+
+      <!-- Detectors -->
+      <div class="vf-form__item">
+        <label for="detectors" class="vf-form__label">BGC Detectors
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Select the detectors to filter BGCs by the tool used to identify them.</span>
+          </span>
+        </label>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true"
+                 {% if request.GET.antismash == 'true' or request.GET.antismash is None %}checked{% endif %}>
+          <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true"
+                 {% if request.GET.gecco == 'true' or request.GET.gecco is None %}checked{% endif %}>
+          <label for="gecco" class="vf-checkbox__label">GECCO</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true"
+                 {% if request.GET.sanntis == 'true' or request.GET.sanntis is None %}checked{% endif %}>
+          <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
+        </div>
+      </div>
+
+      <!-- Aggregate Strategy -->
+      <div class="vf-form__item">
+        <label for="aggregate_strategy" class="vf-form__label">Aggregate strategy
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Select the aggregate strategy for how results should be combined.</span>
+          </span>
+        </label>
+        <select id="aggregate_strategy" name="aggregate_strategy" class="vf-form__select">
+          <option value="single" {% if request.GET.aggregate_strategy == "single" %}selected{% endif %}>Single</option>
+          <option value="union" {% if request.GET.aggregate_strategy == "union" %}selected{% endif %}>Union</option>
+          <option value="intersection" {% if request.GET.aggregate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
+        </select>
+      </div>
+
+      
+      <!-- Submit Button -->
+      <div class="vf-form__item">
+        <button id="pag_button_as" type="submit" class="vf-button vf-button--primary">Apply</button>
+      </div>
+    </form>
+  </aside>
+
+ 
+    <!-- Results Table Section -->
+    <div class="results-container">
+      <div id="results">
+        {% if results %}
+          {% include 'explore_table.html' %}
+        {% else %}
+        <div class="content-section">
+          <!-- Summary Section -->
+          <div id="results_summary" class="vf-summary-container">
+            {% if not results %}
+              <div class="vf-section-header">
+                <h2 class="vf-section-header__heading">Explore the data</h2>
+              </div>
+            {% else %}
+              <div class="vf-section-header">
+                <h2 class="vf-section-header__heading">Your results</h2>
+              </div>
+            {% endif %}
+            <div class="vf-section-content | vf-grid vf-grid__col-4">
+              <article class="vf-summary">
+                <h3 class="vf-summary__title">Total BGC</h3>
+                <div class="vf-summary__text predictor-class-grid">
+                  <strong>{{result_stats.total_regions}}</strong>
+                </div>
+              </article>
+              <article class="vf-summary">
+                <h3 class="vf-summary__title">Total Studies</h3>
+                <div class="vf-summary__text predictor-class-grid">
+                  <strong>{{result_stats.n_studies}}</strong>
+                </div>
+              </article>
+              <article class="vf-summary">
+                <h3 class="vf-summary__title">Total Assemblies</h3>
+                <div class="vf-summary__text predictor-class-grid">
+                  <strong>{{result_stats.n_assemblies}}</strong>
+                </div>
+              </article>
+              <article class="vf-summary">
+                <h3 class="vf-summary__title">Class distribution</h3>
+                <div class="vf-summary__text predictor-class-grid">
+                  {% for clss, counts in result_stats.bgc_class_dist.items %}
+                    <div>
+                      <strong>{{clss}}</strong>: {{counts}}
+                    </div>
+                  {% endfor %}
+                </div>
+              </article>
+            </div>
+          </div>
+        
+          <p class="default-message">Enter search criteria and click "Apply" to search for database.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    // Handle form submission
+    $('#search-form').on('submit', function(e) {
+      e.preventDefault();
+      loadResults(1);  // Load the first page of results
+    });
+
+    // Handle pagination button clicks
+    $(document).on('click', '.pagination button', function(e) {
+      e.preventDefault();
+      var page = $(this).data('page');  // Get the page number from the button's data attribute
+      loadResults(page);
+    });
+
+    function loadResults(page) {
+      $.ajax({
+        url: "{% url 'explore' %}",
+        type: "GET",
+        data: $('#search-form').serialize() + '&page=' + page,
+        success: function(response) {
+          $('#results').html(response);
+        },
+        error: function(xhr, status, error) {
+          console.error("AJAX Error:", status, error);
+          $('#results').html('<p>An error occurred. Please try again.</p>');
+        }
+      });
+    }
+  });
+</script>
+
+{% endblock %}
