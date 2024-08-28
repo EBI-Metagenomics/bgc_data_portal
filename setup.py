@@ -27,7 +27,7 @@ setup(
         'seaborn',
         'requests',
         'plotly',
-        # '',
+        'django-filter',
         # '',
     ],
     extras_require={

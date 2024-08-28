@@ -60,12 +60,12 @@
     {% for bgc in results %}
     <tr class="vf-table__row">
       <td class="vf-table__cell">
-        <a href="{% url 'bgc_page' bgc.contig_mgyc bgc.start_position bgc.end_position %}">
+        <a href="{% url 'bgc_page' bgc.mgyc bgc.start_position bgc.end_position %}">
           {{ bgc.mgybs.0 }}
         </a>
       </td>
-      <td class="vf-table__cell">{{ bgc.assembly_accession }}</td>
-      <td class="vf-table__cell">{{ bgc.contig_mgyc }}</td>
+      <td class="vf-table__cell">{{ bgc.mgyc.assembly.accession }}</td>
+      <td class="vf-table__cell">{{ bgc.mgyc.mgyc }}</td>
       <td class="vf-table__cell">{{ bgc.start_position }}</td>
       <td class="vf-table__cell">{{ bgc.end_position }}</td>
       <td class="vf-table__cell">{{ bgc.bgc_detector_names|join:', ' }}</td>

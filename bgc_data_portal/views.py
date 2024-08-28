@@ -6,13 +6,17 @@ import os
 from django.http import FileResponse, Http404
 from django.conf import settings
 from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,download_bgcs
+from api.models import Bgc
 from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
 import logging
 from collections import Counter
 from bgc_plots.class_distribution_plots import generate_horizontal_bar_plot_html
 
-from api.utils import get_region_features
+from api.utils import get_region_features, DB_STATS
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
+
+from api.forms import BgcAdvancedSearchForm
+from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,6 +45,102 @@ def landing_page(request):
     return render(request, 'landing_page.html')
 
 def explore(request):
+
+    form = request.GET
+
+    if form.get('keyword'):
+        results = search_bgcs_by_keyword(form.get('keyword'))
+
+    elif form.get('aggregate_strategy'):
+        results = search_bgcs_by_advanced(form)
+    else:
+        results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()
+
+    # generate class dist plots
+    result_stats = dict(
+        total_regions=len(results),
+        bgc_class_dist=dict(Counter([bgc.bgc_class_names[0].split(',')[0] for bgc in results])),
+        n_assemblies=results.values('mgyc__assembly__accession').distinct().count(),
+        n_studies=results.values('mgyc__assembly__study').distinct().count(),
+    ) 
+    # partials_dist = Counter([str(bgc.bgc_class_names).split(',')[0] for bgc in results])
+
+    page = request.GET.get('page', 1)
+    paginator = Paginator(list(results), 10)  # Show 10 items per page
+    try:
+        paginated_results = paginator.page(page)
+    except PageNotAnInteger:
+        paginated_results = paginator.page(1)
+    except EmptyPage:
+        paginated_results = paginator.page(paginator.num_pages)
+
+    context = {
+        'results': paginated_results,
+        'request_params': form,
+        'result_stats': result_stats if form else DB_STATS,
+        'advanced_form': BgcAdvancedSearchForm,
+    }
+
+    # If it's an AJAX request, return the partial table
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'explore_table.html', context)
+    
+    # Otherwise, return the full page
+    return render(request, 'explore_page.html', context)
+    plot_html = None
+    
+    total_regions = None
+    bgc_class_dist = None
+    n_assemblies = None
+    n_studies = None
+    default_bgc_class_dist = {'TERPENE': 1001, 'NRPS': 1233, 'SACCHARIDE': 5824, 'POLYKETIDE': 637, 'NRP': 21310, 'RIPP': 417, 'UNKNOWN': 3342, 'ALKALOID': 124, 'OTHER': 540}
+    defeult_total_regions = 50012
+    default_n_studies= 4209
+    default_n_assemblies = 5200
+
+    if request.GET:
+        try:
+            complex_query_params = BgcSearchCallSchema(
+                antismash=request.GET.get('antismash', 'true') == 'true',
+                gecco=request.GET.get('gecco', 'true') == 'true',
+                sanntis=request.GET.get('sanntis', 'true') == 'true',
+                bgc_class_name=request.GET.get('bgc_class_name'),
+                mgyb=request.GET.get('mgyb'),
+                assembly_accession=request.GET.get('assembly_accession'),
+                contig_mgyc=request.GET.get('contig_mgyc'),
+                full_length=request.GET.get('full_length', 'true') == 'true',
+                single_truncated=request.GET.get('single_truncated', 'true') == 'true',
+                double_truncated=request.GET.get('double_truncated', 'true') == 'true',
+                biome_lineage=request.GET.get('biome_lineage'),
+                protein_pfam=request.GET.get('protein_pfam',''),
+                pfam_strategy=PfamStrategy(request.GET.get('pfam_strategy', 'intersection')),
+                aggregate_strategy=Aggregate(request.GET.get('aggregate_strategy', 'single'))
+            )
+
+            if keyword:
+                _results,_bgcs = perform_keyword_search(keyword)
+            elif request.GET:
+                _results,_bgcs = perform_complex_search(complex_query_params)
+                
+
+        except Exception as e:
+            print('error:', e)
+            results = None  # Ensure results is always defined even in case of an error
+
+    # stats dictionary
+    result_stats = {
+        'total_regions':total_regions or defeult_total_regions,
+        'bgc_class_dist': bgc_class_dist or default_bgc_class_dist,
+        'n_assemblies': n_assemblies or default_n_assemblies,
+        'n_studies': n_studies or default_n_studies,
+        }
+
+    print(result_stats)
+
+
+
+
+
     results = None
     _results = None
     page = request.GET.get('page', 1)

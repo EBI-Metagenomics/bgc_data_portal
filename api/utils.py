@@ -2,6 +2,7 @@
 from functools import reduce
 import json
 import operator
+from collections import Counter
 from django.http import Http404
 import pandas as pd
 from .schemas import PfamStrategy
@@ -13,6 +14,43 @@ from django.db.models import Q,F
 class RegionFeatureError(Exception):
     """Custom exception for errors related to region features."""
     pass
+
+def generate_bgc_statistics():
+    """Generate dictionary with summary statistics of db"""
+    # Start with an empty QuerySet
+    results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
+    # Generate the required statistics
+    result_stats = dict(
+        # Total regions is the length of the QuerySet
+        total_regions=len(results),
+
+        # Distribution of BGC classes
+        bgc_class_dist=dict(Counter(
+            # Access bgc_class_names, split on ',', and take the first element for each result
+            [bgc.bgc_class.bgc_class_name.split(',')[0] for bgc in results if bgc.bgc_class]
+        )),
+
+        # Count of distinct assemblies by their accession
+        n_assemblies=results.values('mgyc__assembly__accession').distinct().count(),
+
+        # Count of distinct studies
+        n_studies=results.values('mgyc__assembly__study').distinct().count(),
+    )
+
+    return result_stats
+
+DB_STATS = generate_bgc_statistics()
+
+def mgyb_converter(mgyb,text_to_int=True):
+    """Function to convert mgyb text to int and viceversa. Match fromat with Bgc.mgyb model """
+
+    mgyb_template = "MGYB{:012}"
+
+    if text_to_int:
+        return int(mgyb[4:])
+    else:
+        return mgyb_template.format(mgyb)
+
 
 
 def search_keyword_in_models(keyword: str):
