@@ -110,12 +110,6 @@ class GetContigRegionInput(Schema):
         description="The output format type for the result.",
         enum=['fasta', 'gbk', 'json'],
     )
-    precomuted_data: Optional[Tuple] = Field(
-        None,
-        title="precomuted_data for internal service use",
-        exclude_from_schema=True,
-        description="Leave it in blank.", # This is to avoid double calculation of region features when called within the service.
-    )
 
 
 
@@ -135,10 +129,4 @@ class GetContigRegionVisualisationInput(Schema):
         None,
         title="End Position",
         description="The end position of the sequence."
-    )
-    precomuted_data: Optional[Tuple] = Field(
-        None,
-        title="precomuted_data for internal service use",
-        exclude_from_schema=True,
-        description="Leave it in blank.", # This is to avoid double calculation of region features when called within the service.
     )

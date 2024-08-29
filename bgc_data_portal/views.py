@@ -5,10 +5,12 @@ from django.views.generic import TemplateView
 import os
 from django.http import FileResponse, Http404
 from django.conf import settings
+from ninja import Query
 from api.api import get_contig_region
 from api.models import Bgc
 import logging
 from collections import Counter
+from api.schemas import GetContigRegionInput
 from bgc_plots.class_distribution_plots import generate_horizontal_bar_plot_html
 
 from api.utils import get_region_features, DB_STATS
@@ -89,10 +91,12 @@ def explore(request):
 
 def bgc_page(request, mgyc,start_position,end_position):
     # Extract the relevant parameters for the plot from the request or use defaults
-    # print('ksksksks')
+    # # print('ksksksks')
     try:
         start_position = int(start_position)
         end_position = int(end_position)
+
+        # print(mgyc,start_position,end_position)
 
         contig, assembly_accession,features_df = get_region_features(
             mgyc,
@@ -100,7 +104,6 @@ def bgc_page(request, mgyc,start_position,end_position):
             end_position,
             extended_window=EXTENDED_NUCLEOTIDE_WINDOW
             )
-        
         # remove tails to avoid ploting more that the desired EXTENDED_NUCLEOTIDE_WINDOW
         features_df['start'] = features_df['start'].map(lambda x:max(start_position-EXTENDED_NUCLEOTIDE_WINDOW,x))
         features_df['end'] = features_df['end'].map(lambda x:min(end_position+EXTENDED_NUCLEOTIDE_WINDOW,x))
@@ -145,7 +148,7 @@ def bgc_page(request, mgyc,start_position,end_position):
                     'description':pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('description',''),
                 })
 
-            # print(cds_info_dict[p]['pfam'])
+            # # print(cds_info_dict[p]['pfam'])
         # format fetures for download
         download_features = features_df[(features_df['start']<=end_position)&(features_df['end']>=start_position)]
         download_features['start'] = download_features['start'].map(lambda x:max(start_position,x))
@@ -163,33 +166,21 @@ def bgc_page(request, mgyc,start_position,end_position):
             'mgyc': mgyc,
             'start_position': start_position,
             'end_position': end_position,
-            'precomuted_data': (contig, assembly_accession, download_features)
         })
     except Exception as e:
         logging.error(f"Error in bgc_page view: {e}")
         return HttpResponse(f"An error occurred: {e}", status=500)
 
-def download_bgc_data(request, mgyc, start_position, end_position, precomuted_data=False):
-    # try:
-        start_position = int(start_position)
-        end_position = int(end_position)
-        
-        output_type = request.GET.get('output_type', 'gbk')  # Default to GenBank if not specified
+def download_bgc_data(request, mgyc, start_position, end_position):
+    params_instance = GetContigRegionInput(
+        mgyc=mgyc,
+        start_position=start_position,
+        end_position=end_position,
+        output_type=request.GET.get('output_type'),
+    )
 
-        # Call the API function to get the download data
-        response = get_contig_region(
-            request,
-            mgyc=mgyc,
-            start_position=start_position,
-            end_position=end_position,
-            output_type=OutputType(output_type),
-            precomuted_data=precomuted_data,
-        )
+    return get_contig_region( request, params_instance)
 
-        return response
-    # except Exception as e:
-        # logging.error(f"Error in bgc_page view: {e}")
-        # return HttpResponse(f"An error occurred: {e}", status=500)
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)

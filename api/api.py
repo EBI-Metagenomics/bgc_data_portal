@@ -98,17 +98,14 @@ def get_contig_region(request, params: GetContigRegionInput = Query(...)):
 
     Provide the MGYC, start position, and end position to retrieve the BGC data 
     in your desired format (FASTA, GeneBank, JSON, GFF3).
-    - **precomuted_data**: Should be set as false
     """
 
-    if params.precomuted_data:
-       contig, assembly_accession, features_df = params.precomuted_data
-    else:
-        try:
-            contig, assembly_accession, features_df = get_region_features(params.mgyc, params.start_position, params.end_position)
-        except RegionFeatureError as e:
-            raise Http404(str(e))
+    try:
+        contig, assembly_accession, features_df = get_region_features(params.mgyc, params.start_position, params.end_position)
+    except RegionFeatureError as e:
+        raise Http404(str(e))
 
+    print(params.mgyc, params.start_position, params.end_position)
     # Generate the requested output format
     write_output_function = getattr(WriteRegion, params.output_type)
     output_content = write_output_function(contig, params.start_position, params.end_position, assembly_accession, features_df)
@@ -125,15 +122,11 @@ def get_contig_region_plot(request, params: GetContigRegionVisualisationInput = 
 
     Provide the MGYC, start position, and end position to view the BGC region. 
     The plot includes coding regions, Pfam annotations, and BGC predictions from various detectors.
-    - **precomuted_data**: Should be set as false
     """
-    if params.precomuted_data:
-       _, _, features_df = params.precomuted_data
-    else:
-        try:
-            _, _, features_df = get_region_features(params.mgyc, params.start_position, params.end_position)
-        except RegionFeatureError as e:
-            raise Http404(str(e))
+    try:
+        _, _, features_df = get_region_features(params.mgyc, params.start_position, params.end_position)
+    except RegionFeatureError as e:
+        raise Http404(str(e))
     
     plot_html = ContigRegionViewer.plot_contig_region(features_df)
     return plot_html

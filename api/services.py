@@ -26,7 +26,7 @@ def search_bgcs_by_advanced(criteria):
     Get BGC queryset based on advanced search criteria.
     """
 
-    # print(criteria)
+    # # print(criteria)
 
     qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
 

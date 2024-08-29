@@ -60,7 +60,7 @@
     {% for bgc in results %}
     <tr class="vf-table__row">
       <td class="vf-table__cell">
-        <a href="{% url 'bgc_page' bgc.mgyc bgc.start_position bgc.end_position %}">
+        <a href="{% url 'bgc_page' bgc.mgyc.mgyc bgc.start_position bgc.end_position %}">
           {{ bgc.mgybs.0 }}
         </a>
       </td>

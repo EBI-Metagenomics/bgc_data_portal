@@ -33,7 +33,7 @@ class BgcKeywordFilter(django_filters.FilterSet):
         # Build the BGC query
         bgc_query = Q(bgc_detector__bgc_detector_name__icontains=value)
         bgc_query |= Q(bgc_metadata__icontains=value)
-        # print(len(queryset.filter(bgc_query).values_list('mgyb', flat=True).all()))
+        # # print(len(queryset.filter(bgc_query).values_list('mgyb', flat=True).all()))
         
         mgyb_filtered_qs = MgybConverterFilter(field_name='mgyb').filter(queryset, value)       
         # Filter Contig by the keyword
@@ -129,7 +129,7 @@ class BgcFilter(django_filters.FilterSet):
         return queryset
 
     def filter_by_protein_pfam(self, queryset, name, value):
-        print(self.data.get('protein_pfam'))
+        # print(self.data.get('protein_pfam'))
         pfam = [pfam.strip() for pfam in re.split("[, ]",self.data.get('protein_pfam', ''))]
         pfam_strategy = self.data.get('pfam_strategy', 'intersection')
         
@@ -142,7 +142,7 @@ class BgcFilter(django_filters.FilterSet):
                 )
                 for pfam_item in pfam  # Assuming multiple pfams are comma-separated
             ]
-            print('HEREE: ',pfam)
+            # print('HEREE: ',pfam)
 
 
             if pfam_queries:

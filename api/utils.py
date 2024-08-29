@@ -97,11 +97,16 @@ def get_region_features(
         Returns:
             pd.DataFrame: DataFrame containing the formatted feature data.
         """
+
+        # Delimit features window with extention
+        window_start = start_position - extended_window
+        window_end = end_position + extended_window
+
         try:
             contig, assembly_accession, bgcs, protein_metadata = find_region_features(
                 mgyc=mgyc,
-                start_position=start_position - extended_window,
-                end_position=end_position + extended_window,
+                start_position=window_start,
+                end_position=window_end,
             )
         except RegionFeatureError as e:
             raise Http404(str(e))
@@ -136,7 +141,7 @@ def get_region_features(
             'score': None,
             'strand': 0,
             'attrib':{
-                'ID': f"{mgyc}_{start_position}-{end_position}",
+                'ID': f"{mgyc}-{start_position}-{end_position}",
                 'BGC_CLASS':"Aggregated region"},
         })
 
@@ -191,5 +196,12 @@ def get_region_features(
                         # 'PFAM':pfam_id,
                         },
                 })
-        return contig, assembly_accession,pd.DataFrame(features)
+
+        # Add limits to avoid features going neyon de defined limits
+        features_df = pd.DataFrame(features)
+        features_df = features_df[(features_df.start<=window_end)&(features_df.end>=window_start)]
+        features_df['start'] = features_df['start'].apply(lambda x: max(x, window_start))
+        features_df['end'] = features_df['end'].apply(lambda x: min(x, window_end))
+
+        return contig, assembly_accession,features_df
 

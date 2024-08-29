@@ -193,21 +193,22 @@ class ContigRegionViewer:
             
 
         # Plot method tracks
-        method_positions = [-(shape_height * 1.2) - i * method_track_offset for i in range(len(method_data))]
+        method_positions = {row[legend_trace_name_column]:(-(shape_height * 1.2) - i * method_track_offset) for i,(_,row) in enumerate(method_data.sort_values([legend_rank_column,'source']).drop_duplicates(legend_trace_name_column).iterrows())}
+        print(method_positions)
         for i, (_,row) in enumerate(method_data.sort_values([legend_rank_column,'source']).iterrows()):
             trace = go.Scatter(
                 x=[row['start'], row['end']],
-                y=[method_positions[i], method_positions[i]],
+                y=[method_positions[row[legend_trace_name_column]], method_positions[row[legend_trace_name_column]]],
                 mode="lines",
                 line=dict(color=row[color_column], width=9.),
                 hoverinfo="text",
                 text=f"{row[names]}: {row['start']} - {row['end']}",
-                showlegend= True,#row[legend_trace_name_column] not in added_legends,
+                showlegend= row[legend_trace_name_column] not in added_legends,
                 legendgroup='BGCs',#row[legend_text_column],
                 legendgrouptitle_text='BGC',#row[legend_text_column],
                 legendrank=row[legend_rank_column],
                 name=row['source'],
-                customdata=("",row['attrib'].get('mgyp')),
+                customdata=(None,None),
             )
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
@@ -215,7 +216,7 @@ class ContigRegionViewer:
         # Layout adjustments
         layout = go.Layout(
             xaxis=dict(showgrid=False, zeroline=False, range=xaxis_range),
-            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[min(method_positions) - shape_height, shape_height]),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[min(method_positions.values()) - shape_height, shape_height]),
             showlegend=show_legend,
             plot_bgcolor=background_color,
             paper_bgcolor=background_color,
@@ -238,6 +239,7 @@ class ContigRegionViewer:
             HTML string of plotly.graph_objs.Figure: The generated plotly figure.
         """
         features_df = ContigRegionViewer.format_data_for_plot(_features_df)
+        print(features_df.groupby('source').sample(1))
         fig =  ContigRegionViewer.create_bgc_plot(features_df)
         html_str = pio.to_html(fig, full_html=False, div_id='bgc-plot')  # full_html=False to embed in an existing HTML structure
         return html_str

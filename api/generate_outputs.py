@@ -73,6 +73,7 @@ class WriteRegion:
                 )
                 record.features.append(feature)
 
+            print(row)
             if row['type'] == 'ANNOT':
                 protein = row['attrib']
                 feature = SeqFeature(
@@ -88,6 +89,7 @@ class WriteRegion:
                     }
                 )
                 record.features.append(feature)
+            print('CACHIMBA')
 
         genbank_io = io.StringIO()
         SeqIO.write(record, genbank_io, "genbank")
@@ -125,18 +127,17 @@ class WriteRegion:
             f"Region: {start_position}-{end_position}, "
             f"Generated using {__name__} version {__version__}."
         )
-
         details = {'Detected BGCs': [], 'Sequence description': contig_description}
         for _, row in region_df.iterrows():
             if row['type'] == 'CLUSTER':
-                mgyb = row['mgyb']
+                mgyb = row['attrib']['ID']
                 detector = row['source'] if pd.notna(row['source']) else "Unknown"
                 detector_version = row['attrib'].get('detector_version', "Unknown")
                 bgc_class = row['attrib'].get('BGC_CLASS') if pd.notna(row['attrib'].get('BGC_CLASS')) else "Unknown"
                 start_position_str = str(max(row['start'], start_position))
                 end_position_str = str(min(row['end'], end_position))
                 details["Detected BGCs"].append(
-                    f"Accession: {mgyb};Start {start_position_str}; End: {end_position_str}; Detector: {detector}v{detector_version};Class: {bgc_class}; "
+                    f"Accession: {mgyb};Start {start_position_str}; End: {end_position_str}; Detector: {detector};Detector version:{detector_version};Class: {bgc_class}; "
                 )
 
         subregion = {
