@@ -4,6 +4,7 @@ from ninja.pagination import paginate
 from ninja.errors import HttpError
 from typing import Any, List, Optional, Union, Tuple
 from enum import Enum
+from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
 from django.db.models import Q
 from ninja import Query
 import pandas as pd
@@ -19,7 +20,7 @@ from bgc_data_portal import __version__, __name__, __description__
 
 
 api = NinjaAPI(
-    title="Biosynthetic Gene Cluster (BGC) Portal API",
+    title="MGnify Biosynthetic Gene Clusters Portal API",
     description="API for accessing and retrieving biosynthetic gene cluster predictions from metagenomic assemblies.",
     version=__version__,
     docs_url="/docs/"
@@ -130,8 +131,18 @@ def search_by_keyword(request, keyword: str):
     Use this endpoint to retrieve BGCs based on keywords or accession numbers.
     This is equivalent to the portal's keyword search.
     """
-    aggregated_result, _ =  perform_keyword_search(keyword)
-    return aggregated_result
+    search_results = search_bgcs_by_keyword(keyword)
+
+    return [ BgcSearchUserOutputSchema( mgybs=bgc.mgybs,
+                    assembly_accession=bgc.mgyc.assembly.accession,
+                    contig_mgyc=bgc.mgyc.mgyc,
+                    start_position=bgc.start_position,
+                    end_position=bgc.end_position,
+                    bgc_detector_names=bgc.bgc_detector_names,
+                    bgc_class_names=bgc.bgc_class_names
+            ) 
+            for bgc in search_results 
+    ]
 
 @api.get("/bgcs/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Advanced search for BGCs")
 @paginate

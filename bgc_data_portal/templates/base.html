@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Biosynthetic Gene Cluster Portal{% endblock %}</title>
+    <title>{% block title %}MGnify Biosynthetic Gene Clusters{% endblock %}</title>
     <!-- Visual Framework CSS from CDN -->
     <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -38,7 +38,7 @@
         <div class="vf-hero__content | vf-box | vf-stack vf-stack--400">
             <span class="vf-badge vf-badge--primary">beta</span>
             <h2 class="vf-hero__heading"> 
-                <a href="{% url 'landing_page' %}" style="text-decoration: none; color: inherit;">Biosynthetic Gene Cluster Portal</a> 
+                <a href="{% url 'landing_page' %}" style="text-decoration: none; color: inherit;">MGnify Biosynthetic Gene Clusters</a> 
             </h2>
             <p class="vf-hero__text">Explore biosynthetic gene clusters.</p>
             <form action="{% url 'explore' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
@@ -62,7 +62,7 @@
                     <a href="{% url 'landing_page' %}" class="vf-navigation__link" aria-current="page">Home</a>
                 </li>
                 <li class="vf-navigation__item">
-                    <a href="docs_index" class="vf-navigation__link">Documents</a>
+                    <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documents</a>
                 </li>
                 <li class="vf-navigation__item">
                     <a href="/api/v1/docs" class="vf-navigation__link">API</a>

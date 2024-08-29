@@ -68,7 +68,8 @@ class BgcAdvancedSearchForm(forms.Form):
             (2, 'Double-Truncated')
         ],
         label='Select Detectors',
-        help_text='Filter BGCs detected by completeness. Full-Length BGC indicates if the BGC is full-length; Single-Truncated indicates if the BGC is single-truncated; Double-Truncated indicates if the BGC is double-truncated.'
+        help_text='Filter BGCs detected by completeness. Full-Length BGC indicates if the BGC is full-length; Single-Truncated indicates if the BGC is single-truncated; Double-Truncated indicates if the BGC is double-truncated.',
+        initial=[0,1,2]
     )
     
     protein_pfam = forms.CharField(
@@ -101,12 +102,13 @@ class BgcAdvancedSearchForm(forms.Form):
             'style': 'margin-bottom: 10px;'  # Add inline styles for spacing
         }),
         choices=[
-            ('antismash', 'antiSMASH'),
-            ('gecco', 'GECCO'),
-            ('sanntis', 'SanntiS')
+            ('antiSMASH', 'antiSMASH'),
+            ('GECCO', 'GECCO'),
+            ('SanntiS', 'SanntiS')
         ],
         label='Select Detectors',
-        help_text='Filter BGCs detected by the selected detectors.'
+        help_text='Filter BGCs detected by the selected detectors.',
+        initial=['antiSMASH','GECCO','SanntiS']
     )
 
     aggregate_strategy = forms.ChoiceField(

@@ -6,8 +6,8 @@ execute:
     freeze: auto
     
 website:
-  title: "Biosynthetic Gene Cluster Portal Documentation"
-  description: "Guides, examples, and API documentation for using the Biosynthetic Gene Cluster Portal."
+  title: "MGnify Biosynthetic Gene Clusters Portal Documentation"
+  description: "Guides, examples, and API documentation for using the MGnify Biosynthetic Gene Clusters Portal."
   page-navigation: true
 
   navbar:
@@ -46,10 +46,6 @@ format:
       - zephyr
       - styles.scss
     toc: true
-    # toc-location: left
-    # toc-depth: 3
-    # toc-active-border: true
-    # code-fold: false
 
 # # Sections
 files:
@@ -59,11 +55,3 @@ files:
   - using-portal/search-results.qmd
   - using-portal/bgc-details.qmd
   - api-documentation.qmd
-
-
-# # Additional options
-# metadata:
-#   title: "Biosynthetic Gene Cluster Portal Documentation"
-#   # description: "Documentation for the BGC Portal, including user guides, API instructions, and use cases."
-#   author: "Microbiome Informatics Team, EMBL-EBI"
-#   date: "2024"

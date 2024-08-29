@@ -6,7 +6,7 @@ date: "2024-08-20"
 ---
 
 
-The Home Page serves as the primary navigation hub for the **Biosynthetic Gene Cluster (BGC) Portal**. This page provides quick access to the main functionalities of the portal, allowing users to search for BGCs, access API documentation, find user guides, and learn more about the project.
+The Home Page serves as the primary navigation hub for the **MGnify Biosynthetic Gene Clusters**. This page provides quick access to the main functionalities of the portal, allowing users to search for BGCs, access API documentation, find user guides, and learn more about the project.
 
 ## Keyword Search
 

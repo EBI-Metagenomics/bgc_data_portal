@@ -6,7 +6,7 @@ date: "2024-08-20"
 ---
 
 
-This section provides a detailed guide on how to explore the BGC details page within the Biosynthetic Gene Cluster (BGC) Portal. Users can gain insights into the predicted BGC regions, understand various annotations, and download relevant data files.
+This section provides a detailed guide on how to explore the BGC details page within the MGnify Biosynthetic Gene Clusters. Users can gain insights into the predicted BGC regions, understand various annotations, and download relevant data files.
 
 
 ## Basic Information

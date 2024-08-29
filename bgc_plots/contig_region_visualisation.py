@@ -46,7 +46,7 @@ DETECTOR_COLORS = {
 }
 
 class ContigRegionViewer:
-    """A class for visualizing contig regions in a biosynthetic gene cluster (BGC)."""
+    """A class for visualizing contig regions in a biosynthetic gene cluster."""
 
     @staticmethod
     def format_data_for_plot(features_df) -> pd.DataFrame:
@@ -130,7 +130,7 @@ class ContigRegionViewer:
                         background_color: str = "white", method_track_offset: float = 0.0005, 
                         **layout_kwargs):
         """
-        Creates a plot for the biosynthetic gene cluster (BGC) features.
+        Creates a plot for the biosynthetic gene cluster features.
 
         Args:
             features_df (pd.DataFrame): DataFrame containing the feature data.
