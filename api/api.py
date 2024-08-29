@@ -105,7 +105,7 @@ def get_contig_region(request, params: GetContigRegionInput = Query(...)):
     except RegionFeatureError as e:
         raise Http404(str(e))
 
-    print(params.mgyc, params.start_position, params.end_position)
+
     # Generate the requested output format
     write_output_function = getattr(WriteRegion, params.output_type)
     output_content = write_output_function(contig, params.start_position, params.end_position, assembly_accession, features_df)

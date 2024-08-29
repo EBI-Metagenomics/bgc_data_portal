@@ -11,11 +11,8 @@ from api.models import Bgc
 import logging
 from collections import Counter
 from api.schemas import GetContigRegionInput
-from bgc_plots.class_distribution_plots import generate_horizontal_bar_plot_html
-
 from api.utils import get_region_features, DB_STATS
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
-
 from api.forms import BgcAdvancedSearchForm
 from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
 
@@ -60,9 +57,9 @@ def explore(request):
     # generate class dist plots
     result_stats = dict(
         total_regions=len(results),
-        bgc_class_dist=dict(Counter([bgc.bgc_class_names[0].split(',')[0] for bgc in results])),
-        n_assemblies=results.values('mgyc__assembly__accession').distinct().count(),
-        n_studies=results.values('mgyc__assembly__study').distinct().count(),
+        bgc_class_dist=dict(Counter([bgc.bgc_class_names[0] for bgc in results])),
+        n_assemblies=len({aggregated_region.mgyc.assembly.accession for aggregated_region in results}),
+        n_studies=len({aggregated_region.mgyc.assembly.study_id for aggregated_region in results}),
     ) 
 
     page = request.GET.get('page', 1)
@@ -76,8 +73,7 @@ def explore(request):
 
     context = {
         'results': paginated_results,
-        'request_params': advanced_form,
-        'result_stats': result_stats if advanced_form else DB_STATS,
+        'result_stats': result_stats if advanced_form.is_valid() else DB_STATS,
         'advanced_form': BgcAdvancedSearchForm,
     }
 
@@ -91,12 +87,12 @@ def explore(request):
 
 def bgc_page(request, mgyc,start_position,end_position):
     # Extract the relevant parameters for the plot from the request or use defaults
-    # # print('ksksksks')
+
     try:
         start_position = int(start_position)
         end_position = int(end_position)
 
-        # print(mgyc,start_position,end_position)
+
 
         contig, assembly_accession,features_df = get_region_features(
             mgyc,
@@ -148,7 +144,7 @@ def bgc_page(request, mgyc,start_position,end_position):
                     'description':pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('description',''),
                 })
 
-            # # print(cds_info_dict[p]['pfam'])
+
         # format fetures for download
         download_features = features_df[(features_df['start']<=end_position)&(features_df['end']>=start_position)]
         download_features['start'] = download_features['start'].map(lambda x:max(start_position,x))

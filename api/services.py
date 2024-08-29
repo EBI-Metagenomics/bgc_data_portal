@@ -4,9 +4,10 @@ from django.db.models import Q, F
 from functools import reduce
 from operator import and_, or_
 from .models import Bgc
-from .filters import BgcFilter,BgcKeywordFilter, MgybConverterFilter
+from .filters import BgcKeywordFilter, MgybConverterFilter
 from .models import Bgc
 from .utils import mgyb_converter
+from .aggregate_bgcs import BgcAggregator
 
 def search_bgcs_by_keyword(keyword):
     # Initialize the filter with the keyword
@@ -18,7 +19,7 @@ def search_bgcs_by_keyword(keyword):
         mgyb_converted= mgyb_converter(bgc.mgyb,text_to_int=False)
         bgc.mgybs = [mgyb_converted]
         bgc.bgc_detector_names = [bgc.bgc_detector.bgc_detector_name]
-        bgc.bgc_class_names = [bgc.bgc_class.bgc_class_name]
+        bgc.bgc_class_names = bgc.bgc_class.bgc_class_name.split(',')
     return results
 
 def search_bgcs_by_advanced(criteria):
@@ -26,7 +27,6 @@ def search_bgcs_by_advanced(criteria):
     Get BGC queryset based on advanced search criteria.
     """
 
-    # # print(criteria)
 
     qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
 
@@ -77,8 +77,11 @@ def search_bgcs_by_advanced(criteria):
         mgyb_converted= mgyb_converter(bgc.mgyb,text_to_int=False)
         bgc.mgybs = [mgyb_converted]
         bgc.bgc_detector_names = [bgc.bgc_detector.bgc_detector_name]
-        bgc.bgc_class_names = [bgc.bgc_class.bgc_class_name]
-    return qs
+        bgc.bgc_class_names = bgc.bgc_class.bgc_class_name.split(',')
+
+    aggregate_function = getattr(BgcAggregator,criteria.get('aggregate_strategy'))
+    
+    return aggregate_function(qs)
 
 
 

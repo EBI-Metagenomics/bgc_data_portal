@@ -7,7 +7,7 @@
       </div>
     {% else %}
       <div class="vf-section-header">
-        <h2 class="vf-section-header__heading">Your results</h2>
+        <h2 class="vf-section-header__heading">Search results</h2>
       </div>
     {% endif %}
     <div class="vf-section-content | vf-grid vf-grid__col-4">
@@ -47,29 +47,31 @@
 <table class="vf-table">
   <thead class="vf-table__header">
     <tr class="vf-table__row">
-      <th class="vf-table__heading" scope="col">BGC Accession</th>
-      <th class="vf-table__heading" scope="col">Assembly Accession</th>
-      <th class="vf-table__heading" scope="col">Contig MGYC</th>
-      <th class="vf-table__heading" scope="col">Start Position</th>
-      <th class="vf-table__heading" scope="col">End Position</th>
-      <th class="vf-table__heading" scope="col">Detector Names</th>
-      <th class="vf-table__heading" scope="col">Class Names</th>
+      <th class="vf-table__heading" scope="col">MGYB</th>
+      <th class="vf-table__heading" scope="col">Assembly</th>
+      <th class="vf-table__heading" scope="col">MGYC</th>
+      <th class="vf-table__heading" scope="col">Start</th>
+      <th class="vf-table__heading" scope="col">End</th>
+      <th class="vf-table__heading" scope="col">Detectors</th>
+      <th class="vf-table__heading" scope="col">Classes </th>
+      <th class="vf-table__heading" scope="col">Details</th>
     </tr>
   </thead>
   <tbody class="vf-table__body">
     {% for bgc in results %}
     <tr class="vf-table__row">
-      <td class="vf-table__cell">
-        <a href="{% url 'bgc_page' bgc.mgyc.mgyc bgc.start_position bgc.end_position %}">
-          {{ bgc.mgybs.0 }}
-        </a>
-      </td>
+      <td class="vf-table__cell">{{ bgc.mgybs|join:', ' }}</td>
       <td class="vf-table__cell">{{ bgc.mgyc.assembly.accession }}</td>
       <td class="vf-table__cell">{{ bgc.mgyc.mgyc }}</td>
       <td class="vf-table__cell">{{ bgc.start_position }}</td>
       <td class="vf-table__cell">{{ bgc.end_position }}</td>
       <td class="vf-table__cell">{{ bgc.bgc_detector_names|join:', ' }}</td>
       <td class="vf-table__cell">{{ bgc.bgc_class_names|join:', ' }}</td>
+      <td class="vf-table__cell">
+        <a href="{% url 'bgc_page' bgc.mgyc.mgyc bgc.start_position bgc.end_position %}" target="_blank" onclick="window.open(this.href, '_blank'); return false;">
+          View
+        </a>
+      </td>
     </tr>
     {% endfor %}
   </tbody>

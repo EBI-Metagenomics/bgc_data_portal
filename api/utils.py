@@ -18,6 +18,7 @@ def generate_bgc_statistics():
     """Generate dictionary with summary statistics of db"""
     # Start with an empty QuerySet
     results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
+
     # Generate the required statistics
     result_stats = dict(
         # Total regions is the length of the QuerySet
@@ -36,6 +37,7 @@ def generate_bgc_statistics():
         n_studies=results.values('mgyc__assembly__study').distinct().count(),
     )
 
+    
     return result_stats
 
 DB_STATS = generate_bgc_statistics()

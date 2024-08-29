@@ -73,7 +73,7 @@ class WriteRegion:
                 )
                 record.features.append(feature)
 
-            print(row)
+
             if row['type'] == 'ANNOT':
                 protein = row['attrib']
                 feature = SeqFeature(
@@ -89,7 +89,7 @@ class WriteRegion:
                     }
                 )
                 record.features.append(feature)
-            print('CACHIMBA')
+
 
         genbank_io = io.StringIO()
         SeqIO.write(record, genbank_io, "genbank")

@@ -194,7 +194,7 @@ class ContigRegionViewer:
 
         # Plot method tracks
         method_positions = {row[legend_trace_name_column]:(-(shape_height * 1.2) - i * method_track_offset) for i,(_,row) in enumerate(method_data.sort_values([legend_rank_column,'source']).drop_duplicates(legend_trace_name_column).iterrows())}
-        print(method_positions)
+
         for i, (_,row) in enumerate(method_data.sort_values([legend_rank_column,'source']).iterrows()):
             trace = go.Scatter(
                 x=[row['start'], row['end']],
@@ -239,7 +239,7 @@ class ContigRegionViewer:
             HTML string of plotly.graph_objs.Figure: The generated plotly figure.
         """
         features_df = ContigRegionViewer.format_data_for_plot(_features_df)
-        print(features_df.groupby('source').sample(1))
+
         fig =  ContigRegionViewer.create_bgc_plot(features_df)
         html_str = pio.to_html(fig, full_html=False, div_id='bgc-plot')  # full_html=False to embed in an existing HTML structure
         return html_str

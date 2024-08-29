@@ -106,7 +106,7 @@
   .vf-table {
     width: 100%;
     table-layout: fixed;
-    border-collapse: collapse;
+    /* border-collapse: collapse; */
   }
 
   .vf-table__header th,
@@ -117,6 +117,7 @@
     text-overflow: ellipsis;
     max-width: 150px;
     border: 1px solid #ddd;
+    font-size: 14px; /* Reduce font size of table cells */
   }
 
   .vf-table__header th {
@@ -126,7 +127,60 @@
 
   .vf-table__cell a {
     text-decoration: none;
-    color: inherit;
+    /* color: inherit; */
+  }
+
+  .vf-table__cell a:hover {
+    text-decoration: underline;
+  }
+
+  .vf-table__row:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+    /* Set specific widths for columns */
+    .vf-table__header th:nth-child(1),
+  .vf-table__cell:nth-child(1) {
+    width: 20%; /* Adjust the width as needed */
+  }
+
+  .vf-table__header th:nth-child(2),
+  .vf-table__cell:nth-child(2) {
+    width: 12.5%; /* Adjust the width as needed */
+  }
+
+  .vf-table__header th:nth-child(3),
+  .vf-table__cell:nth-child(3) {
+    width: 20%; /* Adjust the width as needed */
+  }
+
+  .vf-table__header th:nth-child(4),
+  .vf-table__cell:nth-child(4) {
+    width: 9%; /* Adjust the width as needed */
+  }
+  .vf-table__header th:nth-child(5),
+  .vf-table__cell:nth-child(5) {
+    width: 9%; /* Adjust the width as needed */
+  }
+  .vf-table__header th:nth-child(6),
+  .vf-table__cell:nth-child(6) {
+    width: 15%; /* Adjust the width as needed */
+  }
+  .vf-table__header th:nth-child(7),
+  .vf-table__cell:nth-child(7) {
+    width: 15%; /* Adjust the width as needed */
+  }
+  .vf-table__header th:nth-child(8),
+  .vf-table__cell:nth-child(8) {
+    width: 10%; /* Adjust the width as needed */
+  }
+
+  .vf-table__header th {
+    background-color: #f7f7f7;
+    font-weight: bold;
+  }
+
+  .vf-table__cell a {
+    text-decoration: none;
   }
 
   .vf-table__cell a:hover {
@@ -204,7 +258,7 @@
               </div>
             {% else %}
               <div class="vf-section-header">
-                <h2 class="vf-section-header__heading">Your results</h2>
+                <h2 class="vf-section-header__heading">Search results</h2>
               </div>
             {% endif %}
             <div class="vf-section-content | vf-grid vf-grid__col-4">
