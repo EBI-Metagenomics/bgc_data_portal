@@ -89,15 +89,12 @@ WSGI_APPLICATION = 'bgc_data_portal.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-print(BASE_DIR / 'bgc_database.ALL_TABLES.db')
-print(BASE_DIR / 'bgc_database.ALL_TABLES.db')
-print(BASE_DIR / 'bgc_database.ALL_TABLES.db')
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         # 'NAME': DATABASE_NAME,
-        'NAME': BASE_DIR / 'bgc_database.ALL_TABLES.db',
+        'NAME': BASE_DIR / 'bgcs_db.sqlite',
     }
 }
 

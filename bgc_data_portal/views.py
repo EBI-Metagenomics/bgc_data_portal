@@ -45,7 +45,7 @@ def landing_page(request):
 def explore(request):
 
     advanced_form = BgcAdvancedSearchForm(request.GET or None)
-
+    
     if request.GET.get('keyword'):
         results = search_bgcs_by_keyword(request.GET.get('keyword'))
 

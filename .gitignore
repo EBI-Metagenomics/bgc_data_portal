@@ -4,6 +4,7 @@
 *.pyc
 __pycache__
 db.sqlite3
+*bgcs_db.sqlite
 *.db
 !bgc_database.db.debug.db
 media
