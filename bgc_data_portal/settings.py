@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'ninja',
     'api',
-    # 'bgc_plots',
+    'matomo',
     # 'dash_app',
     # 'django_plotly_dash',
     # 'django.contrib.staticfiles',  #
@@ -77,6 +77,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'bgc_data_portal.context_processors.use_matomo',
             ],
         },
     },
@@ -153,3 +154,7 @@ PLOTLY_DASH = {
     "cache_timeout_initial_arguments": 60,
     "serve_locally": True,
 }
+
+# MATOMO
+MATOMO_URL = "https://ebi-mgnify.matomo.cloud/"
+MATOMO_SITE_ID = 6

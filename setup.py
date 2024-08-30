@@ -28,7 +28,7 @@ setup(
         'requests',
         'plotly',
         'django-filter',
-        # '',
+        'django-matomo==0.1.6',
     ],
     extras_require={
         'dev': [

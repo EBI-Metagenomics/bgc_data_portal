@@ -1,3 +1,6 @@
+{% if use_matomo %}
+    {% load matomo_tags %}
+{% endif %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -105,6 +108,19 @@
                 </div>
             </div>
             <p class="vf-footer__notice">© 2024 EMBL-EBI</p>
+            <div data-vf-js-banner-cookie-name="emblContentHub27360"
+                 class="vf-banner vf-banner--fixed vf-banner--bottom vf-banner--notice"
+                 data-vf-js-banner="true"
+                 data-vf-js-banner-cookie-version="224467"
+                 data-vf-js-banner-state="dismissible"
+                 data-vf-js-banner-button-text="I agree">
+                <div class="vf-banner__content | vf-grid" data-vf-js-banner-text="">
+                    <p class="vf-text vf-text-body--2"> This website uses cookies to function.
+                        By using the site you are agreeing to this as outlined in our
+                        <a class="vf-banner__link" href="https://www.embl.org/info/privacy-policy/">Privacy Policy</a>.
+                    </p>
+                </div>
+            </div>
         </div>
     </footer>
 
