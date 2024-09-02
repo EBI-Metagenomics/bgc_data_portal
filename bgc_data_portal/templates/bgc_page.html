@@ -309,7 +309,6 @@
                         // Use the Clipboard API to copy the trimmed text to the clipboard
                         navigator.clipboard.writeText(sequenceText).then(function() {
                             // Success feedback (optional)
-                            console.log('Sequence copied to clipboard!');
                         }).catch(function(error) {
                             // Error feedback (optional)
                             console.error('Failed to copy text: ', error);

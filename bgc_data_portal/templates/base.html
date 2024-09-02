@@ -153,14 +153,13 @@
             const loader = document.getElementById('search-loader');
     
             // Ensure the elements are found before adding the listener
-            if (form && loader) {
+            if (form) {
                 form.addEventListener('submit', function(event) {
                     // Prevent the default form submission
                     event.preventDefault();
     
                     // Get the value of the 'keyword' input
                     const keyword = form.querySelector('input[name="keyword"]').value;
-                    console.log('Submitted keyword:', keyword); // Verify the keyword value
     
                     // Show the loader
                     $('.vf-loader').show();
@@ -170,14 +169,12 @@
     
                     // Construct the URL with the query parameters
                     const actionUrl = form.getAttribute('action'); // Get the form action URL
-                    const queryString = new URLSearchParams(new FormData(form)).toString(); // Serialize form data to query string
+                    // const queryString = new URLSearchParams(new FormData(form)).toString(); // Serialize form data to query string
     
                     // Redirect to the constructed URL
-                    console.log('Submitted keyword:', `${actionUrl}?${keyword}`); // Verify the keyword value
                     window.location.href = `${actionUrl}?keyword=${keyword}`;
                 });
             } else {
-                console.error('Form or loader element not found');
             }
         };
     </script>

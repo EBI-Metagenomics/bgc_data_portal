@@ -95,7 +95,12 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         # 'NAME': DATABASE_NAME,
         'NAME': BASE_DIR / 'bgcs_db.sqlite',
-    }
+        # 'NAME': BASE_DIR / 'bgcs_db.sqlite',
+    },
+    # 'new_db': {
+    #         'ENGINE': 'django.db.backends.sqlite3',
+    #         'NAME': BASE_DIR / 'bgcs_db.DEV.sqlite',
+    #     }
 }
 
 
@@ -159,3 +164,4 @@ PLOTLY_DASH = {
 # MATOMO
 MATOMO_URL = "https://ebi-mgnify.matomo.cloud/"
 MATOMO_SITE_ID = 6
+

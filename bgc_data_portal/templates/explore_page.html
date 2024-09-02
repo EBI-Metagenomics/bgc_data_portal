@@ -259,6 +259,7 @@
       </div>
     </form>
 
+
   </aside>
 
  
@@ -321,44 +322,68 @@
 </div>
 
 <script>
-$(document).ready(function() {
-  // Handle form submission
-  $('#search-form').on('submit', function(e) {
-    e.preventDefault();
-    loadResults(1);  // Load the first page of results
-  });
+  const serializedString = "{{ serialized_string|escapejs }}";
+  window.onload = function() {
+            // Select the form and loader directly
+            const advanced_form = document.getElementById('search-form');
+            const loader = document.getElementById('search-loader');
+    
+            // Ensure the elements are found before adding the listener
+            if (advanced_form) {
+              advanced_form.addEventListener('submit', function(event) {
+                    // Prevent the default form submission
+                    event.preventDefault();
+    
+                    // Get the value of the 'keyword' input
+                    // const keyword = form.querySelector('input[name="keyword"]').value;
+    
+                    // Show the loader
+                    if (loader) {
+                      console.log('LOADERRR')
+                      loader.style.display = 'block'; // Change to 'flex', 'inline-block', etc., if needed
+                    }
+    
+                    // Disable form inputs to prevent multiple submissions
+                    advanced_form.querySelectorAll('input, button').forEach(element => element.disabled = true);
+    
+                    // Construct the URL with the query parameters
+                    const actionUrl = form.getAttribute('action'); // Get the form action URL
+    
+                    // Redirect to the constructed URL
+                    window.location.href = `${actionUrl}?` + $('#search-form').serialize();
+                });
+            } else {
+            }
+        };
 
-  // Handle pagination button clicks
-  $(document).on('click', '.pagination button', function(e) {
-    e.preventDefault();
-    var page = $(this).data('page');  // Get the page number from the button's data attribute
-    loadResults(page);
-  });
+    // Handle pagination button clicks
+    $(document).on('click', '.pagination button', function(e) {
 
-  function loadResults(page) {
-    // Show the loader only during AJAX requests
-    $('.vf-loader').show();
-    $.ajax({
-      url: "{% url 'explore' %}",
-      type: "GET",
-      data: $('#search-form').serialize() + '&page=' + page,
-      success: function(response) {
-        // Replace results and hide the loader
-        $('#results').html(response);
-      },
-      error: function(xhr, status, error) {
-        console.error("AJAX Error:", status, error);
-        $('#results').html('<p>An error occurred. Please try again.</p>');
-      },
-      complete: function() {
-        // Hide the loader after the AJAX request completes
-        $('.vf-loader').hide();
-      }
+      // console.log('pageless_query_params2:', pageless_query_params_string);
+
+      e.preventDefault();
+      var page = $(this).data('page');  // Get the page number from the button's data attribute
+      // $('.vf-loader').show();
+      $.ajax({
+        url: "{% url 'explore' %}",
+        type: "GET",
+        data: serializedString + '&page=' + page, // Combine serialized query params with the page parameter
+        success: function(response) {
+          // Replace results and hide the loader
+          $('#results').html(response);
+        },
+        error: function(xhr, status, error) {
+          console.error("AJAX Error:", status, error);
+          $('#results').html('<p>An error occurred. Please try again.</p>');
+        },
+        complete: function() {
+          // Hide the loader after the AJAX request completes
+          // $('.vf-loader').hide();
+        }
+      });
     });
-  }
-});
-
 
 </script>
+
 
 {% endblock %}

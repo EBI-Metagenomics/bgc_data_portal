@@ -1,5 +1,17 @@
 from django import forms
 
+class BgcKeywordSearchForm(forms.Form):
+    keyword = forms.CharField(
+        max_length=255, 
+        required=False, 
+        label='Keyword',
+        help_text='Search the data usning keyword',
+        # widget=forms.TextInput(attrs={
+        #     'class': 'form-control custom-input',  # Add custom CSS class
+        #     'style': 'width: 200px; margin-bottom: 10px;'  # Add inline styles for size and spacing
+        # }
+        )
+
 
 class BgcAdvancedSearchForm(forms.Form):
     bgc_class_name = forms.CharField(

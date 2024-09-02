@@ -1,9 +1,11 @@
+import json
 from django.shortcuts import render, redirect
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse
 from django.views.generic import TemplateView
 import os
 from django.http import FileResponse, Http404
+from urllib.parse import urlencode
 from django.conf import settings
 from ninja import Query
 from api.api import get_contig_region
@@ -13,7 +15,11 @@ from collections import Counter
 from api.schemas import GetContigRegionInput
 from api.utils import get_region_features, DB_STATS
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
-from api.forms import BgcAdvancedSearchForm
+from api.forms import BgcAdvancedSearchForm,BgcKeywordSearchForm
+from urllib.parse import urlencode
+
+from django.core.cache import cache
+
 from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
 
 logging.basicConfig(level=logging.INFO)
@@ -42,31 +48,40 @@ class DocsView(TemplateView):
 def landing_page(request):
     return render(request, 'landing_page.html')
 
+
 def explore(request):
 
-    advanced_form = BgcAdvancedSearchForm(request.GET or None)
-    print('REQUESTTT  ',request.GET)
-    if request.GET.get('keyword'):
-        print('keywor SEARCH')
-        results = search_bgcs_by_keyword(request.GET.get('keyword'))
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
 
-    elif advanced_form.is_valid():
-        print('advanced SEARCH')
-        results = search_bgcs_by_advanced(advanced_form.cleaned_data)
-    else:
-        print('else SEARCH')
-        results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()
+    current_advanced_form = BgcAdvancedSearchForm(request.GET or None)
+    
+    pageless_query_params = urlencode(query_params if query_params.get('keyword') else current_advanced_form.cleaned_data if current_advanced_form.is_valid() else {}, doseq=True)
 
-    # generate class dist plots
-    result_stats = dict(
-        total_regions=len(results),
-        bgc_class_dist=dict(Counter([bgc.bgc_class_names[0] for bgc in results])),
-        n_assemblies=len({aggregated_region.mgyc.assembly.accession for aggregated_region in results}),
-        n_studies=len({aggregated_region.mgyc.assembly.study_id for aggregated_region in results}),
-    ) 
+    results,result_stats = cache.get(pageless_query_params,(None,None))  # Try to get results from the cache
+
+    
+    if not results:  # If results are not cached, perform the search
+        if query_params.get('keyword'):
+            current_advanced_form = BgcAdvancedSearchForm()
+            results = search_bgcs_by_keyword(query_params.get('keyword'))
+        elif current_advanced_form.is_valid():
+            results = search_bgcs_by_advanced(current_advanced_form.cleaned_data)
+        else:
+            results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()
+            current_advanced_form = BgcAdvancedSearchForm()
+            
+        result_stats = dict(
+            total_regions=len(results),
+            bgc_class_dist=dict(Counter([bgc.bgc_class_names[0] for bgc in results])),
+            n_assemblies=len({aggregated_region.mgyc.assembly.accession for aggregated_region in results}),
+            n_studies=len({aggregated_region.mgyc.assembly.study_id for aggregated_region in results}),
+        )
+        cache.set(pageless_query_params, (results,result_stats), timeout=300)  # Cache the results for 5 minutes
+
 
     page = request.GET.get('page', 1)
-    paginator = Paginator(list(results), 10)  # Show 10 items per page
+    paginator = Paginator(list(results), 10)  
     try:
         paginated_results = paginator.page(page)
     except PageNotAnInteger:
@@ -74,19 +89,22 @@ def explore(request):
     except EmptyPage:
         paginated_results = paginator.page(paginator.num_pages)
 
+
     context = {
         'results': paginated_results,
-        'result_stats': result_stats if advanced_form.is_valid() else DB_STATS,
-        'advanced_form': BgcAdvancedSearchForm,
+        'result_stats': result_stats if results else DB_STATS,
+        'advanced_form': current_advanced_form,
+        'serialized_string': str(pageless_query_params),
     }
+
 
     # If it's an AJAX request, return the partial table
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        print('AJAX')
         return render(request, 'explore_table.html', context)
-    
     # Otherwise, return the full page
+    print('NOT AJAX')
     return render(request, 'explore_page.html', context)
-
 
 def bgc_page(request, mgyc,start_position,end_position):
     # Extract the relevant parameters for the plot from the request or use defaults
@@ -179,7 +197,6 @@ def download_bgc_data(request, mgyc, start_position, end_position):
     )
 
     return get_contig_region( request, params_instance)
-
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)
