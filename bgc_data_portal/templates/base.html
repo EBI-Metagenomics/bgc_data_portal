@@ -71,7 +71,7 @@
                     <button type="submit" class="vf-button vf-button--primary">Search</button>
                 </div>
                 <p class="vf-text-body--5">
-                    Example: <a class="vf-link" href="{% url 'explore' %}?keyword=Polyketide">Polyketide</a>
+                    Example:  <a href="#" class="vf-link" id="example-link">Polyketide</a>
                 </p>
             </form>
         </div>
@@ -147,6 +147,15 @@
     <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
     <!-- Your custom JS, if any -->
     <script>
+    document.getElementById('example-link').addEventListener('click', function(event) {
+        event.preventDefault();  // Prevent the default link behavior
+        const searchInput = document.getElementById('search-keyword');
+        searchInput.value = 'Polyketide';  // Set the value of the input field
+
+        // Optionally, submit the form automatically
+        // document.getElementById('keyword-form').submit();
+    });
+
         window.onload = function() {
             // Select the form and loader directly
             const form = document.getElementById('keyword-form');
