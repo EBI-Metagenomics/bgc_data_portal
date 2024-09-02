@@ -1,0 +1,127 @@
+---
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: bgc_data_portal-hl-exp
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: proxy-config
+      namespace: bgc_data_portal-hl-exp
+    data:
+      HTTP_PROXY: "http://hh-wwwcache.ebi.ac.uk:3128"
+      HTTPS_PROXY: "http://hh-wwwcache.ebi.ac.uk:3128"
+      http_proxy: "http://hh-wwwcache.ebi.ac.uk:3128"
+      https_proxy: "http://hh-wwwcache.ebi.ac.uk:3128"
+      no_proxy: "localhost,.cluster.local"
+      ALLOWED_HOST: "bgc-portal.mgnify.org"
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: bgc_data_portal-site
+      namespace: bgc_data_portal-hl-exp
+      labels:
+        app: bgc_data_portal-site
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: bgc_data_portal-site
+      template:
+        metadata:
+          labels:
+            app: bgc_data_portal-site
+        spec:
+          securityContext:
+            runAsUser: 7123
+            runAsGroup: 1347
+          volumes:
+            - name: bgc_data_portal-app-storage
+              persistentVolumeClaim:
+                claimName: bgc_data_portal-volume-claim
+          containers:
+            - image: quay.io/microbiome-informatics/bgc_data_portal_site:ebi-wp-k8s-hl
+              imagePullPolicy: Always
+              name: bgc_data_portal-site
+              envFrom:
+                - secretRef:
+                    name: bgc_data_portal-secret
+                - configMapRef:
+                    name: proxy-config
+              ports:
+                - containerPort: 8000
+                  name: django
+              volumeMounts:
+              - mountPath: "/app/dbs"
+                name: bgc_data_portal-app-storage
+          imagePullSecrets:
+            - name: quay-pull-secret
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: bgc_data_portal-site
+      namespace: bgc_data_portal-hl-exp
+      labels:
+        app: bgc_data_portal-site
+    spec:
+      type: NodePort
+      selector:
+        app: bgc_data_portal-site
+      ports:
+        - port: 8000
+          targetPort: 8000
+          protocol: TCP
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: bgc_data_portal-ingress
+      namespace: bgc_data_portal-hl-exp
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+    spec:
+      rules:
+        - host: bgc-portal.mgnify.org
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: bgc_data_portal-site
+                    port:
+                      number: 8000
+  - apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: bgc_data_portal-vol-1
+      namespace: bgc_data_portal-hl-exp
+    spec:
+      capacity:
+        storage: 8Gi
+      volumeMode: Filesystem
+      accessModes:
+        - ReadOnlyMany
+      persistentVolumeReclaimPolicy: Recycle
+      mountOptions:
+        - nfsvers=3
+      nfs:
+        server: hh-isi-srv-vlan1496.ebi.ac.uk
+        path: /ifs/public/rw/metagenomics/bgc_data_portal/dbs
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: bgc_data_portal-volume-claim
+      namespace: bgc_data_portal-hl-exp
+    spec:
+      storageClassName: ""
+      accessModes:
+        - ReadOnlyMany
+      resources:
+        requests:
+          storage: 6Gi
+      volumeName: bgc_data_portal-vol-1
+
