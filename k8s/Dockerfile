@@ -9,4 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8000
 ENV PYTHONUNBUFFERED=0
 
-CMD python manage.py runserver --skip-checks 0.0.0.0:8000
+
+CMD ["gunicorn", "--bind", ":8000", "--workers", "3", "--timeout", "520", "bgc_data_portal.wsgi"]

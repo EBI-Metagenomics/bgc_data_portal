@@ -100,10 +100,8 @@ def explore(request):
 
     # If it's an AJAX request, return the partial table
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        print('AJAX')
         return render(request, 'explore_table.html', context)
     # Otherwise, return the full page
-    print('NOT AJAX')
     return render(request, 'explore_page.html', context)
 
 def bgc_page(request, mgyc,start_position,end_position):

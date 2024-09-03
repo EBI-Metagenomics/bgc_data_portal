@@ -16,8 +16,6 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG_DB = True
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
@@ -25,13 +23,11 @@ DEBUG_DB = True
 SECRET_KEY = 'django-insecure-^n%q=s*(@&*yhtp2v40k#%=eiby*$*5q9&e&8g#l*ec-j7wjyo'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ["*"]
 
-
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -42,9 +38,6 @@ INSTALLED_APPS = [
     'ninja',
     'api',
     'matomo',
-    # 'dash_app',
-    # 'django_plotly_dash',
-    # 'django.contrib.staticfiles',  #
 ]
 
 MIDDLEWARE = [
@@ -55,9 +48,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-# 
-    # 'django_plotly_dash.middleware.BaseMiddleware',
-    # 'django_plotly_dash.middleware.ExternalRedirectionMiddleware',
 ]
 
 ROOT_URLCONF = 'bgc_data_portal.urls'
@@ -81,11 +71,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'bgc_data_portal.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
-
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -93,10 +80,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'bgcs_db.sqlite',
         # 'NAME': BASE_DIR / 'bgcs_db.sqlite',
     },
-    # 'new_db': {
-    #         'ENGINE': 'django.db.backends.sqlite3',
-    #         'NAME': BASE_DIR / 'bgcs_db.DEV.sqlite',
-    #     }
 }
 
 
@@ -137,13 +120,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
-    os.path.join(BASE_DIR, "docs", "_site", "site_libs"),
-
-    # os.path.join(BASE_DIR, "docs", "_site", "static"),
-    # BASE_DIR / "docs/_site",  # Add this line
+    BASE_DIR / "docs/_site/site_libs",
 ]
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
