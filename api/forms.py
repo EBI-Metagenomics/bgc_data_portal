@@ -75,12 +75,12 @@ class BgcAdvancedSearchForm(forms.Form):
             'style': 'margin-bottom: 10px;'  # Add inline styles for spacing
         }),
         choices=[
-            (0, 'Full-Length BGC'),
-            (1, 'Single-Truncated'),
-            (2, 'Double-Truncated')
+            (0, 'Complete BGC'),
+            (1, 'Single bounded'),
+            (2, 'Double bounded')
         ],
         label='Select Detectors',
-        help_text='Filter BGCs detected by completeness. Full-Length BGC indicates if the BGC is full-length; Single-Truncated indicates if the BGC is single-truncated; Double-Truncated indicates if the BGC is double-truncated.',
+        help_text='Filter BGCs detected by completeness. `Complete` indicates a BGC prediction fully contained within contig booundaries; `Single bounded` indicates if the BGC is truncated in one contig edge; `Double bounded` indicates if the BGC is truncated in both contig edges.',
         initial=[0,1,2]
     )
     
@@ -88,7 +88,7 @@ class BgcAdvancedSearchForm(forms.Form):
         max_length=255, 
         required=False, 
         label='Pfam',
-        help_text='Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).',
+        help_text='Enter one or more Pfam accession separated by comma or space. Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).',
         widget=forms.TextInput(attrs={
             'class': 'form-control custom-input',  # Add custom CSS class
             'style': 'width: 200px; margin-bottom: 5px;'  # Add inline styles for size and spacing
@@ -100,7 +100,7 @@ class BgcAdvancedSearchForm(forms.Form):
         required=False,
         label='Pfam Strategy',
         initial='intersection',
-        help_text='Choose "AND" to include BGCs that match all Pfams, or "OR" to include BGCs that match any Pfam.',
+        help_text='Choose "AND" to include BGCs that match all provided Pfams, or "OR" to include BGCs that match any Pfam.',
         widget=forms.Select(attrs={
             'class': 'form-control custom-input',  # Add custom CSS class
             'style': 'width: 200px; margin-bottom: 20px;'  # Add inline styles for size and spacing
@@ -128,7 +128,7 @@ class BgcAdvancedSearchForm(forms.Form):
         required=False,
         label='Aggregate Strategy',
         initial='single',
-        help_text='Select the aggregate strategy for how results should be combined.',
+        help_text='Select the aggregate strategy for how results should be combined. See `Documentation` for detailed information',
         # widget=forms.TextInput(attrs={
             # 'class': 'form-control custom-input',  # Add custom CSS class
             # 'style': 'width: 200px; margin-bottom: 20px;'  # Add inline styles for size and spacing
