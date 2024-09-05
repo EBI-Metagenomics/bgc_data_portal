@@ -25,7 +25,27 @@ class BgcKeywordFilter(django_filters.FilterSet):
 
     @staticmethod
     def filter_by_keyword(queryset, name, value):
-        # Build the BGC query
+        # If query looks like an MGYB, use direct lookup if possible
+        if type(value) is str and value.lower().strip().startswith('mgyb'):
+            try:
+                mgyb_id = int(value.lower().lstrip('mgyb'))
+            except ValueError:
+                logging.warning(f"Search keyword looked like an MGYB accession ({value}) but didn't parse as int")
+            else:
+                return queryset.filter(mgyb=mgyb_id)
+
+        # If query looks like Pfam, do lookup only from protein side for efficiency
+        if type(value) is str and value.lower().strip().startswith('pf') and len(value.strip()) == 7:
+            logging.warning(f"Using protein-metadata ONLY lookup for keyword {value}")
+            metadata = Metadata.objects.filter(mgyp__pfam__icontains=value)
+            # TODO: metadata should have an FK to MGC so that this doesn't use an expensive string lookup
+            return queryset.filter(mgyb__in=metadata.values_list("bgcdb_id", flat=True))
+
+        # If query looks like MGYP, do lookup from protein side for efficiency
+        if type(value) is str and value.lower().strip().startswith('mgyp'):
+            logging.warning(f"Using protein-metadata ONLY lookup for keyword {value}")
+            metadata = Metadata.objects.filter(mgyp__mgyp__icontains=value)
+            return queryset.filter(mgyb__in=metadata.values_list("bgcdb_id", flat=True))
 
         filter_on_mgyb_accession = Q()
         if type(value) is str and value.lower().startswith('mgyb'):
@@ -45,16 +65,7 @@ class BgcKeywordFilter(django_filters.FilterSet):
             Q(bgc_detector__bgc_detector_name__icontains=value)
         )
 
-        # Find proteins matching the keyword
-        filter_on_metadata = Metadata.objects.filter(
-            Q(mgyp__mgyp__icontains=value) |
-            Q(mgyp__pfam__icontains=value)
-        )
-        # TODO: Metadata should have fk in the db to BGC so that a proper JOIN can be used
-        bgcids_from_matching_metadata = filter_on_metadata.values_list("bgcdb_id", flat=True)
-        filter_on_related_metadata = Q(mgyb__in=bgcids_from_matching_metadata)
-
-        return queryset.filter(filter_on_parent_objects | filter_on_related_metadata | filter_on_mgyb_accession)
+        return queryset.filter(filter_on_parent_objects | filter_on_mgyb_accession)
 
     keyword = django_filters.CharFilter(method='filter_by_keyword')
 

@@ -29,7 +29,12 @@ ALLOWED_HOSTS = [os.getenv("ALLOWED_HOST", '*')]
 
 INTERNAL_IPS = [
     "127.0.0.1",
+    "0.0.0.0",
 ]
+
+DEBUG_TOOLBAR_CONFIG = {
+    'SHOW_TOOLBAR_CALLBACK': lambda _request: DEBUG
+}
 
 # Application definition
 INSTALLED_APPS = [
@@ -165,7 +170,7 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': 'DEBUG',
             'class': 'logging.StreamHandler',
             'stream': sys.stdout,
             'formatter': 'simple',
@@ -173,12 +178,12 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'INFO',
+        'level': 'DEBUG',
     },
     'loggers': {
         'django': {
             'handlers': ['console'],
-            'level': 'INFO',
+            'level': 'DEBUG',
             'propagate': False,
         },
     },
