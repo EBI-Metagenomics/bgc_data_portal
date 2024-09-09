@@ -20,12 +20,12 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./k8s-hl/Dockerfile
+          file: ./k8s/Dockerfile
           load: true
           push: false
           tags: |
-            quay.io/microbiome-informatics/protein-landing-page:${{ github.ref_name }}
-            quay.io/microbiome-informatics/protein-landing-page:latest
+            quay.io/microbiome-informatics/bgc-data-portal_site:${{ github.ref_name }}
+            quay.io/microbiome-informatics/bgc-data-portal_site:latest
 
       - name: Login to Quay.io
         uses: docker/login-action@v3
@@ -35,4 +35,4 @@ jobs:
           password: ${{ secrets.QUAY_PASSWORD }}
 
       - name: Push
-        run: docker push quay.io/microbiome-informatics/protein-landing-page:latest
+        run: docker push quay.io/microbiome-informatics/bgc-data-portal_site:latest
