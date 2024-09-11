@@ -12,7 +12,6 @@ from .filters import BgcKeywordFilter, MgybConverterFilter
 from .models import Bgc, BgcClass, BgcDetector
 from .utils import mgyb_converter, process_bgc_results
 
-from tqdm import tqdm
 
 def search_bgcs_by_keyword(keyword):
     """
