@@ -2,26 +2,28 @@ import operator
 import re
 from functools import reduce
 
-from django.db.models import Q, F
+from django.db.models import Q, F, Value, TextField
+from django.db.models.functions import Concat
+from django.db import models
+import pandas as pd
 
 from .aggregate_bgcs import BgcAggregator
 from .filters import BgcKeywordFilter, MgybConverterFilter
-from .models import Bgc
-from .utils import mgyb_converter
+from .models import Bgc, BgcClass, BgcDetector
+from .utils import mgyb_converter, process_bgc_results
 
+from tqdm import tqdm
 
 def search_bgcs_by_keyword(keyword):
+    """
+    Get BGC queryset based on keyword search criteria.
+    """
     # Initialize the filter with the keyword
-    bgc_filter = BgcKeywordFilter({'keyword': keyword}, queryset=Bgc.objects_with_contigs.all())
-    results = bgc_filter.qs
-
-    # Convert the mgyb integers back to the "MGYB{:012}" format for display
-    for bgc in results:
-        # TODO move to model properties if really needed as lists
-        bgc.mgybs = [bgc.accession]
-        bgc.bgc_detector_names = [bgc.bgc_detector.bgc_detector_name]
-        bgc.bgc_class_names = bgc.bgc_class.bgc_class_name.split(',')
-    return results
+    if not keyword:
+        return pd.DataFrame([])
+    bgc_filter = BgcKeywordFilter({'keyword': keyword}, queryset=Bgc.objects_with_contigs)
+    query_df = process_bgc_results(bgc_filter.qs)
+    return query_df
 
 def search_bgcs_by_advanced(criteria):
     """
@@ -81,7 +83,6 @@ def search_bgcs_by_advanced(criteria):
         bgc.bgc_class_names = bgc.bgc_class.bgc_class_name.split(',')
 
     aggregate_function = getattr(BgcAggregator,criteria.get('aggregate_strategy'))
-    print('AGGREGATED ',len(aggregate_function))
     
     return aggregate_function(qs,n_detectors=len(criteria.get('detectors')))
 

@@ -12,12 +12,11 @@ from api.forms import BgcAdvancedSearchForm
 from api.models import Bgc
 from api.schemas import GetContigRegionInput
 from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
-from api.utils import get_region_features, get_latest_stats
+from api.utils import get_region_features, get_latest_stats, class_counter
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 EXTENDED_NUCLEOTIDE_WINDOW = 7000
 
@@ -53,32 +52,30 @@ def explore(request):
     
     pageless_query_params = urlencode(query_params if query_params.get('keyword') else current_advanced_form.cleaned_data if current_advanced_form.is_valid() else {}, doseq=True)
 
-    results,result_stats = cache.get(pageless_query_params,(None,None))  # Try to get results from the cache
+    results_df,result_stats = cache.get(pageless_query_params,(None,None))  # Try to get results from the cache
 
-    
-
-    if not results:  # If results are not cached, perform the search
-        if query_params.get('keyword'):
+    if not result_stats:  # If results are not cached, perform the search
+        if query_params.get('keyword')!=None:
             current_advanced_form = BgcAdvancedSearchForm()
-            results = search_bgcs_by_keyword(query_params.get('keyword'))
+            results_df = search_bgcs_by_keyword(query_params.get('keyword'))
         elif current_advanced_form.is_valid():
-            print(current_advanced_form.cleaned_data)
             results = search_bgcs_by_advanced(current_advanced_form.cleaned_data)
         else:
+            # TODO
             results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()
             current_advanced_form = BgcAdvancedSearchForm()
-            
-        result_stats = dict(
-            total_regions=len(results),
-            bgc_class_dist=dict(Counter([bgc.bgc_class_names[0] for bgc in results])),
-            n_assemblies=len({aggregated_region.mgyc.assembly.accession for aggregated_region in results}),
-            n_studies=len({aggregated_region.mgyc.assembly.study_id for aggregated_region in results}),
-        )
-        cache.set(pageless_query_params, (results,result_stats), timeout=300)  # Cache the results for 5 minutes
 
+        result_stats = dict(
+            total_regions=results_df.shape[0],
+            # bgc_class_dist=dict(results_df['bgc_class_names'].value_counts()),
+            bgc_class_dist=class_counter(results_df['bgc_class_names']) if results_df.shape[0] else {},
+            n_assemblies=results_df.assembly_accession.nunique() if results_df.shape[0] else 0,
+            n_studies=results_df.study_accession.nunique() if results_df.shape[0] else 0,
+        )
+        cache.set(pageless_query_params, (results_df,result_stats), timeout=300)  # Cache the results for 5 minutes
 
     page = request.GET.get('page', 1)
-    paginator = Paginator(list(results), 10)  
+    paginator = Paginator(list(results_df.to_dict(orient='records')), 10)  
     try:
         paginated_results = paginator.page(page)
     except PageNotAnInteger:
@@ -86,10 +83,9 @@ def explore(request):
     except EmptyPage:
         paginated_results = paginator.page(paginator.num_pages)
 
-
     context = {
         'results': paginated_results,
-        'result_stats': result_stats if results else get_latest_stats(),
+        'result_stats': result_stats if result_stats else get_latest_stats(),
         'advanced_form': current_advanced_form,
         'serialized_string': str(pageless_query_params),
     }
@@ -124,7 +120,7 @@ def bgc_page(request, mgyc,start_position,end_position):
         # Get summary details regarding
         cds_attribs = dict(features_df[features_df['type']=='CDS'].iloc[0]['attrib'])
         assembly_accession = cds_attribs.get('assembly_accession')
-        assembly_url = "https://www.ebi.ac.uk/metagenomics/assemblies/{assembly_accession}"
+        assembly_url = f"https://www.ebi.ac.uk/metagenomics/assemblies/{assembly_accession}"
         biome_lineage=cds_attribs.get('biome_lineage','').replace('root:','')
         
         aggr_df = features_df[ (features_df.start>=start_position) & (features_df.end<=end_position)]

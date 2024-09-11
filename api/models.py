@@ -11,17 +11,15 @@ class Assembly(models.Model):
 
     class Meta:
         db_table = 'assembly'
-
-
+        
+    
 class BgcManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().select_related('bgc_detector').select_related('bgc_class')
 
-
 class BgcWithContigManager(BgcManager):
     def get_queryset(self):
         return super().get_queryset().select_related('mgyc', 'mgyc__assembly')
-
 
 class Bgc(models.Model):
     objects = BgcManager()

@@ -46,15 +46,64 @@ def get_latest_stats():
         return latest_stats.stats
     return {}
 
+import pandas as pd
+from django.db.models import F
 
 def mgyb_converter(mgyb,text_to_int=True):
     """Function to convert mgyb text to int and viceversa. Match format with Bgc.mgyb model """
     mgyb_template = "MGYB{:012}"
     return int(mgyb[4:]) if text_to_int else mgyb_template.format(mgyb)
 
+def process_bgc_results(queryset):
+    """
+    Process the queryset results by annotating fields and converting to a DataFrame.
+    
+    :param queryset: The Django queryset to process.
+    :return: A processed pandas DataFrame.
+    """
+    if not queryset.exists():
+        return pd.DataFrame([])
+    # Annotate the necessary fields
+    results = queryset.annotate(
+        mgybs=F('mgyb'),  
+        bgc_detector_names=F('bgc_detector__bgc_detector_name'),
+        bgc_class_names=F('bgc_class__bgc_class_name'),
+        assembly_accession=F('mgyc__assembly__accession'),
+        study_accession=F('mgyc__assembly__study__accession'),
+        # study_accession=F('mgyc__assembly__study__accession'),
+    )
+
+    # Convert to a DataFrame
+    query_data = list(results.values())  # Fetch all fields as dictionaries
+    query_df = pd.DataFrame(query_data)
+
+    # Apply necessary transformations to specific columns
+    query_df['mgybs'] = query_df['mgybs'].map(lambda x: [mgyb_converter(x,text_to_int=False)])
+    query_df['bgc_detector_names'] = query_df['bgc_detector_names'].map(lambda x: [x])
+    query_df['bgc_class_names'] = query_df['bgc_class_names'].map(lambda x: x.split(','))
+
+    return query_df
 
 
+def class_counter(class_column):
+    """Function to normalise classes and get class distribution dictionary"""
+    counts_dict = {}
+    for classes,counts in class_column.value_counts().items():
+        # normalise NRP/NRPS nomenclature
+        classes = [x.replace('NRPS','NRP') for x in classes]
 
+        # class ident based on mix 
+        if len(classes)==1:
+            clss_id = classes[0]
+        elif len({'POLYKETIDE','NRP'})>=2:
+            clss_id = 'POLYKETIDE-NRP'
+        else:
+            clss_id='MIXED'
+
+        counts_dict.setdefault(clss_id,[]).append(counts)
+
+    return {class_id:sum(counts) for class_id,counts in counts_dict.items()}
+        
 def find_region_features( 
               mgyc: str = None, 
               start_position: int = None, 

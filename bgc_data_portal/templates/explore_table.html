@@ -61,14 +61,14 @@
     {% for bgc in results %}
     <tr class="vf-table__row">
       <td class="vf-table__cell">{{ bgc.mgybs|join:', ' }}</td>
-      <td class="vf-table__cell">{{ bgc.mgyc.assembly.accession }}</td>
-      <td class="vf-table__cell">{{ bgc.mgyc.mgyc }}</td>
+      <td class="vf-table__cell">{{ bgc.assembly_accession }}</td>
+      <td class="vf-table__cell">{{ bgc.mgyc_id }}</td>
       <td class="vf-table__cell">{{ bgc.start_position }}</td>
       <td class="vf-table__cell">{{ bgc.end_position }}</td>
       <td class="vf-table__cell">{{ bgc.bgc_detector_names|join:', ' }}</td>
       <td class="vf-table__cell">{{ bgc.bgc_class_names|join:', ' }}</td>
       <td class="vf-table__cell">
-        <a href="{% url 'bgc_page' bgc.mgyc.mgyc bgc.start_position bgc.end_position %}" target="_blank" onclick="window.open(this.href, '_blank'); return false;">
+        <a href="{% url 'bgc_page' bgc.mgyc_id bgc.start_position bgc.end_position %}" target="_blank" onclick="window.open(this.href, '_blank'); return false;">
           View
         </a>
       </td>
