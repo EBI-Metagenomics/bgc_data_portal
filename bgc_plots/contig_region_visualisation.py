@@ -177,7 +177,7 @@ class ContigRegionViewer:
                 y=row["ys"],
                 fill="toself",
                 mode="lines",
-                line=dict(color='black', width=3. if row['type'] == 'CDS' else 1.),
+                line=dict(color='black', width=1.5 if row['type'] == 'CDS' else 1.5),
                 fillcolor=color,
                 text=f"{row['ID']}" + (f": {row['legend_text']}" if row['type'] != 'CDS' else '') ,#row[names],
                 hoverinfo="text+x+y",
@@ -220,6 +220,7 @@ class ContigRegionViewer:
             showlegend=show_legend,
             plot_bgcolor=background_color,
             paper_bgcolor=background_color,
+            clickmode='event+select',
             **layout_kwargs
         )
 
