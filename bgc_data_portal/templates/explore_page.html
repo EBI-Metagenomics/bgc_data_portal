@@ -1,13 +1,11 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load humanize static %}
 {% block title %}MGnify BGCs - Explore{% endblock %}
 
 {% block content %}
-
 <div id="search-results" class="page-container">
   <!-- Search Sidebar -->
   <aside class="search-sidebar">
-    <!-- templates/bgc/advanced_search.html -->
     <form id="search-form" action="{% url 'explore' %}" method="get" class="vf-form">
       <h2>Advanced search</h2>
 
@@ -26,24 +24,19 @@
       {% endfor %}
 
       <div class="vf-form__item">
-        <button id="pag_button_as" type="submit" class="vf-button vf-button--primary"
-          style="margin-top: 10px;">Apply</button>
+        <button id="pag_button_as" type="submit" class="vf-button vf-button--primary" style="margin-top: 10px;">Apply</button>
       </div>
     </form>
-
   </aside>
-
 
   <!-- Results Table Section -->
   <div class="results-container">
-    <!-- <div class="bgcs-portal-spinner"></div> -->
     <div id="results">
       {% if results %}
       {% include 'explore_table.html' %}
       {% else %}
       <article class="vf-card vf-card--brand vf-card--bordered" style="margin-bottom: 30px;">
         <div class="content-section">
-          <!-- Summary Section -->
           <div id="results_summary" class="vf-summary-container" style="background-color: #ffffff;">
             {% if not results %}
             <div class="vf-section-header">
@@ -78,7 +71,7 @@
                 <div class="vf-summary__text predictor-class-grid">
                   {% for clss, counts in result_stats.bgc_class_dist.items %}
                   <div>
-                    <strong>{{clss}}</strong>: {{ counts|intcomma }}
+                    <strong>{{ clss }}</strong>: {{ counts|intcomma }}
                   </div>
                   {% endfor %}
                 </div>
@@ -86,82 +79,18 @@
             </div>
           </div>
       </article>
-
       <p class="default-message">Enter search criteria and click "Apply" to search the database.</p>
       {% endif %}
     </div>
   </div>
 </div>
-</div>
 
+<!-- Pass Django context variables to JavaScript -->
 <script>
   const serializedString = "{{ serialized_string|escapejs }}";
-  document.addEventListener('DOMContentLoaded', function () {
-    // Select the form and loader directly
-    const advancedForm = document.getElementById('search-form'); // Correct the form selector
-    const loader = document.querySelector('.bgcs-portal-spinner'); // Select the loader using the class
-
-    // Ensure the elements are found before adding the listener
-    if (advancedForm && loader) {
-      advancedForm.addEventListener('submit', function (event) {
-        console.log('Form submit event triggered'); // Log message to confirm the event is triggered
-
-        // Prevent the default form submission
-        event.preventDefault();
-        $('.bgcs-portal-spinner').show();
-        // Disable form inputs to prevent multiple submissions
-        // advancedForm.querySelectorAll('input, button').forEach(element => element.disabled = true);
-        const formData = new FormData(advancedForm);
-
-        // Check and log form data to ensure it's capturing the expected fields
-        for (let [name, value] of formData.entries()) {
-          console.log(name, value); // Log form data to inspect what is captured
-        }
-        const serializedData = new URLSearchParams(formData).toString();
-        // Construct the URL with the query parameters and navigate
-        const actionUrl = advancedForm.getAttribute('action'); // Get the form action URL
-        // const serializedData = $(advancedForm)
-        // .find('input, select, textarea')
-        // .serialize();
-
-        // Redirect to the constructed URL
-        console.log(`${actionUrl}?${serializedData}`); // Log message to confirm the event is triggered
-        console.log(advancedForm); // Log message to confirm the event is triggered
-        window.location.href = `${actionUrl}?${$('#search-form').serialize()}`;
-      });
-    } else {
-      console.error('Form or Loader not found'); // Log if the elements aren't found
-    }
-  });
-
-  // Handle pagination button clicks
-  $(document).on('click', '.pagination button', function (e) {
-
-    // console.log('pageless_query_params2:', pageless_query_params_string);
-
-    e.preventDefault();
-    var page = $(this).data('page');  // Get the page number from the button's data attribute
-    // $('.bgcs-portal-spinner').show();
-    $.ajax({
-      url: "{% url 'explore' %}",
-      type: "GET",
-      data: serializedString + '&page=' + page, // Combine serialized query params with the page parameter
-      success: function (response) {
-        // Replace results and hide the loader
-        $('#results').html(response);
-      },
-      error: function (xhr, status, error) {
-        console.error("AJAX Error:", status, error);
-        $('#results').html('<p>An error occurred. Please try again.</p>');
-      },
-      complete: function () {
-        // Hide the loader after the AJAX request completes
-        // $('.bgcs-portal-spinner').hide();
-      }
-    });
-  });
-
 </script>
+{% endblock %}
 
-
+{% block extra_scripts %}
+<script src="{% static 'js/explore.js' %}"></script>
 {% endblock %}
