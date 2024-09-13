@@ -86,7 +86,6 @@ def search_bgcs_by_advanced(criteria):
     return aggregate_function(query_df,n_detectors=len(criteria.get('detectors')))
 
 
-
 def get_results_and_stats(pageless_query_params, sort_column=None, sort_order='asc'):
     """
     Retrieves or computes the results DataFrame and stats based on the given query parameters.
@@ -100,12 +99,22 @@ def get_results_and_stats(pageless_query_params, sort_column=None, sort_order='a
         results_df (DataFrame): The resulting DataFrame.
         result_stats (dict): A dictionary containing statistics about the results.
     """
+
+    if not pageless_query_params:
+        return None, None,BgcAdvancedSearchForm()
+
     # Create query string for cache key
-    parsed_params = parse_qs(pageless_query_params)
+    query_params = parse_qs(pageless_query_params)
+    query_params = {name:value[0] if len(value)==1 else value for name,value in query_params.items()}
+    # _fake_complete_advanced_search_params = {name:query_params.get(name,'') for name,default in BgcAdvancedSearchForm().fields.items()}
+    # _fake_complete_advanced_search_params.update(query_params)
+
+    # print('PArsed',parsed_params)
     # Convert lists to single values where applicable
-    query_params = {key: value[0] if len(value) == 1 else value for key, value in parsed_params.items()}
+    # query_params = {key: value[0] if len(value) == 1 else value for key, value in parsed_params.items()}
 
     current_advanced_form = BgcAdvancedSearchForm(query_params or None) 
+    print('\nOOOOOO\n',query_params,pageless_query_params,current_advanced_form.is_valid(),current_advanced_form.cleaned_data)
     current_advanced_form = current_advanced_form if current_advanced_form.is_valid() else BgcAdvancedSearchForm()
     # Try to get results from the cache
     results_df, result_stats = cache.get(pageless_query_params, (pd.DataFrame([]), None))
