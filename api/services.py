@@ -126,10 +126,11 @@ def get_results_and_stats(pageless_query_params, sort_column=None, sort_order="a
     if not pageless_query_params:
         return pd.DataFrame([]), {}, BgcAdvancedSearchForm()
 
+    _fake_bgc_form = {name:field.initial for name,field in BgcAdvancedSearchForm.base_fields.items() }
     # Create query string for cache key
     query_params = parse_qs(pageless_query_params)
     query_params = {
-        name: value[0] if len(value) == 1 else value
+        name: value[0] if type(_fake_bgc_form.get(name,'')) != list else value
         for name, value in query_params.items()
     }
 

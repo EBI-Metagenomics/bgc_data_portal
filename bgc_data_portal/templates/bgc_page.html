@@ -188,7 +188,7 @@
                                 <div class="vf-section-header">
                                     <h2 class="vf-section-header__heading">${cds_id}</h2>
                                 </div>
-                                <div class="vf-section-content | vf-grid vf-grid__col-5">
+                                <div class="vf-section-content | vf-grid vf-grid__col-6">
                                     <article class="vf-summary">
                                         <h3 class="vf-summary__title">Cluster representative</h3>
                                         <p class="vf-summary__text">
@@ -218,15 +218,6 @@
                                 </div>
                             </section>
                             
-                            <div class="vf-card__content | vf-stack vf-stack--400 | sequenceViewerDiv">
-                                <h3 class="vf-card__heading">Sequence Viewer</h3>
-                                <div id="proteinSequenceContainer" class="protein-sequence-container">
-                                    ${cdsInfo.sequence.trim()}
-                                </div>
-                                <div class="right-align">
-                                    <button id="copy_button" class="vf-button vf-button--primary vf-button--sm">Copy</button>
-                                </div>
-                            </div>
 
                             <!-- PFAM Annotations Table -->
                             <div class="vf-card__content | vf-stack vf-stack--400">
@@ -246,6 +237,15 @@
                                         ${pfamTableRows}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div class="vf-card__content | vf-stack vf-stack--400 | sequenceViewerDiv">
+                                <h3 class="vf-card__heading">Sequence</h3>
+                                <div id="proteinSequenceContainer" class="protein-sequence-container">
+                                    ${cdsInfo.sequence.trim()}
+                                </div>
+                                <div class="right-align">
+                                    <button id="copy_button" class="vf-button vf-button--primary vf-button--sm">Copy</button>
+                                </div>
                             </div>
                         </div>
                     `;

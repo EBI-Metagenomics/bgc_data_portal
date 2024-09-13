@@ -88,3 +88,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
   
+  function showSpinner() {
+    var spinner = document.querySelector('.bgcs-portal-spinner'); // Select the spinner element
+    if (spinner) {
+        spinner.style.display = 'block'; // Show the spinner
+    }
+}
