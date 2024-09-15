@@ -29,7 +29,6 @@ class BgcAggregator:
     def union(individual_bgcs,n_detectors=2):
 
         output_bgcs = []
-
         # Step 2: Process each group for overlapping regions
         for _,bgcs in individual_bgcs.groupby('mgyc_id'):
             
@@ -37,24 +36,26 @@ class BgcAggregator:
                 continue
 
             # Sort bgcs by start_position to make it easier to detect overlaps
-            bgcs.sort_values('start_position').reset_index(drop=True)
-
+            bgcs = bgcs.sort_values('start_position').reset_index(drop=True)
             current_group = bgcs.iloc[0]
             aggregated_bgcs = [current_group]
-
             for i in range(1, bgcs.shape[0]):
                 bgc = bgcs.iloc[i]
-                
+                # print(bgc)
+                # print('DETECTORS',n_detectors)
                 # Check if current bgc overlaps with the current group
                 if bgc.start_position <= current_group.end_position:
 
+                    # current_group.end_position = max(current_group.end_position, bgc.end_position)
                     current_group.end_position = max(current_group.end_position, bgc.end_position)
                     aggregated_bgcs.append(bgc)
 
                 elif len(aggregated_bgcs)>=n_detectors:
-                    
+
                     # If not overlapping, save the current group and start a new one
                     output_bgcs.append((current_group,aggregated_bgcs))
+
+
                     # Start a new group
                     current_group = bgc
                     aggregated_bgcs = [current_group]
@@ -62,6 +63,7 @@ class BgcAggregator:
             # Don't forget to add the last group
             if len(aggregated_bgcs)>=n_detectors:
                 output_bgcs.append((current_group,aggregated_bgcs))
+
 
         return BgcAggregator.aggregate_results(output_bgcs)
     
@@ -77,7 +79,7 @@ class BgcAggregator:
                 continue
 
             # Sort bgcs by start_position to make it easier to detect overlaps
-            bgcs.sort_values('start_position').reset_index(drop=True)
+            bgcs = bgcs.sort_values('start_position').reset_index(drop=True)
 
             current_group = bgcs.iloc[0]
             aggregated_bgcs = [current_group]
