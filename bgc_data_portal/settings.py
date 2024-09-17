@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 import sys
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +22,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", 'django-insecure-^n%q=s*(@&*yhtp2v40k#%=eiby*$*5q9&e&8g#l*ec-j7wjyo')
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = [os.getenv("ALLOWED_HOST", '*')]
+ALLOWED_HOSTS_ENV = os.getenv("ALLOWED_HOSTS")
+if not ALLOWED_HOSTS_ENV:
+    if DEBUG:
+        ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    else:
+        raise ImproperlyConfigured("Set the ALLOWED_HOSTS environment variable")
+else:
+    ALLOWED_HOSTS = ALLOWED_HOSTS_ENV.split(',')
 
 INTERNAL_IPS = [
     "127.0.0.1",
@@ -45,11 +54,13 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    "debug_toolbar",
     'ninja',
     'api',
     'matomo',
 ]
+
+if DEBUG:
+    INSTALLED_APPS += ["debug_toolbar"]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -59,9 +70,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 ]
+
+if DEBUG:
+    MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
 
 ROOT_URLCONF = 'bgc_data_portal.urls'
 
@@ -72,7 +85,7 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
-                'django.template.context_processors.debug',
+                # 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -81,6 +94,8 @@ TEMPLATES = [
         },
     },
 ]
+
+
 
 WSGI_APPLICATION = 'bgc_data_portal.wsgi.application'
 
@@ -152,6 +167,9 @@ CACHE_TIMEOUT = 600
 MATOMO_URL = "https://ebi-mgnify.matomo.cloud/"
 MATOMO_SITE_ID = 6
 
+
+LOG_LEVEL = 'DEBUG' if DEBUG else 'INFO'
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -167,7 +185,7 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'DEBUG',
+            'level': LOG_LEVEL,
             'class': 'logging.StreamHandler',
             'stream': sys.stdout,
             'formatter': 'simple',
@@ -175,12 +193,12 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'DEBUG',
+        'level': LOG_LEVEL,
     },
     'loggers': {
         'django': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': LOG_LEVEL,
             'propagate': False,
         },
     },
