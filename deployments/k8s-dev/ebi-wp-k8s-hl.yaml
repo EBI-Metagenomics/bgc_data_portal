@@ -17,7 +17,7 @@ items:
       http_proxy: "http://hh-wwwcache.ebi.ac.uk:3128"
       https_proxy: "http://hh-wwwcache.ebi.ac.uk:3128"
       no_proxy: "localhost,.cluster.local"
-      ALLOWED_HOST: "bgc-portal-dev.mgnify.org"
+      ALLOWED_HOSTS: "bgc-portal-dev.mgnify.org"
       DB_PATH: "/local/dbs/bgcs_db.sqlite"
 
   - apiVersion: apps/v1

@@ -1,0 +1,184 @@
+---
+apiVersion: v1
+kind: List
+items:
+#  - apiVersion: v1
+#    kind: Namespace
+#    metadata:
+#      name: bgc-data-portal-hl-prod
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: proxy-config
+      namespace: bgc-data-portal-hl-prod
+    data:
+      HTTP_PROXY: "http://hh-wwwcache.ebi.ac.uk:3128"
+      HTTPS_PROXY: "http://hh-wwwcache.ebi.ac.uk:3128"
+      http_proxy: "http://hh-wwwcache.ebi.ac.uk:3128"
+      https_proxy: "http://hh-wwwcache.ebi.ac.uk:3128"
+      no_proxy: "localhost,.cluster.local"
+      ALLOWED_HOSTS: "bgc-portal.mgnify.org"
+      DB_PATH: "/local/dbs/bgcs_db.sqlite"
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: bgc-data-portal-site
+      namespace: bgc-data-portal-hl-prod
+      labels:
+        app: bgc-data-portal-site
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: bgc-data-portal-site
+      template:
+        metadata:
+          labels:
+            app: bgc-data-portal-site
+        spec:
+          securityContext:
+            runAsUser: 7123
+            runAsGroup: 1347
+          volumes:
+            - name: bgc-data-portal-app-storage
+              persistentVolumeClaim:
+                claimName: bgc-data-portal-volume-claim-prod-1
+            - name: bgc-data-portal-local-storage
+              persistentVolumeClaim:
+                claimName: bgc-data-portal-local-volume-claim-prod-1
+          containers:
+            - image: quay.io/microbiome-informatics/bgc-data-portal_site:ebi-wp-k8s-hl
+            # - image: quay.io/microbiome-informatics/bgc-data-portal_site:latest
+              imagePullPolicy: Always
+              name: bgc-data-portal-site
+              envFrom:
+                - secretRef:
+                    name: bgc-data-portal-secret
+                - configMapRef:
+                    name: proxy-config
+              ports:
+                - containerPort: 8000
+                  name: django
+              volumeMounts:
+              - mountPath: "/app/dbs"
+                name: bgc-data-portal-app-storage
+              - mountPath: "/local/dbs"
+                name: bgc-data-portal-local-storage
+          initContainers:
+            - name: fix-permissions
+              image: busybox
+              command: [ "sh", "-c", "chown -R 7123:1347 /local/dbs && chmod -R 775 /local/dbs && cp -f /app/dbs/bgcs_db.sqlite /local/dbs/bgcs_db.sqlite && chown 7123:1347 /local/dbs/bgcs_db.sqlite" ]
+              volumeMounts:
+              - mountPath: "/app/dbs"
+                name: bgc-data-portal-app-storage
+              - mountPath: "/local/dbs"
+                name: bgc-data-portal-local-storage
+              # Override the security context for the init container to run as root
+              securityContext:
+                runAsUser: 0  # root user
+                runAsGroup: 0  # root group
+          imagePullSecrets:
+            - name: quay-pull-secret
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: bgc-data-portal-site
+      namespace: bgc-data-portal-hl-prod
+      labels:
+        app: bgc-data-portal-site
+    spec:
+      type: NodePort
+      selector:
+        app: bgc-data-portal-site
+      ports:
+        - port: 8000
+          targetPort: 8000
+          protocol: TCP
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: bgc-data-portal-ingress
+      namespace: bgc-data-portal-hl-prod
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+    spec:
+      rules:
+        - host: bgc-portal.mgnify.org
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: bgc-data-portal-site
+                    port:
+                      number: 8000
+  - apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: bgc-data-portal-vol-prod-1
+      namespace: bgc-data-portal-hl-prod
+    spec:
+      capacity:
+        storage: 8Gi
+      volumeMode: Filesystem
+      accessModes:
+        - ReadOnlyMany
+      persistentVolumeReclaimPolicy: Recycle
+      mountOptions:
+        - nfsvers=3
+      nfs:
+        server: hh-isi-srv-vlan1496.ebi.ac.uk
+        path: /ifs/public/rw/metagenomics/bgc-data-portal-prod/dbs
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: bgc-data-portal-volume-claim-prod-1
+      namespace: bgc-data-portal-hl-prod
+    spec:
+      storageClassName: ""
+      accessModes:
+        - ReadOnlyMany
+      resources:
+        requests:
+          storage: 6Gi
+      volumeName: bgc-data-portal-vol-prod-1
+  - apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: bgc-data-portal-local-vol-prod-1
+      namespace: bgc-data-portal-hl-prod
+    spec:
+      accessModes:
+        - ReadWriteMany
+      capacity:
+        storage: 24Gi
+      local:
+        path: /var/local-disk
+      persistentVolumeReclaimPolicy: Retain
+      storageClassName: local-storage
+      volumeMode: Filesystem
+      nodeAffinity:
+        required:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - hh-rke-wp-webadmin-52-worker-1.caas.ebi.ac.uk
+                    - hh-rke-wp-webadmin-52-worker-2.caas.ebi.ac.uk
+                    - hh-rke-wp-webadmin-52-worker-3.caas.ebi.ac.uk
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: bgc-data-portal-local-volume-claim-prod-1
+      namespace: bgc-data-portal-hl-prod
+    spec:
+      storageClassName: local-storage
+      accessModes:
+        - ReadWriteMany
+      resources:
+        requests:
+          storage: 6Gi
+      volumeName: bgc-data-portal-local-vol-prod-1
