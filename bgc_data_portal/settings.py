@@ -27,14 +27,18 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
+
+IS_COLLECTSTATIC = 'collectstatic' in sys.argv
+
 ALLOWED_HOSTS_ENV = os.getenv("ALLOWED_HOSTS")
 if not ALLOWED_HOSTS_ENV:
-    if DEBUG:
+    if DEBUG or IS_COLLECTSTATIC:
         ALLOWED_HOSTS = ['localhost', '127.0.0.1']
     else:
         raise ImproperlyConfigured("Set the ALLOWED_HOSTS environment variable")
 else:
     ALLOWED_HOSTS = ALLOWED_HOSTS_ENV.split(',')
+
 
 INTERNAL_IPS = [
     "127.0.0.1",
