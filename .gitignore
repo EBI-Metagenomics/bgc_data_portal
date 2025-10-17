@@ -1,0 +1,57 @@
+*.sqlite
+*.sqlite.bak
+venv
+comparisons_service*
+.cache
+.env
+deployments/*/.k8s.env.local
+deployments/*/bgc-data-portal-secret.yaml
+django/staticfiles
+
+.*
+!.gitignore
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Media/uploads (optional, depending on setup)
+media/
+uploads/
+
+# Virtual environments
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Pytest
+.cache/
+.pytest_cache/
+
+# MyPy, coverage, etc
+.mypy_cache/
+coverage.*
+htmlcov/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# macOS
+.DS_Store

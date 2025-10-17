@@ -1,0 +1,107 @@
+<!-- {# 
+Copyright 2024 EMBL - European Bioinformatics Institute
+
+Licensed under the Apache License, Version 2.0 (the "License");
+You may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+#} -->
+{% extends "base.html" %}
+{% block content %}
+    <section class="vf-grid vf-grid__col-3 | vf-card-container | vf-u-fullbleed ">
+        <div class="vf-grid__col--span-2">
+            <div class="vf-grid vf-grid__col-2">
+                <article class="vf-card vf-card--brand vf-card--bordered">
+                    <div class="vf-card__content | vf-stack vf-stack--400">
+                        <h3 class="vf-card__heading">
+                            <a class="vf-card__link" href="{% url 'search' %}">Explore BGCs
+                                <svg aria-hidden="true"
+                                     class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                     width="1em"
+                                     height="1em"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M0 12c0 6.627 5.373 12 12 12s12-5.373 12-12S18.627 0 12 0C5.376.008.008 5.376 0 12zm13.707-5.209l4.5 4.5a1 1 0 010 1.414l-4.5 4.5a1 1 0 01-1.414-1.414l2.366-2.367a.25.25 0 00-.177-.424H6a1 1 0 010-2h8.482a.25.25 0 00.177-.427l-2.366-2.368a1 1 0 011.414-1.414z" fill="currentColor" fill-rule="nonzero" />
+                                </svg>
+                            </a>
+                        </h3>
+                        <p class="vf-card__text">Find and download metagenomic biosynthetic gene clusters using advanced search options.</p>
+                    </div>
+                </article>
+                <article class="vf-card vf-card--brand vf-card--bordered">
+                    <div class="vf-card__content | vf-stack vf-stack--400">
+                        <h3 class="vf-card__heading">
+                            <a class="vf-card__link"
+                               href="{% if request.META.SCRIPT_NAME %}{{ request.META.SCRIPT_NAME }}/api/docs{% else %}/api/docs{% endif %}">API Access
+                                <svg aria-hidden="true"
+                                     class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                     width="1em"
+                                     height="1em"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M0 12c0 6.627 5.373 12 12 12s12-5.373 12-12S18.627 0 12 0C5.376.008.008 5.376 0 12zm13.707-5.209l4.5 4.5a1 1 0 010 1.414l-4.5 4.5a1 1 0 01-1.414-1.414l2.366-2.367a.25.25 0 00-.177-.424H6a1 1 0 010-2h8.482a.25.25 0 00.177-.427l-2.366-2.368a1 1 0 011.414-1.414z" fill="currentColor" fill-rule="nonzero" />
+                                </svg>
+                            </a>
+                        </h3>
+                        <p class="vf-card__text">Get documentation on how to use the API for accessing BGC data.</p>
+                    </div>
+                </article>
+                <article class="vf-card vf-card--brand vf-card--bordered">
+                    <div class="vf-card__content | vf-stack vf-stack--400">
+                        <h3 class="vf-card__heading">
+                            <a class="vf-card__link" href="{% url 'docs_index' %}">User Documentation
+                                <svg aria-hidden="true"
+                                     class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                     width="1em"
+                                     height="1em"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M0 12c0 6.627 5.373 12 12 12s12-5.373 12-12S18.627 0 12 0C5.376.008.008 5.376 0 12zm13.707-5.209l4.5 4.5a1 1 0 010 1.414l-4.5 4.5a1 1 0 01-1.414-1.414l2.366-2.367a.25.25 0 00-.177-.424H6a1 1 0 010-2h8.482a.25.25 0 00.177-.427l-2.366-2.368a1 1 0 011.414-1.414z" fill="currentColor" fill-rule="nonzero" />
+                                </svg>
+                            </a>
+                        </h3>
+                        <p class="vf-card__text">View guides and examples on how to use the data portal.</p>
+                    </div>
+                </article>
+                <article class="vf-card vf-card--brand vf-card--bordered">
+                    <div class="vf-card__content | vf-stack vf-stack--400">
+                        <h3 class="vf-card__heading">
+                            <a class="vf-card__link"
+                               href="https://ftp.ebi.ac.uk/pub/databases/metagenomics/bgc_data_portal/archive/current">Downloads
+                                <svg aria-hidden="true"
+                                     class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                     width="1em"
+                                     height="1em"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M0 12c0 6.627 5.373 12 12 12s12-5.373 12-12S18.627 0 12 0C5.376.008.008 5.376 0 12zm13.707-5.209l4.5 4.5a1 1 0 010 1.414l-4.5 4.5a1 1 0 01-1.414-1.414l2.366-2.367a.25.25 0 00-.177-.424H6a1 1 0 010-2h8.482a.25.25 0 00.177-.427l-2.366-2.368a1 1 0 011.414-1.414z" fill="currentColor" fill-rule="nonzero" />
+                                </svg>
+                            </a>
+                        </h3>
+                        <p class="vf-card__text">Access the FTP site to download the latest data files.</p>
+                    </div>
+                </article>
+            </div>
+        </div>
+        <div class="vf-grid__col--span-1">
+            <article class="vf-card vf-card--brand vf-card--striped">
+                <div class="vf-card__content | vf-stack vf-stack--400">
+                    <h3 class="vf-card__heading">
+                        <a class="vf-card__link" href="{% url 'about' %}">About
+                            <svg aria-hidden="true"
+                                 class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                 width="1em"
+                                 height="1em"
+                                 xmlns="http://www.w3.org/2000/svg">
+                                <path d="M0 12c0 6.627 5.373 12 12 12s12-5.373 12-12S18.627 0 12 0C5.376.008.008 5.376 0 12zm13.707-5.209l4.5 4.5a1 1 0 010 1.414l-4.5 4.5a1 1 0 01-1.414-1.414l2.366-2.367a.25.25 0 00-.177-.424H6a1 1 0 010-2h8.482a.25.25 0 00.177-.427l-2.366-2.368a1 1 0 011.414-1.414z" fill="currentColor" fill-rule="nonzero" />
+                            </svg>
+                        </a>
+                    </h3>
+                    <p class="vf-card__text">Learn about the project, tools, and support behind MGnify Biosynthetic Gene Clusters.</p>
+                </div>
+            </article>
+        </div>
+    </section>
+{% endblock content %}

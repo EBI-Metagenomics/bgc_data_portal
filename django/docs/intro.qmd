@@ -1,0 +1,31 @@
+---
+title: "Use Cases"
+# author: "Santiago Sanchez"
+date: "2025-07-08"
+number-sections: false
+format:
+  html:
+    embed-resources: true
+# output: html_document
+---
+
+The following use cases demonstrate how to explore and analyse biosynthetic gene clusters (BGCs) using the **MGnify Biosynthetic Gene Clusters (BGCs) Portal**. Each use case guides users through practical examples of how to integrate the platform's features with other resources, including using the API, performing advanced searches, visualising results, and downloading relevant datasets for further analysis.
+
+## Available use cases
+
+### 1. Exploring RiPPs with Glycosyltransferase domains and Toxin-Antitoxin systems
+
+In this notebook, we explore how to use the **MGnify Biosynthetic Gene Clusters (BGCs) portal** and its API to discover **Ribosomally Synthesised and Post-translationally Modified Peptides (RiPPs)** containing glycosyltransferase domains that are associated with toxin-antitoxin systems.
+
+This notebook covers:
+- How to use the MGnify API to find RiPPs with glycosyltransferase domains.
+- Steps to download and analyse genomic regions of interest.
+- Visualising the genomic context to gain further insights into the data.
+
+[Explore the full notebook here.](ripp-glycosyltransferase-toxin-antitoxin.ipynb)
+
+---
+
+### More use cases coming soon!
+
+

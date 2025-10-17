@@ -1,0 +1,266 @@
+{% load table_tags humanize %}
+<article class="vf-card vf-card--brand vf-card--bordered results-article">
+    {# — Hero Tabs Header — #}
+    <ul class="vf-tabs__list" data-vf-js-tabs>
+        <li class="vf-tabs__item">
+            <a class="vf-tabs__link" href="#vf-tabs__section--table">Table</a>
+        </li>
+        <li class="vf-tabs__item">
+            <a class="vf-tabs__link" href="#vf-tabs__section--compounds">Cards</a>
+        </li>
+        <li class="vf-tabs__item">
+            <a class="vf-tabs__link" href="#vf-tabs__section--plot">UMAP</a>
+        </li>
+    </ul>
+    {# — Hero Tabs Content — #}
+    <div class="vf-tabs-content" data-vf-js-tabs-content>
+        {# 1. Table View #}
+        <section class="vf-tabs__section" id="vf-tabs__section--table">
+            <h1 class="vf-heading">Search Results</h1>
+            <a class="vf-button vf-button--link vf-button--sm"
+               href="{% url 'download_results_tsv' %}?{{ encoded_params|safe }}&sort={{ sort }}&order={{ order }}">
+                <i class="material-icons">download</i>&nbsp;Download results TSV
+            </a>
+            <table id="explore-table" class="vf-table">
+                <thead class="vf-table__header">
+                    <tr class="vf-table__row">
+                        {# — only your data columns, no “Actions” #}
+                        {% for column in columns %}
+                            <th class="vf-table__heading" scope="col">
+                                {{ column.name }}
+                                {% if column.slug %}
+                                    <a href="?{{ encoded_params|safe }}&sort={{ column.slug }}&order={% if sort == column.slug and order == 'asc' %}desc{% else %}asc{% endif %}">
+                                        {% if sort == column.slug %}
+                                            {% if order == 'asc' %}
+                                                <span class="sort-icon-style">▲</span>
+                                            {% else %}
+                                                <span class="sort-icon-style">▼</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="sort-icon-style">↕</span>
+                                        {% endif %}
+                                    </a>
+                                {% endif %}
+                            </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="vf-table__body">
+                    {% for obj in results %}
+                        <tr class="vf-table__row js-bgc-row clickable-row"
+                            data-bgc-id="{{ obj.id }}">
+                            {% for column in columns %}
+                                <td class="vf-table__cell">
+                                    {% with value=obj|getattr_tag:column.slug %}
+                                        {% if value|is_list %}
+                                            {{ value|join:", " }}
+                                        {% else %}
+                                            {{ value }}
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="pagination pagination-center">
+                <button class="vf-button vf-button--primary" data-page="1">First</button>
+                {% if results.has_previous %}
+                    <button class="vf-button vf-button--secondary"
+                            data-page="{{ results.previous_page_number }}">Previous</button>
+                {% else %}
+                    <button class="vf-button vf-button--secondary" disabled>Previous</button>
+                {% endif %}
+                <span class="vf-pagination__info">Page {{ results.number }} of {{ results.paginator.num_pages }}</span>
+                {% if results.has_next %}
+                    <button class="vf-button vf-button--secondary"
+                            data-page="{{ results.next_page_number }}">Next</button>
+                {% else %}
+                    <button class="vf-button vf-button--secondary" disabled>Next</button>
+                {% endif %}
+                <button class="vf-button vf-button--primary"
+                        data-page="{{ results.paginator.num_pages }}">Last</button>
+            </div>
+        </section>
+        {# 2. Compounds Card View #}
+        <section class="vf-tabs__section" id="vf-tabs__section--compounds" hidden>
+            {# — wrap in our new grid container, drop the vf-grid classes — #}
+          <div class="compound-results-grid">
+                {% for bgc in results %}
+                        <article class="vf-card vf-card--brand vf-card--bordered">
+                        <!-- Flex container for image and content side by side -->
+                        <div class="compound-flex">
+                            {% if bgc.smiles_svg %}
+                                <div class="vf-card__image card-image">{{ bgc.smiles_svg | safe }}</div>
+                            {% endif %}
+                            <div class="vf-card__content | vf-stack vf-stack--400 card-content-flex">
+                                <h3 class="vf-card__heading">
+                                    <a class="vf-card__link" href="{% url 'bgc_page' %}?bgc_id={{ bgc.id }}">
+                                        {{ bgc.accession }}
+                                        <svg aria-hidden="true"
+                                             class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                             width="1em"
+                                             height="1em"
+                                             xmlns="http://www.w3.org/2000/svg">
+                                            <!-- icon path -->
+                                        </svg>
+                                    </a>
+                                </h3>
+                                {% for column in columns %}
+                                    <p class="vf-card__text">
+                                        <strong>{{ column.name }}:</strong>
+                                        {% with value=bgc|getattr_tag:column.slug %}
+                                            {% if value|is_list %}
+                                                {{ value|join:", " }}
+                                            {% else %}
+                                                {{ value }}
+                                            {% endif %}
+                                        {% endwith %}
+                                    </p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <!-- end flex container -->
+                    </article>
+                {% endfor %}
+            </div>
+            <div class="pagination pagination-center">
+                <button class="vf-button vf-button--primary" data-page="1">First</button>
+                {% if results.has_previous %}
+                    <button class="vf-button vf-button--secondary"
+                            data-page="{{ results.previous_page_number }}">Previous</button>
+                {% else %}
+                    <button class="vf-button vf-button--secondary" disabled>Previous</button>
+                {% endif %}
+                <span class="vf-pagination__info">Page {{ results.number }} of {{ results.paginator.num_pages }}</span>
+                {% if results.has_next %}
+                    <button class="vf-button vf-button--secondary"
+                            data-page="{{ results.next_page_number }}">Next</button>
+                {% else %}
+                    <button class="vf-button vf-button--secondary" disabled>Next</button>
+                {% endif %}
+                <button class="vf-button vf-button--primary"
+                        data-page="{{ results.paginator.num_pages }}">Last</button>
+            </div>
+        </section>
+        {# — UMAP Table — #}
+        <section class="vf-tabs__section" id="vf-tabs__section--plot" hidden>
+            <h1 class="vf-heading">{{ plot_message }}</h1>
+            <!-- container Plotly will fill -->
+            <div id="bgc-scatter"></div>
+            <!-- JSON payload straight from the view -->
+            <script id="bgc-json" type="application/json">{{ scatter_json }}</script>
+        </section>
+    </div>
+</article>
+<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+<script>
+  // Hero-style tabs activation
+document.querySelectorAll('[data-vf-js-tabs]').forEach(tabContainer => {
+  const links = tabContainer.querySelectorAll('.vf-tabs__link');
+  const sections = document.querySelectorAll('.vf-tabs__section');  // <<< FIXED here
+
+  links.forEach((link, i) => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      links.forEach(l => l.classList.remove('vf-tabs__link--active'));
+      sections.forEach(s => s.hidden = true);
+      link.classList.add('vf-tabs__link--active');
+      sections[i].hidden = false;
+
+      // Lazy-load plot on first open
+      if (sections[i].id === 'vf-tabs__section--plot' && !window._scatterDrawn){
+        drawScatter();
+        window._scatterDrawn = true;
+      }
+    });
+  });
+
+  // Activate first tab on page load
+  links[0].classList.add('vf-tabs__link--active');
+});
+  document.querySelectorAll('.pagination button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = btn.getAttribute('data-page');
+      const params = new URLSearchParams(window.location.search);
+      params.set('page', page);
+      // preserve any other filters/sorts you have:
+      window.location.search = params.toString();
+    });
+  });
+
+
+function drawScatter(){
+  const data = JSON.parse(document.getElementById('bgc-json').textContent);
+
+  // split into traces by class_tag for automatic colour-by-class
+  const tracesByClass = {};
+data.forEach(pt => {
+  if(!tracesByClass[pt.class_tag]) 
+    tracesByClass[pt.class_tag] = {
+      x:[], y:[], text:[], customdata:[], marker: { size: [] },
+      mode:'markers', type:'scatter',
+      name: pt.class_tag,
+      hovertemplate:'%{text}<extra></extra>'
+    };
+
+  const trace = tracesByClass[pt.class_tag];
+
+  const lines = [];
+  Object.keys(pt).forEach(k => {
+    if(['x','y','id','class_tag', 'is_mibig_tag'].includes(k)) return;
+    lines.push(`<b>${k}</b>: ${pt[k]}`);
+  });
+
+  const isHighlighted = pt.is_mibig_tag === true || pt.is_mibig_tag === "True";
+
+  trace.x.push(pt.x);
+  trace.y.push(pt.y);
+  trace.text.push(lines.join('<br>'));
+  trace.customdata.push(pt.id);
+  trace.marker.size.push(isHighlighted ? 14 : 8);  // <<< control size here
+});
+
+  const traces = Object.values(tracesByClass);
+
+const layout = {
+  hovermode: 'closest',
+  margin: {l:0, r:0, t:0, b:0},
+  xaxis: {
+    visible: false,
+    showgrid: false,
+    zeroline: false,
+    showticklabels: false,
+  },
+  yaxis: {
+    visible: false,
+    showgrid: false,
+    zeroline: false,
+    showticklabels: false,
+  },
+  showlegend: true,
+  plot_bgcolor: 'white',
+  paper_bgcolor: 'white',
+};
+
+  Plotly.newPlot('bgc-scatter', traces, layout);
+
+  // click handler: open BGC detail page in new tab
+  const plot = document.getElementById('bgc-scatter');
+  plot.on('plotly_click', function(e){
+    const bgcId = e.points[0].customdata;
+    window.open(`{% url 'bgc_page' %}?bgc_id=${bgcId}`, '_blank', 'noopener');
+  });
+}
+</script>
+<script>
+  // Attach click handlers to BGC table rows after DOM is parsed
+  document.querySelectorAll('.js-bgc-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const bgcId = row.getAttribute('data-bgc-id');
+      const url = "{% url 'bgc_page' %}?bgc_id=" + bgcId ;
+      window.open(url, '_blank', 'noopener');
+    });
+  });
+</script>

@@ -1,0 +1,67 @@
+project:
+  type: website
+
+execute:
+  freeze: auto
+
+website:
+  title: "MGnify Biosynthetic Gene Clusters Portal Documentation"
+  description: "Guides, examples, and API documentation for using the MGnify Biosynthetic Gene Clusters Portal."
+  page-navigation: true
+
+  navbar:
+    right:
+      - href: https://ebi.ac.uk/finn-srv/mgnify-bgcs
+        text: MGnify BGCs
+      - icon: github
+        href: https://github.com/Finn-Lab/bgc_data_portal
+
+  sidebar:
+    style: docked
+    search: true
+    contents:
+      - text: "MGnify BGCs Portal"
+        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/index.html
+        contents:
+          - text: "Home Page"
+            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/landing-page-features.html
+          - text: "Explore BGCs"
+            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/explore-bgcs.html
+          - text: "BGC Details"
+            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/bgc-details.html
+      - text: "API Documentation"
+        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/api-documentation.html
+      - text: "Use cases"
+        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/intro.html
+        contents:
+          - text: "Introduction"
+            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/intro.html
+          - text: "Exploring RiPPs"
+            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/ripp-glycosyltransferase-toxin-antitoxin.html
+      - text: "About"
+        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/about.html
+
+
+  page-footer:
+    left: "© 2024 EMBL-EBI"
+    right:
+      - icon: github
+        href: https://github.com/Finn-Lab/bgc_data_portal
+
+format:
+  html:
+    theme:
+      - zephyr
+      - styles.scss
+    toc: true
+    embed-resources: true
+
+# files:
+#   - index.qmd
+#   - landing-page-features.qmd
+#   - explore-bgcs.qmd  
+#   - bgc-details.qmd
+#   - use-cases/index.qmd
+#   - use-cases/ripp-glycosyltransferase-toxin-antitoxin.ipynb
+#   - api-documentation.qmd
+#   - about.qmd  

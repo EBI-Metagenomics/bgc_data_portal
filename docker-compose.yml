@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+  redis:
+    image: quay.io/microbiome-informatics/redis:7.4
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db:
+    # image: quay.io/microbiome-informatics/pgvector:arm64
+    image: ankane/pgvector:latest
+    env_file: .env
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 5
+
+  rabbitmq:
+    image: quay.io/microbiome-informatics/rabbitmq:arm64
+    hostname: rabbitmq
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      retries: 5
+
+  django:
+    build:
+      context: ./django
+      dockerfile: Dockerfile    
+    env_file: .env
+    command: >
+      sh -c "
+            #  python manage.py makemigrations mgnify_bgcs &&
+             python manage.py migrate &&
+             # run server in debug mode
+             python manage.py runserver 0.0.0.0:8000
+             # run server in production mode
+              # gunicorn bgc_data_portal.wsgi:application -b 0.0.0.0:8000"
+    volumes:
+        - ./django:/app # DEBUG
+        - static_volume:/app/static
+        - ingest_packages:/data/packages  
+        - /Users/fragoso/.cache/huggingface:/data/huggingface # DEBUG
+    environment:
+      - MEDIA_ROOT=/data/packages
+      - HF_HOME=/data/huggingface # DEBUG
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  celery:
+    build:
+      context: ./django
+      dockerfile: Dockerfile
+    env_file: .env
+    command: >
+        sh -c "
+        # wait for Django to finish its migrations
+        sleep 15 &&
+        celery -A bgc_data_portal.celery worker --loglevel=info "
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./django:/app # DEBUG
+      - ingest_packages:/data/packages
+      - /Users/fragoso/.cache/huggingface:/data/huggingface # DEBUG
+    environment:
+      - HF_HOME=/data/huggingface # DEBUG
+
+volumes:
+  db_data:
+  static_volume:
+  ingest_packages:
+
+

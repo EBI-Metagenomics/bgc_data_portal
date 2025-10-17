@@ -1,0 +1,5 @@
+#SCRON --job-name=pg_backup_job
+#SCRON --time=1-00
+#SCRON --mem=4G
+#SCRON --output=/dev/null
+0 3 * * *  sbatch ~/pg_backup_job.sh; sbatch --job-name=schedule_jobs_wgs --mail-user=vkale,kates,mbc,sandyr --mail-type=END,FAIL --mem=500MB --time=1:00:00 --output=/homes/emgpr_wgs/logs/$SLURM_JOB_ID.log --wrap="/hps/software/users/rdf/metagenomics/service-team/repos/mi-automation/backlog/scripts/backlog-prod.sh schedule_jobs --exp WGA WGS RNA-Seq -v 3 --max 5"

@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% load humanize static %}
+{% block title %}
+    MGnify BGCs - Explore
+{% endblock title %}
+{% block content %}
+
+    <div id="search-results" class="page-container">
+        {#────────────────────────────────────────────────────────────────────────#}
+        {# LEFT STRIP: "Explore the data" (always visible)                        #}
+        {#────────────────────────────────────────────────────────────────────────#}
+        <aside class="search-sidebar">
+            <article class="vf-card vf-card--brand vf-card--bordered">
+                <div class="content-section">
+                <div id="results_summary" class="vf-summary-container">
+                        <div class="vf-section-header">
+                            <h2 class="vf-section-header__heading">Explore the data</h2>
+                        </div>
+                        <div class="vf-section-content | vf-grid vf-grid__col-1">
+                            <article class="vf-summary">
+                                <h3 class="vf-summary__title">Regions</h3>
+                                <div class="vf-summary__text predictor-class-grid">
+                                    <strong>{{ result_stats.total_regions|intcomma }}</strong>
+                                </div>
+                            </article>
+                            <article class="vf-summary">
+                                <h3 class="vf-summary__title">Studies</h3>
+                                <div class="vf-summary__text predictor-class-grid">
+                                    <strong>{{ result_stats.n_studies|intcomma }}</strong>
+                                </div>
+                            </article>
+                            <article class="vf-summary">
+                                <h3 class="vf-summary__title">Assemblies</h3>
+                                <div class="vf-summary__text predictor-class-grid">
+                                    <strong>{{ result_stats.n_assemblies|intcomma }}</strong>
+                                </div>
+                            </article>
+                            <article class="vf-summary">
+                                <h3 class="vf-summary__title">Class distribution (%)</h3>
+                                <div class="vf-summary__text predictor-class-grid">
+                                    {% for clss, counts in result_stats.bgc_class_dist.items %}
+                                        <div>
+                                            <strong>{{ clss }}</strong>: {{ counts|intcomma }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </aside>
+        {#────────────────────────────────────────────────────────────────────────#}
+        {# MAIN — right side: one card with VF Hero tabs                        #}
+        {#────────────────────────────────────────────────────────────────────────#}
+        <div class="results-container">
+            <article class="vf-card vf-card--brand vf-card--bordered results-card">
+                {# VF Hero Tabs Header #}
+                <div class="vf-tabs">
+                    <ul class="vf-tabs__list" data-vf-js-tabs>
+                        <li class="vf-tabs__item">
+                            <a class="vf-tabs__link" href="#vf-tabs__section--advanced">Advanced Search</a>
+                        </li>
+                        <li class="vf-tabs__item">
+                            <a class="vf-tabs__link" href="#vf-tabs__section--sequence">Sequence Search</a>
+                        </li>
+                        <li class="vf-tabs__item">
+                            <a class="vf-tabs__link" href="#vf-tabs__section--chemical">Chemical Structure Search</a>
+                        </li>
+                    </ul>
+                </div>
+                {# VF Hero Tabs Content #}
+                <div class="vf-tabs-content padded" data-vf-js-tabs-content>
+                    {#────────────────────────────────────────────────────────────────#}
+                    {# 1. Advanced Search Panel                                      #}
+                    {#────────────────────────────────────────────────────────────────#}
+                            <section class="vf-tabs__section" id="vf-tabs__section--advanced">
+                                <form id="search-form" action="{% url 'search' %}" method="get" class="vf-form stack">
+                            <input type="hidden" name="form_type" value="advanced">
+                            {# Lay out fields in three columns #}
+                            <div class="vf-grid vf-grid__col-3 grid-gap-20">
+                                {% for field in advanced_form %}
+                                    <div class="vf-form__item">
+                                        <label for="{{ field.id_for_label }}" class="vf-form__label">
+                                            {{ field.label }}
+                                            {% if field.help_text %}
+                                                <span class="tooltip-container">
+                                                    <span class="tooltip-icon">?</span>
+                                                    <span class="tooltip-text">{{ field.help_text }}</span>
+                                                </span>
+                                            {% endif %}
+                                        </label>
+                                        {{ field }}
+                                        {% if field.errors %}<div class="vf-error-message field-error">{{ field.errors }}</div>{% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            {# Submit button aligned bottom-right with fixed width #}
+                            <div class="vf-form__item align-right mt-auto">
+                                <button id="pag_button_as" type="submit" class="vf-button vf-button--primary fixed-120">Apply</button>
+                            </div>
+                        </form>
+                    </section>
+                    {#────────────────────────────────────────────────────────────────#}
+                    {# 2. Sequence Search Panel                                      #}
+                    {#────────────────────────────────────────────────────────────────#}
+                    <section class="vf-tabs__section" id="vf-tabs__section--sequence">
+                        <form id="sequence-search-form" action="{% url 'search' %}" method="get" class="vf-form stack">
+                            <input type="hidden" name="form_type" value="sequence">
+                            <div class="vf-grid vf-grid__col-2 grid-gap-20">
+                                {% for field in sequence_form %}
+                                    <div class="vf-form__item grid-col-span-2" id="wrapper-{{ field.name }}">
+                                        <label for="{{ field.id_for_label }}" class="vf-form__label">{{ field.label }}</label>
+                                        {{ field }}
+                                        {% if field.help_text %}<p class="vf-form__helper">{{ field.help_text }}</p>{% endif %}
+                                        {% if field.errors %}<div class="vf-error-message field-error">{{ field.errors }}</div>{% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div class="vf-form__item align-right mt-auto">
+                                <button type="submit" class="vf-button vf-button--primary fixed-120">Search</button>
+                            </div>
+                        </form>
+                    </section>
+                    {#────────────────────────────────────────────────────────────────#}
+                    {# 3. Chemical Structure Search Panel                             #}
+                    {#────────────────────────────────────────────────────────────────#}
+                    <section class="vf-tabs__section" id="vf-tabs__section--chemical">
+                        <form id="chemical-search-form" action="{% url 'search' %}" method="get" class="vf-form stack">
+                            <input type="hidden" name="form_type" value="chemical">
+                            {{ chemical_form.smiles }} {# hidden, can sit here #}
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                            {# 1. JSME drawing canvas (topmost)                                     #}
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                       <div id="jsme_container">
+                                <!-- JSME will replace this div with its applet -->
+                            </div>
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                            {# 2. SMILES‐text input (below JSME)                                     #}
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                            <div class="vf-form__item">
+                                <label for="{{ chemical_form.smiles_text.id_for_label }}"
+                                       class="vf-form__label">{{ chemical_form.smiles_text.label }}</label>
+                                {{ chemical_form.smiles_text }}
+                                {% if chemical_form.smiles_text.help_text %}
+                                    <p class="vf-form__helper">{{ chemical_form.smiles_text.help_text }}</p>
+                                {% endif %}
+                                {% if chemical_form.smiles_text.errors %}
+                                    <div class="vf-error-message">{{ chemical_form.smiles_text.errors }}</div>
+                                {% endif %}
+                            </div>
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                            {# 3. Similarity threshold (beneath the SMILES‐text)                     #}
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                            <div class="vf-form__item">
+                                <label for="{{ chemical_form.similarity_threshold.id_for_label }}"
+                                       class="vf-form__label">{{ chemical_form.similarity_threshold.label }}</label>
+                                {{ chemical_form.similarity_threshold }}
+                                {% if chemical_form.similarity_threshold.help_text %}
+                                    <p class="vf-form__helper">{{ chemical_form.similarity_threshold.help_text }}</p>
+                                {% endif %}
+                                {% if chemical_form.similarity_threshold.errors %}
+                                    <div class="vf-error-message">{{ chemical_form.similarity_threshold.errors }}</div>
+                                {% endif %}
+                            </div>
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                            {# 4. Submit button (bottom‐right)                                        #}
+                            {# ─────────────────────────────────────────────────────────────────────#}
+                            <div class="vf-form__item align-right">
+                                <button type="submit" class="vf-button vf-button--primary fixed-120" id="chemical-search-btn">Search</button>
+                            </div>
+                        </form>
+                    </section>
+                    <!-- {#────────────────────────────────────────────────────────────────────────#} -->
+                    <!-- {# 3. Load JSME from static files (installed via npm → copied under      #} -->
+                    <!-- {#    chemdraw/static/chemdraw/jsme/)                                     #} -->
+                    <!-- {#────────────────────────────────────────────────────────────────────────#} -->
+                                        <!-- the loader must come _after_ the <div id="jsme_container"> -->
+                                        <script type="text/javascript" src="{% static 'jsme_slim/jsme.nocache.js' %}" defer></script>
+                                        <script>
+                                            // 1) Called automatically by jsme.nocache.js once it's ready
+                                            function jsmeOnLoad() {
+                                                window.jsmeApplet = new JSApplet.JSME("jsme_container", "420px", "300px", {});
+                                            }
+
+                                            // 2) Before form-submission: pick typed SMILES (if any) else use JSME.smiles()
+                                            document.addEventListener("DOMContentLoaded", function () {
+                                                const form = document.getElementById("chemical-search-form");
+                                                if (!form) return;
+                                                const smilesHI = form.querySelector('input[name="smiles"]');
+                                                const textSI = form.querySelector('input[name="smiles_text"]');
+                                                form.addEventListener("submit", function (evt) {
+                                                    const typed = textSI && textSI.value.trim();
+                                                    if (typed) {
+                                                        smilesHI.value = typed;
+                                                        return;
+                                                    }
+                                                    if (!window.jsmeApplet) {
+                                                        evt.preventDefault();
+                                                        alert("Please wait: the structure editor is still loading.");
+                                                        return;
+                                                    }
+                                                    const drawnSMILES = window.jsmeApplet.smiles().trim();
+                                                    if (!drawnSMILES) {
+                                                        evt.preventDefault();
+                                                        alert("Either draw a molecule or paste its SMILES string.");
+                                                        return;
+                                                    }
+                                                    smilesHI.value = drawnSMILES;
+                                                });
+                                            });
+                                        </script>
+
+                                        <!-- Pass Django context variables to JavaScript -->
+                                        <script>
+                                            const serializedString = "{{ serialized_string|escapejs }}";
+                                            document.addEventListener("DOMContentLoaded", function () {
+                                                const thresholdInput = document.getElementById("id_similarity_threshold");
+                                                const simOptions = document.querySelectorAll('input[name="similarity_measure"]');
+                                                const unitOptions = document.querySelectorAll('input[name="unit_of_comparison"]');
+                                                const jaccardWrapper = document.getElementById("wrapper-set_similarity_threshold");
+
+                                                function updateThreshold() {
+                                                    const selectedSim = document.querySelector('input[name="similarity_measure"]:checked');
+                                                    if (selectedSim && thresholdInput) {
+                                                        if (selectedSim.value === "hmmer") {
+                                                            thresholdInput.value = 32;
+                                                            thresholdInput.step = 1;
+                                                        } else {
+                                                            thresholdInput.value = 0.85;
+                                                            thresholdInput.step = 0.01;
+                                                        }
+                                                    }
+                                                }
+
+                                                function updateJaccardField() {
+                                                    const selectedUnit = document.querySelector('input[name="unit_of_comparison"]:checked');
+                                                    if (!jaccardWrapper) return;
+                                                    if (selectedUnit && selectedUnit.value === "proteins") {
+                                                        jaccardWrapper.style.display = "block";
+                                                    } else {
+                                                        jaccardWrapper.style.display = "none";
+                                                    }
+                                                }
+
+                                                simOptions.forEach(opt => opt.addEventListener("change", updateThreshold));
+                                                unitOptions.forEach(opt => opt.addEventListener("change", updateJaccardField));
+
+                                                updateThreshold();
+                                                updateJaccardField();
+                                            });
+                                        </script>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </div>
+        {% endblock content %}
+
+        {% block extra_scripts %}
+            <script src="{% static 'js/explore.js' %}"></script>
+        {% endblock extra_scripts %}

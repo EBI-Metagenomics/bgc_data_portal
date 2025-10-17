@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% load humanize static %}
+{% block title %}
+    MGnify BGCs - Results
+{% endblock title %}
+{% block content %}
+        <div id="search-results" class="page-container">
+        <!-- Sidebar Summary -->
+        <aside class="search-sidebar">
+            {% if result_stats %}
+                <article class="vf-card vf-card--brand vf-card--bordered results-sidebar-card">
+                    <div class="content-section">
+                    <div id="results_summary" class="vf-summary-container">
+                            <div class="vf-section-header">
+                                <h2 class="vf-section-header__heading">Results summary</h2>
+                            </div>
+                            <div class="vf-section-content | vf-grid vf-grid__col-1">
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Regions</h3>
+                                    <div class="vf-summary__text predictor-class-grid">
+                                        <strong>{{ result_stats.total_regions | intcomma }}</strong>
+                                    </div>
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Studies</h3>
+                                    <div class="vf-summary__text predictor-class-grid">
+                                        <strong>{{ result_stats.n_studies | intcomma }}</strong>
+                                    </div>
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Assemblies</h3>
+                                    <div class="vf-summary__text predictor-class-grid">
+                                        <strong>{{ result_stats.n_assemblies | intcomma }}</strong>
+                                    </div>
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Class distribution (%)</h3>
+                                    <div class="vf-summary__text predictor-class-grid">
+                                        {% for clss, counts in result_stats.bgc_class_dist.items %}
+                                            <div>
+                                                <strong>{{ clss }}</strong>: {{ counts | intcomma }}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            {% endif %}
+        </aside>
+        <!-- Main Results Section -->
+        <div class="results-container">
+                {% if results is None %}
+                <div class="spinner-wrapper">
+                    <h2 id="status-message" class="status-message">Your search is running. Please wait...</h2>
+                    <div id="spinner" class="spinner-box"></div>
+                </div>
+            {% else %}
+                {% include "results_table.html" %}
+            {% endif %}
+        </div>
+    </div>
+{% endblock content %}
+{% block extra_scripts %}
+    {% if results is None and encoded_params %}
+        <script>
+(function poll() {
+  fetch("{% url 'job_status' %}?{{ encoded_params|safe }}")
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.status === "SUCCESS") {
+        const url = "{% url 'results_view' %}?{{ encoded_params|safe }}";
+        if (window.location.href !== url) {
+          window.location.href = url;
+        } else {
+          window.location.reload();
+        }
+      } else if (data.status === "FAILURE") {
+        const errorString = data.error;
+        if (errorString && errorString.includes("Insufficient data for search")) {
+          document.getElementById("status-message").textContent = errorString;
+        } else {
+          document.getElementById("status-message").textContent = "Search failed";
+        }
+        document.getElementById("spinner").style.display = "none";
+      } else {
+        setTimeout(poll, 2000);
+      }
+    })
+    .catch((err) => {
+      console.error("Error during polling:", err);
+      setTimeout(poll, 5000);
+    });
+})();
+        </script>
+    {% endif %}
+{% endblock extra_scripts %}

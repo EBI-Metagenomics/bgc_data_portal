@@ -1,0 +1,553 @@
+apiVersion: v1
+kind: List
+items:
+ ###############################################################################
+ # 0. Namespace + proxy configuration (unchanged)
+ ###############################################################################
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: bgc-data-portal-hl-exp
+
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: proxy-config
+      namespace: bgc-data-portal-hl-exp
+    data:
+      HTTP_PROXY:  "http://hh-wwwcache.ebi.ac.uk:3128"
+      HTTPS_PROXY: "http://hh-wwwcache.ebi.ac.uk:3128"
+      http_proxy:  "http://hh-wwwcache.ebi.ac.uk:3128"
+      https_proxy: "http://hh-wwwcache.ebi.ac.uk:3128"
+      no_proxy:    "localhost,.cluster.local"
+      ALLOWED_HOSTS: "bgc-portal-dev.mgnify.org"
+
+ ###############################################################################
+ # 1. PostgreSQL (pgvector)  — 25 GiB
+ ###############################################################################
+  - apiVersion: apps/v1
+    kind: StatefulSet
+    metadata:
+      name: postgres
+      namespace: bgc-data-portal-hl-exp
+      labels:
+        app: postgres
+    spec:
+      serviceName: postgres
+      replicas: 1
+      selector:
+        matchLabels:
+          app: postgres
+      template:
+        metadata:
+          labels:
+            app: postgres
+        spec:
+          imagePullSecrets:
+            - name: quay-pull-secret
+          containers:
+            - name: postgres
+              image: quay.io/microbiome-informatics/pgvector:amd64
+              imagePullPolicy: Always
+              envFrom:
+                - secretRef:
+                    name: bgc-data-portal-secret
+                - configMapRef:
+                    name: proxy-config
+              ports:
+                - containerPort: 5432
+              readinessProbe:
+                exec:
+                  command:
+                    - sh
+                    - -c
+                    - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+                initialDelaySeconds: 5
+                periodSeconds: 5
+              livenessProbe:
+                exec:
+                  command:
+                    - sh
+                    - -c
+                    - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+                initialDelaySeconds: 10
+                periodSeconds: 10
+              volumeMounts:
+                - name: db-data
+                  mountPath: /var/lib/postgresql/data
+      volumeClaimTemplates:
+        - metadata:
+            name: db-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 25Gi
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: postgres
+      namespace: bgc-data-portal-hl-exp
+    spec:
+      clusterIP: None
+      selector:
+        app: postgres
+      ports:
+        - port: 5432
+          targetPort: 5432
+
+ ###############################################################################
+ # 2. Redis
+ ###############################################################################
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: redis
+      namespace: bgc-data-portal-hl-exp
+      labels:
+        app: redis
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: redis
+      template:
+        metadata:
+          labels:
+            app: redis
+        spec:
+          imagePullSecrets:
+            - name: quay-pull-secret
+          containers:
+            - name: redis
+              image: quay.io/microbiome-informatics/redis:7.4
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 6379
+              readinessProbe:
+                exec:
+                  command:
+                    - redis-cli
+                    - ping
+                periodSeconds: 5
+                timeoutSeconds: 3
+              livenessProbe:
+                exec:
+                  command:
+                    - redis-cli
+                    - ping
+                periodSeconds: 5
+                timeoutSeconds: 3
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: redis
+      namespace: bgc-data-portal-hl-exp
+    spec:
+      selector:
+        app: redis
+      ports:
+        - port: 6379
+          targetPort: 6379
+
+ ###############################################################################
+ # 3. RabbitMQ
+ ###############################################################################
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: rabbitmq
+      namespace: bgc-data-portal-hl-exp
+      labels:
+        app: rabbitmq
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: rabbitmq
+      template:
+        metadata:
+          labels:
+            app: rabbitmq
+        spec:
+          imagePullSecrets:
+            - name: quay-pull-secret
+          containers:
+            - name: rabbitmq
+              image: quay.io/microbiome-informatics/rabbitmq:amd64
+              imagePullPolicy: Always
+              envFrom:
+                - secretRef:
+                    name: bgc-data-portal-secret
+                - configMapRef:
+                    name: proxy-config
+              ports:
+                - name: amqp
+                  containerPort: 5672
+                - name: management
+                  containerPort: 15672
+              readinessProbe:
+                exec:
+                  command:
+                    - rabbitmq-diagnostics
+                    - -q
+                    - ping
+                periodSeconds: 5
+              livenessProbe:
+                exec:
+                  command:
+                    - rabbitmq-diagnostics
+                    - -q
+                    - ping
+                periodSeconds: 5
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: rabbitmq
+      namespace: bgc-data-portal-hl-exp
+    spec:
+      selector:
+        app: rabbitmq
+      ports:
+        - name: amqp
+          port: 5672
+          targetPort: 5672
+        - name: management
+          port: 15672
+          targetPort: 15672
+
+ ###############################################################################
+ # 4. Django web app
+ ###############################################################################
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: bgc-data-portal-django
+      namespace: bgc-data-portal-hl-exp
+      labels:
+        app: bgc-data-portal-django
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: bgc-data-portal-django
+      template:
+        metadata:
+          labels:
+            app: bgc-data-portal-django
+        spec:
+          securityContext:
+            runAsUser: 7123
+            runAsGroup: 1347
+            fsGroup: 1347
+          imagePullSecrets:
+            - name: quay-pull-secret
+          volumes:
+            - name: static-volume
+              persistentVolumeClaim:
+                claimName: bgc-static-volume-claim-v2
+            - name: ingest-packages
+              persistentVolumeClaim:
+                claimName: bgc-ingest-packages-claim
+            - name: hf-cache
+              persistentVolumeClaim:
+                claimName: bgc-hf-cache-claim
+          containers:
+            - name: django
+              securityContext:
+                runAsUser: 7123
+                runAsGroup: 1347
+              image: quay.io/microbiome-informatics/bgc_dp_web_site:dev
+              workingDir: /app
+              imagePullPolicy: Always
+              env:
+                - name: MEDIA_ROOT
+                  value: /data/packages
+                - name: HF_HOME
+                  value: /data/huggingface
+                - name: NUMBA_CACHE_DIR
+                  value: /tmp/numba_cache
+              envFrom:
+                - secretRef:
+                    name: bgc-data-portal-secret
+                - configMapRef:
+                    name: proxy-config
+              ports:
+                - name: http
+                  containerPort: 8000
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  cd /app && \
+                  python manage.py migrate && \
+                  python manage.py runserver 0.0.0.0:8000
+              volumeMounts:
+                - mountPath: /app/staticfiles
+                  name: static-volume
+                - mountPath: /data/packages
+                  name: ingest-packages
+                - mountPath: /data/huggingface
+                  name: hf-cache
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: bgc-data-portal-django
+      namespace: bgc-data-portal-hl-exp
+      labels:
+        app: bgc-data-portal-django
+    spec:
+      type: ClusterIP
+      selector:
+        app: bgc-data-portal-django
+      ports:
+        - name: http
+          port: 80
+          targetPort: 8000
+
+ ###############################################################################
+ # 5. Celery worker
+ ###############################################################################
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: bgc-data-portal-celery
+      namespace: bgc-data-portal-hl-exp
+      labels:
+        app: bgc-data-portal-celery
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: bgc-data-portal-celery
+      template:
+        metadata:
+          labels:
+            app: bgc-data-portal-celery
+        spec:
+          securityContext:
+            runAsUser: 7123
+            runAsGroup: 1347
+            fsGroup: 1347
+          imagePullSecrets:
+            - name: quay-pull-secret
+          volumes:
+            - name: ingest-packages
+              persistentVolumeClaim:
+                claimName: bgc-ingest-packages-claim
+            - name: hf-cache
+              persistentVolumeClaim:
+                claimName: bgc-hf-cache-claim
+            - name: static-volume
+              persistentVolumeClaim:
+                claimName: bgc-static-volume-claim-v2
+          containers:
+            - name: celery
+              securityContext: 
+                runAsUser: 7123
+                runAsGroup: 1347
+              image: quay.io/microbiome-informatics/bgc_dp_web_site:dev
+              imagePullPolicy: Always
+              env:
+                - name: HF_HOME
+                  value: /data/huggingface
+                - name: NUMBA_CACHE_DIR
+                  value: /tmp/numba_cache
+              envFrom:
+                - secretRef:
+                    name: bgc-data-portal-secret
+                - configMapRef:
+                    name: proxy-config
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  sleep 15 && \
+                  celery -A bgc_data_portal.celery worker --loglevel=info
+              volumeMounts:
+                - mountPath: /app/staticfiles
+                  name: static-volume
+                - mountPath: /data/packages
+                  name: ingest-packages
+                - mountPath: /data/huggingface
+                  name: hf-cache
+
+ ###############################################################################
+ # 7. Static NGINX (serves /static/* with correct MIME)
+ ###############################################################################
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: bgc-data-portal-static
+      namespace: bgc-data-portal-hl-exp
+      labels:
+        app: bgc-data-portal-static
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: bgc-data-portal-static
+      template:
+        metadata:
+          labels:
+            app: bgc-data-portal-static
+        spec:
+          imagePullSecrets:
+            - name: quay-pull-secret
+          containers:
+            - name: nginx
+              image: nginx:alpine
+              ports:
+                - containerPort: 80
+              volumeMounts:
+                - name: static-volume
+                  # mountPath: /usr/share/nginx/html/static
+                  mountPath: /usr/share/nginx/html  # Changed from /usr/share/nginx/html/static
+                - name: nginx-cache
+                  mountPath: /var/cache/nginx
+
+          volumes:
+            - name: static-volume
+              persistentVolumeClaim:
+                claimName: bgc-static-volume-claim-v2
+            - name: nginx-cache
+              emptyDir: {}
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: bgc-data-portal-static
+      namespace: bgc-data-portal-hl-exp
+    spec:
+      selector:
+        app: bgc-data-portal-static
+      ports:
+        - name: http
+          port: 80
+          targetPort: 80
+
+ ###############################################################################
+ # 8. Ingress for public host (static & large-body)
+ ###############################################################################
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: bgc-data-portal-ingress
+      namespace: bgc-data-portal-hl-exp
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+        nginx.ingress.kubernetes.io/proxy-body-size: "6g"
+        nginx.ingress.kubernetes.io/use-regex: "true"
+    spec:
+      rules:
+        - host: bgc-portal-dev.mgnify.org
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: bgc-data-portal-django
+                    port:
+                      number: 80
+ ###############################################################################
+ # 9. Dynamic PVCs (static assets, ingest packages, HF cache)
+ ###############################################################################
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: bgc-static-volume-claim-v2
+      namespace: bgc-data-portal-hl-exp
+    spec:
+      accessModes:
+        - ReadWriteMany
+      resources:
+        requests:
+          storage: 2Gi
+
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: bgc-ingest-packages-claim
+      namespace: bgc-data-portal-hl-exp
+    spec:
+      accessModes:
+        - ReadWriteMany
+      resources:
+        requests:
+          storage: 5Gi
+
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: bgc-hf-cache-claim
+      namespace: bgc-data-portal-hl-exp
+    spec:
+      accessModes:
+        - ReadWriteMany
+      resources:
+        requests:
+          storage: 10Gi
+
+ ###############################################################################
+ # 10. Post-deploy test Jobs
+ ###############################################################################
+  - apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: bgc-integration-tests
+      namespace: bgc-data-portal-hl-exp
+      annotations:
+        helm.sh/hook: post-install,post-upgrade
+        helm.sh/hook-delete-policy: before-hook-creation
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: quay-pull-secret
+          containers:
+            - name: tests
+              image: quay.io/microbiome-informatics/bgc_dp_web_site:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  pytest django/tests/integration/ -v
+              envFrom:
+                - secretRef:
+                    name: bgc-data-portal-secret
+                - configMapRef:
+                    name: proxy-config
+
+  - apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: bgc-e2e-tests
+      namespace: bgc-data-portal-hl-exp
+      annotations:
+        helm.sh/hook: post-install,post-upgrade
+        helm.sh/hook-delete-policy: before-hook-creation
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: quay-pull-secret
+          containers:
+            - name: tests
+              image: quay.io/microbiome-informatics/bgc_dp_web_site:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  playwright install chromium && \
+                  pytest django/tests/e2e/ -v --base-url=https://bgc-portal-dev.mgnify.org
+              envFrom:
+                - secretRef:
+                    name: bgc-data-portal-secret
+                - configMapRef:
+                    name: proxy-config

@@ -1,0 +1,93 @@
+---
+title: "Introduction"
+# author: "Santiago Sanchez"
+date: "2025-07-08"
+number-sections: false
+format:
+  html:
+    embed-resources: true
+# output: html_document
+---
+
+
+Biosynthetic gene clusters (BGCs) encode the pathways for many natural products (for example antibiotics, siderophores, pigments and toxins). The **MGnify Biosynthetic Gene Clusters** portal gives natural product researchers rapid access to BGC predictions made uniformly across thousands of publicly available metagenomic assemblies processed by MGnify.
+
+The site lets you search, filter, compare and download BGC‑related information, then (if you wish) move to programmatic access later. Multiple independent detection tools are combined so you can focus quickly on the strongest candidates.
+
+## Quick start (3 minutes)
+
+1. Go to “Explore BGCs”.
+2. Type a biome keyword (e.g. sediment) OR paste a BGC accession (MGYB...) OR select one or two BGC classes. Press Apply.
+3. Sort a column (e.g. Classes) and switch to the UMAP tab to see class clusters. Click any point or table row to open full details.
+4. Use the “Download results TSV” button if you want a local list to integrate with other tools.
+
+![](/img/landing_page_quicks.png)
+
+Want to search by a Pfam domain combination or a chemical scaffold? Open the appropriate tab in the same form (Sequence or Chemical Structure) and submit—no need to leave the page.
+
+## When to use each search mode
+
+- Keyword (top bar): a quick way to jump to something you already know (accessions, simple terms).
+- Advanced Search: for combining biological, functional and structural criteria (class + Pfam + biome + completeness).
+- Sequence Search: when you have a nucleotide or amino‑acid sequence fragment and want to find similar predicted regions.
+- Chemical Structure Search: early exploratory link between a molecule (draw or SMILES) and clusters that may produce related chemotypes.
+- Sequence Analysis page: experimental embedding; paste a sequence to see nearest clusters as JSON output you can save for downstream work.
+
+
+## Basic navigation
+
+The **MGnify Biosynthetic Gene Clusters Portal** is designed with three primary components that help users navigate and utilise its features effectively. Below is an overview of these components:
+
+### 1. [Home page](landing-page-features.qmd)
+
+The Home Page is your entry point to the **MGnify Biosynthetic Gene Clusters** portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:
+
+- **Keyword search**: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the `GET /api/v1/keyword_search/` endpoint of the API.
+- **Access and explore options**: 
+  - **Search BGCs**: Directs you to the Explore BGCs page for more detailed queries.
+  - **API Access**: Provides documentation on how to use the API for programmatic access to BGC data.
+  - **User Documentation**: Guides and examples to help you navigate and utilise the portal effectively.
+  - **Downloads**: Access the FTP site to download the latest data.
+  - **About Us**: Information about the project, including details on the EUREMAP initiative supporting marine bioprospecting research.
+
+### 2. [Explore BGCs page](explore-bgcs.qmd)
+
+The Explore BGCs page is where users can perform detailed searches and view the results. It includes:
+
+- **Tabbed search interface**: Three tabs (Advanced Search, Sequence Search, Chemical Structure Search) allow switching between search modalities without leaving the page.
+- **Advanced Search panel**: Build complex queries using BGC class names, accessions, biome lineage, Pfams, detector selection, and completeness. Equivalent to the `GET /api/v1/advanced_search/` endpoint.
+- **Sequence Search panel**: Paste nucleotide or amino acid sequence data (FASTA / raw) to search for similar BGC regions using configurable similarity strategies.
+- **Chemical Structure Search panel**: Draw a compound using the embedded JSME editor or paste a SMILES string and search for BGCs associated with biosynthetic potential for structurally similar metabolites.
+- **Results summary**: High‑level counts (regions, studies, assemblies, class distribution) for the current query.
+- **Results visualisation tabs**: Table (sortable, paginated), Cards (compound‑oriented view including optional rendered structures), and UMAP (2‑D embedding with class colouring and MiBIG highlighting). Clicking a table row or UMAP point opens the BGC Details page in a new tab.
+- **TSV export**: Download current (optionally sorted) results for offline analysis.
+
+### 3. [BGC Details page](bgc-details.qmd)
+
+The BGC Details Page provides an in-depth view of a specific biosynthetic gene cluster. Key features include:
+
+- **Aggregated region overview**: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.
+- **BGC Plot**: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors. Hovering and clicking elements display further information.
+- **CDS Data**: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.
+- **Download options**: Allows you to download data related to the BGC in formats GeneBank, JSON, and FASTA. This is equivalent to calling the `GET /api/v1/contig_region/` endpoint of the API using the MGYC and start/end positions of the *aggregated region*.
+
+
+## [Use case examples](index.qmd)
+
+To help users better understand the practical applications of the platform, a series of **use case notebooks** have been provided. These notebooks demonstrate how to utilise the platform’s data and tools, including:
+
+You can explore these use cases in detail through the [Use Cases](index.qmd) section of the portal.
+
+## Glossary
+
+- **BGC (Biosynthetic Gene Cluster)**: A stretch of DNA containing the genes that together can make a natural product.
+- **MGYB**: The stable identifier we assign to an (aggregated) predicted region (the “BGC accession”). Use it to find or cite that region.
+- **MGYC**: A contig accession—the sequence fragment (assembly piece) on which the BGC sits.
+- **Completeness (Full / Single / Double)**: Whether the cluster appears fully internal to the contig (Full) or cut off by one (Single) or both (Double) contig ends (likely partial).
+- **Pfam**: A protein domain family; filtering by Pfam helps target clusters encoding specific enzymatic components.
+- **UMAP**: A method to project high‑dimensional similarity between clusters into 2D so you can visually see grouping by class or novelty.
+- **Asynchronous search**: You submit a query; the server works in the background; the page auto‑updates when ready.
+- **SMILES**: A compact text way to describe a chemical structure (can be pasted or generated by the drawing tool).
+- **MiBIG**: A reference collection of experimentally characterised biosynthetic gene clusters; used for the highlighted points in some plots.
+
+For more detailed instructions, please refer to the specific sections of the documentation.
