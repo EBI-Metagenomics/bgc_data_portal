@@ -8,6 +8,7 @@ deployments/*/.k8s.env.local
 deployments/*/bgc-data-portal-secret.yaml
 django/staticfiles
 
+
 .*
 !.gitignore
 
