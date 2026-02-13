@@ -10,7 +10,7 @@ class Study(models.Model):
 
 class Biome(models.Model):
     id = models.AutoField(primary_key=True)
-    lineage = models.CharField(max_length=255, blank=True, null=True)
+    lineage = models.CharField(max_length=255, blank=True, null=True, unique=True)
 
 
 class Assembly(models.Model):
@@ -93,7 +93,6 @@ class Bgc(models.Model):
     )
     embedding = VectorField(dimensions=1152, null=True, blank=True)
     is_aggregated_region = models.BooleanField(default=False)
-    metadata = models.JSONField(blank=True, null=True)
     compounds = models.JSONField(
         default=list,
         blank=True,
@@ -239,6 +238,12 @@ class Cds(models.Model):
                 fields=["start_position", "end_position"], name="idx_cds_positions"
             ),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contig", "start_position", "end_position", "strand", "protein", "gene_caller"],
+                name="uniq_cds_location_caller_pipeline",
+            )
+        ]
 
 
 class CurrentStats(models.Model):
@@ -264,21 +269,3 @@ class UMAPTransform(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-
-class Point(models.Model):
-    x_coord = models.FloatField()
-    y_coord = models.FloatField()
-    name = models.CharField(max_length=60)
-
-    # store [x_coord,y_coord] as a 2-dim embedding
-    embedding = VectorField(dimensions=2)
-
-    created = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.name} ({self.x_coord}, {self.y_coord})"
-
-    def save(self, *args, **kwargs):
-        # automatically populate the vector from x,y
-        self.embedding = [self.x_coord, self.y_coord]
-        super().save(*args, **kwargs)

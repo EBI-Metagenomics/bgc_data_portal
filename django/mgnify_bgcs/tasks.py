@@ -102,7 +102,6 @@ from .ingestion_schemas import (
     UMAPManifest,
 )
 
-from .models import Point
 import json
 import time
 
