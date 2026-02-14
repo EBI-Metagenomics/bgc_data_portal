@@ -520,7 +520,7 @@ items:
         - ReadWriteMany
       resources:
         requests:
-          storage: 5Gi
+          storage: 30Gi
 
   - apiVersion: v1
     kind: PersistentVolumeClaim

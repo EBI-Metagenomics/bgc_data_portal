@@ -10,7 +10,7 @@ class Study(models.Model):
 
 class Biome(models.Model):
     id = models.AutoField(primary_key=True)
-    lineage = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    lineage = models.CharField(max_length=255, default="root", unique=True)
 
 
 class Assembly(models.Model):
@@ -36,7 +36,7 @@ class Assembly(models.Model):
 class Contig(models.Model):
     id = models.AutoField(
         primary_key=True
-    )  # this is now the primary key instead of mgyc
+    )  
     sequence_sha256 = models.CharField(max_length=64, unique=True, db_index=True)
     mgyc = models.CharField(max_length=255, blank=True, null=True)
     accession = models.CharField(max_length=255, blank=True, null=True)
@@ -70,7 +70,6 @@ class BgcDetector(models.Model):
 
 class Bgc(models.Model):
     id = models.BigAutoField(primary_key=True)
-    # Allow bgcs to persist even if contig deleted; private bgcs marked and removed as needed
     contig = models.ForeignKey(
         Contig, on_delete=models.SET_NULL, null=True, blank=True, related_name="bgcs"
     )
@@ -109,7 +108,6 @@ class Bgc(models.Model):
         indexes = [
             models.Index(fields=["identifier"], name="idx_bgc_identifier"),
             GinIndex(fields=["metadata"], name="idx_bgc_metadata_gin"),
-            # HNSW index for fast nearest neighbor search using cosine distance
             HnswIndex(
                 fields=["embedding"],
                 name="bgc_embedding_hnsw",
@@ -139,7 +137,7 @@ class BgcBgcClass(models.Model):
         ]
 
 
-class Domain(models.Model):  # this used to be Pfam
+class Domain(models.Model):  
     id = models.AutoField(primary_key=True)
     acc = models.CharField(max_length=50, unique=True, db_index=True)
     name = models.CharField(max_length=255, db_index=True)
@@ -228,7 +226,7 @@ class Cds(models.Model):
     end_position = models.IntegerField()
     strand = models.SmallIntegerField()
     protein_identifier = models.CharField(max_length=255, blank=True, null=True)
-    pipeline_version = models.CharField(max_length=50)
+    pipeline_version = models.CharField(max_length=50, blank=True, null=True)
 
     class Meta:
         indexes = [
@@ -241,7 +239,7 @@ class Cds(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["contig", "start_position", "end_position", "strand", "protein", "gene_caller"],
-                name="uniq_cds_location_caller_pipeline",
+                name="uniq_cds_location_protein_caller",
             )
         ]
 
@@ -264,7 +262,7 @@ class UMAPTransform(models.Model):
     umap_version = models.CharField(max_length=50)
     model_blob = models.BinaryField()
 
-    sha256 = models.CharField(max_length=64, unique=True)  # integrity check
+    sha256 = models.CharField(max_length=64, unique=True)  
 
     class Meta:
         ordering = ["-created_at"]

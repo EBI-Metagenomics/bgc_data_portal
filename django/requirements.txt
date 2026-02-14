@@ -14,7 +14,7 @@ transformers==4.48.1
 esm==3.2.0
 biopython==1.85
 tqdm==4.67.1
-pyarrow
+"pyarrow>=23.0,<24"
 pandas
 redis>=4.0.0
 pyrodigal==3.6.3
