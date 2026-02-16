@@ -62,6 +62,6 @@ jobs:
           context: ./${{ matrix.folder }}
           file: ./${{ matrix.folder }}/Dockerfile
           # push: ${{ github.event_name == 'release' }}
-          push: True
+          push: true
           tags: |
             ${{ steps.set_tags.outputs.image }}:${{ steps.set_tags.outputs.tag }}
