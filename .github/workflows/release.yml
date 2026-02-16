@@ -2,7 +2,7 @@ name: Build and Push Docker Images
 
 on:
   push:
-    branches: [master, dev]
+    branches: [main, dev]
   release:
     types: [published]
 
@@ -15,6 +15,11 @@ jobs:
   docker:
     name: Build & Push Services
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'release' ||
+      github.ref == 'refs/heads/dev' ||
+      (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, ' release '))
+
     strategy:
       matrix:
         include:
@@ -42,7 +47,7 @@ jobs:
 
           if [[ "${BRANCH_NAME}" == *dev* ]]; then
             TAG=dev
-          elif [[ "${BRANCH_NAME}" == *master* ]]; then
+          elif [[ "${BRANCH_NAME}" == *main* ]]; then
             TAG=latest
           else
             TAG=unstable
