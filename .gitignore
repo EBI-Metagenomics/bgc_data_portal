@@ -8,9 +8,9 @@ deployments/*/.k8s.env.local
 deployments/*/bgc-data-portal-secret.yaml
 deployments/k8s-local/.env.local
 django/staticfiles
+!**/*.env*example
+.ruff_cache
 
-
-.*
 !.gitignore
 
 # Byte-compiled / optimized / DLL files

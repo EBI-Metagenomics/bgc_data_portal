@@ -1,0 +1,51 @@
+default_language_version:
+  python: python3.12
+
+exclude: >
+  (?x)^(
+    \.git/|
+    \.venv/|
+    venv/|
+    env/|
+    \.tox/|
+    \.nox/|
+    build/|
+    dist/|
+    \.eggs/|
+    .*\.egg-info/|
+    \.mypy_cache/|
+    \.ruff_cache/|
+    \.pytest_cache/|
+    \.coverage|
+    coverage\.xml|
+    htmlcov/|
+    __pycache__/|
+    node_modules/|
+    docs/_build/|
+    site/|
+    \.idea/|
+    \.vscode/
+  )
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(\.github/workflows/)
+      - id: end-of-file-fixer
+        exclude: ^(\.github/workflows/)
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=50000]
+
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.4
+    hooks:
+      - id: ruff
+        args: ["--fix","--exit-zero"]
