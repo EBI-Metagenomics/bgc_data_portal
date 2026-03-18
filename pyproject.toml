@@ -1,7 +1,11 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "bgc-data-portal"
-version = "1.0.0"
-requires-python = ">=3.10"
+dynamic = ["version"]
+requires-python = ">=3.12"
 # Runtime dependencies are managed in django/requirements.txt.
 # Dev-only dependencies are in django/requirements-dev.txt.
 # See django/requirements-web.txt for the fast dev image subset.
@@ -26,6 +30,6 @@ testpaths = ["django/tests"]
 python_files = ["test_*.py"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 ignore_missing_imports = true
 exclude = ["migrations/"]
