@@ -1,4 +1,4 @@
-# Web-only requirements — no ML/bio packages (torch, transformers, esm, biopython, etc.)
+# Web-only requirements — no heavy ML packages (torch, transformers, esm, etc.)
 # Use this file for the dev image to keep build times under 5 minutes.
 # The full requirements.txt is used for production images that run ML management commands.
 
@@ -15,7 +15,7 @@ orjson>=3.10.3
 pydantic>=2
 plotly==5.22.0
 tqdm==4.67.1
-"pyarrow>=23.0,<24"
+pyarrow>=23.0,<24
 pandas
 redis>=4.0.0
 numpy==2.0.1
@@ -33,3 +33,4 @@ python-multipart==0.0.9
 django-ninja==1.4
 # Required for Celery hot-reload in k8s (watchmedo auto-restart)
 watchdog==4.0.1
+biopython==1.85

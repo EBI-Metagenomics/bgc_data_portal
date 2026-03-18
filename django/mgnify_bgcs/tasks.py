@@ -51,23 +51,14 @@ except Exception:  # pragma: no cover - env specific
             return len(self._v)
 
 
-from .services.aggregated_bgcs import build_aggregated_for_contigs
-from .services.annotate_record import SeqAnnotator
 from .services.db_operations import (
     ingest_package as svc_ingest_package,
     export_bgc_embeddings_base64 as svc_export_bgc_embeddings_base64,
     register_umap_transform as svc_register_umap_transform,
 )
 
-
 import json
 
-from mgnify_bgcs.searches import (
-    search_bgcs_by_keyword,
-    search_bgcs_by_advanced,
-    search_bgcs_by_record,
-    sequence_bgcs_by_smiles,
-)
 from .cache_utils import set_job_cache
 
 log = logging.getLogger(__name__)
@@ -188,6 +179,8 @@ def calculate_aggregated_bgcs(self, contig_ids: list[int] | None = None) -> bool
     set_job_cache(
         search_key=str(task_id), task_id=task_id, timeout=settings.CACHE_TIMEOUT
     )
+    from .services.aggregated_bgcs import build_aggregated_for_contigs
+
     created = build_aggregated_for_contigs(contig_ids)
     log.info("calculate_aggregated_bgcs running as task id: %s", task_id)
     log.info("Aggregated-BGC rebuild complete – %s regions created", created)
@@ -240,6 +233,8 @@ def keyword_search(self, search_key: str, clean_params: dict) -> Any:
         search_key=str(search_key), task_id=str(task_id), timeout=settings.CACHE_TIMEOUT
     )
 
+    from mgnify_bgcs.searches import search_bgcs_by_keyword
+
     query_rows = search_bgcs_by_keyword(keyword)
 
     log.info("Found %s BGCs for keyword: %s", len(query_rows), keyword)
@@ -274,6 +269,8 @@ def advanced_search(self, search_key: str, clean_params: dict) -> Any:
     set_job_cache(
         search_key=str(search_key), task_id=str(task_id), timeout=settings.CACHE_TIMEOUT
     )
+
+    from mgnify_bgcs.searches import search_bgcs_by_advanced
 
     query_rows = search_bgcs_by_advanced(clean_params)
     log.info("Found %s BGCs for criteria: %s", len(query_rows), clean_params)
@@ -320,6 +317,8 @@ def sequence_search(self, search_key: str, clean_params: dict) -> Any:
         clean_params.get("set_similarity_threshold") or 0.0
     )
 
+    from .services.annotate_record import SeqAnnotator
+
     sequence_annotator = SeqAnnotator()
     record = sequence_annotator.annotate_sequence_file(
         file_string=fasta_txt,
@@ -331,6 +330,8 @@ def sequence_search(self, search_key: str, clean_params: dict) -> Any:
     # ------------------------------------------------------------------
     # 2. Fast similarity search (pgvector + SQL when possible)
     # ------------------------------------------------------------------
+    from mgnify_bgcs.searches import search_bgcs_by_record
+
     query_rows = search_bgcs_by_record(
         record=record,
         unit_of_comparison=cast(Any, unit_of_comparison),
@@ -376,6 +377,8 @@ def compound_search(self, search_key: str, clean_params: dict) -> Any:
 
     query_smiles = clean_params.get("smiles", "").strip()
     similarity_threshold = float(clean_params.get("similarity_threshold") or 0.0)
+    from mgnify_bgcs.searches import sequence_bgcs_by_smiles
+
     query_rows = sequence_bgcs_by_smiles(
         query_smiles=query_smiles, similarity_threshold=similarity_threshold
     )

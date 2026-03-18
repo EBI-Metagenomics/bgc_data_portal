@@ -1,4 +1,4 @@
-.PHONY: cluster-create cluster-delete create-local-secrets \
+.PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
         dev deploy-local delete-local deploy-dev deploy-prod \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets
 
@@ -26,7 +26,10 @@ cluster-delete:
 	kind delete cluster --name bgc-local
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
-create-local-secrets: validate-secrets
+create-local-namespace:
+	kubectl apply -f deployments/k8s-local/manifests/00-namespace.yaml
+
+create-local-secrets: validate-secrets create-local-namespace
 	kubectl create secret generic bgc-data-portal-secret \
 	  --from-env-file=$(ENV_FILE) -n bgc-local \
 	  --dry-run=client -o yaml | kubectl apply -f -

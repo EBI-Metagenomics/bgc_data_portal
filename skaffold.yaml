@@ -30,6 +30,16 @@ deploy:
   kubectl:
     defaultNamespace: bgc-local
 
+portForward:
+  # Reliable port-forward for macOS (NodePort via kind extraPortMappings is
+  # unreliable on macOS due to Docker Desktop's network stack).
+  # Access the app at http://localhost:8080
+  - resourceType: service
+    resourceName: bgc-data-portal-django
+    namespace: bgc-local
+    port: 80
+    localPort: 8080
+
 profiles:
   # ── local ──────────────────────────────────────────────────────────────────
   # Auto-activated when kubeContext is kind-bgc-local.

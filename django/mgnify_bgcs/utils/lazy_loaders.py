@@ -2,7 +2,6 @@ from functools import lru_cache
 from joblib import load
 import io
 from ..models import UMAPTransform
-from ..services.protein_embeddings import ESMEmbedder
 import logging
 from packaging.version import parse
 from mgnify_bgcs.models import BgcDetector
@@ -44,6 +43,8 @@ def protein_embedder():
     """
     Caches so we only ever load one embedder per worker.
     """
+    from ..services.protein_embeddings import ESMEmbedder
+
     global _esm_cache
     if _esm_cache is None:
         _esm_cache = ESMEmbedder()

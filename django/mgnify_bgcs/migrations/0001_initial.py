@@ -9,7 +9,9 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = []
+    dependencies = [
+        ("mgnify_bgcs", "0000_pgvector_extension"),
+    ]
 
     operations = [
         migrations.CreateModel(

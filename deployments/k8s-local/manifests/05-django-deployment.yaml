@@ -16,6 +16,15 @@ spec:
       # Run migrations before the main container starts.
       # Prevents the Celery worker from hitting an unmigrated DB on first boot.
       initContainers:
+        - name: wait-for-postgres
+          image: bgc-data-portal-django
+          command:
+            - sh
+            - -c
+            - |
+              until python -c "import socket; socket.create_connection(('postgres', 5432))" 2>/dev/null; do
+                echo "waiting for postgres..."; sleep 2
+              done
         - name: migrate
           image: bgc-data-portal-django  # Skaffold replaces with the built tag
           workingDir: /app

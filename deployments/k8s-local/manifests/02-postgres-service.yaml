@@ -4,7 +4,6 @@ metadata:
   name: postgres
   namespace: bgc-local
 spec:
-  clusterIP: None  # headless — StatefulSet pods resolve by name
   selector:
     app: postgres
   ports:

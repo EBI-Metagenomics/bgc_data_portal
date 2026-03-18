@@ -5,7 +5,7 @@ metadata:
   namespace: bgc-local
 data:
   DJANGO_DEBUG: "True"
-  ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0"
+  ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,*"
   LOG_LEVEL: "DEBUG"
   # Matomo disabled locally
   MATOMO_URL: ""
