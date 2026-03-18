@@ -6,6 +6,7 @@ comparisons_service*
 .env
 deployments/*/.k8s.env.local
 deployments/*/bgc-data-portal-secret.yaml
+deployments/k8s-local/.env.local
 django/staticfiles
 
 

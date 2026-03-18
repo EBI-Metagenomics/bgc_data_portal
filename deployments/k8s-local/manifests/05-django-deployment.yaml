@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bgc-data-portal-django
+  namespace: bgc-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bgc-data-portal-django
+  template:
+    metadata:
+      labels:
+        app: bgc-data-portal-django
+    spec:
+      # Run migrations before the main container starts.
+      # Prevents the Celery worker from hitting an unmigrated DB on first boot.
+      initContainers:
+        - name: migrate
+          image: bgc-data-portal-django  # Skaffold replaces with the built tag
+          workingDir: /app
+          command: [python, manage.py, migrate, --noinput]
+          envFrom:
+            - secretRef:
+                name: bgc-data-portal-secret
+            - configMapRef:
+                name: app-config
+      containers:
+        - name: django
+          image: bgc-data-portal-django  # Skaffold replaces with the built tag
+          workingDir: /app
+          # runserver auto-reloads on .py changes synced by Skaffold
+          command:
+            - python
+            - manage.py
+            - runserver
+            - 0.0.0.0:8000
+          envFrom:
+            - secretRef:
+                name: bgc-data-portal-secret
+            - configMapRef:
+                name: app-config
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /api/docs
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: packages
+              mountPath: /data/packages
+      volumes:
+        # emptyDir avoids PVC multi-writer complexity for local dev.
+        # Data does not survive pod restarts — acceptable in local dev.
+        - name: packages
+          emptyDir: {}

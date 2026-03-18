@@ -1,0 +1,31 @@
+[project]
+name = "bgc-data-portal"
+version = "1.0.0"
+requires-python = ">=3.10"
+# Runtime dependencies are managed in django/requirements.txt.
+# Dev-only dependencies are in django/requirements-dev.txt.
+# See django/requirements-web.txt for the fast dev image subset.
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = ["django/migrations", "django/staticfiles"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+exclude = "migrations"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "bgc_data_portal.settings"
+pythonpath = ["django"]
+testpaths = ["django/tests"]
+python_files = ["test_*.py"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+exclude = ["migrations/"]

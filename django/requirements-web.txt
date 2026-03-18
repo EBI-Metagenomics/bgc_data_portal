@@ -1,0 +1,35 @@
+# Web-only requirements — no ML/bio packages (torch, transformers, esm, biopython, etc.)
+# Use this file for the dev image to keep build times under 5 minutes.
+# The full requirements.txt is used for production images that run ML management commands.
+
+Django==5.0.4
+djangorestframework==3.15.1
+celery==5.4.0
+django-celery-results==2.5.0
+gunicorn==22.0.0
+uvicorn[standard]==0.30.1
+psycopg[binary]==3.1.18
+dj-database-url==2.1.0
+pgvector==0.4.1
+orjson>=3.10.3
+pydantic>=2
+plotly==5.22.0
+tqdm==4.67.1
+"pyarrow>=23.0,<24"
+pandas
+redis>=4.0.0
+numpy==2.0.1
+joblib==1.4.2
+seaborn==0.13.2
+requests==2.32.3
+django-filter==24.3
+django-matomo==0.1.6
+whitenoise==6.4.0
+django-debug-toolbar==5.0.1
+django-redis
+django-csp
+aiofiles
+python-multipart==0.0.9
+django-ninja==1.4
+# Required for Celery hot-reload in k8s (watchmedo auto-restart)
+watchdog==4.0.1

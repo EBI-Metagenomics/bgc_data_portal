@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bgc-data-portal-django
+  namespace: bgc-local
+spec:
+  # NodePort exposes the app at host port 8080 via kind's extraPortMappings.
+  # Access at http://localhost:8080 (no ingress controller required).
+  type: NodePort
+  selector:
+    app: bgc-data-portal-django
+  ports:
+    - port: 80
+      targetPort: 8000
+      nodePort: 30080

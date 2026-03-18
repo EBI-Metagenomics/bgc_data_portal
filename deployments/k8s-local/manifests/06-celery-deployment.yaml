@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bgc-data-portal-celery
+  namespace: bgc-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bgc-data-portal-celery
+  template:
+    metadata:
+      labels:
+        app: bgc-data-portal-celery
+    spec:
+      containers:
+        - name: celery
+          image: bgc-data-portal-django  # same slim image as Django
+          workingDir: /app
+          # watchmedo restarts Celery automatically when Skaffold syncs .py files
+          command:
+            - watchmedo
+            - auto-restart
+            - --directory=/app
+            - --pattern=*.py
+            - --recursive
+            - --
+            - celery
+            - -A
+            - bgc_data_portal.celery
+            - worker
+            - --loglevel=info
+          envFrom:
+            - secretRef:
+                name: bgc-data-portal-secret
+            - configMapRef:
+                name: app-config
+          volumeMounts:
+            - name: packages
+              mountPath: /data/packages
+      volumes:
+        - name: packages
+          emptyDir: {}

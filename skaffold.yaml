@@ -1,0 +1,82 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+
+build:
+  artifacts:
+    - image: bgc-data-portal-django
+      context: django
+      docker:
+        dockerfile: Dockerfile.dev
+      platforms:
+        - linux/arm64   # M3 Pro / Apple Silicon; change to linux/amd64 for Intel/CI
+      sync:
+        manual:
+          - src: "**/*.py"
+            dest: /app
+          - src: "**/*.html"
+            dest: /app
+          - src: "**/*.css"
+            dest: /app
+          - src: "**/*.js"
+            dest: /app
+  local:
+    push: false
+
+manifests:
+  rawYaml:
+    - deployments/k8s-local/manifests/*.yaml
+
+deploy:
+  kubectl:
+    defaultNamespace: bgc-local
+
+profiles:
+  # ── local ──────────────────────────────────────────────────────────────────
+  # Auto-activated when kubeContext is kind-bgc-local.
+  # Usage: make dev   OR   skaffold dev -p local
+  - name: local
+    activation:
+      - kubeContext: kind-bgc-local
+
+  # ── dev ────────────────────────────────────────────────────────────────────
+  # Builds and pushes to quay.io, deploys to k8s-dev (EBI HL cluster, exp ns).
+  # Requires quay.io credentials: docker login quay.io
+  # Usage: KUBE_CONTEXT=<ctx> make deploy-dev
+  - name: dev
+    build:
+      artifacts:
+        - image: quay.io/microbiome-informatics/bgc_dp_web_site
+          context: django
+          docker:
+            dockerfile: Dockerfile.dev
+          platforms:
+            - linux/amd64
+      local:
+        push: true
+    manifests:
+      rawYaml:
+        - deployments/k8s-dev/ebi-wp-k8s-hl.yaml
+    deploy:
+      kubectl:
+        defaultNamespace: bgc-data-portal-hl-exp
+
+  # ── prod ───────────────────────────────────────────────────────────────────
+  # Builds prod image (full requirements.txt, collectstatic), pushes, deploys.
+  # Usage: KUBE_CONTEXT=<ctx> make deploy-prod
+  - name: prod
+    build:
+      artifacts:
+        - image: quay.io/microbiome-informatics/bgc_dp_web_site
+          context: django
+          docker:
+            dockerfile: Dockerfile
+          platforms:
+            - linux/amd64
+      local:
+        push: true
+    manifests:
+      rawYaml:
+        - deployments/k8s-prod/ebi-wp-k8s-hl.yaml
+    deploy:
+      kubectl:
+        defaultNamespace: bgc-data-portal-hl-prod
