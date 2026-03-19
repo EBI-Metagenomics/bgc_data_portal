@@ -1,0 +1,8 @@
+studies: 10
+assemblies_per_study: 5
+contigs_per_assembly: 2
+bgcs_per_contig: 5
+cds_per_bgc: 4
+pfam_domains_per_protein: 2
+bgc_classes: [Polyketide, NRP, RiPP, Terpene, Alkaloid, NRPS-like]
+detectors: [antiSMASH, GECCO, SanntiS]

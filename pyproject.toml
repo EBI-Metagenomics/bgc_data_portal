@@ -10,6 +10,18 @@ requires-python = ">=3.12"
 # Dev-only dependencies are in django/requirements-dev.txt.
 # See django/requirements-web.txt for the fast dev image subset.
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "pytest-django>=4.5",
+    "playwright>=1.40",
+    "pytest-playwright>=0.4",
+    "requests",
+    "factory-boy>=3.3",
+    "faker>=25",
+    "pytest-factoryboy>=2.7",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"

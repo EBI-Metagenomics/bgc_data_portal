@@ -79,3 +79,21 @@ curl -I https://www.ebi.ac.uk/finn-srv/mgnify-bgcs/api/docs
 kubectl logs -f -n bgc-data-portal-hl-prod deploy/bgc-data-portal-django \
   --context <prod-kube-context>
 ```
+
+### Running tests in prod
+
+Only unit tests (which require no DB access) should be run against the production pod.
+Integration tests write to the database and must never be run in prod.
+
+```bash
+kubectl exec -n bgc-data-portal-hl-prod deploy/bgc-data-portal-django \
+  --context <prod-kube-context> -- pytest tests/unit/ -q
+```
+
+### Seeding in prod
+
+**Do not run `seed_data` against production.** The command inserts synthetic rows that
+would pollute real data. Use it only in local KIND or k8s-dev environments.
+
+To populate prod with real data, use the ETL pipeline and `load_assembly_staged_tsvs`
+management command as described in the ETL runbook.

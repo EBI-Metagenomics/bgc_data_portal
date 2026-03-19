@@ -36,6 +36,40 @@ kubectl logs -f -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
   --context <your-ebi-kube-context>
 ```
 
+## Seeding the Dev Database
+
+The `seed_data` management command populates the dev database with synthetic BGC data
+without requiring a full ETL run.
+
+```bash
+# Exec into the running Django pod
+kubectl exec -it -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
+  --context <your-ebi-kube-context> -- bash
+
+# Inside the pod:
+python manage.py seed_data                    # ~24 BGCs (small manifest)
+python manage.py seed_data --manifest medium  # ~1 000 BGCs
+python manage.py seed_data --clear --manifest medium  # wipe and re-seed
+```
+
+Use `medium` after a fresh deploy so search, pagination, and the UMAP scatter all have
+enough data to exercise meaningfully.
+
+## Running Tests Against Dev
+
+```bash
+# Unit tests (no DB required — safe to run in any environment)
+kubectl exec -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
+  --context <your-ebi-kube-context> -- pytest tests/unit/ -q
+
+# Integration tests (read/write the dev DB — seed first)
+kubectl exec -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
+  --context <your-ebi-kube-context> -- pytest tests/integration/ -q --tb=short
+```
+
+> **Note:** Integration tests write to the dev database. Run them only on the dev
+> namespace — never against prod.
+
 ## Post-Deploy Verification
 
 ```bash
