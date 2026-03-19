@@ -108,6 +108,9 @@ python manage.py seed_data
 # Seed with the medium manifest (~1 000 BGCs — good for UI / pagination work)
 python manage.py seed_data --manifest medium
 
+# Update the stats to display on website
+python manage.py update_current_stats
+
 # Wipe everything and re-seed from scratch
 python manage.py seed_data --clear --manifest small
 ```
