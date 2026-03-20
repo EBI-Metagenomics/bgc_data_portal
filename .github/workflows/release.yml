@@ -25,6 +25,10 @@ jobs:
         include:
           - folder: django
             image_name: bgc_dp_web_site
+            dockerfile: Dockerfile
+          - folder: django
+            image_name: bgc_dp_web_site_worker
+            dockerfile: Dockerfile.worker
 
     steps:
       - name: Checkout
@@ -60,7 +64,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.folder }}
-          file: ./${{ matrix.folder }}/Dockerfile
+          file: ./${{ matrix.folder }}/${{ matrix.dockerfile }}
           # push: ${{ github.event_name == 'release' }}
           push: true
           tags: |

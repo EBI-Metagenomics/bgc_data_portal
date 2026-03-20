@@ -364,7 +364,7 @@ items:
                 claimName: bgc-static-volume-claim
           containers:
             - name: celery
-              image: quay.io/microbiome-informatics/bgc_dp_web_site:latest
+              image: quay.io/microbiome-informatics/bgc_dp_web_site_worker:latest
               imagePullPolicy: Always
               env:
                 - name: HF_HOME

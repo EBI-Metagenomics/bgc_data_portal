@@ -18,5 +18,5 @@ COPY . .
 EXPOSE 8000
 
 # Django runserver auto-reloads on file changes synced by Skaffold.
-# For Celery, the 06-celery-deployment.yaml overrides this CMD with watchmedo.
+# For the Celery worker pod, use Dockerfile.worker.dev instead (includes torch/esm).
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

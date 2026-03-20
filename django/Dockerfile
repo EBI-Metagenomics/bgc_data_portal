@@ -18,8 +18,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY requirements-web.txt .
+RUN pip install --upgrade pip && pip install -r requirements-web.txt
 
 COPY . .
 

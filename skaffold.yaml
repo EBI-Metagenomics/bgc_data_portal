@@ -19,6 +19,22 @@ build:
             dest: /app
           - src: "**/*.js"
             dest: /app
+    - image: bgc-data-portal-django-worker
+      context: django
+      docker:
+        dockerfile: Dockerfile.worker.dev
+      platforms:
+        - linux/arm64   # M3 Pro / Apple Silicon; change to linux/amd64 for Intel/CI
+      sync:
+        manual:
+          - src: "**/*.py"
+            dest: /app
+          - src: "**/*.html"
+            dest: /app
+          - src: "**/*.css"
+            dest: /app
+          - src: "**/*.js"
+            dest: /app
   local:
     push: false
 
@@ -61,6 +77,32 @@ profiles:
             dockerfile: Dockerfile.dev
           platforms:
             - linux/amd64
+          sync:
+            manual:
+              - src: "**/*.py"
+                dest: /app
+              - src: "**/*.html"
+                dest: /app
+              - src: "**/*.css"
+                dest: /app
+              - src: "**/*.js"
+                dest: /app
+        - image: quay.io/microbiome-informatics/bgc_dp_web_site_worker
+          context: django
+          docker:
+            dockerfile: Dockerfile.worker.dev
+          platforms:
+            - linux/amd64
+          sync:
+            manual:
+              - src: "**/*.py"
+                dest: /app
+              - src: "**/*.html"
+                dest: /app
+              - src: "**/*.css"
+                dest: /app
+              - src: "**/*.js"
+                dest: /app
       local:
         push: true
     manifests:
@@ -80,6 +122,12 @@ profiles:
           context: django
           docker:
             dockerfile: Dockerfile
+          platforms:
+            - linux/amd64
+        - image: quay.io/microbiome-informatics/bgc_dp_web_site_worker
+          context: django
+          docker:
+            dockerfile: Dockerfile.worker
           platforms:
             - linux/amd64
       local:

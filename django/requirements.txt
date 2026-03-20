@@ -1,3 +1,7 @@
+# DEPRECATED: this file is kept as a compatibility alias.
+# New images use requirements-web.txt (web pod) or requirements-worker.txt (Celery worker).
+-r requirements-worker.txt
+
 Django==5.0.4
 djangorestframework==3.15.1
 celery==5.4.0

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: celery
-          image: bgc-data-portal-django  # same slim image as Django
+          image: bgc-data-portal-django-worker
           workingDir: /app
           # watchmedo restarts Celery automatically when Skaffold syncs .py files
           command:

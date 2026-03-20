@@ -1,0 +1,30 @@
+FROM python:3.10-slim
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    build-essential \
+    python3-dev \
+    libffi-dev \
+    libssl-dev \
+    make \
+    git \
+    libxrender1 \
+    libxext6 \
+    libsm6 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# ── Layer A: heavy ML packages (rarely change → maximise cache) ─────────────
+COPY requirements-ml.txt .
+RUN pip install --upgrade pip && pip install -r requirements-ml.txt
+
+# ── Layer B: remaining deps ──────────────────────────────────────────────────
+COPY requirements-web.txt requirements-worker.txt ./
+RUN pip install -r requirements-worker.txt
+
+# ── Layer C: application code (changes often) ───────────────────────────────
+COPY . .

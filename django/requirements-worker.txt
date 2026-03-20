@@ -1,0 +1,4 @@
+# Worker requirements — composes the web stack with the full ML stack.
+# Used for the Celery worker image (Dockerfile.worker).
+-r requirements-web.txt
+-r requirements-ml.txt

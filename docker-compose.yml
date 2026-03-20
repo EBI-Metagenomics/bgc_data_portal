@@ -65,7 +65,7 @@ services:
   celery:
     build:
       context: ./django
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.worker
     env_file: .env
     command: >
         sh -c "

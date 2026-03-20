@@ -1,0 +1,9 @@
+# Heavy ML / science packages shared by the worker image.
+# The extra-index-url is needed for the CPU-only torch wheel.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.7.0
+transformers==4.48.1
+esm==3.2.0
+rdkit==2025.03.2
+pyhmmer==0.11.1
+umap-learn==0.5.7
