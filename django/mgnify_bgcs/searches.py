@@ -11,9 +11,6 @@ from django.db.models import Case, When, Value, FloatField
 
 from Bio.SeqRecord import SeqRecord
 
-from rdkit import Chem
-from rdkit.Chem import DataStructs, rdFingerprintGenerator
-
 from mgnify_bgcs.utils.helpers import annotate_queryset, find_doppelganger_bgcs
 from mgnify_bgcs.utils.lazy_loaders import get_highest_versions_by_tool
 from mgnify_bgcs.filters import BgcKeywordFilter
@@ -294,6 +291,9 @@ def sequence_bgcs_by_smiles(query_smiles, similarity_threshold: float):
     """
     Sequence BGC by molecular structure
     """
+    from rdkit import Chem
+    from rdkit.Chem import DataStructs, rdFingerprintGenerator
+
     log.info("sequence_bgcs_by_smiles: %s, %s", query_smiles, similarity_threshold)
     mfpgen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 

@@ -35,7 +35,7 @@ cp deployments/k8s-local/.env.local.example deployments/k8s-local/.env.local
 # 3. Build dev image, create secrets, and deploy all services
 make deploy-local
 
-make create-local-secrets
+# make create-local-secrets
 ```
 
 The first `make deploy-local` pulls base images and installs Python packages.

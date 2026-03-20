@@ -1,13 +1,12 @@
-from rdkit import Chem
-from rdkit.Chem.Draw import rdMolDraw2D
-
-
 def smiles_to_svg(smiles: str, size: tuple[int, int] = (200, 200)) -> str:
     """
     Given a SMILES string, return an SVG string of its 2D depiction.
     If RDKit cannot parse, returns an empty string.
     We strip out the XML header so you can embed directly in HTML.
     """
+    from rdkit import Chem
+    from rdkit.Chem.Draw import rdMolDraw2D
+
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return ""

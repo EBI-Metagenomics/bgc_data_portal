@@ -18,6 +18,9 @@ tqdm==4.67.1
 pyarrow>=23.0,<24
 pandas
 redis>=4.0.0
+pyrodigal==3.6.3
+pyhmmer==0.11.1
+umap-learn==0.5.7
 numpy==2.0.1
 joblib==1.4.2
 seaborn==0.13.2
@@ -31,6 +34,7 @@ django-csp
 aiofiles
 python-multipart==0.0.9
 django-ninja==1.4
+rdkit==2025.03.2
 # Required for Celery hot-reload in k8s (watchmedo auto-restart)
 watchdog==4.0.1
 biopython==1.85

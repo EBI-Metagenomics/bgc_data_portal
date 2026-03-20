@@ -9,6 +9,7 @@ from pathlib import Path
 
 import yaml
 
+from mgnify_bgcs.models import BgcBgcClass
 from tests.factories.models import (
     AssemblyFactory,
     BgcClassFactory,
@@ -86,7 +87,11 @@ class DatasetBuilder:
                             detector=random.choice(detectors),
                         )
                         n_classes = min(random.randint(1, 2), len(classes))
-                        bgc.classes.set(random.sample(classes, k=n_classes))
+                        chosen = random.sample(classes, k=n_classes)
+                        BgcBgcClass.objects.bulk_create(
+                            [BgcBgcClass(bgc=bgc, bgc_class=cls) for cls in chosen],
+                            ignore_conflicts=True,
+                        )
                         counts["bgcs"] += 1
 
                         for _ in range(spec["cds_per_bgc"]):
