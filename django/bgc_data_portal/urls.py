@@ -12,7 +12,7 @@
 # limitations under the License.
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
 from debug_toolbar.toolbar import debug_toolbar_urls
 
 from . import views
@@ -41,5 +41,7 @@ urlpatterns = [
     path(
         "results/download-tsv/", views.download_results_tsv, name="download_results_tsv"
     ),
+    path("dashboard/", views.dashboard_spa, name="dashboard"),
+    re_path(r"^dashboard/.*$", views.dashboard_spa),
     path("api/", mgnify_api.api.urls, name="api"),
 ] + debug_toolbar_urls()

@@ -435,6 +435,14 @@ def download_results_tsv(request):
     return response
 
 
+def dashboard_spa(request):
+    """Serve the React SPA for the discovery dashboard."""
+    return render(request, "dashboard.html", {
+        "FORCE_SCRIPT_NAME": settings.FORCE_SCRIPT_NAME,
+        "DEBUG": settings.DEBUG,
+    })
+
+
 def custom_404_view(request, exception):
     """
     Custom 404 error view.

@@ -1,0 +1,261 @@
+// ── Weight parameters ──────────────────────────────────────────────────────
+
+export interface GenomeWeightParams {
+  w_diversity: number;
+  w_novelty: number;
+  w_density: number;
+  w_taxonomic: number;
+  w_quality: number;
+}
+
+export const GENOME_WEIGHT_DEFAULTS: GenomeWeightParams = {
+  w_diversity: 0.25,
+  w_novelty: 0.4,
+  w_density: 0.15,
+  w_taxonomic: 0.1,
+  w_quality: 0.1,
+};
+
+export interface QueryWeightParams {
+  w_similarity: number;
+  w_novelty: number;
+  w_completeness: number;
+  w_domain_novelty: number;
+}
+
+export const QUERY_WEIGHT_DEFAULTS: QueryWeightParams = {
+  w_similarity: 0.4,
+  w_novelty: 0.3,
+  w_completeness: 0.15,
+  w_domain_novelty: 0.15,
+};
+
+// ── Pagination ────────────────────────────────────────────────────────────
+
+export interface PaginationMeta {
+  page: number;
+  page_size: number;
+  total_count: number;
+  total_pages: number;
+}
+
+// ── Genome schemas ────────────────────────────────────────────────────────
+
+export interface GenomeRosterItem {
+  id: number;
+  accession: string;
+  organism_name: string | null;
+  taxonomy_kingdom: string | null;
+  taxonomy_phylum: string | null;
+  taxonomy_class: string | null;
+  taxonomy_order: string | null;
+  taxonomy_family: string | null;
+  taxonomy_genus: string | null;
+  taxonomy_species: string | null;
+  is_type_strain: boolean;
+  type_strain_catalog_url: string | null;
+  bgc_count: number;
+  l1_class_count: number;
+  bgc_diversity_score: number;
+  bgc_novelty_score: number;
+  bgc_density: number;
+  taxonomic_novelty: number;
+  genome_quality: number;
+  composite_score: number;
+}
+
+export interface PaginatedGenomeResponse {
+  items: GenomeRosterItem[];
+  pagination: PaginationMeta;
+}
+
+export interface GenomeDetail {
+  id: number;
+  accession: string;
+  organism_name: string | null;
+  taxonomy_kingdom: string | null;
+  taxonomy_phylum: string | null;
+  taxonomy_class: string | null;
+  taxonomy_order: string | null;
+  taxonomy_family: string | null;
+  taxonomy_genus: string | null;
+  taxonomy_species: string | null;
+  is_type_strain: boolean;
+  type_strain_catalog_url: string | null;
+  genome_size_mb: number | null;
+  genome_quality: number | null;
+  isolation_source: string | null;
+  bgc_count: number;
+  l1_class_count: number;
+  bgc_diversity_score: number;
+  bgc_novelty_score: number;
+  bgc_density: number;
+  taxonomic_novelty: number;
+  composite_score: number;
+}
+
+export interface GenomeScatterPoint {
+  id: number;
+  x: number;
+  y: number;
+  composite_score: number;
+  taxonomy_family: string | null;
+  organism_name: string | null;
+  is_type_strain: boolean;
+}
+
+// ── BGC schemas ───────────────────────────────────────────────────────────
+
+export interface BgcRosterItem {
+  id: number;
+  accession: string;
+  classification_l1: string;
+  classification_l2: string | null;
+  classification_l3: string | null;
+  size_kb: number;
+  novelty_score: number;
+  domain_novelty: number;
+  is_partial: boolean;
+  nearest_mibig_accession: string | null;
+  nearest_mibig_distance: number | null;
+}
+
+export interface DomainArchitectureItem {
+  domain_acc: string;
+  domain_name: string;
+  ref_db: string;
+  start: number;
+  end: number;
+  score: number | null;
+}
+
+export interface ParentGenomeSummary {
+  assembly_id: number;
+  accession: string;
+  organism_name: string | null;
+  taxonomy_family: string | null;
+  is_type_strain: boolean;
+  genome_quality: number | null;
+}
+
+export interface BgcDetail {
+  id: number;
+  accession: string;
+  classification_l1: string;
+  classification_l2: string | null;
+  classification_l3: string | null;
+  size_kb: number;
+  novelty_score: number;
+  domain_novelty: number;
+  is_partial: boolean;
+  nearest_mibig_accession: string | null;
+  nearest_mibig_distance: number | null;
+  is_validated: boolean;
+  domain_architecture: DomainArchitectureItem[];
+  parent_genome: ParentGenomeSummary | null;
+}
+
+export interface BgcScatterPoint {
+  id: number;
+  umap_x: number;
+  umap_y: number;
+  bgc_class: string;
+  is_mibig: boolean;
+  compound_name: string | null;
+}
+
+export interface MibigReferencePoint {
+  accession: string;
+  compound_name: string;
+  bgc_class: string;
+  umap_x: number;
+  umap_y: number;
+}
+
+// ── Filter schemas ────────────────────────────────────────────────────────
+
+export interface TaxonomyNode {
+  name: string;
+  rank: string;
+  count: number;
+  children: TaxonomyNode[];
+}
+
+export interface BgcClassOption {
+  name: string;
+  count: number;
+}
+
+export interface NpClassLevel {
+  name: string;
+  count: number;
+  children: NpClassLevel[];
+}
+
+export interface DomainOption {
+  acc: string;
+  name: string;
+  description: string | null;
+  count: number;
+}
+
+export interface PaginatedDomainResponse {
+  items: DomainOption[];
+  pagination: PaginationMeta;
+}
+
+// ── Query mode schemas ────────────────────────────────────────────────────
+
+export interface DomainCondition {
+  acc: string;
+  required: boolean;
+}
+
+export interface DomainQueryRequest {
+  domains: DomainCondition[];
+  logic: "and" | "or";
+}
+
+export interface QueryResultBgc {
+  id: number;
+  accession: string;
+  classification_l1: string;
+  classification_l2: string | null;
+  size_kb: number;
+  novelty_score: number;
+  domain_novelty: number;
+  is_partial: boolean;
+  relevance_score: number;
+  assembly_id: number | null;
+  assembly_accession: string | null;
+  organism_name: string | null;
+  is_type_strain: boolean;
+}
+
+export interface PaginatedQueryResultResponse {
+  items: QueryResultBgc[];
+  pagination: PaginationMeta;
+}
+
+export interface QueryResultGenomeAggregation {
+  assembly_id: number;
+  accession: string;
+  organism_name: string | null;
+  taxonomy_family: string | null;
+  is_type_strain: boolean;
+  hit_count: number;
+  max_relevance: number;
+  mean_relevance: number;
+  complete_fraction: number;
+}
+
+export interface PaginatedGenomeAggregationResponse {
+  items: QueryResultGenomeAggregation[];
+  pagination: PaginationMeta;
+}
+
+// ── Export schemas ─────────────────────────────────────────────────────────
+
+export interface ShortlistExportRequest {
+  ids: number[];
+}

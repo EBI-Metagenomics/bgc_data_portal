@@ -2,3 +2,5 @@
 *secret*
 venv
 *.db
+frontend/node_modules
+static/dashboard
