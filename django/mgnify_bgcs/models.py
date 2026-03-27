@@ -31,6 +31,28 @@ class Assembly(models.Model):
         blank=True,
         related_name="assemblies",
     )
+    # 7-rank taxonomy
+    taxonomy_kingdom = models.CharField(max_length=100, blank=True, null=True)
+    taxonomy_phylum = models.CharField(max_length=100, blank=True, null=True)
+    taxonomy_class = models.CharField(max_length=100, blank=True, null=True)
+    taxonomy_order = models.CharField(max_length=100, blank=True, null=True)
+    taxonomy_family = models.CharField(max_length=100, blank=True, null=True)
+    taxonomy_genus = models.CharField(max_length=100, blank=True, null=True)
+    taxonomy_species = models.CharField(max_length=100, blank=True, null=True)
+    # Genome metadata
+    organism_name = models.CharField(max_length=255, blank=True, null=True)
+    is_type_strain = models.BooleanField(default=False)
+    type_strain_catalog_url = models.URLField(blank=True, null=True)
+    genome_size_mb = models.FloatField(blank=True, null=True)
+    genome_quality = models.FloatField(blank=True, null=True)
+    isolation_source = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["taxonomy_family"], name="idx_assembly_tax_family"),
+            models.Index(fields=["taxonomy_genus"], name="idx_assembly_tax_genus"),
+            models.Index(fields=["is_type_strain"], name="idx_assembly_type_strain"),
+        ]
 
 
 class Contig(models.Model):

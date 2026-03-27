@@ -66,15 +66,102 @@ class BiomeFactory(DjangoModelFactory):
     lineage = factory.Sequence(lambda n: f"root:Environmental:Soil:type{n}")
 
 
+_TAXONOMY_POOL = [
+    ("Bacteria", "Actinomycetota", "Actinomycetes", "Streptomycetales", "Streptomycetaceae", "Streptomyces", "Streptomyces coelicolor"),
+    ("Bacteria", "Actinomycetota", "Actinomycetes", "Streptomycetales", "Streptomycetaceae", "Streptomyces", "Streptomyces griseus"),
+    ("Bacteria", "Actinomycetota", "Actinomycetes", "Micromonosporales", "Micromonosporaceae", "Micromonospora", "Micromonospora carbonacea"),
+    ("Bacteria", "Actinomycetota", "Actinomycetes", "Pseudonocardiales", "Pseudonocardiaceae", "Amycolatopsis", "Amycolatopsis mediterranei"),
+    ("Bacteria", "Actinomycetota", "Actinomycetes", "Streptosporangiales", "Streptosporangiaceae", "Streptosporangium", "Streptosporangium roseum"),
+    ("Bacteria", "Pseudomonadota", "Gammaproteobacteria", "Pseudomonadales", "Pseudomonadaceae", "Pseudomonas", "Pseudomonas fluorescens"),
+    ("Bacteria", "Pseudomonadota", "Gammaproteobacteria", "Enterobacterales", "Enterobacteriaceae", "Serratia", "Serratia marcescens"),
+    ("Bacteria", "Pseudomonadota", "Alphaproteobacteria", "Rhizobiales", "Bradyrhizobiaceae", "Bradyrhizobium", "Bradyrhizobium japonicum"),
+    ("Bacteria", "Pseudomonadota", "Betaproteobacteria", "Burkholderiales", "Burkholderiaceae", "Burkholderia", "Burkholderia gladioli"),
+    ("Bacteria", "Bacillota", "Bacilli", "Bacillales", "Bacillaceae", "Bacillus", "Bacillus subtilis"),
+    ("Bacteria", "Bacillota", "Bacilli", "Bacillales", "Paenibacillaceae", "Paenibacillus", "Paenibacillus polymyxa"),
+    ("Bacteria", "Cyanobacteriota", "Cyanophyceae", "Nostocales", "Nostocaceae", "Nostoc", "Nostoc punctiforme"),
+    ("Bacteria", "Cyanobacteriota", "Cyanophyceae", "Oscillatoriales", "Microcoleaceae", "Moorea", "Moorea producens"),
+    ("Bacteria", "Myxococcota", "Myxococcia", "Myxococcales", "Myxococcaceae", "Myxococcus", "Myxococcus xanthus"),
+    ("Bacteria", "Myxococcota", "Myxococcia", "Myxococcales", "Myxococcaceae", "Sorangium", "Sorangium cellulosum"),
+    ("Bacteria", "Bacteroidota", "Bacteroidia", "Flavobacteriales", "Flavobacteriaceae", "Flavobacterium", "Flavobacterium johnsoniae"),
+    ("Bacteria", "Planctomycetota", "Planctomycetes", "Planctomycetales", "Planctomycetaceae", "Planctomyces", "Planctomyces brasiliensis"),
+    ("Archaea", "Euryarchaeota", "Halobacteria", "Halobacteriales", "Halobacteriaceae", "Halobacterium", "Halobacterium salinarum"),
+    ("Bacteria", "Actinomycetota", "Actinomycetes", "Frankiales", "Frankiaceae", "Frankia", "Frankia alni"),
+    ("Bacteria", "Actinomycetota", "Actinomycetes", "Corynebacteriales", "Nocardiaceae", "Nocardia", "Nocardia brasiliensis"),
+]
+
+
 class AssemblyFactory(DjangoModelFactory):
     class Meta:
         model = Assembly
         django_get_or_create = ("accession",)
+        exclude = ("_taxonomy",)
 
     accession = factory.Sequence(lambda n: f"ERZ{n:07d}")
     study = factory.SubFactory(StudyFactory)
     biome = factory.SubFactory(BiomeFactory)
     collection = None
+
+    @factory.lazy_attribute
+    def _taxonomy(self):
+        return random.choice(_TAXONOMY_POOL)
+
+    @factory.lazy_attribute
+    def taxonomy_kingdom(self):
+        return self._taxonomy[0]
+
+    @factory.lazy_attribute
+    def taxonomy_phylum(self):
+        return self._taxonomy[1]
+
+    @factory.lazy_attribute
+    def taxonomy_class(self):
+        return self._taxonomy[2]
+
+    @factory.lazy_attribute
+    def taxonomy_order(self):
+        return self._taxonomy[3]
+
+    @factory.lazy_attribute
+    def taxonomy_family(self):
+        return self._taxonomy[4]
+
+    @factory.lazy_attribute
+    def taxonomy_genus(self):
+        return self._taxonomy[5]
+
+    @factory.lazy_attribute
+    def taxonomy_species(self):
+        return self._taxonomy[6]
+
+    @factory.lazy_attribute
+    def organism_name(self):
+        return f"{self._taxonomy[6]} strain {random.choice(string.ascii_uppercase)}{random.randint(1, 999)}"
+
+    @factory.lazy_attribute
+    def is_type_strain(self):
+        return random.random() < 0.1
+
+    @factory.lazy_attribute
+    def type_strain_catalog_url(self):
+        if self.is_type_strain:
+            return f"https://www.dsmz.de/collection/catalogue/details/culture/DSM-{random.randint(1000, 99999)}"
+        return None
+
+    @factory.lazy_attribute
+    def genome_size_mb(self):
+        return round(random.uniform(2.0, 12.0), 2)
+
+    @factory.lazy_attribute
+    def genome_quality(self):
+        return round(random.betavariate(8, 2), 3)
+
+    @factory.lazy_attribute
+    def isolation_source(self):
+        return random.choice([
+            "soil", "marine sediment", "freshwater", "rhizosphere",
+            "human gut", "insect symbiont", "cave sediment", "hot spring",
+            "mangrove soil", "coral mucus", "desert sand", "peat bog",
+        ])
 
 
 class ContigFactory(DjangoModelFactory):

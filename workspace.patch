@@ -1,0 +1,3021 @@
+diff --git a/bgc_data_portal/settings.py b/bgc_data_portal/settings.py
+index e7b3735..3766815 100644
+--- a/bgc_data_portal/settings.py
++++ b/bgc_data_portal/settings.py
+@@ -74,6 +74,7 @@ INSTALLED_APPS = [
+     "django_celery_results",
+     "pgvector",
+     "csp",
++    "discovery",
+ ]
+ 
+ if DEBUG:
+diff --git a/bgc_data_portal/urls.py b/bgc_data_portal/urls.py
+index 227899d..f7e954b 100644
+--- a/bgc_data_portal/urls.py
++++ b/bgc_data_portal/urls.py
+@@ -17,6 +17,9 @@ from debug_toolbar.toolbar import debug_toolbar_urls
+ 
+ from . import views
+ from mgnify_bgcs import api as mgnify_api
++from discovery.api import discovery_router
++
++mgnify_api.api.add_router("/dashboard/", discovery_router)
+ 
+ handler404 = "bgc_data_portal.views.custom_404_view"
+ 
+diff --git a/discovery/__init__.py b/discovery/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/discovery/admin.py b/discovery/admin.py
+new file mode 100644
+index 0000000..929beb9
+--- /dev/null
++++ b/discovery/admin.py
+@@ -0,0 +1,52 @@
++from django.contrib import admin
++
++from .models import (
++    GCF,
++    GCFMembership,
++    NaturalProduct,
++    MibigReference,
++    GenomeScore,
++    BgcScore,
++)
++
++
++@admin.register(GCF)
++class GCFAdmin(admin.ModelAdmin):
++    list_display = ("family_id", "member_count", "known_chemistry_annotation", "mibig_accession")
++    search_fields = ("family_id", "known_chemistry_annotation")
++
++
++@admin.register(GCFMembership)
++class GCFMembershipAdmin(admin.ModelAdmin):
++    list_display = ("gcf", "bgc", "distance_to_representative")
++    raw_id_fields = ("gcf", "bgc")
++
++
++@admin.register(NaturalProduct)
++class NaturalProductAdmin(admin.ModelAdmin):
++    list_display = ("name", "chemical_class_l1", "chemical_class_l2", "producing_organism")
++    search_fields = ("name", "smiles")
++    list_filter = ("chemical_class_l1",)
++
++
++@admin.register(MibigReference)
++class MibigReferenceAdmin(admin.ModelAdmin):
++    list_display = ("accession", "compound_name", "bgc_class")
++    search_fields = ("accession", "compound_name")
++
++
++@admin.register(GenomeScore)
++class GenomeScoreAdmin(admin.ModelAdmin):
++    list_display = (
++        "assembly",
++        "bgc_count",
++        "bgc_diversity_score",
++        "bgc_novelty_score",
++        "bgc_density",
++    )
++
++
++@admin.register(BgcScore)
++class BgcScoreAdmin(admin.ModelAdmin):
++    list_display = ("bgc", "novelty_score", "domain_novelty", "size_kb", "classification_l1")
++    list_filter = ("classification_l1", "is_validated")
+diff --git a/discovery/api.py b/discovery/api.py
+new file mode 100644
+index 0000000..2748c1a
+--- /dev/null
++++ b/discovery/api.py
+@@ -0,0 +1,960 @@
++"""Discovery dashboard API — Django Ninja Router.
++
++Mounted on the main NinjaAPI at /api/dashboard/.
++"""
++
++import csv
++import math
++from io import StringIO
++from typing import Optional
++
++from django.db.models import Q, Count, Avg, Max, F, Value, FloatField
++from django.db.models.functions import Coalesce
++from django.http import HttpResponse
++from ninja import Router, Query
++from ninja.errors import HttpError
++
++from mgnify_bgcs.models import (
++    Assembly,
++    Bgc,
++    BgcClass,
++    Cds,
++    Domain,
++    ProteinDomain,
++)
++from discovery.models import (
++    BgcScore,
++    GCFMembership,
++    GenomeScore,
++    MibigReference,
++    NaturalProduct,
++)
++from discovery.services.scoring import compute_composite_priority
++from discovery.api_schemas import (
++    BgcClassOption,
++    BgcDetail,
++    BgcRosterItem,
++    BgcScatterPoint,
++    DomainArchitectureItem,
++    DomainOption,
++    DomainQueryRequest,
++    GenomeDetail,
++    GenomeRosterItem,
++    GenomeScatterPoint,
++    GenomeWeightParams,
++    MibigReferencePoint,
++    NpClassLevel,
++    PaginatedDomainResponse,
++    PaginatedGenomeAggregationResponse,
++    PaginatedGenomeResponse,
++    PaginatedQueryResultResponse,
++    PaginationMeta,
++    ParentGenomeSummary,
++    QueryResultBgc,
++    QueryResultGenomeAggregation,
++    QueryWeightParams,
++    ShortlistExportRequest,
++    TaxonomyNode,
++)
++
++discovery_router = Router(tags=["Discovery Dashboard"])
++
++
++# ── Helpers ───────────────────────────────────────────────────────────────────
++
++
++def _paginate(page: int, page_size: int, total_count: int):
++    page = max(1, page)
++    page_size = max(1, min(page_size, 200))
++    total_pages = max(1, math.ceil(total_count / page_size))
++    offset = (page - 1) * page_size
++    return page, page_size, total_pages, offset
++
++
++def _genome_composite(gs: GenomeScore, weights: GenomeWeightParams) -> float:
++    return compute_composite_priority(
++        scores={
++            "diversity": gs.bgc_diversity_score,
++            "novelty": gs.bgc_novelty_score,
++            "density": gs.bgc_density,
++            "taxonomic": gs.taxonomic_novelty,
++            "quality": gs.genome_quality,
++        },
++        weights={
++            "diversity": weights.w_diversity,
++            "novelty": weights.w_novelty,
++            "density": weights.w_density,
++            "taxonomic": weights.w_taxonomic,
++            "quality": weights.w_quality,
++        },
++    )
++
++
++def _assembly_to_roster_item(assembly: Assembly, composite: float) -> GenomeRosterItem:
++    gs = getattr(assembly, "genome_score", None)
++    return GenomeRosterItem(
++        id=assembly.id,
++        accession=assembly.accession,
++        organism_name=assembly.organism_name,
++        taxonomy_kingdom=assembly.taxonomy_kingdom,
++        taxonomy_phylum=assembly.taxonomy_phylum,
++        taxonomy_class=assembly.taxonomy_class,
++        taxonomy_order=assembly.taxonomy_order,
++        taxonomy_family=assembly.taxonomy_family,
++        taxonomy_genus=assembly.taxonomy_genus,
++        taxonomy_species=assembly.taxonomy_species,
++        is_type_strain=assembly.is_type_strain,
++        type_strain_catalog_url=assembly.type_strain_catalog_url,
++        bgc_count=gs.bgc_count if gs else 0,
++        l1_class_count=gs.l1_class_count if gs else 0,
++        bgc_diversity_score=gs.bgc_diversity_score if gs else 0.0,
++        bgc_novelty_score=gs.bgc_novelty_score if gs else 0.0,
++        bgc_density=gs.bgc_density if gs else 0.0,
++        taxonomic_novelty=gs.taxonomic_novelty if gs else 0.0,
++        genome_quality=gs.genome_quality if gs else 0.0,
++        composite_score=composite,
++    )
++
++
++# ── Genome endpoints ─────────────────────────────────────────────────────────
++
++
++@discovery_router.get("/genomes/", response=PaginatedGenomeResponse)
++def genome_roster(
++    request,
++    page: int = 1,
++    page_size: int = 25,
++    sort_by: str = "composite_score",
++    order: str = "desc",
++    search: Optional[str] = None,
++    taxonomy_kingdom: Optional[str] = None,
++    taxonomy_phylum: Optional[str] = None,
++    taxonomy_class: Optional[str] = None,
++    taxonomy_order: Optional[str] = None,
++    taxonomy_family: Optional[str] = None,
++    taxonomy_genus: Optional[str] = None,
++    type_strain_only: bool = False,
++    bgc_class: Optional[str] = None,
++    weights: GenomeWeightParams = Query(...),
++):
++    qs = Assembly.objects.select_related("genome_score").filter(
++        genome_score__isnull=False
++    )
++
++    # Filters
++    if type_strain_only:
++        qs = qs.filter(is_type_strain=True)
++    if taxonomy_kingdom:
++        qs = qs.filter(taxonomy_kingdom__iexact=taxonomy_kingdom)
++    if taxonomy_phylum:
++        qs = qs.filter(taxonomy_phylum__iexact=taxonomy_phylum)
++    if taxonomy_class:
++        qs = qs.filter(taxonomy_class__iexact=taxonomy_class)
++    if taxonomy_order:
++        qs = qs.filter(taxonomy_order__iexact=taxonomy_order)
++    if taxonomy_family:
++        qs = qs.filter(taxonomy_family__iexact=taxonomy_family)
++    if taxonomy_genus:
++        qs = qs.filter(taxonomy_genus__iexact=taxonomy_genus)
++    if search:
++        qs = qs.filter(
++            Q(organism_name__icontains=search)
++            | Q(taxonomy_species__icontains=search)
++            | Q(taxonomy_genus__icontains=search)
++            | Q(taxonomy_family__icontains=search)
++            | Q(accession__icontains=search)
++        )
++    if bgc_class:
++        qs = qs.filter(contigs__bgcs__classes__name__iexact=bgc_class).distinct()
++
++    # Materialize with composite scores
++    assemblies = list(qs)
++    results = []
++    for assembly in assemblies:
++        gs = assembly.genome_score
++        composite = _genome_composite(gs, weights)
++        results.append((assembly, composite))
++
++    # Sort
++    score_fields = {
++        "composite_score", "bgc_count", "bgc_diversity_score",
++        "bgc_novelty_score", "bgc_density", "taxonomic_novelty", "genome_quality",
++        "l1_class_count",
++    }
++    reverse = order == "desc"
++
++    if sort_by == "composite_score":
++        results.sort(key=lambda x: x[1], reverse=reverse)
++    elif sort_by in score_fields:
++        results.sort(
++            key=lambda x: getattr(x[0].genome_score, sort_by, 0),
++            reverse=reverse,
++        )
++    elif sort_by == "organism_name":
++        results.sort(key=lambda x: (x[0].organism_name or ""), reverse=reverse)
++    else:
++        results.sort(key=lambda x: x[1], reverse=True)
++
++    total_count = len(results)
++    page, page_size, total_pages, offset = _paginate(page, page_size, total_count)
++    page_results = results[offset : offset + page_size]
++
++    items = [_assembly_to_roster_item(a, c) for a, c in page_results]
++
++    return PaginatedGenomeResponse(
++        items=items,
++        pagination=PaginationMeta(
++            page=page,
++            page_size=page_size,
++            total_count=total_count,
++            total_pages=total_pages,
++        ),
++    )
++
++
++@discovery_router.get("/genomes/{assembly_id}/", response=GenomeDetail)
++def genome_detail(request, assembly_id: int, weights: GenomeWeightParams = Query(...)):
++    try:
++        assembly = Assembly.objects.select_related("genome_score").get(id=assembly_id)
++    except Assembly.DoesNotExist:
++        raise HttpError(404, "Assembly not found")
++
++    gs = getattr(assembly, "genome_score", None)
++    composite = _genome_composite(gs, weights) if gs else 0.0
++
++    return GenomeDetail(
++        id=assembly.id,
++        accession=assembly.accession,
++        organism_name=assembly.organism_name,
++        taxonomy_kingdom=assembly.taxonomy_kingdom,
++        taxonomy_phylum=assembly.taxonomy_phylum,
++        taxonomy_class=assembly.taxonomy_class,
++        taxonomy_order=assembly.taxonomy_order,
++        taxonomy_family=assembly.taxonomy_family,
++        taxonomy_genus=assembly.taxonomy_genus,
++        taxonomy_species=assembly.taxonomy_species,
++        is_type_strain=assembly.is_type_strain,
++        type_strain_catalog_url=assembly.type_strain_catalog_url,
++        genome_size_mb=assembly.genome_size_mb,
++        genome_quality=assembly.genome_quality,
++        isolation_source=assembly.isolation_source,
++        bgc_count=gs.bgc_count if gs else 0,
++        l1_class_count=gs.l1_class_count if gs else 0,
++        bgc_diversity_score=gs.bgc_diversity_score if gs else 0.0,
++        bgc_novelty_score=gs.bgc_novelty_score if gs else 0.0,
++        bgc_density=gs.bgc_density if gs else 0.0,
++        taxonomic_novelty=gs.taxonomic_novelty if gs else 0.0,
++        composite_score=composite,
++    )
++
++
++@discovery_router.get("/genomes/{assembly_id}/bgcs/", response=list[BgcRosterItem])
++def genome_bgc_roster(request, assembly_id: int):
++    bgcs = (
++        Bgc.objects.filter(contig__assembly_id=assembly_id)
++        .select_related("bgc_score")
++        .order_by("-bgc_score__novelty_score")
++    )
++
++    items = []
++    for bgc in bgcs:
++        bs = getattr(bgc, "bgc_score", None)
++        items.append(
++            BgcRosterItem(
++                id=bgc.id,
++                accession=bgc.accession,
++                classification_l1=bs.classification_l1 if bs else "",
++                classification_l2=bs.classification_l2 if bs else None,
++                classification_l3=bs.classification_l3 if bs else None,
++                size_kb=bs.size_kb if bs else 0.0,
++                novelty_score=bs.novelty_score if bs else 0.0,
++                domain_novelty=bs.domain_novelty if bs else 0.0,
++                is_partial=bgc.is_partial,
++                nearest_mibig_accession=bs.nearest_mibig_accession if bs else None,
++                nearest_mibig_distance=bs.nearest_mibig_distance if bs else None,
++            )
++        )
++    return items
++
++
++@discovery_router.get("/genome-scatter/", response=list[GenomeScatterPoint])
++def genome_scatter(
++    request,
++    x_axis: str = "bgc_diversity_score",
++    y_axis: str = "bgc_novelty_score",
++    type_strain_only: bool = False,
++    taxonomy_family: Optional[str] = None,
++    bgc_class: Optional[str] = None,
++    weights: GenomeWeightParams = Query(...),
++):
++    allowed_axes = {
++        "bgc_diversity_score",
++        "bgc_novelty_score",
++        "bgc_density",
++        "taxonomic_novelty",
++        "genome_quality",
++    }
++    if x_axis not in allowed_axes or y_axis not in allowed_axes:
++        raise HttpError(400, f"Axis must be one of: {', '.join(sorted(allowed_axes))}")
++
++    qs = Assembly.objects.select_related("genome_score").filter(
++        genome_score__isnull=False
++    )
++    if type_strain_only:
++        qs = qs.filter(is_type_strain=True)
++    if taxonomy_family:
++        qs = qs.filter(taxonomy_family__iexact=taxonomy_family)
++    if bgc_class:
++        qs = qs.filter(contigs__bgcs__classes__name__iexact=bgc_class).distinct()
++
++    points = []
++    for assembly in qs:
++        gs = assembly.genome_score
++        composite = _genome_composite(gs, weights)
++        points.append(
++            GenomeScatterPoint(
++                id=assembly.id,
++                x=getattr(gs, x_axis, 0.0),
++                y=getattr(gs, y_axis, 0.0),
++                composite_score=composite,
++                taxonomy_family=assembly.taxonomy_family,
++                organism_name=assembly.organism_name,
++                is_type_strain=assembly.is_type_strain,
++            )
++        )
++    return points
++
++
++# ── BGC endpoints ─────────────────────────────────────────────────────────────
++
++
++@discovery_router.get("/bgcs/{bgc_id}/", response=BgcDetail)
++def bgc_detail(request, bgc_id: int):
++    try:
++        bgc = Bgc.objects.select_related(
++            "bgc_score", "contig__assembly"
++        ).get(id=bgc_id)
++    except Bgc.DoesNotExist:
++        raise HttpError(404, "BGC not found")
++
++    bs = getattr(bgc, "bgc_score", None)
++
++    # Build domain architecture
++    domain_arch = []
++    cds_qs = Cds.objects.filter(
++        contig=bgc.contig,
++        start_position__gte=bgc.start_position,
++        end_position__lte=bgc.end_position,
++    ).select_related("protein")
++
++    for cds in cds_qs:
++        for pd in ProteinDomain.objects.filter(protein=cds.protein).select_related("domain"):
++            domain_arch.append(
++                DomainArchitectureItem(
++                    domain_acc=pd.domain.acc,
++                    domain_name=pd.domain.name,
++                    ref_db=pd.domain.ref_db,
++                    start=pd.start_position,
++                    end=pd.end_position,
++                    score=pd.score,
++                )
++            )
++
++    # Parent genome
++    parent = None
++    assembly = bgc.contig.assembly if bgc.contig else None
++    if assembly:
++        parent = ParentGenomeSummary(
++            assembly_id=assembly.id,
++            accession=assembly.accession,
++            organism_name=assembly.organism_name,
++            taxonomy_family=assembly.taxonomy_family,
++            is_type_strain=assembly.is_type_strain,
++            genome_quality=assembly.genome_quality,
++        )
++
++    return BgcDetail(
++        id=bgc.id,
++        accession=bgc.accession,
++        classification_l1=bs.classification_l1 if bs else "",
++        classification_l2=bs.classification_l2 if bs else None,
++        classification_l3=bs.classification_l3 if bs else None,
++        size_kb=bs.size_kb if bs else 0.0,
++        novelty_score=bs.novelty_score if bs else 0.0,
++        domain_novelty=bs.domain_novelty if bs else 0.0,
++        is_partial=bgc.is_partial,
++        nearest_mibig_accession=bs.nearest_mibig_accession if bs else None,
++        nearest_mibig_distance=bs.nearest_mibig_distance if bs else None,
++        is_validated=bs.is_validated if bs else False,
++        domain_architecture=domain_arch,
++        parent_genome=parent,
++    )
++
++
++@discovery_router.get("/bgc-scatter/", response=list[BgcScatterPoint])
++def bgc_scatter(
++    request,
++    include_mibig: bool = True,
++    bgc_class: Optional[str] = None,
++    assembly_ids: Optional[str] = None,
++    max_points: int = 2000,
++):
++    """UMAP scatter data for BGCs, optionally including MIBiG reference points."""
++    qs = Bgc.objects.filter(
++        metadata__umap_x_coord__isnull=False,
++        bgc_score__isnull=False,
++    ).select_related("bgc_score")
++
++    if bgc_class:
++        qs = qs.filter(classes__name__iexact=bgc_class)
++    if assembly_ids:
++        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
++        if ids:
++            qs = qs.filter(contig__assembly_id__in=ids)
++
++    # Sample if too many
++    total = qs.count()
++    if total > max_points:
++        qs = qs.order_by("?")[:max_points]
++
++    points = []
++    for bgc in qs:
++        meta = bgc.metadata or {}
++        bs = bgc.bgc_score
++        points.append(
++            BgcScatterPoint(
++                id=bgc.id,
++                umap_x=meta.get("umap_x_coord", 0.0),
++                umap_y=meta.get("umap_y_coord", 0.0),
++                bgc_class=bs.classification_l1 if bs else "",
++                is_mibig=False,
++                compound_name=None,
++            )
++        )
++
++    if include_mibig:
++        for ref in MibigReference.objects.all():
++            points.append(
++                BgcScatterPoint(
++                    id=ref.id,
++                    umap_x=ref.umap_x,
++                    umap_y=ref.umap_y,
++                    bgc_class=ref.bgc_class,
++                    is_mibig=True,
++                    compound_name=ref.compound_name,
++                )
++            )
++
++    return points
++
++
++# ── Query mode endpoints ──────────────────────────────────────────────────────
++
++
++@discovery_router.post("/query/domain/", response=PaginatedQueryResultResponse)
++def domain_query(
++    request,
++    body: DomainQueryRequest,
++    page: int = 1,
++    page_size: int = 25,
++    weights: QueryWeightParams = Query(...),
++):
++    """Find BGCs by protein domain composition."""
++    if not body.domains:
++        raise HttpError(400, "At least one domain is required")
++
++    required = [d.acc for d in body.domains if d.required]
++    excluded = [d.acc for d in body.domains if not d.required]
++
++    # Find proteins that have the required domains
++    qs = Bgc.objects.select_related("bgc_score", "contig__assembly").filter(
++        bgc_score__isnull=False
++    )
++
++    if body.logic == "and" and required:
++        # BGC must contain proteins with ALL required domains
++        for acc in required:
++            qs = qs.filter(
++                contig__cds__protein__domains__acc=acc
++            )
++        qs = qs.distinct()
++    elif required:
++        # BGC must contain proteins with ANY required domain
++        qs = qs.filter(
++            contig__cds__protein__domains__acc__in=required
++        ).distinct()
++
++    if excluded:
++        qs = qs.exclude(
++            contig__cds__protein__domains__acc__in=excluded
++        )
++
++    # Score and paginate
++    results = []
++    for bgc in qs:
++        bs = bgc.bgc_score
++        # Simple relevance: combine novelty and domain novelty
++        relevance = compute_composite_priority(
++            scores={
++                "similarity": 1.0,  # domain match is binary
++                "novelty": bs.novelty_score if bs else 0.0,
++                "completeness": 0.0 if bgc.is_partial else 1.0,
++                "domain_novelty": bs.domain_novelty if bs else 0.0,
++            },
++            weights={
++                "similarity": weights.w_similarity,
++                "novelty": weights.w_novelty,
++                "completeness": weights.w_completeness,
++                "domain_novelty": weights.w_domain_novelty,
++            },
++        )
++        results.append((bgc, relevance))
++
++    results.sort(key=lambda x: x[1], reverse=True)
++    total_count = len(results)
++    pg, ps, tp, offset = _paginate(page, page_size, total_count)
++    page_results = results[offset : offset + ps]
++
++    items = []
++    for bgc, relevance in page_results:
++        bs = bgc.bgc_score
++        assembly = bgc.contig.assembly if bgc.contig else None
++        items.append(
++            QueryResultBgc(
++                id=bgc.id,
++                accession=bgc.accession,
++                classification_l1=bs.classification_l1 if bs else "",
++                classification_l2=bs.classification_l2 if bs else None,
++                size_kb=bs.size_kb if bs else 0.0,
++                novelty_score=bs.novelty_score if bs else 0.0,
++                domain_novelty=bs.domain_novelty if bs else 0.0,
++                is_partial=bgc.is_partial,
++                relevance_score=round(relevance, 4),
++                assembly_id=assembly.id if assembly else None,
++                assembly_accession=assembly.accession if assembly else None,
++                organism_name=assembly.organism_name if assembly else None,
++                is_type_strain=assembly.is_type_strain if assembly else False,
++            )
++        )
++
++    return PaginatedQueryResultResponse(
++        items=items,
++        pagination=PaginationMeta(
++            page=pg, page_size=ps, total_count=total_count, total_pages=tp
++        ),
++    )
++
++
++@discovery_router.post(
++    "/query/similar-bgc/{bgc_id}/", response=PaginatedQueryResultResponse
++)
++def similar_bgc_query(
++    request,
++    bgc_id: int,
++    page: int = 1,
++    page_size: int = 25,
++    max_distance: float = 0.5,
++    weights: QueryWeightParams = Query(...),
++):
++    """Find BGCs similar to a given BGC via embedding distance."""
++    try:
++        source = Bgc.objects.get(id=bgc_id)
++    except Bgc.DoesNotExist:
++        raise HttpError(404, "BGC not found")
++
++    if source.embedding is None:
++        raise HttpError(400, "Source BGC has no embedding")
++
++    from pgvector.django import CosineDistance
++
++    qs = (
++        Bgc.objects.exclude(id=bgc_id)
++        .filter(embedding__isnull=False, bgc_score__isnull=False)
++        .select_related("bgc_score", "contig__assembly")
++        .annotate(distance=CosineDistance("embedding", source.embedding))
++        .filter(distance__lte=max_distance)
++        .order_by("distance")
++    )
++
++    # Compute relevance scores
++    results = []
++    for bgc in qs:
++        bs = bgc.bgc_score
++        similarity = 1.0 - bgc.distance
++        relevance = compute_composite_priority(
++            scores={
++                "similarity": similarity,
++                "novelty": bs.novelty_score if bs else 0.0,
++                "completeness": 0.0 if bgc.is_partial else 1.0,
++                "domain_novelty": bs.domain_novelty if bs else 0.0,
++            },
++            weights={
++                "similarity": weights.w_similarity,
++                "novelty": weights.w_novelty,
++                "completeness": weights.w_completeness,
++                "domain_novelty": weights.w_domain_novelty,
++            },
++        )
++        results.append((bgc, relevance))
++
++    results.sort(key=lambda x: x[1], reverse=True)
++    total_count = len(results)
++    pg, ps, tp, offset = _paginate(page, page_size, total_count)
++    page_results = results[offset : offset + ps]
++
++    items = []
++    for bgc, relevance in page_results:
++        bs = bgc.bgc_score
++        assembly = bgc.contig.assembly if bgc.contig else None
++        items.append(
++            QueryResultBgc(
++                id=bgc.id,
++                accession=bgc.accession,
++                classification_l1=bs.classification_l1 if bs else "",
++                classification_l2=bs.classification_l2 if bs else None,
++                size_kb=bs.size_kb if bs else 0.0,
++                novelty_score=bs.novelty_score if bs else 0.0,
++                domain_novelty=bs.domain_novelty if bs else 0.0,
++                is_partial=bgc.is_partial,
++                relevance_score=round(relevance, 4),
++                assembly_id=assembly.id if assembly else None,
++                assembly_accession=assembly.accession if assembly else None,
++                organism_name=assembly.organism_name if assembly else None,
++                is_type_strain=assembly.is_type_strain if assembly else False,
++            )
++        )
++
++    return PaginatedQueryResultResponse(
++        items=items,
++        pagination=PaginationMeta(
++            page=pg, page_size=ps, total_count=total_count, total_pages=tp
++        ),
++    )
++
++
++@discovery_router.get(
++    "/query-results/genomes/", response=PaginatedGenomeAggregationResponse
++)
++def query_results_genome_aggregation(
++    request,
++    bgc_ids: str,
++    page: int = 1,
++    page_size: int = 25,
++    sort_by: str = "max_relevance",
++    order: str = "desc",
++):
++    """Aggregate BGC-level query results to genome level.
++
++    bgc_ids: comma-separated list of BGC IDs from a query result.
++    """
++    ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
++    if not ids:
++        return PaginatedGenomeAggregationResponse(
++            items=[],
++            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
++        )
++
++    bgcs = (
++        Bgc.objects.filter(id__in=ids)
++        .select_related("bgc_score", "contig__assembly")
++    )
++
++    # Group by assembly
++    genome_map: dict[int, dict] = {}
++    for bgc in bgcs:
++        assembly = bgc.contig.assembly if bgc.contig else None
++        if not assembly:
++            continue
++        aid = assembly.id
++        if aid not in genome_map:
++            genome_map[aid] = {
++                "assembly": assembly,
++                "hits": [],
++            }
++        bs = bgc.bgc_score
++        genome_map[aid]["hits"].append({
++            "novelty": bs.novelty_score if bs else 0.0,
++            "is_partial": bgc.is_partial,
++        })
++
++    results = []
++    for aid, data in genome_map.items():
++        assembly = data["assembly"]
++        hits = data["hits"]
++        novelties = [h["novelty"] for h in hits]
++        complete_count = sum(1 for h in hits if not h["is_partial"])
++
++        results.append(
++            QueryResultGenomeAggregation(
++                assembly_id=assembly.id,
++                accession=assembly.accession,
++                organism_name=assembly.organism_name,
++                taxonomy_family=assembly.taxonomy_family,
++                is_type_strain=assembly.is_type_strain,
++                hit_count=len(hits),
++                max_relevance=round(max(novelties) if novelties else 0.0, 4),
++                mean_relevance=round(
++                    sum(novelties) / len(novelties) if novelties else 0.0, 4
++                ),
++                complete_fraction=round(
++                    complete_count / len(hits) if hits else 0.0, 4
++                ),
++            )
++        )
++
++    # Sort
++    reverse = order == "desc"
++    if sort_by in ("max_relevance", "mean_relevance", "hit_count", "complete_fraction"):
++        results.sort(key=lambda x: getattr(x, sort_by, 0), reverse=reverse)
++    else:
++        results.sort(key=lambda x: x.max_relevance, reverse=True)
++
++    total_count = len(results)
++    pg, ps, tp, offset = _paginate(page, page_size, total_count)
++
++    return PaginatedGenomeAggregationResponse(
++        items=results[offset : offset + ps],
++        pagination=PaginationMeta(
++            page=pg, page_size=ps, total_count=total_count, total_pages=tp
++        ),
++    )
++
++
++# ── Filter endpoints ──────────────────────────────────────────────────────────
++
++
++@discovery_router.get("/filters/taxonomy/", response=list[TaxonomyNode])
++def taxonomy_tree(request):
++    """Build a taxonomy tree from assemblies that have genome scores."""
++    qs = Assembly.objects.filter(genome_score__isnull=False).values(
++        "taxonomy_kingdom",
++        "taxonomy_phylum",
++        "taxonomy_class",
++        "taxonomy_order",
++        "taxonomy_family",
++        "taxonomy_genus",
++    )
++
++    # Build hierarchical tree
++    tree: dict = {}
++    for row in qs:
++        ranks = [
++            ("kingdom", row["taxonomy_kingdom"]),
++            ("phylum", row["taxonomy_phylum"]),
++            ("class", row["taxonomy_class"]),
++            ("order", row["taxonomy_order"]),
++            ("family", row["taxonomy_family"]),
++            ("genus", row["taxonomy_genus"]),
++        ]
++        node = tree
++        for rank, name in ranks:
++            if not name:
++                break
++            if name not in node:
++                node[name] = {"_rank": rank, "_count": 0, "_children": {}}
++            node[name]["_count"] += 1
++            node = node[name]["_children"]
++
++    def _build_nodes(level: dict) -> list[TaxonomyNode]:
++        nodes = []
++        for name, data in sorted(level.items()):
++            if name.startswith("_"):
++                continue
++            nodes.append(
++                TaxonomyNode(
++                    name=name,
++                    rank=data["_rank"],
++                    count=data["_count"],
++                    children=_build_nodes(data["_children"]),
++                )
++            )
++        return nodes
++
++    return _build_nodes(tree)
++
++
++@discovery_router.get("/filters/bgc-classes/", response=list[BgcClassOption])
++def bgc_classes(request):
++    return [
++        BgcClassOption(name=row["name"], count=row["count"])
++        for row in BgcClass.objects.annotate(count=Count("bgcs")).values("name", "count")
++        if row["count"] > 0
++    ]
++
++
++@discovery_router.get("/filters/np-classes/", response=list[NpClassLevel])
++def np_classes(request):
++    """NaturalProduct 3-level class hierarchy."""
++    qs = NaturalProduct.objects.values(
++        "chemical_class_l1", "chemical_class_l2", "chemical_class_l3"
++    ).annotate(count=Count("id"))
++
++    # Build tree
++    tree: dict = {}
++    for row in qs:
++        l1 = row["chemical_class_l1"]
++        l2 = row["chemical_class_l2"]
++        l3 = row["chemical_class_l3"]
++        cnt = row["count"]
++
++        if l1 not in tree:
++            tree[l1] = {"count": 0, "children": {}}
++        tree[l1]["count"] += cnt
++
++        if l2:
++            if l2 not in tree[l1]["children"]:
++                tree[l1]["children"][l2] = {"count": 0, "children": {}}
++            tree[l1]["children"][l2]["count"] += cnt
++
++            if l3:
++                if l3 not in tree[l1]["children"][l2]["children"]:
++                    tree[l1]["children"][l2]["children"][l3] = {"count": 0, "children": {}}
++                tree[l1]["children"][l2]["children"][l3]["count"] += cnt
++
++    def _build(level: dict) -> list[NpClassLevel]:
++        return [
++            NpClassLevel(
++                name=name,
++                count=data["count"],
++                children=_build(data["children"]),
++            )
++            for name, data in sorted(level.items())
++        ]
++
++    return _build(tree)
++
++
++@discovery_router.get("/filters/domains/", response=PaginatedDomainResponse)
++def domain_list(
++    request,
++    search: Optional[str] = None,
++    page: int = 1,
++    page_size: int = 50,
++):
++    qs = Domain.objects.annotate(count=Count("proteins")).filter(count__gt=0)
++
++    if search:
++        qs = qs.filter(
++            Q(acc__icontains=search)
++            | Q(name__icontains=search)
++            | Q(description__icontains=search)
++        )
++
++    total_count = qs.count()
++    pg, ps, tp, offset = _paginate(page, page_size, total_count)
++
++    items = [
++        DomainOption(
++            acc=d.acc,
++            name=d.name,
++            description=d.description,
++            count=d.count,
++        )
++        for d in qs.order_by("-count")[offset : offset + ps]
++    ]
++
++    return PaginatedDomainResponse(
++        items=items,
++        pagination=PaginationMeta(
++            page=pg, page_size=ps, total_count=total_count, total_pages=tp
++        ),
++    )
++
++
++# ── Export endpoints ──────────────────────────────────────────────────────────
++
++
++@discovery_router.post("/shortlist/genome/export/")
++def export_genome_shortlist(request, body: ShortlistExportRequest):
++    """Export genome shortlist as CSV."""
++    if not body.ids:
++        raise HttpError(400, "No genome IDs provided")
++    if len(body.ids) > 20:
++        raise HttpError(400, "Maximum 20 genomes per export")
++
++    assemblies = (
++        Assembly.objects.filter(id__in=body.ids)
++        .select_related("genome_score")
++    )
++
++    buf = StringIO()
++    writer = csv.writer(buf)
++    writer.writerow([
++        "accession",
++        "organism_name",
++        "taxonomy_kingdom",
++        "taxonomy_phylum",
++        "taxonomy_class",
++        "taxonomy_order",
++        "taxonomy_family",
++        "taxonomy_genus",
++        "taxonomy_species",
++        "is_type_strain",
++        "type_strain_catalog_url",
++        "genome_size_mb",
++        "genome_quality",
++        "isolation_source",
++        "bgc_count",
++        "l1_class_count",
++        "bgc_diversity_score",
++        "bgc_novelty_score",
++        "bgc_density",
++        "taxonomic_novelty",
++    ])
++
++    for a in assemblies:
++        gs = getattr(a, "genome_score", None)
++        writer.writerow([
++            a.accession,
++            a.organism_name or "",
++            a.taxonomy_kingdom or "",
++            a.taxonomy_phylum or "",
++            a.taxonomy_class or "",
++            a.taxonomy_order or "",
++            a.taxonomy_family or "",
++            a.taxonomy_genus or "",
++            a.taxonomy_species or "",
++            a.is_type_strain,
++            a.type_strain_catalog_url or "",
++            a.genome_size_mb or "",
++            a.genome_quality or "",
++            a.isolation_source or "",
++            gs.bgc_count if gs else 0,
++            gs.l1_class_count if gs else 0,
++            gs.bgc_diversity_score if gs else 0.0,
++            gs.bgc_novelty_score if gs else 0.0,
++            gs.bgc_density if gs else 0.0,
++            gs.taxonomic_novelty if gs else 0.0,
++        ])
++
++    response = HttpResponse(buf.getvalue(), content_type="text/csv")
++    response["Content-Disposition"] = 'attachment; filename="genome_shortlist.csv"'
++    return response
++
++
++@discovery_router.post("/shortlist/bgc/export/")
++def export_bgc_shortlist(request, body: ShortlistExportRequest):
++    """Export BGC shortlist as a multi-record GenBank file."""
++    if not body.ids:
++        raise HttpError(400, "No BGC IDs provided")
++    if len(body.ids) > 20:
++        raise HttpError(400, "Maximum 20 BGCs per export")
++
++    from mgnify_bgcs.utils.seqrecord_utils import build_bgc_record
++
++    records = []
++    for bgc_id in body.ids:
++        try:
++            record = build_bgc_record(bgc_id)
++            records.append(record.to_gbk())
++        except Exception:
++            # Skip BGCs that can't be converted
++            continue
++
++    if not records:
++        raise HttpError(400, "No BGC records could be generated")
++
++    content = "\n".join(records)
++    response = HttpResponse(content, content_type="application/genbank")
++    response["Content-Disposition"] = 'attachment; filename="bgc_shortlist.gbk"'
++    return response
+diff --git a/discovery/api_schemas.py b/discovery/api_schemas.py
+new file mode 100644
+index 0000000..e0c8c32
+--- /dev/null
++++ b/discovery/api_schemas.py
+@@ -0,0 +1,266 @@
++"""Pydantic schemas for the discovery dashboard API."""
++
++from typing import Optional
++
++from ninja import Schema
++
++
++# ── Weight parameters ─────────────────────────────────────────────────────────
++
++
++class GenomeWeightParams(Schema):
++    """Weights for the Explore Genomes composite priority score."""
++
++    w_diversity: float = 0.25
++    w_novelty: float = 0.40
++    w_density: float = 0.15
++    w_taxonomic: float = 0.10
++    w_quality: float = 0.10
++
++
++class QueryWeightParams(Schema):
++    """Weights for the Query mode result relevance score."""
++
++    w_similarity: float = 0.40
++    w_novelty: float = 0.30
++    w_completeness: float = 0.15
++    w_domain_novelty: float = 0.15
++
++
++# ── Pagination ────────────────────────────────────────────────────────────────
++
++
++class PaginationMeta(Schema):
++    page: int
++    page_size: int
++    total_count: int
++    total_pages: int
++
++
++# ── Genome schemas ────────────────────────────────────────────────────────────
++
++
++class GenomeRosterItem(Schema):
++    id: int
++    accession: str
++    organism_name: Optional[str] = None
++    taxonomy_kingdom: Optional[str] = None
++    taxonomy_phylum: Optional[str] = None
++    taxonomy_class: Optional[str] = None
++    taxonomy_order: Optional[str] = None
++    taxonomy_family: Optional[str] = None
++    taxonomy_genus: Optional[str] = None
++    taxonomy_species: Optional[str] = None
++    is_type_strain: bool = False
++    type_strain_catalog_url: Optional[str] = None
++    # Scores
++    bgc_count: int = 0
++    l1_class_count: int = 0
++    bgc_diversity_score: float = 0.0
++    bgc_novelty_score: float = 0.0
++    bgc_density: float = 0.0
++    taxonomic_novelty: float = 0.0
++    genome_quality: float = 0.0
++    composite_score: float = 0.0
++
++
++class PaginatedGenomeResponse(Schema):
++    items: list[GenomeRosterItem]
++    pagination: PaginationMeta
++
++
++class GenomeDetail(Schema):
++    id: int
++    accession: str
++    organism_name: Optional[str] = None
++    taxonomy_kingdom: Optional[str] = None
++    taxonomy_phylum: Optional[str] = None
++    taxonomy_class: Optional[str] = None
++    taxonomy_order: Optional[str] = None
++    taxonomy_family: Optional[str] = None
++    taxonomy_genus: Optional[str] = None
++    taxonomy_species: Optional[str] = None
++    is_type_strain: bool = False
++    type_strain_catalog_url: Optional[str] = None
++    genome_size_mb: Optional[float] = None
++    genome_quality: Optional[float] = None
++    isolation_source: Optional[str] = None
++    # Scores
++    bgc_count: int = 0
++    l1_class_count: int = 0
++    bgc_diversity_score: float = 0.0
++    bgc_novelty_score: float = 0.0
++    bgc_density: float = 0.0
++    taxonomic_novelty: float = 0.0
++    composite_score: float = 0.0
++
++
++class GenomeScatterPoint(Schema):
++    id: int
++    x: float
++    y: float
++    composite_score: float
++    taxonomy_family: Optional[str] = None
++    organism_name: Optional[str] = None
++    is_type_strain: bool = False
++
++
++# ── BGC schemas ───────────────────────────────────────────────────────────────
++
++
++class BgcRosterItem(Schema):
++    id: int
++    accession: str
++    classification_l1: str = ""
++    classification_l2: Optional[str] = None
++    classification_l3: Optional[str] = None
++    size_kb: float = 0.0
++    novelty_score: float = 0.0
++    domain_novelty: float = 0.0
++    is_partial: bool = False
++    nearest_mibig_accession: Optional[str] = None
++    nearest_mibig_distance: Optional[float] = None
++
++
++class DomainArchitectureItem(Schema):
++    domain_acc: str
++    domain_name: str
++    ref_db: str
++    start: int
++    end: int
++    score: Optional[float] = None
++
++
++class ParentGenomeSummary(Schema):
++    assembly_id: int
++    accession: str
++    organism_name: Optional[str] = None
++    taxonomy_family: Optional[str] = None
++    is_type_strain: bool = False
++    genome_quality: Optional[float] = None
++
++
++class BgcDetail(Schema):
++    id: int
++    accession: str
++    classification_l1: str = ""
++    classification_l2: Optional[str] = None
++    classification_l3: Optional[str] = None
++    size_kb: float = 0.0
++    novelty_score: float = 0.0
++    domain_novelty: float = 0.0
++    is_partial: bool = False
++    nearest_mibig_accession: Optional[str] = None
++    nearest_mibig_distance: Optional[float] = None
++    is_validated: bool = False
++    domain_architecture: list[DomainArchitectureItem] = []
++    parent_genome: Optional[ParentGenomeSummary] = None
++
++
++class BgcScatterPoint(Schema):
++    id: int
++    umap_x: float
++    umap_y: float
++    bgc_class: str = ""
++    is_mibig: bool = False
++    compound_name: Optional[str] = None
++
++
++class MibigReferencePoint(Schema):
++    accession: str
++    compound_name: str
++    bgc_class: str
++    umap_x: float
++    umap_y: float
++
++
++# ── Filter schemas ────────────────────────────────────────────────────────────
++
++
++class TaxonomyNode(Schema):
++    name: str
++    rank: str
++    count: int
++    children: list["TaxonomyNode"] = []
++
++
++class BgcClassOption(Schema):
++    name: str
++    count: int
++
++
++class NpClassLevel(Schema):
++    name: str
++    count: int
++    children: list["NpClassLevel"] = []
++
++
++class DomainOption(Schema):
++    acc: str
++    name: str
++    description: Optional[str] = None
++    count: int
++
++
++class PaginatedDomainResponse(Schema):
++    items: list[DomainOption]
++    pagination: PaginationMeta
++
++
++# ── Query mode schemas ────────────────────────────────────────────────────────
++
++
++class DomainCondition(Schema):
++    acc: str
++    required: bool = True
++
++
++class DomainQueryRequest(Schema):
++    domains: list[DomainCondition]
++    logic: str = "and"  # "and" | "or"
++
++
++class QueryResultBgc(Schema):
++    id: int
++    accession: str
++    classification_l1: str = ""
++    classification_l2: Optional[str] = None
++    size_kb: float = 0.0
++    novelty_score: float = 0.0
++    domain_novelty: float = 0.0
++    is_partial: bool = False
++    relevance_score: float = 0.0
++    # Parent genome summary
++    assembly_id: Optional[int] = None
++    assembly_accession: Optional[str] = None
++    organism_name: Optional[str] = None
++    is_type_strain: bool = False
++
++
++class PaginatedQueryResultResponse(Schema):
++    items: list[QueryResultBgc]
++    pagination: PaginationMeta
++
++
++class QueryResultGenomeAggregation(Schema):
++    assembly_id: int
++    accession: str
++    organism_name: Optional[str] = None
++    taxonomy_family: Optional[str] = None
++    is_type_strain: bool = False
++    hit_count: int = 0
++    max_relevance: float = 0.0
++    mean_relevance: float = 0.0
++    complete_fraction: float = 0.0
++
++
++class PaginatedGenomeAggregationResponse(Schema):
++    items: list[QueryResultGenomeAggregation]
++    pagination: PaginationMeta
++
++
++# ── Export schemas ────────────────────────────────────────────────────────────
++
++
++class ShortlistExportRequest(Schema):
++    ids: list[int]
+diff --git a/discovery/apps.py b/discovery/apps.py
+new file mode 100644
+index 0000000..c1a3a2f
+--- /dev/null
++++ b/discovery/apps.py
+@@ -0,0 +1,6 @@
++from django.apps import AppConfig
++
++
++class DiscoveryConfig(AppConfig):
++    default_auto_field = "django.db.models.BigAutoField"
++    name = "discovery"
+diff --git a/discovery/management/__init__.py b/discovery/management/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/discovery/management/commands/__init__.py b/discovery/management/commands/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/discovery/management/commands/seed_discovery_data.py b/discovery/management/commands/seed_discovery_data.py
+new file mode 100644
+index 0000000..d283b4f
+--- /dev/null
++++ b/discovery/management/commands/seed_discovery_data.py
+@@ -0,0 +1,353 @@
++"""
++Seed the discovery app with realistic mock data for dashboard development.
++
++Usage:
++    python manage.py seed_discovery_data
++    python manage.py seed_discovery_data --clear   # wipe discovery tables first
++    python manage.py seed_discovery_data --small    # smaller dataset (20 assemblies)
++"""
++
++import random
++import math
++
++import numpy as np
++from django.core.management.base import BaseCommand
++from django.db import transaction
++
++from mgnify_bgcs.models import Assembly, Bgc, BgcClass, BgcBgcClass, Contig
++
++from discovery.models import (
++    GCF,
++    GCFMembership,
++    NaturalProduct,
++    MibigReference,
++    GenomeScore,
++    BgcScore,
++)
++
++# Reuse factory pools for consistency
++from tests.factories.models import _TAXONOMY_POOL
++from tests.factories.discovery_models import (
++    _MIBIG_COMPOUNDS,
++    _NP_CLASSES,
++    _SMILES_POOL,
++)
++
++
++# UMAP cluster centers for 7 BGC classes
++_UMAP_CENTERS = {
++    "Polyketide": (-5.0, 3.0),
++    "NRP": (4.0, 4.0),
++    "RiPP": (0.0, -5.0),
++    "Terpene": (-6.0, -4.0),
++    "Saccharide": (5.0, -3.0),
++    "Alkaloid": (7.0, 1.0),
++    "Other": (0.0, 0.0),
++}
++
++_BGC_L1_CLASSES = list(_UMAP_CENTERS.keys())
++
++_ISOLATION_SOURCES = [
++    "soil", "marine sediment", "freshwater", "rhizosphere",
++    "human gut", "insect symbiont", "cave sediment", "hot spring",
++    "mangrove soil", "coral mucus", "desert sand", "peat bog",
++]
++
++
++def _clustered_umap(bgc_class: str, jitter: float = 2.0):
++    cx, cy = _UMAP_CENTERS.get(bgc_class, (0.0, 0.0))
++    return (
++        round(cx + random.gauss(0, jitter), 4),
++        round(cy + random.gauss(0, jitter), 4),
++    )
++
++
++class Command(BaseCommand):
++    help = "Seed discovery models with realistic mock data"
++
++    def add_arguments(self, parser):
++        parser.add_argument("--clear", action="store_true", help="Delete all discovery data first")
++        parser.add_argument("--small", action="store_true", help="Create a smaller dataset (20 assemblies)")
++
++    @transaction.atomic
++    def handle(self, *args, **options):
++        if options["clear"]:
++            self.stdout.write("Clearing discovery tables...")
++            BgcScore.objects.all().delete()
++            GenomeScore.objects.all().delete()
++            GCFMembership.objects.all().delete()
++            NaturalProduct.objects.all().delete()
++            MibigReference.objects.all().delete()
++            GCF.objects.all().delete()
++            # Also clean up seeded assemblies/contigs/bgcs
++            Assembly.objects.filter(accession__startswith="DISC_ERZ").delete()
++            self.stdout.write(self.style.SUCCESS("Cleared."))
++
++        n_assemblies = 20 if options["small"] else 80
++        self.stdout.write(f"Seeding {n_assemblies} assemblies...")
++
++        # 1. Ensure BGC classes exist
++        bgc_class_objs = {}
++        for name in _BGC_L1_CLASSES:
++            obj, _ = BgcClass.objects.get_or_create(name=name)
++            bgc_class_objs[name] = obj
++
++        # 2. Create MIBiG references
++        self.stdout.write("Creating MIBiG references...")
++        mibig_refs = []
++        for i, (compound, bgc_class) in enumerate(_MIBIG_COMPOUNDS):
++            ux, uy = _clustered_umap(bgc_class, jitter=1.5)
++            ref, created = MibigReference.objects.get_or_create(
++                accession=f"BGC{i + 1:07d}",
++                defaults=dict(
++                    compound_name=compound,
++                    bgc_class=bgc_class,
++                    umap_x=ux,
++                    umap_y=uy,
++                    embedding=np.random.randn(1152).astype(np.float32).tolist(),
++                ),
++            )
++            mibig_refs.append(ref)
++        self.stdout.write(f"  {len(mibig_refs)} MIBiG references ready.")
++
++        # 3. Create assemblies with taxonomy
++        self.stdout.write("Creating assemblies...")
++        assemblies = []
++        for i in range(n_assemblies):
++            tax = random.choice(_TAXONOMY_POOL)
++            is_ts = random.random() < 0.12
++            assembly, _ = Assembly.objects.get_or_create(
++                accession=f"DISC_ERZ{i:07d}",
++                defaults=dict(
++                    taxonomy_kingdom=tax[0],
++                    taxonomy_phylum=tax[1],
++                    taxonomy_class=tax[2],
++                    taxonomy_order=tax[3],
++                    taxonomy_family=tax[4],
++                    taxonomy_genus=tax[5],
++                    taxonomy_species=tax[6],
++                    organism_name=f"{tax[6]} strain {chr(65 + i % 26)}{i}",
++                    is_type_strain=is_ts,
++                    type_strain_catalog_url=(
++                        f"https://www.dsmz.de/collection/catalogue/details/culture/DSM-{random.randint(1000, 99999)}"
++                        if is_ts
++                        else None
++                    ),
++                    genome_size_mb=round(random.uniform(2.5, 12.0), 2),
++                    genome_quality=round(random.betavariate(8, 2), 3),
++                    isolation_source=random.choice(_ISOLATION_SOURCES),
++                ),
++            )
++            assemblies.append(assembly)
++
++        # 4. Create contigs and BGCs for each assembly
++        self.stdout.write("Creating contigs and BGCs...")
++        all_bgcs = []
++        assembly_bgc_map = {}  # assembly_id -> list of bgcs
++
++        for assembly in assemblies:
++            n_contigs = random.randint(1, 3)
++            assembly_bgcs = []
++
++            for ci in range(n_contigs):
++                contig_len = random.randint(50_000, 500_000)
++                seq = "ACGT" * (contig_len // 4)  # placeholder sequence
++                contig, _ = Contig.objects.get_or_create(
++                    sequence_sha256=f"disc_{assembly.id}_{ci}_sha256",
++                    defaults=dict(
++                        assembly=assembly,
++                        mgyc=f"DISC_MGYC{assembly.id:06d}{ci:03d}",
++                        accession=f"disc_contig_{assembly.id}_{ci}",
++                        name=f"contig_{assembly.id}_{ci}",
++                        length=contig_len,
++                        sequence=seq,
++                    ),
++                )
++
++                n_bgcs = random.randint(2, 8)
++                pos = random.randint(100, 5000)
++                for bi in range(n_bgcs):
++                    bgc_size = random.randint(5_000, 80_000)
++                    bgc_class_name = random.choice(_BGC_L1_CLASSES)
++                    ux, uy = _clustered_umap(bgc_class_name)
++
++                    bgc = Bgc.objects.create(
++                        contig=contig,
++                        identifier=f"disc_bgc_{assembly.id}_{ci}_{bi}",
++                        start_position=pos,
++                        end_position=pos + bgc_size,
++                        is_partial=random.random() < 0.2,
++                        embedding=np.random.randn(1152).astype(np.float32).tolist(),
++                        metadata={
++                            "umap_x_coord": ux,
++                            "umap_y_coord": uy,
++                            "detectors": ["antiSMASH"],
++                        },
++                    )
++                    # Assign BGC class
++                    BgcBgcClass.objects.get_or_create(
++                        bgc=bgc,
++                        bgc_class=bgc_class_objs[bgc_class_name],
++                    )
++                    bgc._class_name = bgc_class_name
++                    assembly_bgcs.append(bgc)
++                    all_bgcs.append(bgc)
++                    pos += bgc_size + random.randint(1000, 10000)
++
++            assembly_bgc_map[assembly.id] = assembly_bgcs
++
++        self.stdout.write(f"  {len(all_bgcs)} BGCs across {n_assemblies} assemblies.")
++
++        # 5. Create GCFs and assign memberships
++        self.stdout.write("Creating GCFs...")
++        n_gcfs = max(5, len(all_bgcs) // 15)
++        gcf_list = []
++        for gi in range(n_gcfs):
++            mibig_ref = random.choice(mibig_refs) if random.random() < 0.3 else None
++            gcf = GCF.objects.create(
++                family_id=f"GCF_{gi:06d}",
++                member_count=0,
++                known_chemistry_annotation=(
++                    mibig_ref.compound_name if mibig_ref else None
++                ),
++                mibig_accession=(
++                    mibig_ref.accession if mibig_ref else None
++                ),
++            )
++            gcf_list.append(gcf)
++
++        # Assign each BGC to a random GCF
++        memberships = []
++        for bgc in all_bgcs:
++            gcf = random.choice(gcf_list)
++            memberships.append(
++                GCFMembership(
++                    gcf=gcf,
++                    bgc=bgc,
++                    distance_to_representative=round(random.uniform(0.0, 0.5), 4),
++                )
++            )
++        GCFMembership.objects.bulk_create(memberships)
++
++        # Update member counts and representative BGCs
++        for gcf in gcf_list:
++            members = gcf.memberships.all()
++            gcf.member_count = members.count()
++            if gcf.member_count > 0:
++                gcf.representative_bgc = members.order_by("distance_to_representative").first().bgc
++            gcf.save()
++
++        self.stdout.write(f"  {n_gcfs} GCFs created.")
++
++        # 6. Create NaturalProducts
++        self.stdout.write("Creating NaturalProducts...")
++        nps = []
++        n_nps = min(100, len(all_bgcs) // 3)
++        sampled_bgcs = random.sample(all_bgcs, min(n_nps, len(all_bgcs)))
++        for bgc in sampled_bgcs:
++            l1 = random.choice(list(_NP_CLASSES.keys()))
++            l2 = random.choice(list(_NP_CLASSES[l1].keys()))
++            l3 = random.choice(_NP_CLASSES[l1][l2])
++            nps.append(
++                NaturalProduct(
++                    name=f"compound_{bgc.id}",
++                    smiles=random.choice(_SMILES_POOL),
++                    chemical_class_l1=l1,
++                    chemical_class_l2=l2,
++                    chemical_class_l3=l3,
++                    producing_organism=bgc.contig.assembly.organism_name if bgc.contig and bgc.contig.assembly else None,
++                    bgc=bgc,
++                )
++            )
++        NaturalProduct.objects.bulk_create(nps)
++        self.stdout.write(f"  {len(nps)} NaturalProducts created.")
++
++        # 7. Compute BgcScores
++        self.stdout.write("Computing BgcScores...")
++        bgc_scores = []
++        for bgc in all_bgcs:
++            class_name = getattr(bgc, "_class_name", "Other")
++            l2 = None
++            l3 = None
++            if class_name in _NP_CLASSES:
++                l2 = random.choice(list(_NP_CLASSES[class_name].keys()))
++                l3 = random.choice(_NP_CLASSES[class_name][l2])
++
++            novelty = round(random.betavariate(2, 5), 4)
++            nearest_dist = round(1.0 - novelty, 4)
++            nearest_acc = None
++            if nearest_dist < 0.6:
++                nearest_acc = random.choice(mibig_refs).accession
++
++            gcf_membership = GCFMembership.objects.filter(bgc=bgc).first()
++
++            bgc_scores.append(
++                BgcScore(
++                    bgc=bgc,
++                    novelty_score=novelty,
++                    domain_novelty=round(random.betavariate(2, 6), 4),
++                    nearest_mibig_accession=nearest_acc,
++                    nearest_mibig_distance=nearest_dist,
++                    size_kb=round((bgc.end_position - bgc.start_position) / 1000.0, 2),
++                    gcf=gcf_membership.gcf if gcf_membership else None,
++                    classification_l1=class_name,
++                    classification_l2=l2,
++                    classification_l3=l3,
++                    is_validated=random.random() < 0.03,
++                )
++            )
++        BgcScore.objects.bulk_create(bgc_scores)
++
++        # 8. Compute GenomeScores
++        self.stdout.write("Computing GenomeScores...")
++        genome_scores = []
++        for assembly in assemblies:
++            bgcs = assembly_bgc_map.get(assembly.id, [])
++            bgc_count = len(bgcs)
++
++            # Diversity: Shannon entropy over L1 classes
++            class_counts = {}
++            for bgc in bgcs:
++                cn = getattr(bgc, "_class_name", "Other")
++                class_counts[cn] = class_counts.get(cn, 0) + 1
++
++            total = sum(class_counts.values()) or 1
++            entropy = 0.0
++            for count in class_counts.values():
++                p = count / total
++                if p > 0:
++                    entropy -= p * math.log2(p)
++            # Normalize: max entropy for 7 classes is log2(7) ≈ 2.807
++            diversity = round(entropy / math.log2(7), 4) if entropy > 0 else 0.0
++
++            # Novelty: mean of BGC novelty scores
++            bgc_novelties = [
++                s.novelty_score
++                for s in BgcScore.objects.filter(bgc__in=[b.id for b in bgcs])
++            ]
++            novelty = round(sum(bgc_novelties) / len(bgc_novelties), 4) if bgc_novelties else 0.0
++
++            # Density
++            density = 0.0
++            if assembly.genome_size_mb and assembly.genome_size_mb > 0:
++                density = round(bgc_count / assembly.genome_size_mb / 5.0, 4)  # normalize ~5 bgc/Mb as 1.0
++                density = min(density, 1.0)
++
++            genome_scores.append(
++                GenomeScore(
++                    assembly=assembly,
++                    bgc_count=bgc_count,
++                    bgc_diversity_score=diversity,
++                    bgc_novelty_score=novelty,
++                    bgc_density=density,
++                    taxonomic_novelty=round(random.betavariate(2, 4), 4),
++                    genome_quality=assembly.genome_quality or round(random.betavariate(8, 2), 4),
++                    l1_class_count=len(class_counts),
++                )
++            )
++        GenomeScore.objects.bulk_create(genome_scores)
++
++        self.stdout.write(self.style.SUCCESS(
++            f"Done! Seeded {n_assemblies} assemblies, {len(all_bgcs)} BGCs, "
++            f"{n_gcfs} GCFs, {len(nps)} NaturalProducts, {len(mibig_refs)} MIBiG refs."
++        ))
+diff --git a/discovery/migrations/0001_initial.py b/discovery/migrations/0001_initial.py
+new file mode 100644
+index 0000000..2bc7853
+--- /dev/null
++++ b/discovery/migrations/0001_initial.py
+@@ -0,0 +1,107 @@
++# Generated by Django 5.0.4 on 2026-03-27 09:26
++
++import django.db.models.deletion
++import pgvector.django.indexes
++import pgvector.django.vector
++from django.db import migrations, models
++
++
++class Migration(migrations.Migration):
++
++    initial = True
++
++    dependencies = [
++        ('mgnify_bgcs', '0019_assembly_genome_quality_assembly_genome_size_mb_and_more'),
++    ]
++
++    operations = [
++        migrations.CreateModel(
++            name='GenomeScore',
++            fields=[
++                ('assembly', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='genome_score', serialize=False, to='mgnify_bgcs.assembly')),
++                ('bgc_count', models.IntegerField(default=0)),
++                ('bgc_diversity_score', models.FloatField(default=0.0)),
++                ('bgc_novelty_score', models.FloatField(default=0.0)),
++                ('bgc_density', models.FloatField(default=0.0)),
++                ('taxonomic_novelty', models.FloatField(default=0.0)),
++                ('genome_quality', models.FloatField(default=0.0)),
++                ('l1_class_count', models.IntegerField(default=0)),
++                ('updated_at', models.DateTimeField(auto_now=True)),
++            ],
++        ),
++        migrations.CreateModel(
++            name='GCF',
++            fields=[
++                ('id', models.AutoField(primary_key=True, serialize=False)),
++                ('family_id', models.CharField(db_index=True, max_length=255, unique=True)),
++                ('member_count', models.IntegerField(default=0)),
++                ('known_chemistry_annotation', models.CharField(blank=True, max_length=255, null=True)),
++                ('mibig_accession', models.CharField(blank=True, max_length=255, null=True)),
++                ('representative_bgc', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='represented_gcf', to='mgnify_bgcs.bgc')),
++            ],
++            options={
++                'verbose_name': 'GCF',
++                'verbose_name_plural': 'GCFs',
++            },
++        ),
++        migrations.CreateModel(
++            name='BgcScore',
++            fields=[
++                ('bgc', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='bgc_score', serialize=False, to='mgnify_bgcs.bgc')),
++                ('novelty_score', models.FloatField(default=0.0)),
++                ('domain_novelty', models.FloatField(default=0.0)),
++                ('nearest_mibig_accession', models.CharField(blank=True, max_length=50, null=True)),
++                ('nearest_mibig_distance', models.FloatField(blank=True, null=True)),
++                ('size_kb', models.FloatField(default=0.0)),
++                ('classification_l1', models.CharField(blank=True, default='', max_length=100)),
++                ('classification_l2', models.CharField(blank=True, max_length=100, null=True)),
++                ('classification_l3', models.CharField(blank=True, max_length=100, null=True)),
++                ('is_validated', models.BooleanField(default=False)),
++                ('gcf', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='bgc_scores', to='discovery.gcf')),
++            ],
++        ),
++        migrations.CreateModel(
++            name='GCFMembership',
++            fields=[
++                ('id', models.AutoField(primary_key=True, serialize=False)),
++                ('distance_to_representative', models.FloatField(default=0.0)),
++                ('bgc', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='gcf_membership', to='mgnify_bgcs.bgc')),
++                ('gcf', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='memberships', to='discovery.gcf')),
++            ],
++            options={
++                'verbose_name': 'GCF membership',
++                'verbose_name_plural': 'GCF memberships',
++            },
++        ),
++        migrations.CreateModel(
++            name='MibigReference',
++            fields=[
++                ('id', models.AutoField(primary_key=True, serialize=False)),
++                ('accession', models.CharField(db_index=True, max_length=50, unique=True)),
++                ('compound_name', models.CharField(max_length=255)),
++                ('bgc_class', models.CharField(max_length=100)),
++                ('umap_x', models.FloatField()),
++                ('umap_y', models.FloatField()),
++                ('embedding', pgvector.django.vector.VectorField(blank=True, dimensions=1152, null=True)),
++            ],
++            options={
++                'indexes': [pgvector.django.indexes.HnswIndex(ef_construction=512, fields=['embedding'], m=16, name='mibig_embedding_hnsw', opclasses=['vector_cosine_ops'])],
++            },
++        ),
++        migrations.CreateModel(
++            name='NaturalProduct',
++            fields=[
++                ('id', models.AutoField(primary_key=True, serialize=False)),
++                ('name', models.CharField(max_length=255)),
++                ('smiles', models.TextField()),
++                ('chemical_class_l1', models.CharField(max_length=100)),
++                ('chemical_class_l2', models.CharField(blank=True, max_length=100, null=True)),
++                ('chemical_class_l3', models.CharField(blank=True, max_length=100, null=True)),
++                ('producing_organism', models.CharField(blank=True, max_length=255, null=True)),
++                ('bgc', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='natural_products', to='mgnify_bgcs.bgc')),
++            ],
++            options={
++                'indexes': [models.Index(fields=['chemical_class_l1'], name='idx_np_class_l1'), models.Index(fields=['chemical_class_l1', 'chemical_class_l2'], name='idx_np_class_l1_l2')],
++            },
++        ),
++    ]
+diff --git a/discovery/migrations/__init__.py b/discovery/migrations/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/discovery/models.py b/discovery/models.py
+new file mode 100644
+index 0000000..affbefa
+--- /dev/null
++++ b/discovery/models.py
+@@ -0,0 +1,155 @@
++from django.db import models
++from pgvector.django import VectorField, HnswIndex
++
++
++class GCF(models.Model):
++    """Gene Cluster Family — a group of BGCs with similar protein-level architecture."""
++
++    id = models.AutoField(primary_key=True)
++    family_id = models.CharField(max_length=255, unique=True, db_index=True)
++    representative_bgc = models.ForeignKey(
++        "mgnify_bgcs.Bgc",
++        on_delete=models.SET_NULL,
++        null=True,
++        blank=True,
++        related_name="represented_gcf",
++    )
++    member_count = models.IntegerField(default=0)
++    known_chemistry_annotation = models.CharField(max_length=255, blank=True, null=True)
++    mibig_accession = models.CharField(max_length=255, blank=True, null=True)
++
++    class Meta:
++        verbose_name = "GCF"
++        verbose_name_plural = "GCFs"
++
++    def __str__(self):
++        return self.family_id
++
++
++class GCFMembership(models.Model):
++    """Associates a BGC with exactly one GCF."""
++
++    id = models.AutoField(primary_key=True)
++    gcf = models.ForeignKey(GCF, on_delete=models.CASCADE, related_name="memberships")
++    bgc = models.OneToOneField(
++        "mgnify_bgcs.Bgc",
++        on_delete=models.CASCADE,
++        related_name="gcf_membership",
++    )
++    distance_to_representative = models.FloatField(default=0.0)
++
++    class Meta:
++        verbose_name = "GCF membership"
++        verbose_name_plural = "GCF memberships"
++
++    def __str__(self):
++        return f"{self.bgc_id} → {self.gcf.family_id}"
++
++
++class NaturalProduct(models.Model):
++    """A characterized natural product linked to its producing BGC."""
++
++    id = models.AutoField(primary_key=True)
++    name = models.CharField(max_length=255)
++    smiles = models.TextField()
++    chemical_class_l1 = models.CharField(max_length=100)
++    chemical_class_l2 = models.CharField(max_length=100, blank=True, null=True)
++    chemical_class_l3 = models.CharField(max_length=100, blank=True, null=True)
++    producing_organism = models.CharField(max_length=255, blank=True, null=True)
++    bgc = models.ForeignKey(
++        "mgnify_bgcs.Bgc",
++        on_delete=models.SET_NULL,
++        null=True,
++        blank=True,
++        related_name="natural_products",
++    )
++
++    class Meta:
++        indexes = [
++            models.Index(fields=["chemical_class_l1"], name="idx_np_class_l1"),
++            models.Index(
++                fields=["chemical_class_l1", "chemical_class_l2"],
++                name="idx_np_class_l1_l2",
++            ),
++        ]
++
++    def __str__(self):
++        return self.name
++
++
++class MibigReference(models.Model):
++    """A MIBiG reference cluster — known chemistry landmark in the UMAP space."""
++
++    id = models.AutoField(primary_key=True)
++    accession = models.CharField(max_length=50, unique=True, db_index=True)
++    compound_name = models.CharField(max_length=255)
++    bgc_class = models.CharField(max_length=100)
++    umap_x = models.FloatField()
++    umap_y = models.FloatField()
++    embedding = VectorField(dimensions=1152, null=True, blank=True)
++
++    class Meta:
++        indexes = [
++            HnswIndex(
++                fields=["embedding"],
++                name="mibig_embedding_hnsw",
++                opclasses=["vector_cosine_ops"],
++                m=16,
++                ef_construction=512,
++            ),
++        ]
++
++    def __str__(self):
++        return f"{self.accession} ({self.compound_name})"
++
++
++class GenomeScore(models.Model):
++    """Precomputed genome-level (Assembly) scores for the discovery dashboard."""
++
++    assembly = models.OneToOneField(
++        "mgnify_bgcs.Assembly",
++        on_delete=models.CASCADE,
++        related_name="genome_score",
++        primary_key=True,
++    )
++    bgc_count = models.IntegerField(default=0)
++    bgc_diversity_score = models.FloatField(default=0.0)
++    bgc_novelty_score = models.FloatField(default=0.0)
++    bgc_density = models.FloatField(default=0.0)
++    taxonomic_novelty = models.FloatField(default=0.0)
++    genome_quality = models.FloatField(default=0.0)
++    l1_class_count = models.IntegerField(default=0)
++    updated_at = models.DateTimeField(auto_now=True)
++
++    def __str__(self):
++        return f"Scores for {self.assembly.accession}"
++
++
++class BgcScore(models.Model):
++    """Precomputed BGC-level scores for the discovery dashboard."""
++
++    bgc = models.OneToOneField(
++        "mgnify_bgcs.Bgc",
++        on_delete=models.CASCADE,
++        related_name="bgc_score",
++        primary_key=True,
++    )
++    novelty_score = models.FloatField(default=0.0)
++    domain_novelty = models.FloatField(default=0.0)
++    nearest_mibig_accession = models.CharField(max_length=50, blank=True, null=True)
++    nearest_mibig_distance = models.FloatField(blank=True, null=True)
++    size_kb = models.FloatField(default=0.0)
++    gcf = models.ForeignKey(
++        GCF,
++        on_delete=models.SET_NULL,
++        null=True,
++        blank=True,
++        related_name="bgc_scores",
++    )
++    classification_l1 = models.CharField(max_length=100, blank=True, default="")
++    classification_l2 = models.CharField(max_length=100, blank=True, null=True)
++    classification_l3 = models.CharField(max_length=100, blank=True, null=True)
++    is_validated = models.BooleanField(default=False)
++
++    def __str__(self):
++        return f"Scores for BGC {self.bgc_id}"
+diff --git a/discovery/services/__init__.py b/discovery/services/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/discovery/services/scoring.py b/discovery/services/scoring.py
+new file mode 100644
+index 0000000..f70babd
+--- /dev/null
++++ b/discovery/services/scoring.py
+@@ -0,0 +1,45 @@
++"""
++Runtime scoring for the discovery dashboard.
++
++All BGC-level and genome-level sub-scores are precomputed and stored in
++GenomeScore / BgcScore.  Only the composite priority score is computed at
++query time, because its weights are user-tunable via dashboard sliders.
++"""
++
++
++def compute_composite_priority(
++    scores: dict[str, float],
++    weights: dict[str, float],
++) -> float:
++    """Weighted sum of sub-scores, normalized by weight sum.
++
++    Parameters
++    ----------
++    scores : dict
++        Mapping of score names to their [0, 1] values.
++        In Explore Genomes mode these come from GenomeScore:
++            bgc_diversity_score, bgc_novelty_score, bgc_density
++        In Query mode these come from BgcScore:
++            query_similarity, novelty_score, domain_novelty
++    weights : dict
++        Mapping of the same score names to user-selected weights.
++        Keys not present in *scores* are silently ignored.
++
++    Returns
++    -------
++    float
++        Composite priority in [0, 1].  Returns 0.0 when no matching
++        score-weight pairs exist or when total weight is zero.
++    """
++    total_weight = 0.0
++    weighted_sum = 0.0
++
++    for key, weight in weights.items():
++        if key in scores and weight > 0:
++            weighted_sum += scores[key] * weight
++            total_weight += weight
++
++    if total_weight == 0.0:
++        return 0.0
++
++    return weighted_sum / total_weight
+diff --git a/mgnify_bgcs/migrations/0019_assembly_genome_quality_assembly_genome_size_mb_and_more.py b/mgnify_bgcs/migrations/0019_assembly_genome_quality_assembly_genome_size_mb_and_more.py
+new file mode 100644
+index 0000000..b0f5bdb
+--- /dev/null
++++ b/mgnify_bgcs/migrations/0019_assembly_genome_quality_assembly_genome_size_mb_and_more.py
+@@ -0,0 +1,90 @@
++# Generated by Django 5.0.4 on 2026-03-27 09:26
++
++from django.db import migrations, models
++
++
++class Migration(migrations.Migration):
++
++    dependencies = [
++        ('mgnify_bgcs', '0018_remove_cds_uniq_cds_location_caller_pipeline_and_more'),
++    ]
++
++    operations = [
++        migrations.AddField(
++            model_name='assembly',
++            name='genome_quality',
++            field=models.FloatField(blank=True, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='genome_size_mb',
++            field=models.FloatField(blank=True, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='is_type_strain',
++            field=models.BooleanField(default=False),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='isolation_source',
++            field=models.CharField(blank=True, max_length=255, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='organism_name',
++            field=models.CharField(blank=True, max_length=255, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='taxonomy_class',
++            field=models.CharField(blank=True, max_length=100, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='taxonomy_family',
++            field=models.CharField(blank=True, max_length=100, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='taxonomy_genus',
++            field=models.CharField(blank=True, max_length=100, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='taxonomy_kingdom',
++            field=models.CharField(blank=True, max_length=100, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='taxonomy_order',
++            field=models.CharField(blank=True, max_length=100, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='taxonomy_phylum',
++            field=models.CharField(blank=True, max_length=100, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='taxonomy_species',
++            field=models.CharField(blank=True, max_length=100, null=True),
++        ),
++        migrations.AddField(
++            model_name='assembly',
++            name='type_strain_catalog_url',
++            field=models.URLField(blank=True, null=True),
++        ),
++        migrations.AddIndex(
++            model_name='assembly',
++            index=models.Index(fields=['taxonomy_family'], name='idx_assembly_tax_family'),
++        ),
++        migrations.AddIndex(
++            model_name='assembly',
++            index=models.Index(fields=['taxonomy_genus'], name='idx_assembly_tax_genus'),
++        ),
++        migrations.AddIndex(
++            model_name='assembly',
++            index=models.Index(fields=['is_type_strain'], name='idx_assembly_type_strain'),
++        ),
++    ]
+diff --git a/mgnify_bgcs/models.py b/mgnify_bgcs/models.py
+index 37f8e96..b82427d 100644
+--- a/mgnify_bgcs/models.py
++++ b/mgnify_bgcs/models.py
+@@ -31,6 +31,28 @@ class Assembly(models.Model):
+         blank=True,
+         related_name="assemblies",
+     )
++    # 7-rank taxonomy
++    taxonomy_kingdom = models.CharField(max_length=100, blank=True, null=True)
++    taxonomy_phylum = models.CharField(max_length=100, blank=True, null=True)
++    taxonomy_class = models.CharField(max_length=100, blank=True, null=True)
++    taxonomy_order = models.CharField(max_length=100, blank=True, null=True)
++    taxonomy_family = models.CharField(max_length=100, blank=True, null=True)
++    taxonomy_genus = models.CharField(max_length=100, blank=True, null=True)
++    taxonomy_species = models.CharField(max_length=100, blank=True, null=True)
++    # Genome metadata
++    organism_name = models.CharField(max_length=255, blank=True, null=True)
++    is_type_strain = models.BooleanField(default=False)
++    type_strain_catalog_url = models.URLField(blank=True, null=True)
++    genome_size_mb = models.FloatField(blank=True, null=True)
++    genome_quality = models.FloatField(blank=True, null=True)
++    isolation_source = models.CharField(max_length=255, blank=True, null=True)
++
++    class Meta:
++        indexes = [
++            models.Index(fields=["taxonomy_family"], name="idx_assembly_tax_family"),
++            models.Index(fields=["taxonomy_genus"], name="idx_assembly_tax_genus"),
++            models.Index(fields=["is_type_strain"], name="idx_assembly_type_strain"),
++        ]
+ 
+ 
+ class Contig(models.Model):
+diff --git a/tests/factories/discovery_models.py b/tests/factories/discovery_models.py
+new file mode 100644
+index 0000000..4381f6f
+--- /dev/null
++++ b/tests/factories/discovery_models.py
+@@ -0,0 +1,261 @@
++"""
++factory_boy DjangoModelFactory definitions for discovery app models.
++
++Usage:
++    from tests.factories.discovery_models import GCFFactory
++    gcf = GCFFactory()
++"""
++
++import random
++
++import factory
++import numpy as np
++from factory.django import DjangoModelFactory
++
++from discovery.models import (
++    GCF,
++    GCFMembership,
++    NaturalProduct,
++    MibigReference,
++    GenomeScore,
++    BgcScore,
++)
++from tests.factories.models import AssemblyFactory, BgcFactory
++
++
++def _embedding() -> list:
++    return np.random.randn(1152).astype(np.float32).tolist()
++
++
++# Curated pools for realistic data generation
++
++_MIBIG_COMPOUNDS = [
++    ("erythromycin", "Polyketide"),
++    ("vancomycin", "NRP"),
++    ("rifamycin", "Polyketide"),
++    ("tetracycline", "Polyketide"),
++    ("daptomycin", "NRP"),
++    ("rapamycin", "Polyketide"),
++    ("bleomycin", "NRP"),
++    ("avermectin", "Polyketide"),
++    ("streptomycin", "Saccharide"),
++    ("epothilone", "Polyketide"),
++    ("lanthipeptide A", "RiPP"),
++    ("nisin", "RiPP"),
++    ("geosmin", "Terpene"),
++    ("albaflavenone", "Terpene"),
++    ("staurosporine", "Alkaloid"),
++    ("rebeccamycin", "Alkaloid"),
++    ("enterobactin", "NRP"),
++    ("bacillibactin", "NRP"),
++    ("prodiginine", "Alkaloid"),
++    ("desferrioxamine", "NRP"),
++    ("salinosporamide", "Polyketide"),
++    ("thiostrepton", "RiPP"),
++    ("calicheamicin", "Polyketide"),
++    ("actinomycin", "NRP"),
++    ("chloramphenicol", "Other"),
++    ("novobiocin", "Other"),
++    ("clavulanic acid", "Other"),
++    ("melanin", "Other"),
++    ("ectoine", "Other"),
++    ("hopanoid", "Terpene"),
++]
++
++_NP_CLASSES = {
++    "Polyketide": {
++        "Macrolide": ["14-membered macrolide", "16-membered macrolide", "Ansamycin"],
++        "Aromatic polyketide": ["Tetracycline", "Anthracycline", "Angucycline"],
++        "Linear polyketide": ["Polyene", "Polyether", None],
++    },
++    "NRP": {
++        "Cyclic peptide": ["Lipopeptide", "Glycopeptide", "Depsipeptide"],
++        "Linear peptide": ["Siderophore", None, None],
++    },
++    "Alkaloid": {
++        "Indole alkaloid": ["Bisindole", "Carbazole", None],
++        "Pyrrolidine": [None, None, None],
++    },
++    "RiPP": {
++        "Lanthipeptide": ["Class I", "Class II", None],
++        "Thiopeptide": [None, None, None],
++        "Sactipeptide": [None, None, None],
++    },
++    "Terpene": {
++        "Sesquiterpene": [None, None, None],
++        "Diterpene": [None, None, None],
++    },
++    "Saccharide": {
++        "Aminoglycoside": ["4,6-disubstituted", None, None],
++        "Oligosaccharide": [None, None, None],
++    },
++    "Other": {
++        "Phosphonate": [None, None, None],
++        "Aminocoumarin": [None, None, None],
++    },
++}
++
++_SMILES_POOL = [
++    "CC1OC(=O)C(C)C(OC2CC(C)(OC)C(O)C(C)O2)C(C)C(OC2OC(C)CC(N(C)C)C2O)C(C)(O)CC(C)C(=O)C(C)C(O)C1(C)O",
++    "CC(=O)NC1C(O)C(O)C(CO)OC1OC1C(O)C(OC2OC(CO)C(O)C(N)C2O)C(O)C(CO)O1",
++    "CC1=CC(O)=C2C(=O)C3=C(O)C(N(C)C)=CC(O)=C3CC2=C1",
++    "O=C(O)C1=CC=C(N)C=C1",
++    "CC(O)CC(=O)OC1CC(O)C(C)C(OC2CC(C)C(O)C(C)O2)C(C)C(=O)CC(O)C(C)C(=O)C(C)C1OC1CC(N(C)C)C(O)C(C)O1",
++    "CC1OC(OC2C(O)C(O)CC(O2)C2=CC3=CC(=CC(O)=C3C(=O)C2)OC)CC(N)C1O",
++    "CCC(C)C(NC(=O)C(CC(C)C)NC(=O)C(CCC(=O)O)NC(=O)C(CC(=O)O)NC(=O)C(NC=O)CCCN)C(=O)O",
++    "OC1=CC=C(C=C1)C(=O)O",
++    "CC1=C(C=CC=C1O)O",
++    "CC1OC(O)CC1=O",
++    "CC(CC1=CNC2=CC=CC=C12)NC",
++    "OC(=O)CCCCC1SCC2NC(=O)NC12",
++    "CC(C)CC1NC(=O)C(CC(=O)O)NC(=O)C(CC2=CC=CC=C2)NC(=O)C(CO)NC1=O",
++    "OC(=O)C1CCCN1",
++    "CC1=CC=CC=C1NC(=O)C1=CC=CC(O)=C1O",
++    "OC1C(O)C(OC1CO)N1C=NC2=C1N=CN=C2N",
++    "CC(=O)OC1CC2CCC3C(CCC4(C)C3CC=C3CC(O)CCC34C)C2(C)CC1OC(=O)C",
++    "CC1(C)CCC2(CCC3(C)C(=CCC4C5(C)CCC(O)C(C)(C)C5CCC43C)C2C1)C(=O)O",
++    "O=C1C=CC(=O)C2=C1C=CC=C2",
++    "CC1OC(=O)CC(O)C1O",
++]
++
++
++class GCFFactory(DjangoModelFactory):
++    class Meta:
++        model = GCF
++        django_get_or_create = ("family_id",)
++
++    family_id = factory.Sequence(lambda n: f"GCF_{n:06d}")
++    representative_bgc = factory.SubFactory(BgcFactory)
++    member_count = factory.LazyFunction(lambda: random.randint(3, 50))
++    known_chemistry_annotation = factory.LazyFunction(
++        lambda: random.choice([None, None, "polyketide synthase", "NRPS", "lanthipeptide", "siderophore"])
++    )
++    mibig_accession = factory.LazyFunction(
++        lambda: f"BGC{random.randint(1, 2500):07d}" if random.random() < 0.3 else None
++    )
++
++
++class GCFMembershipFactory(DjangoModelFactory):
++    class Meta:
++        model = GCFMembership
++
++    gcf = factory.SubFactory(GCFFactory)
++    bgc = factory.SubFactory(BgcFactory)
++    distance_to_representative = factory.LazyFunction(lambda: round(random.uniform(0.0, 0.5), 4))
++
++
++class NaturalProductFactory(DjangoModelFactory):
++    class Meta:
++        model = NaturalProduct
++        exclude = ("_np_class",)
++
++    name = factory.Faker("word")
++    smiles = factory.LazyFunction(lambda: random.choice(_SMILES_POOL))
++    bgc = factory.SubFactory(BgcFactory)
++
++    @factory.lazy_attribute
++    def _np_class(self):
++        l1 = random.choice(list(_NP_CLASSES.keys()))
++        l2 = random.choice(list(_NP_CLASSES[l1].keys()))
++        l3 = random.choice(_NP_CLASSES[l1][l2])
++        return l1, l2, l3
++
++    @factory.lazy_attribute
++    def chemical_class_l1(self):
++        return self._np_class[0]
++
++    @factory.lazy_attribute
++    def chemical_class_l2(self):
++        return self._np_class[1]
++
++    @factory.lazy_attribute
++    def chemical_class_l3(self):
++        return self._np_class[2]
++
++    @factory.lazy_attribute
++    def producing_organism(self):
++        return random.choice([
++            "Streptomyces coelicolor", "Streptomyces griseus",
++            "Amycolatopsis mediterranei", "Bacillus subtilis",
++            "Pseudomonas fluorescens", "Myxococcus xanthus",
++            None,
++        ])
++
++
++class MibigReferenceFactory(DjangoModelFactory):
++    class Meta:
++        model = MibigReference
++        django_get_or_create = ("accession",)
++        exclude = ("_compound_info",)
++
++    accession = factory.Sequence(lambda n: f"BGC{n:07d}")
++    embedding = factory.LazyFunction(_embedding)
++
++    @factory.lazy_attribute
++    def _compound_info(self):
++        return random.choice(_MIBIG_COMPOUNDS)
++
++    @factory.lazy_attribute
++    def compound_name(self):
++        return self._compound_info[0]
++
++    @factory.lazy_attribute
++    def bgc_class(self):
++        return self._compound_info[1]
++
++    @factory.lazy_attribute
++    def umap_x(self):
++        return round(random.uniform(-10, 10), 4)
++
++    @factory.lazy_attribute
++    def umap_y(self):
++        return round(random.uniform(-10, 10), 4)
++
++
++class GenomeScoreFactory(DjangoModelFactory):
++    class Meta:
++        model = GenomeScore
++
++    assembly = factory.SubFactory(AssemblyFactory)
++    bgc_count = factory.LazyFunction(lambda: random.randint(1, 30))
++    bgc_diversity_score = factory.LazyFunction(lambda: round(random.betavariate(3, 2), 4))
++    bgc_novelty_score = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
++    bgc_density = factory.LazyFunction(lambda: round(random.betavariate(2, 3), 4))
++    taxonomic_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 4), 4))
++    genome_quality = factory.LazyFunction(lambda: round(random.betavariate(8, 2), 4))
++    l1_class_count = factory.LazyFunction(lambda: random.randint(1, 7))
++
++
++class BgcScoreFactory(DjangoModelFactory):
++    class Meta:
++        model = BgcScore
++
++    bgc = factory.SubFactory(BgcFactory)
++    novelty_score = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
++    domain_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 6), 4))
++    nearest_mibig_distance = factory.LazyFunction(lambda: round(random.uniform(0.0, 1.0), 4))
++    size_kb = factory.LazyFunction(lambda: round(random.uniform(5.0, 120.0), 2))
++    is_validated = factory.LazyFunction(lambda: random.random() < 0.05)
++
++    @factory.lazy_attribute
++    def nearest_mibig_accession(self):
++        return f"BGC{random.randint(1, 2500):07d}" if self.nearest_mibig_distance < 0.5 else None
++
++    @factory.lazy_attribute
++    def classification_l1(self):
++        return random.choice(["Polyketide", "NRP", "Alkaloid", "RiPP", "Saccharide", "Other", "Terpene"])
++
++    @factory.lazy_attribute
++    def classification_l2(self):
++        l1 = self.classification_l1
++        if l1 in _NP_CLASSES:
++            return random.choice(list(_NP_CLASSES[l1].keys()))
++        return None
++
++    @factory.lazy_attribute
++    def classification_l3(self):
++        l1 = self.classification_l1
++        l2 = self.classification_l2
++        if l1 in _NP_CLASSES and l2 in _NP_CLASSES.get(l1, {}):
++            return random.choice(_NP_CLASSES[l1][l2])
++        return None
+diff --git a/tests/factories/models.py b/tests/factories/models.py
+index 49a18ee..0f47928 100644
+--- a/tests/factories/models.py
++++ b/tests/factories/models.py
+@@ -66,16 +66,103 @@ class BiomeFactory(DjangoModelFactory):
+     lineage = factory.Sequence(lambda n: f"root:Environmental:Soil:type{n}")
+ 
+ 
++_TAXONOMY_POOL = [
++    ("Bacteria", "Actinomycetota", "Actinomycetes", "Streptomycetales", "Streptomycetaceae", "Streptomyces", "Streptomyces coelicolor"),
++    ("Bacteria", "Actinomycetota", "Actinomycetes", "Streptomycetales", "Streptomycetaceae", "Streptomyces", "Streptomyces griseus"),
++    ("Bacteria", "Actinomycetota", "Actinomycetes", "Micromonosporales", "Micromonosporaceae", "Micromonospora", "Micromonospora carbonacea"),
++    ("Bacteria", "Actinomycetota", "Actinomycetes", "Pseudonocardiales", "Pseudonocardiaceae", "Amycolatopsis", "Amycolatopsis mediterranei"),
++    ("Bacteria", "Actinomycetota", "Actinomycetes", "Streptosporangiales", "Streptosporangiaceae", "Streptosporangium", "Streptosporangium roseum"),
++    ("Bacteria", "Pseudomonadota", "Gammaproteobacteria", "Pseudomonadales", "Pseudomonadaceae", "Pseudomonas", "Pseudomonas fluorescens"),
++    ("Bacteria", "Pseudomonadota", "Gammaproteobacteria", "Enterobacterales", "Enterobacteriaceae", "Serratia", "Serratia marcescens"),
++    ("Bacteria", "Pseudomonadota", "Alphaproteobacteria", "Rhizobiales", "Bradyrhizobiaceae", "Bradyrhizobium", "Bradyrhizobium japonicum"),
++    ("Bacteria", "Pseudomonadota", "Betaproteobacteria", "Burkholderiales", "Burkholderiaceae", "Burkholderia", "Burkholderia gladioli"),
++    ("Bacteria", "Bacillota", "Bacilli", "Bacillales", "Bacillaceae", "Bacillus", "Bacillus subtilis"),
++    ("Bacteria", "Bacillota", "Bacilli", "Bacillales", "Paenibacillaceae", "Paenibacillus", "Paenibacillus polymyxa"),
++    ("Bacteria", "Cyanobacteriota", "Cyanophyceae", "Nostocales", "Nostocaceae", "Nostoc", "Nostoc punctiforme"),
++    ("Bacteria", "Cyanobacteriota", "Cyanophyceae", "Oscillatoriales", "Microcoleaceae", "Moorea", "Moorea producens"),
++    ("Bacteria", "Myxococcota", "Myxococcia", "Myxococcales", "Myxococcaceae", "Myxococcus", "Myxococcus xanthus"),
++    ("Bacteria", "Myxococcota", "Myxococcia", "Myxococcales", "Myxococcaceae", "Sorangium", "Sorangium cellulosum"),
++    ("Bacteria", "Bacteroidota", "Bacteroidia", "Flavobacteriales", "Flavobacteriaceae", "Flavobacterium", "Flavobacterium johnsoniae"),
++    ("Bacteria", "Planctomycetota", "Planctomycetes", "Planctomycetales", "Planctomycetaceae", "Planctomyces", "Planctomyces brasiliensis"),
++    ("Archaea", "Euryarchaeota", "Halobacteria", "Halobacteriales", "Halobacteriaceae", "Halobacterium", "Halobacterium salinarum"),
++    ("Bacteria", "Actinomycetota", "Actinomycetes", "Frankiales", "Frankiaceae", "Frankia", "Frankia alni"),
++    ("Bacteria", "Actinomycetota", "Actinomycetes", "Corynebacteriales", "Nocardiaceae", "Nocardia", "Nocardia brasiliensis"),
++]
++
++
+ class AssemblyFactory(DjangoModelFactory):
+     class Meta:
+         model = Assembly
+         django_get_or_create = ("accession",)
++        exclude = ("_taxonomy",)
+ 
+     accession = factory.Sequence(lambda n: f"ERZ{n:07d}")
+     study = factory.SubFactory(StudyFactory)
+     biome = factory.SubFactory(BiomeFactory)
+     collection = None
+ 
++    @factory.lazy_attribute
++    def _taxonomy(self):
++        return random.choice(_TAXONOMY_POOL)
++
++    @factory.lazy_attribute
++    def taxonomy_kingdom(self):
++        return self._taxonomy[0]
++
++    @factory.lazy_attribute
++    def taxonomy_phylum(self):
++        return self._taxonomy[1]
++
++    @factory.lazy_attribute
++    def taxonomy_class(self):
++        return self._taxonomy[2]
++
++    @factory.lazy_attribute
++    def taxonomy_order(self):
++        return self._taxonomy[3]
++
++    @factory.lazy_attribute
++    def taxonomy_family(self):
++        return self._taxonomy[4]
++
++    @factory.lazy_attribute
++    def taxonomy_genus(self):
++        return self._taxonomy[5]
++
++    @factory.lazy_attribute
++    def taxonomy_species(self):
++        return self._taxonomy[6]
++
++    @factory.lazy_attribute
++    def organism_name(self):
++        return f"{self._taxonomy[6]} strain {random.choice(string.ascii_uppercase)}{random.randint(1, 999)}"
++
++    @factory.lazy_attribute
++    def is_type_strain(self):
++        return random.random() < 0.1
++
++    @factory.lazy_attribute
++    def type_strain_catalog_url(self):
++        if self.is_type_strain:
++            return f"https://www.dsmz.de/collection/catalogue/details/culture/DSM-{random.randint(1000, 99999)}"
++        return None
++
++    @factory.lazy_attribute
++    def genome_size_mb(self):
++        return round(random.uniform(2.0, 12.0), 2)
++
++    @factory.lazy_attribute
++    def genome_quality(self):
++        return round(random.betavariate(8, 2), 3)
++
++    @factory.lazy_attribute
++    def isolation_source(self):
++        return random.choice([
++            "soil", "marine sediment", "freshwater", "rhizosphere",
++            "human gut", "insect symbiont", "cave sediment", "hot spring",
++            "mangrove soil", "coral mucus", "desert sand", "peat bog",
++        ])
++
+ 
+ class ContigFactory(DjangoModelFactory):
+     class Meta:
+diff --git a/tests/integration/test_discovery_api.py b/tests/integration/test_discovery_api.py
+new file mode 100644
+index 0000000..767bc22
+--- /dev/null
++++ b/tests/integration/test_discovery_api.py
+@@ -0,0 +1,331 @@
++"""Integration tests for the discovery dashboard API endpoints."""
++
++import json
++
++import pytest
++from django.test import Client
++
++from mgnify_bgcs.models import Assembly, Bgc, BgcClass, BgcBgcClass, Contig, Domain, Protein, Cds, ProteinDomain, GeneCaller
++from discovery.models import (
++    BgcScore,
++    GCF,
++    GCFMembership,
++    GenomeScore,
++    MibigReference,
++    NaturalProduct,
++)
++
++import numpy as np
++
++
++@pytest.fixture
++def api_client():
++    return Client()
++
++
++def _make_assembly(accession, family="Streptomycetaceae", is_type_strain=False):
++    return Assembly.objects.create(
++        accession=accession,
++        taxonomy_kingdom="Bacteria",
++        taxonomy_phylum="Actinomycetota",
++        taxonomy_class="Actinomycetes",
++        taxonomy_order="Streptomycetales",
++        taxonomy_family=family,
++        taxonomy_genus="Streptomyces",
++        taxonomy_species="Streptomyces coelicolor",
++        organism_name=f"S. coelicolor {accession}",
++        is_type_strain=is_type_strain,
++        genome_size_mb=8.5,
++        genome_quality=0.95,
++    )
++
++
++def _make_bgc(assembly, idx=0, class_name="Polyketide"):
++    contig = Contig.objects.create(
++        assembly=assembly,
++        sequence_sha256=f"test_sha_{assembly.accession}_{idx}",
++        mgyc=f"MGYC_test_{assembly.accession}_{idx}",
++        length=100000,
++        sequence="ACGT" * 25000,
++    )
++    bgc = Bgc.objects.create(
++        contig=contig,
++        identifier=f"test_bgc_{assembly.accession}_{idx}",
++        start_position=1000,
++        end_position=20000,
++        embedding=np.random.randn(1152).astype(np.float32).tolist(),
++        metadata={"umap_x_coord": 1.0 + idx, "umap_y_coord": 2.0 + idx},
++    )
++    bc, _ = BgcClass.objects.get_or_create(name=class_name)
++    BgcBgcClass.objects.create(bgc=bgc, bgc_class=bc)
++    return bgc
++
++
++def _score_assembly(assembly, bgcs):
++    GenomeScore.objects.create(
++        assembly=assembly,
++        bgc_count=len(bgcs),
++        bgc_diversity_score=0.6,
++        bgc_novelty_score=0.4,
++        bgc_density=0.3,
++        taxonomic_novelty=0.5,
++        genome_quality=0.9,
++        l1_class_count=2,
++    )
++
++
++def _score_bgc(bgc, classification_l1="Polyketide"):
++    BgcScore.objects.create(
++        bgc=bgc,
++        novelty_score=0.35,
++        domain_novelty=0.2,
++        nearest_mibig_accession="BGC0000001",
++        nearest_mibig_distance=0.65,
++        size_kb=19.0,
++        classification_l1=classification_l1,
++    )
++
++
++@pytest.fixture
++def seeded_data():
++    """Create a minimal test dataset."""
++    a1 = _make_assembly("TEST_ERZ001", family="Streptomycetaceae", is_type_strain=True)
++    a2 = _make_assembly("TEST_ERZ002", family="Pseudomonadaceae")
++
++    bgc1 = _make_bgc(a1, 0, "Polyketide")
++    bgc2 = _make_bgc(a1, 1, "NRP")
++    bgc3 = _make_bgc(a2, 0, "RiPP")
++
++    _score_assembly(a1, [bgc1, bgc2])
++    _score_assembly(a2, [bgc3])
++
++    _score_bgc(bgc1, "Polyketide")
++    _score_bgc(bgc2, "NRP")
++    _score_bgc(bgc3, "RiPP")
++
++    MibigReference.objects.create(
++        accession="BGC0000001",
++        compound_name="erythromycin",
++        bgc_class="Polyketide",
++        umap_x=-5.0,
++        umap_y=3.0,
++    )
++
++    NaturalProduct.objects.create(
++        name="test_compound",
++        smiles="CC(=O)O",
++        chemical_class_l1="Polyketide",
++        chemical_class_l2="Macrolide",
++        bgc=bgc1,
++    )
++
++    return {
++        "assemblies": [a1, a2],
++        "bgcs": [bgc1, bgc2, bgc3],
++    }
++
++
++_WEIGHT_QS = "w_diversity=0.25&w_novelty=0.4&w_density=0.15&w_taxonomic=0.1&w_quality=0.1"
++
++
++@pytest.mark.django_db
++class TestGenomeRoster:
++    def test_returns_paginated_list(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genomes/?{_WEIGHT_QS}")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert "items" in data
++        assert "pagination" in data
++        assert data["pagination"]["total_count"] == 2
++
++    def test_pagination(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genomes/?page=1&page_size=1&{_WEIGHT_QS}")
++        data = json.loads(r.content)
++        assert len(data["items"]) == 1
++        assert data["pagination"]["total_pages"] == 2
++
++    def test_type_strain_filter(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genomes/?type_strain_only=true&{_WEIGHT_QS}")
++        data = json.loads(r.content)
++        assert data["pagination"]["total_count"] == 1
++        assert data["items"][0]["is_type_strain"] is True
++
++    def test_taxonomy_filter(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genomes/?taxonomy_family=Pseudomonadaceae&{_WEIGHT_QS}")
++        data = json.loads(r.content)
++        assert data["pagination"]["total_count"] == 1
++
++    def test_search(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genomes/?search=TEST_ERZ001&{_WEIGHT_QS}")
++        data = json.loads(r.content)
++        assert data["pagination"]["total_count"] == 1
++
++    def test_sort_by_bgc_count(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genomes/?sort_by=bgc_count&order=desc&{_WEIGHT_QS}")
++        data = json.loads(r.content)
++        assert data["items"][0]["bgc_count"] >= data["items"][1]["bgc_count"]
++
++
++@pytest.mark.django_db
++class TestGenomeDetail:
++    def test_returns_detail(self, api_client, seeded_data):
++        aid = seeded_data["assemblies"][0].id
++        r = api_client.get(f"/api/dashboard/genomes/{aid}/?{_WEIGHT_QS}")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert data["accession"] == "TEST_ERZ001"
++        assert data["genome_size_mb"] == 8.5
++        assert data["is_type_strain"] is True
++
++    def test_404_for_missing(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genomes/99999/?{_WEIGHT_QS}")
++        assert r.status_code == 404
++
++
++@pytest.mark.django_db
++class TestGenomeBgcRoster:
++    def test_returns_bgcs_for_genome(self, api_client, seeded_data):
++        aid = seeded_data["assemblies"][0].id
++        r = api_client.get(f"/api/dashboard/genomes/{aid}/bgcs/")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert len(data) == 2
++
++    def test_empty_for_unknown(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/genomes/99999/bgcs/")
++        assert r.status_code == 200
++        assert json.loads(r.content) == []
++
++
++@pytest.mark.django_db
++class TestGenomeScatter:
++    def test_returns_points(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genome-scatter/?{_WEIGHT_QS}")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert len(data) == 2
++        assert "x" in data[0]
++        assert "y" in data[0]
++        assert "composite_score" in data[0]
++
++    def test_bad_axis_returns_400(self, api_client, seeded_data):
++        r = api_client.get(f"/api/dashboard/genome-scatter/?x_axis=invalid&{_WEIGHT_QS}")
++        assert r.status_code == 400
++
++
++@pytest.mark.django_db
++class TestBgcDetail:
++    def test_returns_detail(self, api_client, seeded_data):
++        bid = seeded_data["bgcs"][0].id
++        r = api_client.get(f"/api/dashboard/bgcs/{bid}/")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert data["classification_l1"] == "Polyketide"
++        assert data["parent_genome"] is not None
++        assert data["parent_genome"]["accession"] == "TEST_ERZ001"
++
++    def test_404_for_missing(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/bgcs/99999/")
++        assert r.status_code == 404
++
++
++@pytest.mark.django_db
++class TestBgcScatter:
++    def test_returns_bgc_and_mibig_points(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/bgc-scatter/?include_mibig=true")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        mibig = [p for p in data if p["is_mibig"]]
++        bgcs = [p for p in data if not p["is_mibig"]]
++        assert len(mibig) == 1
++        assert len(bgcs) == 3
++
++    def test_without_mibig(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/bgc-scatter/?include_mibig=false")
++        data = json.loads(r.content)
++        assert all(not p["is_mibig"] for p in data)
++
++
++@pytest.mark.django_db
++class TestSimilarBgcQuery:
++    def test_finds_similar(self, api_client, seeded_data):
++        bid = seeded_data["bgcs"][0].id
++        r = api_client.post(
++            f"/api/dashboard/query/similar-bgc/{bid}/?max_distance=2.0&w_similarity=0.4&w_novelty=0.3&w_completeness=0.15&w_domain_novelty=0.15",
++            content_type="application/json",
++        )
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert "items" in data
++        # All items should not include the source BGC
++        assert all(item["id"] != bid for item in data["items"])
++
++    def test_404_for_missing_bgc(self, api_client, seeded_data):
++        r = api_client.post(
++            "/api/dashboard/query/similar-bgc/99999/?w_similarity=0.4&w_novelty=0.3&w_completeness=0.15&w_domain_novelty=0.15",
++            content_type="application/json",
++        )
++        assert r.status_code == 404
++
++
++@pytest.mark.django_db
++class TestFilters:
++    def test_taxonomy_tree(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/filters/taxonomy/")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert len(data) > 0
++        assert data[0]["rank"] == "kingdom"
++
++    def test_bgc_classes(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/filters/bgc-classes/")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        names = {c["name"] for c in data}
++        assert "Polyketide" in names
++
++    def test_np_classes(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/filters/np-classes/")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert len(data) > 0
++
++    def test_domain_list(self, api_client, seeded_data):
++        r = api_client.get("/api/dashboard/filters/domains/")
++        assert r.status_code == 200
++        data = json.loads(r.content)
++        assert "items" in data
++        assert "pagination" in data
++
++
++@pytest.mark.django_db
++class TestExports:
++    def test_genome_csv_export(self, api_client, seeded_data):
++        ids = [a.id for a in seeded_data["assemblies"]]
++        r = api_client.post(
++            "/api/dashboard/shortlist/genome/export/",
++            data=json.dumps({"ids": ids}),
++            content_type="application/json",
++        )
++        assert r.status_code == 200
++        assert r["Content-Type"] == "text/csv"
++        assert "genome_shortlist.csv" in r["Content-Disposition"]
++        content = r.content.decode()
++        assert "accession" in content
++        assert "TEST_ERZ001" in content
++
++    def test_genome_export_empty_ids(self, api_client, seeded_data):
++        r = api_client.post(
++            "/api/dashboard/shortlist/genome/export/",
++            data=json.dumps({"ids": []}),
++            content_type="application/json",
++        )
++        assert r.status_code == 400
++
++    def test_genome_export_max_20(self, api_client, seeded_data):
++        r = api_client.post(
++            "/api/dashboard/shortlist/genome/export/",
++            data=json.dumps({"ids": list(range(1, 25))}),
++            content_type="application/json",
++        )
++        assert r.status_code == 400
+diff --git a/tests/unit/test_discovery_factories.py b/tests/unit/test_discovery_factories.py
+new file mode 100644
+index 0000000..ac45e3e
+--- /dev/null
++++ b/tests/unit/test_discovery_factories.py
+@@ -0,0 +1,63 @@
++"""Tests for discovery model factories."""
++
++import pytest
++
++from tests.factories.discovery_models import (
++    GCFFactory,
++    GCFMembershipFactory,
++    NaturalProductFactory,
++    MibigReferenceFactory,
++    GenomeScoreFactory,
++    BgcScoreFactory,
++)
++
++
++@pytest.mark.django_db
++class TestDiscoveryFactories:
++    def test_gcf_factory(self):
++        gcf = GCFFactory()
++        assert gcf.pk is not None
++        assert gcf.family_id.startswith("GCF_")
++        assert gcf.member_count >= 3
++
++    def test_gcf_membership_factory(self):
++        membership = GCFMembershipFactory()
++        assert membership.pk is not None
++        assert membership.gcf is not None
++        assert membership.bgc is not None
++        assert 0.0 <= membership.distance_to_representative <= 0.5
++
++    def test_natural_product_factory(self):
++        np_ = NaturalProductFactory()
++        assert np_.pk is not None
++        assert np_.smiles
++        assert np_.chemical_class_l1 in (
++            "Polyketide", "NRP", "Alkaloid", "RiPP",
++            "Terpene", "Saccharide", "Other",
++        )
++
++    def test_mibig_reference_factory(self):
++        ref = MibigReferenceFactory()
++        assert ref.pk is not None
++        assert ref.accession.startswith("BGC")
++        assert ref.compound_name
++        assert ref.embedding is not None
++        assert len(ref.embedding) == 1152
++
++    def test_genome_score_factory(self):
++        gs = GenomeScoreFactory()
++        assert gs.pk is not None
++        assert 0.0 <= gs.bgc_diversity_score <= 1.0
++        assert 0.0 <= gs.bgc_novelty_score <= 1.0
++        assert 0.0 <= gs.bgc_density <= 1.0
++        assert gs.assembly is not None
++
++    def test_bgc_score_factory(self):
++        bs = BgcScoreFactory()
++        assert bs.pk is not None
++        assert 0.0 <= bs.novelty_score <= 1.0
++        assert bs.size_kb >= 5.0
++        assert bs.classification_l1 in (
++            "Polyketide", "NRP", "Alkaloid", "RiPP",
++            "Terpene", "Saccharide", "Other",
++        )
+diff --git a/tests/unit/test_scoring.py b/tests/unit/test_scoring.py
+new file mode 100644
+index 0000000..3120d14
+--- /dev/null
++++ b/tests/unit/test_scoring.py
+@@ -0,0 +1,72 @@
++"""Unit tests for discovery scoring service."""
++
++import pytest
++from discovery.services.scoring import compute_composite_priority
++
++
++class TestComputeCompositePriority:
++    def test_equal_weights(self):
++        scores = {"a": 0.8, "b": 0.6, "c": 0.4}
++        weights = {"a": 1.0, "b": 1.0, "c": 1.0}
++        result = compute_composite_priority(scores, weights)
++        assert abs(result - 0.6) < 1e-9
++
++    def test_unequal_weights(self):
++        scores = {"novelty": 1.0, "diversity": 0.0}
++        weights = {"novelty": 0.8, "diversity": 0.2}
++        # (1.0 * 0.8 + 0.0 * 0.2) / (0.8 + 0.2) = 0.8
++        result = compute_composite_priority(scores, weights)
++        assert abs(result - 0.8) < 1e-9
++
++    def test_single_weight_dominates(self):
++        scores = {"a": 0.5, "b": 0.9}
++        weights = {"a": 0.0, "b": 1.0}
++        result = compute_composite_priority(scores, weights)
++        assert abs(result - 0.9) < 1e-9
++
++    def test_zero_weights_returns_zero(self):
++        scores = {"a": 0.8, "b": 0.6}
++        weights = {"a": 0.0, "b": 0.0}
++        assert compute_composite_priority(scores, weights) == 0.0
++
++    def test_empty_scores(self):
++        assert compute_composite_priority({}, {"a": 1.0}) == 0.0
++
++    def test_empty_weights(self):
++        assert compute_composite_priority({"a": 0.8}, {}) == 0.0
++
++    def test_both_empty(self):
++        assert compute_composite_priority({}, {}) == 0.0
++
++    def test_mismatched_keys_ignored(self):
++        scores = {"a": 0.5}
++        weights = {"a": 1.0, "b": 1.0}  # b has no score
++        result = compute_composite_priority(scores, weights)
++        assert abs(result - 0.5) < 1e-9
++
++    def test_genome_mode_defaults(self):
++        scores = {
++            "diversity": 0.7,
++            "novelty": 0.3,
++            "density": 0.5,
++            "taxonomic": 0.8,
++            "quality": 0.9,
++        }
++        weights = {
++            "diversity": 0.25,
++            "novelty": 0.40,
++            "density": 0.15,
++            "taxonomic": 0.10,
++            "quality": 0.10,
++        }
++        result = compute_composite_priority(scores, weights)
++        expected = (
++            0.7 * 0.25 + 0.3 * 0.40 + 0.5 * 0.15 + 0.8 * 0.10 + 0.9 * 0.10
++        ) / 1.0
++        assert abs(result - expected) < 1e-9
++
++    def test_result_bounded_zero_one(self):
++        scores = {"a": 0.0, "b": 1.0}
++        weights = {"a": 0.5, "b": 0.5}
++        result = compute_composite_priority(scores, weights)
++        assert 0.0 <= result <= 1.0

@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     "django_celery_results",
     "pgvector",
     "csp",
+    "discovery",
 ]
 
 if DEBUG:
