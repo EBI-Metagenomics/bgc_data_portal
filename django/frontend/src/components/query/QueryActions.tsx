@@ -15,7 +15,7 @@ export function QueryActions() {
   const isFetching = domainFetching || similarFetching;
 
   return (
-    <div className="vf-card vf-card--bordered flex items-center gap-3" style={{ padding: "0.75rem" }}>
+    <div className="vf-card vf-card--brand vf-card--bordered flex items-center gap-3" style={{ padding: "0.75rem" }}>
       {similarBgcSourceId ? (
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">

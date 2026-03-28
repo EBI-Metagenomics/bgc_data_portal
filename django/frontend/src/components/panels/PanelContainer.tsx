@@ -25,7 +25,7 @@ export function PanelContainer({
   return (
     <article
       className={cn(
-        "vf-card vf-card--bordered flex flex-col",
+        "vf-card vf-card--brand vf-card--bordered flex flex-col",
         className
       )}
     >

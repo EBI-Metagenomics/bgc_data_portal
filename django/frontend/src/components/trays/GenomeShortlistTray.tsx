@@ -29,7 +29,7 @@ export function GenomeShortlistTray() {
   return (
     <div
       className={cn(
-        "vf-card vf-card--bordered p-3",
+        "vf-card vf-card--brand vf-card--bordered p-3",
         mode === "explore" ? "border-explore/30 bg-explore/5" : ""
       )}
     >

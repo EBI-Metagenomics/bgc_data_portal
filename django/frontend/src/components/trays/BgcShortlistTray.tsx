@@ -29,7 +29,7 @@ export function BgcShortlistTray() {
   return (
     <div
       className={cn(
-        "vf-card vf-card--bordered p-3",
+        "vf-card vf-card--brand vf-card--bordered p-3",
         mode === "query" ? "border-query/30 bg-query/5" : ""
       )}
     >
