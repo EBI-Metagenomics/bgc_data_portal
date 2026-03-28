@@ -15,7 +15,7 @@ export function DashboardShell() {
   const mode = useModeStore((s) => s.mode);
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex flex-col" style={{ height: "calc(100vh - var(--vf-chrome-height, 90px))" }}>
       <Header />
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}

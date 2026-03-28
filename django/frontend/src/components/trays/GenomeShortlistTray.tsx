@@ -29,8 +29,8 @@ export function GenomeShortlistTray() {
   return (
     <div
       className={cn(
-        "rounded-lg border p-3",
-        mode === "explore" ? "border-explore/30 bg-explore/5" : "border-border"
+        "vf-card vf-card--bordered p-3",
+        mode === "explore" ? "border-explore/30 bg-explore/5" : ""
       )}
     >
       <div className="flex items-center justify-between">

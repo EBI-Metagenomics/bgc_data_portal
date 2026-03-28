@@ -56,12 +56,12 @@ export function GenomeDetail({ genomeId }: GenomeDetailProps) {
     .join(" > ");
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="vf-grid vf-grid__col-2" style={{ gap: "1.5rem" }}>
       {/* Profile */}
-      <div className="space-y-3">
+      <div className="vf-stack vf-stack--400">
         <div>
           <div className="flex items-center gap-2">
-            <h4 className="font-semibold">
+            <h4 className="vf-summary__title">
               {genome.organism_name ?? genome.accession}
             </h4>
             {genome.is_type_strain && (
@@ -108,8 +108,8 @@ export function GenomeDetail({ genomeId }: GenomeDetailProps) {
       </div>
 
       {/* Scores */}
-      <div className="space-y-2">
-        <h4 className="text-sm font-medium">Scores</h4>
+      <div className="vf-stack vf-stack--200">
+        <h4 className="vf-section-header__heading" style={{ fontSize: "0.875rem" }}>Scores</h4>
         <Separator />
         <ScoreBar label="Composite" value={genome.composite_score} />
         <ScoreBar label="BGC Novelty" value={genome.bgc_novelty_score} />

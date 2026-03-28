@@ -19,7 +19,7 @@ export function FilterPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 className="vf-section-header__heading" style={{ fontSize: "0.75rem", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
           Filters
         </h2>
         <Button
@@ -40,7 +40,7 @@ export function FilterPanel() {
           placeholder="Search organisms..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-9 pl-9 text-sm"
+          className="vf-form__input h-9 pl-9 text-sm"
         />
       </div>
 

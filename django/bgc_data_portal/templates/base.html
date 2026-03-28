@@ -41,65 +41,41 @@ limitations under the License.
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     </head>
     <body class="vf-body | vf-stack vf-stack--200">
-        {% block hero %}
-            <section class="vf-hero vf-hero--1200 | vf-u-fullbleed">
-                <div class="vf-hero__content | vf-box | vf-stack vf-stack--400">
-                    <span class="vf-badge vf-badge--primary">beta</span>
-                    <h2 class="vf-hero__heading">
-                        <a href="{% url 'landing_page' %}" class="no-decoration">MGnify Biosynthetic Gene Clusters</a>
-                    </h2>
-                    <p class="vf-hero__text">Explore, analyse, and download metagenomic biosynthetic gene clusters</p>
-                    <form id="keyword-form"
-                          action="{% url 'search' %}"
-                          method="get"
-                          class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
-                        <input type="hidden" name="form_type" value="keyword">
-                        <div class="vf-sidebar__inner">
-                            <div class="vf-form__item">
-                                <input type="search"
-                                       placeholder="Search by keyword"
-                                       id="search-keyword"
-                                       name="keyword"
-                                       class="vf-form__input" />
-                            </div>
-                            <button type="submit" class="vf-button vf-button--primary">Search</button>
-                        </div>
-                        <p class="vf-text-body--5">
-                            Example: <a href="#" class="vf-link" id="example-link">Polyketide</a>
-                        </p>
-                    </form>
-                </div>
-            </section>
-        {% endblock hero %}
-        <nav class="vf-navigation vf-navigation--main | vf-cluster">
-            <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
-                <li class="vf-navigation__item">
-                    <a href="{% url 'landing_page' %}" class="vf-navigation__link">Home</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% url 'search' %}" class="vf-navigation__link">Search</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% url 'dashboard' %}" class="vf-navigation__link">Dashboard</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% if request.META.SCRIPT_NAME %}{{ request.META.SCRIPT_NAME }}/api/docs{% else %}/api/docs{% endif %}"
-                       class="vf-navigation__link"
-                       target="_blank"
-                       rel="noopener noreferrer">API</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% url 'about' %}" class="vf-navigation__link">About</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics"
-                       class="vf-navigation__link">Contact</a>
-                </li>
-            </ul>
-        </nav>
+        <header class="vf-global-header">
+            <div class="vf-global-header__inner">
+                <a href="{% url 'landing_page' %}" class="vf-logo vf-logo--inline">
+                    <span class="vf-logo__text">MGnify BGCs</span>
+                </a>
+                <span class="vf-badge vf-badge--primary">beta</span>
+                <nav class="vf-navigation vf-navigation--global | vf-cluster">
+                    <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
+                        <li class="vf-navigation__item">
+                            <a href="{% url 'search' %}" class="vf-navigation__link">Search</a>
+                        </li>
+                        <li class="vf-navigation__item">
+                            <a href="{% url 'dashboard' %}" class="vf-navigation__link">Dashboard</a>
+                        </li>
+                        <li class="vf-navigation__item">
+                            <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>
+                        </li>
+                        <li class="vf-navigation__item">
+                            <a href="{% if request.META.SCRIPT_NAME %}{{ request.META.SCRIPT_NAME }}/api/docs{% else %}/api/docs{% endif %}"
+                               class="vf-navigation__link"
+                               target="_blank"
+                               rel="noopener noreferrer">API</a>
+                        </li>
+                        <li class="vf-navigation__item">
+                            <a href="{% url 'about' %}" class="vf-navigation__link">About</a>
+                        </li>
+                        <li class="vf-navigation__item">
+                            <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics"
+                               class="vf-navigation__link">Contact</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </header>
+        {% block hero %}{% endblock hero %}
         <main class="vf-main">
             <hr class="vf-divider divider--context-3rem">
             <div class="bgcs-portal-spinner" id="loader"></div>
@@ -108,61 +84,78 @@ limitations under the License.
         </main>
         <footer class="vf-footer">
             <div class="vf-footer__inner">
-                <div class="vf-flag vf-flag--middle vf-flag--400 space-below-20">
-                    <div class="vf-flag__media">
-                        <img src="{% static 'img/Euremap_logo_white.png' %}"
-                             width="100px"
-                             alt="EUREMAP Logo"
-                             height="52px" />
+                <section class="vf-footer__section | vf-stack vf-stack--400">
+                    <div class="vf-flag vf-flag--middle vf-flag--400">
+                        <div class="vf-flag__media">
+                            <img src="{% static 'img/Euremap_logo_white.png' %}"
+                                 width="100"
+                                 alt="EUREMAP Logo"
+                                 height="52" />
+                        </div>
+                        <div class="vf-flag__body">
+                            <p class="vf-footer__notice">
+                                This portal has been developed at EMBL-EBI by the MGnify team as part of the EUREMAP project. EUREMAP is an initiative designed to integrate a pipeline of marine bioprospecting services.
+                            </p>
+                        </div>
                     </div>
-                    <div class="vf-flag__body">
-                        <p class="vf-footer__notice small-font">
-                            This portal has been developed at EMBL-EBI by the MGnify team as part of the EUREMAP project. EUREMAP is an initiative designed to integrate a pipeline of marine bioprospecting services.
-                        </p>
+                    <div class="vf-flag vf-flag--middle vf-flag--400">
+                        <div class="vf-flag__media">
+                            <img src="{% static 'img/eu-flag.svg' %}"
+                                 width="100"
+                                 alt="EU Flag"
+                                 height="67" />
+                        </div>
+                        <div class="vf-flag__body">
+                            <p class="vf-footer__notice">
+                                EUREMAP project is funded by the European Union under grant agreement No. 101131663 (HORIZON-INFRA-2023-DEV-01-04). Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or the Agency. Neither the European Union nor the granting authority can be held responsible for them.
+                            </p>
+                        </div>
                     </div>
-                </div>
-                <div class="vf-flag vf-flag--middle vf-flag--400 space-below-20">
-                    <div class="vf-flag__media">
-                        <img src="{% static 'img/eu-flag.svg' %}"
-                             width="100px"
-                             alt="EU Flag"
-                             height="67px" />
-                    </div>
-                    <div class="vf-flag__body">
-                        <p class="vf-footer__notice small-font">
-                            EUREMAP project is funded by the European Union under grant agreement No. 101131663 (HORIZON-INFRA-2023-DEV-01-04). Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or the Agency. Neither the European Union nor the granting authority can be held responsible for them.
-                        </p>
-                    </div>
-                </div>
-                <hr class="vf-divider divider--context-4rem spaced-top-20">
-                <div class="vf-grid">
-                    <div class="vf-grid__col--span-4">
-                        <h3>Useful Links</h3>
-                        <ul class="vf-list">
-                            <li>
-                                <a href="https://www.ebi.ac.uk/metagenomics" target="_blank">MGnify</a>
+                </section>
+                <hr class="vf-divider">
+                <div class="vf-grid vf-grid__col-3">
+                    <div class="vf-footer__section">
+                        <h4 class="vf-footer__heading">Useful Links</h4>
+                        <ul class="vf-footer__list">
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="https://www.ebi.ac.uk/metagenomics" target="_blank" rel="noopener noreferrer">MGnify</a>
                             </li>
-                            <li>
-                                <a href="https://www.ebi.ac.uk/metagenomics/proteins" target="_blank">MGnify Proteins</a>
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="https://www.ebi.ac.uk/metagenomics/proteins" target="_blank" rel="noopener noreferrer">MGnify Proteins</a>
                             </li>
-                            <li>
-                                <a href="https://euremap.eu" target="_blank">EUREMAP Project</a>
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="https://euremap.eu" target="_blank" rel="noopener noreferrer">EUREMAP Project</a>
                             </li>
                         </ul>
                     </div>
-                    <div class="vf-grid__col--span-4">
-                        <h3>Help</h3>
-                        <ul class="vf-list">
-                            <li>
-                                <a href="{% url 'docs_index' %}">Documentation</a>
+                    <div class="vf-footer__section">
+                        <h4 class="vf-footer__heading">Help</h4>
+                        <ul class="vf-footer__list">
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="{% url 'docs_index' %}">Documentation</a>
                             </li>
-                            <li>
-                                <a href="{% if request.META.SCRIPT_NAME %}{{ request.META.SCRIPT_NAME }}/api/docs{% else %}/api/docs{% endif %}"
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link"
+                                   href="{% if request.META.SCRIPT_NAME %}{{ request.META.SCRIPT_NAME }}/api/docs{% else %}/api/docs{% endif %}"
                                    target="_blank"
                                    rel="noopener noreferrer">API</a>
                             </li>
-                            <li>
-                                <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics">Contact</a>
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="https://www.ebi.ac.uk/about/contact/support/metagenomics">Contact</a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="vf-footer__section">
+                        <h4 class="vf-footer__heading">About</h4>
+                        <ul class="vf-footer__list">
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="{% url 'about' %}">About the Project</a>
+                            </li>
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="{% url 'dashboard' %}">Discovery Dashboard</a>
+                            </li>
+                            <li class="vf-footer__item">
+                                <a class="vf-footer__link" href="https://ftp.ebi.ac.uk/pub/databases/metagenomics/bgc_data_portal/archive/current" target="_blank" rel="noopener noreferrer">Downloads</a>
                             </li>
                         </ul>
                     </div>

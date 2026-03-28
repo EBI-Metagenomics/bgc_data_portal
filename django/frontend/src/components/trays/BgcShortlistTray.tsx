@@ -29,8 +29,8 @@ export function BgcShortlistTray() {
   return (
     <div
       className={cn(
-        "rounded-lg border p-3",
-        mode === "query" ? "border-query/30 bg-query/5" : "border-border"
+        "vf-card vf-card--bordered p-3",
+        mode === "query" ? "border-query/30 bg-query/5" : ""
       )}
     >
       <div className="flex items-center justify-between">

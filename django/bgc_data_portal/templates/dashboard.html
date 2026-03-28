@@ -1,15 +1,73 @@
+<!-- {#
+Copyright 2024 EMBL - European Bioinformatics Institute
+
+Licensed under the Apache License, Version 2.0 (the "License");
+You may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+#} -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="base-path" content="{{ FORCE_SCRIPT_NAME }}" />
+  <meta name="description" content="Discovery Dashboard for MGnify Biosynthetic Gene Clusters.">
   <title>Discovery Dashboard - MGnify BGCs</title>
   {% load static %}
+  <!-- VF CSS (loaded first, Tailwind utilities override where needed) -->
+  <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <!-- Dashboard CSS (Tailwind-based) -->
   <link rel="stylesheet" href="{% static 'dashboard/assets/index.css' %}" />
   <script type="module" src="{% static 'dashboard/assets/index.js' %}"></script>
 </head>
-<body>
+<body class="vf-body vf-body--full-width">
+  <header class="vf-global-header">
+    <div class="vf-global-header__inner">
+      <a href="{% url 'landing_page' %}" class="vf-logo vf-logo--inline">
+        <span class="vf-logo__text">MGnify BGCs</span>
+      </a>
+      <span class="vf-badge vf-badge--primary">beta</span>
+      <nav class="vf-navigation vf-navigation--global | vf-cluster">
+        <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
+          <li class="vf-navigation__item">
+            <a href="{% url 'search' %}" class="vf-navigation__link">Search</a>
+          </li>
+          <li class="vf-navigation__item">
+            <a href="{% url 'dashboard' %}" class="vf-navigation__link" aria-current="page">Dashboard</a>
+          </li>
+          <li class="vf-navigation__item">
+            <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>
+          </li>
+          <li class="vf-navigation__item">
+            <a href="{% if request.META.SCRIPT_NAME %}{{ request.META.SCRIPT_NAME }}/api/docs{% else %}/api/docs{% endif %}"
+               class="vf-navigation__link"
+               target="_blank"
+               rel="noopener noreferrer">API</a>
+          </li>
+          <li class="vf-navigation__item">
+            <a href="{% url 'about' %}" class="vf-navigation__link">About</a>
+          </li>
+          <li class="vf-navigation__item">
+            <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics"
+               class="vf-navigation__link">Contact</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
   <div id="dashboard-root"></div>
+
+  <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
 </body>
 </html>

@@ -45,10 +45,10 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
     .join(" > ");
 
   return (
-    <div className="space-y-4">
+    <div className="vf-stack vf-stack--400">
       <div className="flex items-start justify-between">
         <div>
-          <h4 className="font-mono font-semibold">{bgc.accession}</h4>
+          <h4 className="vf-summary__title" style={{ fontFamily: "monospace" }}>{bgc.accession}</h4>
           <p className="mt-1 text-sm text-muted-foreground">{classification}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Badge variant={bgc.is_partial ? "outline" : "secondary"}>
@@ -91,25 +91,25 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
       <Separator />
 
       {/* Scores */}
-      <div className="grid grid-cols-2 gap-4 text-xs md:grid-cols-4">
-        <div>
-          <span className="text-muted-foreground">Novelty</span>
-          <p className="font-mono font-medium">{bgc.novelty_score.toFixed(3)}</p>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Domain Novelty</span>
-          <p className="font-mono font-medium">{bgc.domain_novelty.toFixed(3)}</p>
-        </div>
+      <div className="vf-grid vf-grid__col-4" style={{ gap: "1rem", fontSize: "0.75rem" }}>
+        <article className="vf-summary">
+          <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Novelty</h3>
+          <p className="vf-summary__text font-mono font-medium">{bgc.novelty_score.toFixed(3)}</p>
+        </article>
+        <article className="vf-summary">
+          <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Domain Novelty</h3>
+          <p className="vf-summary__text font-mono font-medium">{bgc.domain_novelty.toFixed(3)}</p>
+        </article>
         {bgc.nearest_mibig_accession && (
-          <div>
-            <span className="text-muted-foreground">Nearest MIBiG</span>
-            <p className="font-mono font-medium">
+          <article className="vf-summary">
+            <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Nearest MIBiG</h3>
+            <p className="vf-summary__text font-mono font-medium">
               {bgc.nearest_mibig_accession}
             </p>
-            <p className="text-muted-foreground">
+            <p className="vf-summary__text text-muted-foreground">
               dist: {bgc.nearest_mibig_distance?.toFixed(3)}
             </p>
-          </div>
+          </article>
         )}
       </div>
 
@@ -117,7 +117,7 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
 
       {/* Domain architecture */}
       <div>
-        <h5 className="mb-2 text-sm font-medium">Domain Architecture</h5>
+        <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.5rem" }}>Domain Architecture</h5>
         <DomainArchitecture domains={bgc.domain_architecture} />
       </div>
 
@@ -126,7 +126,7 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
         <>
           <Separator />
           <div className="text-xs">
-            <h5 className="mb-1 text-sm font-medium">Parent Genome</h5>
+            <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>Parent Genome</h5>
             <div className="flex items-center gap-2">
               <span>{bgc.parent_genome.organism_name ?? bgc.parent_genome.accession}</span>
               {bgc.parent_genome.is_type_strain && (

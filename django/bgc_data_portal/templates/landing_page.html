@@ -13,10 +13,39 @@ See the License for the specific language governing permissions and
 limitations under the License.
 #} -->
 {% extends "base.html" %}
+{% block hero %}
+    <section class="vf-hero vf-hero--1200 | vf-u-fullbleed">
+        <div class="vf-hero__content | vf-box | vf-stack vf-stack--400">
+            <p class="vf-hero__kicker">MGnify</p>
+            <h1 class="vf-hero__heading">Biosynthetic Gene Clusters</h1>
+            <p class="vf-hero__subheading">Explore, analyse, and download metagenomic biosynthetic gene clusters</p>
+            <form id="keyword-form"
+                  action="{% url 'search' %}"
+                  method="get"
+                  class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
+                <input type="hidden" name="form_type" value="keyword">
+                <div class="vf-sidebar__inner">
+                    <div class="vf-form__item">
+                        <input type="search"
+                               placeholder="Search by keyword"
+                               id="search-keyword"
+                               name="keyword"
+                               class="vf-form__input" />
+                    </div>
+                    <button type="submit" class="vf-button vf-button--primary">Search</button>
+                </div>
+                <p class="vf-text-body--5">
+                    Example: <a href="#" class="vf-link" id="example-link">Polyketide</a>
+                </p>
+            </form>
+        </div>
+    </section>
+{% endblock hero %}
 {% block content %}
-    <section class="vf-grid vf-grid__col-3 | vf-card-container | vf-u-fullbleed ">
-        <div class="vf-grid__col--span-2">
-            <div class="vf-grid vf-grid__col-2">
+    <section class="vf-card-container | vf-u-fullbleed">
+        <div class="vf-card-container__inner | vf-grid vf-grid__col-3">
+            <div class="vf-grid__col--span-2">
+                <div class="vf-grid vf-grid__col-2">
                 <article class="vf-card vf-card--brand vf-card--bordered">
                     <div class="vf-card__content | vf-stack vf-stack--400">
                         <h3 class="vf-card__heading">
@@ -102,6 +131,7 @@ limitations under the License.
                     <p class="vf-card__text">Learn about the project, tools, and support behind MGnify Biosynthetic Gene Clusters.</p>
                 </div>
             </article>
+            </div>
         </div>
     </section>
 {% endblock content %}
