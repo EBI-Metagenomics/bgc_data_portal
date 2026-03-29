@@ -13,6 +13,7 @@ export interface BgcScatterParams {
   include_mibig?: boolean;
   bgc_class?: string;
   assembly_ids?: string;
+  bgc_ids?: string;
   max_points?: number;
 }
 

@@ -42,7 +42,7 @@ export function QueryLayout() {
 
       {/* BGC results + scatter */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="BGC Query Results" className="min-h-[300px]">
+        <PanelContainer title="BGC Roster" className="min-h-[300px]">
           <QueryResultsRoster />
         </PanelContainer>
         <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[300px]">

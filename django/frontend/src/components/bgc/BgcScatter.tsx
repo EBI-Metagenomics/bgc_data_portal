@@ -4,6 +4,7 @@ import { useBgcScatter } from "@/hooks/use-bgc-scatter";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useModeStore } from "@/stores/mode-store";
+import { useQueryStore } from "@/stores/query-store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,18 +26,34 @@ export function BgcScatter() {
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
   const genomeShortlist = useShortlistStore((s) => s.genomes);
+  const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
 
-  // In explore mode, limit to shortlisted/selected genomes
+  // Explore mode: filter by shortlisted/active genomes
+  const hasExploreFilter =
+    genomeShortlist.length > 0 || activeGenomeId != null;
+
   const assemblyIds =
     mode === "explore"
       ? genomeShortlist.length > 0
         ? genomeShortlist.map((g) => g.id)
         : activeGenomeId
           ? [activeGenomeId]
-          : undefined
+          : []
       : undefined;
 
-  const { data: points, isLoading } = useBgcScatter(assemblyIds, showMibig);
+  // Query mode: filter by query result BGC IDs
+  const bgcIds = mode === "query" ? resultBgcIds : undefined;
+  const hasQueryResults = mode === "query" && resultBgcIds.length > 0;
+
+  const hasData =
+    mode === "explore" ? hasExploreFilter : hasQueryResults;
+
+  const { data: points, isLoading } = useBgcScatter({
+    assemblyIds,
+    bgcIds,
+    includeMibig: showMibig,
+    enabled: hasData,
+  });
 
   const traces = useMemo(() => {
     if (!points?.length) return [];
@@ -115,6 +132,16 @@ export function BgcScatter() {
     },
     [setActiveBgcId]
   );
+
+  if (!hasData) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        {mode === "explore"
+          ? "Select or shortlist genomes to view their BGC chemical space"
+          : "Run a query to see results"}
+      </p>
+    );
+  }
 
   if (isLoading) {
     return <Skeleton className="h-64 w-full" />;

@@ -679,6 +679,7 @@ def bgc_scatter(
     include_mibig: bool = True,
     bgc_class: Optional[str] = None,
     assembly_ids: Optional[str] = None,
+    bgc_ids: Optional[str] = None,
     max_points: int = 2000,
 ):
     """UMAP scatter data for BGCs, optionally including MIBiG reference points."""
@@ -689,7 +690,11 @@ def bgc_scatter(
 
     if bgc_class:
         qs = qs.filter(classes__name__iexact=bgc_class)
-    if assembly_ids:
+    if bgc_ids:
+        ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            qs = qs.filter(id__in=ids)
+    elif assembly_ids:
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
             qs = qs.filter(contig__assembly_id__in=ids)
