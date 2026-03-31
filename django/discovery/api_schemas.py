@@ -386,3 +386,174 @@ class BgcRegionOut(Schema):
     cds_list: list[RegionCdsOut] = []
     domain_list: list[RegionDomainOut] = []
     cluster_list: list[RegionClusterOut] = []
+
+
+# ── Assessment schemas ──────────────────────────────────────────────────────
+
+
+class AssessmentAccepted(Schema):
+    task_id: str
+    asset_type: str  # "genome" | "bgc"
+
+
+class AssessmentStatusResponse(Schema):
+    status: str  # "PENDING" | "SUCCESS" | "FAILURE"
+    result: Optional[dict] = None
+
+
+# -- Genome assessment --
+
+
+class PercentileRank(Schema):
+    dimension: str
+    label: str
+    value: float
+    percentile_all: float
+    percentile_type_strain: float
+
+
+class BgcNoveltyItem(Schema):
+    bgc_id: int
+    accession: str
+    classification_l1: str = ""
+    novelty_vs_mibig: float = 0.0
+    novelty_vs_db: float = 0.0
+    domain_novelty: float = 0.0
+
+
+class RedundancyCell(Schema):
+    bgc_id: int
+    accession: str
+    classification_l1: str = ""
+    gcf_family_id: Optional[str] = None
+    gcf_member_count: int = 0
+    gcf_has_mibig: bool = False
+    gcf_has_type_strain: bool = False
+    status: str = "novel_gcf"  # "novel_gcf" | "known_gcf_no_type_strain" | "known_gcf_type_strain"
+
+
+class AssessChemicalSpacePoint(Schema):
+    bgc_id: int
+    accession: str
+    umap_x: float
+    umap_y: float
+    classification_l1: str = ""
+    nearest_mibig_distance: float = 0.0
+    is_sparse: bool = False
+
+
+class RadarReference(Schema):
+    """DB mean and 90th percentile for each GenomeScore dimension."""
+
+    dimension: str
+    label: str
+    db_mean: float
+    db_p90: float
+
+
+class GenomeAssessmentResponse(Schema):
+    assembly_id: int
+    accession: str
+    organism_name: Optional[str] = None
+    is_type_strain: bool = False
+    # Percentile ranks
+    percentile_ranks: list[PercentileRank] = []
+    # DB rank
+    db_rank: int = 0
+    db_total: int = 0
+    composite_score: float = 0.0
+    # Per-BGC novelty
+    bgc_novelty_breakdown: list[BgcNoveltyItem] = []
+    # Redundancy matrix
+    redundancy_matrix: list[RedundancyCell] = []
+    # Chemical space
+    chemical_space_points: list[AssessChemicalSpacePoint] = []
+    mibig_reference_points: list[MibigReferencePoint] = []
+    mean_nearest_mibig_distance: float = 0.0
+    sparse_fraction: float = 0.0
+    # Radar chart reference data
+    radar_references: list[RadarReference] = []
+
+
+# -- BGC assessment --
+
+
+class GcfDomainFrequency(Schema):
+    domain_acc: str
+    domain_name: str
+    frequency: float = 0.0
+    category: str = ""  # "core" | "variable" | "rare"
+
+
+class GcfTaxonomyCount(Schema):
+    taxonomy_family: str
+    count: int = 0
+
+
+class GcfMemberPoint(Schema):
+    bgc_id: int
+    umap_x: float
+    umap_y: float
+    is_type_strain: bool = False
+    distance_to_representative: float = 0.0
+    accession: str = ""
+
+
+class GcfContext(Schema):
+    gcf_id: int
+    family_id: str
+    member_count: int = 0
+    mibig_count: int = 0
+    mean_novelty: float = 0.0
+    known_chemistry_annotation: Optional[str] = None
+    mibig_accession: Optional[str] = None
+    domain_frequency: list[GcfDomainFrequency] = []
+    taxonomy_distribution: list[GcfTaxonomyCount] = []
+    member_points: list[GcfMemberPoint] = []
+
+
+class DomainDifferential(Schema):
+    domain_acc: str
+    domain_name: str
+    in_submitted: bool = True
+    gcf_frequency: float = 0.0
+    category: str = ""  # "core" | "variable" | "absent"
+
+
+class NoveltyDecomposition(Schema):
+    sequence_novelty: float = 0.0
+    chemistry_novelty: float = 0.0
+    architecture_novelty: float = 0.0
+
+
+class AssessNearestNeighborPoint(Schema):
+    bgc_id: Optional[int] = None
+    mibig_accession: Optional[str] = None
+    umap_x: float = 0.0
+    umap_y: float = 0.0
+    distance: float = 0.0
+    label: str = ""
+    is_mibig: bool = False
+
+
+class BgcAssessmentResponse(Schema):
+    bgc_id: int
+    accession: str
+    classification_l1: str = ""
+    classification_l2: Optional[str] = None
+    # GCF placement
+    gcf_context: Optional[GcfContext] = None
+    distance_to_gcf_representative: Optional[float] = None
+    is_novel_singleton: bool = False
+    # Domain differential
+    domain_differential: list[DomainDifferential] = []
+    # Novelty decomposition
+    novelty: NoveltyDecomposition = NoveltyDecomposition()
+    # Chemical space
+    submitted_point: Optional[AssessChemicalSpacePoint] = None
+    nearest_neighbors: list[AssessNearestNeighborPoint] = []
+    mibig_reference_points: list[MibigReferencePoint] = []
+    # Domain architecture for comparison
+    submitted_domains: list[DomainArchitectureItem] = []
+    nearest_mibig_domains: list[DomainArchitectureItem] = []
+    nearest_mibig_accession: Optional[str] = None

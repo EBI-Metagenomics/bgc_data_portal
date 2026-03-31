@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type DashboardMode = "explore" | "query";
+export type DashboardMode = "explore" | "query" | "assess";
 
 interface ModeState {
   mode: DashboardMode;

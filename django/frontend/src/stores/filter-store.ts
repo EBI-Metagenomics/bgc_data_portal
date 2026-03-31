@@ -16,6 +16,7 @@ interface FilterState {
   biomeLineage: string;
   bgcAccession: string;
   assemblyAccession: string;
+  assemblyIds: string;
 
   setTypeStrainOnly: (v: boolean) => void;
   setTaxonomy: (rank: string, value: string) => void;
@@ -25,6 +26,7 @@ interface FilterState {
   setBiomeLineage: (v: string) => void;
   setBgcAccession: (v: string) => void;
   setAssemblyAccession: (v: string) => void;
+  setAssemblyIds: (v: string) => void;
   clearFilters: () => void;
 }
 
@@ -44,6 +46,7 @@ const initialState = {
   biomeLineage: "",
   bgcAccession: "",
   assemblyAccession: "",
+  assemblyIds: "",
 };
 
 const TAXONOMY_RANKS = [
@@ -85,5 +88,6 @@ export const useFilterStore = create<FilterState>((set) => ({
   setBiomeLineage: (v) => set({ biomeLineage: v }),
   setBgcAccession: (v) => set({ bgcAccession: v }),
   setAssemblyAccession: (v) => set({ assemblyAccession: v }),
+  setAssemblyIds: (v) => set({ assemblyIds: v }),
   clearFilters: () => set(initialState),
 }));

@@ -2,6 +2,7 @@ import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { ExploreLayout } from "./panels/ExploreLayout";
 import { QueryLayout } from "./panels/QueryLayout";
+import { AssessLayout } from "./panels/AssessLayout";
 import { useModeStore } from "@/stores/mode-store";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,13 @@ export function DashboardShell() {
         </div>
 
         {/* Main content */}
-        {mode === "explore" ? <ExploreLayout /> : <QueryLayout />}
+        {mode === "explore" ? (
+          <ExploreLayout />
+        ) : mode === "query" ? (
+          <QueryLayout />
+        ) : (
+          <AssessLayout />
+        )}
       </div>
     </div>
   );

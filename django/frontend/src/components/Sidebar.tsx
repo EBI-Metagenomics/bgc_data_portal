@@ -3,16 +3,27 @@ import { FilterPanel } from "@/components/filters/FilterPanel";
 import { WeightTuner } from "@/components/WeightTuner";
 import { SidebarShortlists } from "@/components/trays/SidebarShortlists";
 import { Separator } from "@/components/ui/separator";
+import { useModeStore } from "@/stores/mode-store";
 
 export function Sidebar() {
+  const mode = useModeStore((s) => s.mode);
+
   return (
     <aside className="hidden w-80 border-r xl:block">
       <ScrollArea className="h-full">
         <div className="space-y-4 p-4">
-          <FilterPanel />
-          <Separator />
-          <WeightTuner />
-          <Separator />
+          {mode !== "assess" && (
+            <>
+              <FilterPanel />
+              <Separator />
+            </>
+          )}
+          {mode !== "assess" && (
+            <>
+              <WeightTuner />
+              <Separator />
+            </>
+          )}
           <SidebarShortlists />
         </div>
       </ScrollArea>

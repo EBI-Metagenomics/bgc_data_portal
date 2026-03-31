@@ -1,0 +1,108 @@
+import { useAssessStore } from "@/stores/assess-store";
+import { useGenomeAssessment } from "@/hooks/use-genome-assessment";
+import { PanelContainer } from "@/components/panels/PanelContainer";
+import { AssessmentLoading } from "./AssessmentLoading";
+import { GenomeRankCard } from "./GenomeRankCard";
+import { PriorityRadar } from "./PriorityRadar";
+import { PercentileCharts } from "./PercentileCharts";
+import { BgcNoveltyStrip } from "./BgcNoveltyStrip";
+import { RedundancyMatrix } from "./RedundancyMatrix";
+import { ChemicalSpaceMap } from "./ChemicalSpaceMap";
+import { CrossModeActions } from "./CrossModeActions";
+import { AssessmentExportButton } from "./AssessmentExportButton";
+import { AlertCircle } from "lucide-react";
+
+export function GenomeAssessmentView() {
+  const assetLabel = useAssessStore((s) => s.assetLabel);
+  const { isLoading, isError, result, retry } = useGenomeAssessment();
+
+  if (isLoading) {
+    return <AssessmentLoading label={assetLabel} />;
+  }
+
+  if (isError || !result) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-muted-foreground">
+        <AlertCircle className="h-10 w-10" />
+        <p className="text-sm">Assessment failed.</p>
+        <button
+          onClick={retry}
+          className="text-xs underline hover:text-foreground"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Header bar with name and actions */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">
+            Genome Assessment: {result.organism_name || result.accession}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {result.accession}
+            {result.is_type_strain && (
+              <span className="ml-2 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+                Type Strain
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <AssessmentExportButton />
+          <CrossModeActions assetType="genome" assetId={result.assembly_id} />
+        </div>
+      </div>
+
+      {/* Top row: Rank Card + Radar */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <PanelContainer title="Priority Ranking">
+          <GenomeRankCard
+            dbRank={result.db_rank}
+            dbTotal={result.db_total}
+            compositeScore={result.composite_score}
+            percentileRanks={result.percentile_ranks}
+          />
+        </PanelContainer>
+        <PanelContainer title="Priority Score Radar" className="min-h-[350px]">
+          <PriorityRadar
+            percentileRanks={result.percentile_ranks}
+            radarReferences={result.radar_references}
+          />
+        </PanelContainer>
+      </div>
+
+      {/* Percentile distribution charts */}
+      <PanelContainer title="Score Percentile Distributions">
+        <PercentileCharts
+          percentileRanks={result.percentile_ranks}
+          radarReferences={result.radar_references}
+        />
+      </PanelContainer>
+
+      {/* BGC Novelty Strip */}
+      <PanelContainer title="BGC Novelty Breakdown" className="min-h-[300px]">
+        <BgcNoveltyStrip bgcNovelty={result.bgc_novelty_breakdown} />
+      </PanelContainer>
+
+      {/* Redundancy Matrix */}
+      <PanelContainer title="Redundancy Matrix" className="min-h-[300px]">
+        <RedundancyMatrix matrix={result.redundancy_matrix} />
+      </PanelContainer>
+
+      {/* Chemical Space Map */}
+      <PanelContainer title="Chemical Space Map" className="min-h-[400px]">
+        <ChemicalSpaceMap
+          points={result.chemical_space_points}
+          mibigPoints={result.mibig_reference_points}
+          meanMibigDistance={result.mean_nearest_mibig_distance}
+          sparseFraction={result.sparse_fraction}
+        />
+      </PanelContainer>
+    </>
+  );
+}

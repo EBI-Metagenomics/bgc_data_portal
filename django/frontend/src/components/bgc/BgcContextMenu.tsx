@@ -8,7 +8,8 @@ import { useShortlistStore } from "@/stores/shortlist-store";
 import { useModeStore } from "@/stores/mode-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useSelectionStore } from "@/stores/selection-store";
-import { Plus, Replace, Search } from "lucide-react";
+import { useAssessStore } from "@/stores/assess-store";
+import { Plus, Replace, Search, Microscope } from "lucide-react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
@@ -24,6 +25,7 @@ export function BgcContextMenu({ children, bgcId, label }: BgcContextMenuProps) 
   const setMode = useModeStore((s) => s.setMode);
   const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
+  const startAssessment = useAssessStore((s) => s.startAssessment);
 
   return (
     <ContextMenu>
@@ -51,6 +53,15 @@ export function BgcContextMenu({ children, bgcId, label }: BgcContextMenuProps) 
         >
           <Search className="mr-2 h-4 w-4" />
           Find similar BGCs
+        </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => {
+            startAssessment("bgc", bgcId, label);
+            setMode("assess");
+          }}
+        >
+          <Microscope className="mr-2 h-4 w-4" />
+          Evaluate BGC
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

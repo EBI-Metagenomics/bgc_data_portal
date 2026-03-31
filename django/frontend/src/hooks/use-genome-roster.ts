@@ -30,6 +30,7 @@ export function useGenomeRoster() {
     biome_lineage: filters.biomeLineage || undefined,
     bgc_accession: filters.bgcAccession || undefined,
     assembly_accession: filters.assemblyAccession || undefined,
+    assembly_ids: filters.assemblyIds || undefined,
     w_diversity: weights.w_diversity,
     w_novelty: weights.w_novelty,
     w_density: weights.w_density,

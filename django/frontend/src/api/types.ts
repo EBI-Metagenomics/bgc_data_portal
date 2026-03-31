@@ -372,3 +372,158 @@ export interface BgcStatsResponse {
 export interface ShortlistExportRequest {
   ids: number[];
 }
+
+// ── Assessment schemas ───────────────────────────────────────────────────
+
+export interface AssessmentAccepted {
+  task_id: string;
+  asset_type: "genome" | "bgc";
+}
+
+export interface AssessmentStatusResponse {
+  status: "PENDING" | "SUCCESS" | "FAILURE" | "UNKNOWN";
+  result: GenomeAssessmentResult | BgcAssessmentResult | null;
+}
+
+// -- Genome assessment --
+
+export interface PercentileRank {
+  dimension: string;
+  label: string;
+  value: number;
+  percentile_all: number;
+  percentile_type_strain: number;
+}
+
+export interface BgcNoveltyItem {
+  bgc_id: number;
+  accession: string;
+  classification_l1: string;
+  novelty_vs_mibig: number;
+  novelty_vs_db: number;
+  domain_novelty: number;
+}
+
+export interface RedundancyCell {
+  bgc_id: number;
+  accession: string;
+  classification_l1: string;
+  gcf_family_id: string | null;
+  gcf_member_count: number;
+  gcf_has_mibig: boolean;
+  gcf_has_type_strain: boolean;
+  status: "novel_gcf" | "known_gcf_no_type_strain" | "known_gcf_type_strain";
+}
+
+export interface AssessChemicalSpacePoint {
+  bgc_id: number;
+  accession: string;
+  umap_x: number;
+  umap_y: number;
+  classification_l1: string;
+  nearest_mibig_distance: number;
+  is_sparse: boolean;
+}
+
+export interface RadarReference {
+  dimension: string;
+  label: string;
+  db_mean: number;
+  db_p90: number;
+}
+
+export interface GenomeAssessmentResult {
+  assembly_id: number;
+  accession: string;
+  organism_name: string | null;
+  is_type_strain: boolean;
+  percentile_ranks: PercentileRank[];
+  db_rank: number;
+  db_total: number;
+  composite_score: number;
+  bgc_novelty_breakdown: BgcNoveltyItem[];
+  redundancy_matrix: RedundancyCell[];
+  chemical_space_points: AssessChemicalSpacePoint[];
+  mibig_reference_points: MibigReferencePoint[];
+  mean_nearest_mibig_distance: number;
+  sparse_fraction: number;
+  radar_references: RadarReference[];
+}
+
+// -- BGC assessment --
+
+export interface GcfDomainFrequency {
+  domain_acc: string;
+  domain_name: string;
+  frequency: number;
+  category: "core" | "variable" | "rare";
+}
+
+export interface GcfTaxonomyCount {
+  taxonomy_family: string;
+  count: number;
+}
+
+export interface GcfMemberPoint {
+  bgc_id: number;
+  umap_x: number;
+  umap_y: number;
+  is_type_strain: boolean;
+  distance_to_representative: number;
+  accession: string;
+}
+
+export interface GcfContext {
+  gcf_id: number;
+  family_id: string;
+  member_count: number;
+  mibig_count: number;
+  mean_novelty: number;
+  known_chemistry_annotation: string | null;
+  mibig_accession: string | null;
+  domain_frequency: GcfDomainFrequency[];
+  taxonomy_distribution: GcfTaxonomyCount[];
+  member_points: GcfMemberPoint[];
+}
+
+export interface DomainDifferential {
+  domain_acc: string;
+  domain_name: string;
+  in_submitted: boolean;
+  gcf_frequency: number;
+  category: "core" | "variable" | "absent";
+}
+
+export interface NoveltyDecomposition {
+  sequence_novelty: number;
+  chemistry_novelty: number;
+  architecture_novelty: number;
+}
+
+export interface AssessNearestNeighborPoint {
+  bgc_id: number | null;
+  mibig_accession: string | null;
+  umap_x: number;
+  umap_y: number;
+  distance: number;
+  label: string;
+  is_mibig: boolean;
+}
+
+export interface BgcAssessmentResult {
+  bgc_id: number;
+  accession: string;
+  classification_l1: string;
+  classification_l2: string | null;
+  gcf_context: GcfContext | null;
+  distance_to_gcf_representative: number | null;
+  is_novel_singleton: boolean;
+  domain_differential: DomainDifferential[];
+  novelty: NoveltyDecomposition;
+  submitted_point: AssessChemicalSpacePoint | null;
+  nearest_neighbors: AssessNearestNeighborPoint[];
+  mibig_reference_points: MibigReferencePoint[];
+  submitted_domains: DomainArchitectureItem[];
+  nearest_mibig_domains: DomainArchitectureItem[];
+  nearest_mibig_accession: string | null;
+}

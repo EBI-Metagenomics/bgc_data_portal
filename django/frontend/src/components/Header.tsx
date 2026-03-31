@@ -44,6 +44,21 @@ export function Header() {
                   Query BGC / Chemistry
                 </a>
               </li>
+              <li className="vf-tabs__item">
+                <a
+                  className={cn(
+                    "vf-tabs__link",
+                    mode === "assess" && "is-active"
+                  )}
+                  href="#assess"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMode("assess");
+                  }}
+                >
+                  Asset Evaluation
+                </a>
+              </li>
             </ul>
           </div>
         </div>

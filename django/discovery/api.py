@@ -36,6 +36,8 @@ from discovery.models import (
 from discovery.services.scoring import compute_composite_priority
 from discovery.services.stats import compute_bgc_stats, compute_genome_stats
 from discovery.api_schemas import (
+    AssessmentAccepted,
+    AssessmentStatusResponse,
     BgcClassCount,
     BgcClassOption,
     BgcDetail,
@@ -1650,4 +1652,95 @@ def export_bgc_shortlist(request, body: ShortlistExportRequest):
     content = "\n".join(records)
     response = HttpResponse(content, content_type="application/genbank")
     response["Content-Disposition"] = 'attachment; filename="bgc_shortlist.gbk"'
+    return response
+
+
+# ── Assessment endpoints ────────────────────────────────────────────────────
+
+
+@discovery_router.post(
+    "/assess/genome/{assembly_id}/",
+    response={202: AssessmentAccepted},
+    tags=["Assessment"],
+)
+def assess_genome(request, assembly_id: int, body: GenomeWeightParams = None):
+    """Start an async genome assessment task."""
+    if not Assembly.objects.filter(pk=assembly_id).exists():
+        raise HttpError(404, "Assembly not found")
+
+    weights = {
+        "w_diversity": body.w_diversity if body else 0.30,
+        "w_novelty": body.w_novelty if body else 0.45,
+        "w_density": body.w_density if body else 0.25,
+    }
+
+    from discovery.tasks import assess_genome as assess_genome_task
+
+    result = assess_genome_task.delay(assembly_id, weights)
+    return 202, AssessmentAccepted(task_id=result.id, asset_type="genome")
+
+
+@discovery_router.post(
+    "/assess/bgc/{bgc_id}/",
+    response={202: AssessmentAccepted},
+    tags=["Assessment"],
+)
+def assess_bgc(request, bgc_id: int):
+    """Start an async BGC assessment task."""
+    if not Bgc.objects.filter(pk=bgc_id).exists():
+        raise HttpError(404, "BGC not found")
+
+    from discovery.tasks import assess_bgc as assess_bgc_task
+
+    result = assess_bgc_task.delay(bgc_id)
+    return 202, AssessmentAccepted(task_id=result.id, asset_type="bgc")
+
+
+@discovery_router.get(
+    "/assess/status/{task_id}/",
+    response=AssessmentStatusResponse,
+    tags=["Assessment"],
+)
+def assess_status(request, task_id: str):
+    """Poll for assessment task status and results."""
+    from mgnify_bgcs.cache_utils import get_job_status
+
+    status_data = get_job_status(task_id=task_id)
+    return AssessmentStatusResponse(
+        status=status_data.get("status", "UNKNOWN"),
+        result=status_data.get("result"),
+    )
+
+
+@discovery_router.get(
+    "/assess/genome/{assembly_id}/similar-genomes/",
+    response=list[int],
+    tags=["Assessment"],
+)
+def similar_genomes(request, assembly_id: int):
+    """Return top 10 most similar genome IDs for cross-mode navigation."""
+    if not Assembly.objects.filter(pk=assembly_id).exists():
+        raise HttpError(404, "Assembly not found")
+
+    from discovery.services.assessment import find_similar_genomes
+
+    return find_similar_genomes(assembly_id, k=10)
+
+
+@discovery_router.get(
+    "/assess/export/{task_id}/",
+    tags=["Assessment"],
+)
+def export_assessment(request, task_id: str):
+    """Download assessment results as a JSON file."""
+    from mgnify_bgcs.cache_utils import get_job_status
+
+    status_data = get_job_status(task_id=task_id)
+    if status_data.get("status") != "SUCCESS":
+        raise HttpError(404, "Assessment not found or not yet complete")
+
+    result = status_data.get("result", {})
+    content = json.dumps(result, indent=2, default=str)
+    response = HttpResponse(content, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="assessment_{task_id[:8]}.json"'
     return response
