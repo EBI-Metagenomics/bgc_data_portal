@@ -619,7 +619,7 @@ def bgc_region(request, bgc_id: int):
             start_position__lte=window_end,
             end_position__gte=window_start,
         )
-        .prefetch_related("domains")
+        .prefetch_related("domains", "seq")
         .order_by("start_position")
     )
 
@@ -676,7 +676,7 @@ def bgc_region(request, bgc_id: int):
                     if rep
                     else None
                 ),
-                sequence=cds.sequence,
+                sequence=cds.seq.get_sequence() if hasattr(cds, "seq") else "",
                 pfam=pfam_rows,
             )
         )
@@ -1508,41 +1508,18 @@ def export_genome_shortlist(request, body: ShortlistExportRequest):
 
 @discovery_router.post("/shortlist/bgc/export/")
 def export_bgc_shortlist(request, body: ShortlistExportRequest):
-    """Export BGC shortlist as CSV with scores and classification."""
+    """Export BGC shortlist as a multi-record GenBank file."""
     if not body.ids:
         raise HttpError(400, "No BGC IDs provided")
     if len(body.ids) > 20:
         raise HttpError(400, "Maximum 20 BGCs per export")
 
-    bgcs = DashboardBgc.objects.filter(id__in=body.ids).select_related("genome")
+    from discovery.services.gbk import build_multi_bgc_gbk
 
-    buf = StringIO()
-    writer = csv.writer(buf)
-    writer.writerow([
-        "bgc_accession", "classification_l1", "classification_l2", "classification_l3",
-        "size_kb", "novelty_score", "domain_novelty", "is_partial",
-        "nearest_mibig_accession", "nearest_mibig_distance",
-        "umap_x", "umap_y",
-        "assembly_accession", "organism_name", "taxonomy_family",
-        "contig_accession", "start_position", "end_position",
-    ])
+    gbk_content = build_multi_bgc_gbk(body.ids)
 
-    for bgc in bgcs:
-        genome = bgc.genome
-        writer.writerow([
-            bgc.bgc_accession,
-            bgc.classification_l1, bgc.classification_l2, bgc.classification_l3,
-            bgc.size_kb, bgc.novelty_score, bgc.domain_novelty, bgc.is_partial,
-            bgc.nearest_mibig_accession, bgc.nearest_mibig_distance,
-            bgc.umap_x, bgc.umap_y,
-            genome.assembly_accession if genome else "",
-            genome.organism_name if genome else "",
-            genome.taxonomy_family if genome else "",
-            bgc.contig_accession, bgc.start_position, bgc.end_position,
-        ])
-
-    response = HttpResponse(buf.getvalue(), content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="bgc_shortlist.csv"'
+    response = HttpResponse(gbk_content, content_type="application/octet-stream")
+    response["Content-Disposition"] = 'attachment; filename="bgc_shortlist.gbk"'
     return response
 
 

@@ -21,9 +21,12 @@ from django.db import connection, transaction
 from discovery.models import (
     BgcDomain,
     BgcEmbedding,
+    CdsSequence,
+    ContigSequence,
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
+    DashboardContig,
     DashboardDomain,
     DashboardGCF,
     DashboardGenome,
@@ -117,12 +120,17 @@ _ISOLATION_SOURCES = [
 ]
 
 _AA_ALPHABET = "ACDEFGHIKLMNPQRSTVWY"
+_NT_ALPHABET = "ACGT"
 
 _GENE_CALLERS = ["Prodigal", "Pyrodigal", "MetaProdigal"]
 
 
 def _random_aa(length: int) -> str:
     return "".join(random.choices(_AA_ALPHABET, k=length))
+
+
+def _random_nt(length: int) -> str:
+    return "".join(random.choices(_NT_ALPHABET, k=length))
 
 
 def _sha256(s: str) -> str:
@@ -179,9 +187,12 @@ class Command(BaseCommand):
             self.stdout.write("Clearing discovery tables...")
             # Delete in FK-safe order
             for model in [
-                BgcDomain, DashboardCds, BgcEmbedding, ProteinEmbedding,
+                CdsSequence, BgcDomain, DashboardCds,
+                BgcEmbedding, ProteinEmbedding,
                 DashboardNaturalProduct, DashboardMibigReference,
-                DashboardBgc, DashboardGCF, DashboardGenome,
+                DashboardBgc,
+                ContigSequence, DashboardContig,
+                DashboardGCF, DashboardGenome,
                 DashboardBgcClass, DashboardDomain, PrecomputedStats,
             ]:
                 model.objects.all().delete()
@@ -257,6 +268,42 @@ class Command(BaseCommand):
         gcf_list = list(DashboardGCF.objects.all())
         self.stdout.write(f"  {len(gcf_list)} DashboardGCF rows.")
 
+        # ── 2.5. DashboardContig + ContigSequence ──────────────────────
+        self.stdout.write("Creating contigs with sequences...")
+        all_contigs = []
+        contig_seqs = []
+        contig_map = {}  # (source_assembly_id, contig_idx) -> DashboardContig
+        contig_counter = 0
+
+        for genome in genomes:
+            n_contigs = 3  # enough for bi // 4 grouping (up to 12 BGCs -> indices 0,1,2)
+            for ci in range(n_contigs):
+                contig_acc = f"contig_{genome.source_assembly_id}_{ci}"
+                seq_len = random.randint(500000, 1000000)
+                raw_seq = _random_nt(seq_len)
+                contig = DashboardContig(
+                    genome=genome,
+                    accession=contig_acc,
+                    length=seq_len,
+                    source_contig_id=70000 + contig_counter,
+                )
+                all_contigs.append(contig)
+                contig_map[(genome.source_assembly_id, ci)] = (contig, raw_seq)
+                contig_counter += 1
+
+        DashboardContig.objects.bulk_create(all_contigs)
+
+        for contig, raw_seq in contig_map.values():
+            contig_seqs.append(ContigSequence(
+                contig=contig,
+                data=ContigSequence.compress_sequence(raw_seq),
+            ))
+        ContigSequence.objects.bulk_create(contig_seqs)
+        self.stdout.write(
+            f"  {len(all_contigs)} DashboardContig rows, "
+            f"{len(contig_seqs)} ContigSequence rows."
+        )
+
         # ── 3. DashboardBgc ─────────────────────────────────────────────
         all_bgcs = []
         bgc_counter = 0
@@ -280,11 +327,14 @@ class Command(BaseCommand):
                     nearest_acc = f"BGC{random.randint(1, len(_MIBIG_COMPOUNDS)):07d}"
 
                 gcf = random.choice(gcf_list)
+                contig_idx = bi // 4
+                contig_obj, _ = contig_map[(genome.source_assembly_id, contig_idx)]
 
                 all_bgcs.append(DashboardBgc(
                     genome=genome,
+                    contig=contig_obj,
                     bgc_accession=f"MGYB{10000 + bgc_counter:012d}",
-                    contig_accession=f"contig_{genome.source_assembly_id}_{bi // 4}",
+                    contig_accession=f"contig_{genome.source_assembly_id}_{contig_idx}",
                     start_position=start,
                     end_position=start + bgc_size,
                     classification_path=_build_classification_path(bgc_class, l2, l3),
@@ -366,8 +416,8 @@ class Command(BaseCommand):
                     protein_length=aa_len,
                     gene_caller=random.choice(_GENE_CALLERS),
                     cluster_representative=cluster_rep,
-                    sequence=aa_seq,
                 )
+                cds._aa_seq = aa_seq  # stash for CdsSequence creation
                 all_cds.append(cds)
 
                 # Domains on this CDS
@@ -395,12 +445,24 @@ class Command(BaseCommand):
 
         # Bulk create CDS first (to get IDs)
         DashboardCds.objects.bulk_create(all_cds)
+
+        # Create CdsSequence rows (zlib-compressed amino acid sequences)
+        all_cds_seqs = [
+            CdsSequence(
+                cds=cds,
+                data=CdsSequence.compress_sequence(cds._aa_seq),
+            )
+            for cds in all_cds
+        ]
+        CdsSequence.objects.bulk_create(all_cds_seqs)
+
         # Fix domain FK references to the created CDS objects
         for dom in all_domains:
             dom.cds = dom.cds  # already points to the right object after bulk_create
         BgcDomain.objects.bulk_create(all_domains, ignore_conflicts=True)
         self.stdout.write(
             f"  {len(all_cds)} DashboardCds rows, "
+            f"{len(all_cds_seqs)} CdsSequence rows, "
             f"{len(all_domains)} BgcDomain rows."
         )
 
@@ -427,7 +489,7 @@ class Command(BaseCommand):
             seen_proteins.add(cds.protein_id_str)
             prot_embeddings.append(ProteinEmbedding(
                 source_protein_id=40000 + i,
-                protein_sha256=_sha256(cds.sequence),
+                protein_sha256=_sha256(cds._aa_seq),
                 vector=np.random.randn(1152).astype(np.float32).tolist(),
             ))
         ProteinEmbedding.objects.bulk_create(prot_embeddings)
@@ -464,30 +526,97 @@ class Command(BaseCommand):
 
         # ── 8. DashboardMibigReference (with dashboard_bgc link) ───────
         self.stdout.write("Creating MIBiG references...")
-        # Create MIBiG BGC entries first so we can link them
-        mibig_bgcs = []
+        # Create MIBiG contigs first (one per compound for simplicity)
         mibig_genome = genomes[0]  # attach to first genome for simplicity
+        mibig_contigs = []
+        mibig_contig_seqs_data = []
+        for i, (compound, _) in enumerate(_MIBIG_COMPOUNDS):
+            contig_acc = f"mibig_contig_{i}"
+            seq_len = random.randint(100000, 500000)
+            raw_seq = _random_nt(seq_len)
+            contig = DashboardContig(
+                genome=mibig_genome,
+                accession=contig_acc,
+                length=seq_len,
+                source_contig_id=80000 + i,
+            )
+            mibig_contigs.append(contig)
+            mibig_contig_seqs_data.append(raw_seq)
+        DashboardContig.objects.bulk_create(mibig_contigs)
+        ContigSequence.objects.bulk_create([
+            ContigSequence(
+                contig=contig,
+                data=ContigSequence.compress_sequence(raw_seq),
+            )
+            for contig, raw_seq in zip(mibig_contigs, mibig_contig_seqs_data)
+        ])
+
+        # Create MIBiG BGC entries with contigs linked
+        mibig_bgcs = []
         for i, (compound, bgc_class) in enumerate(_MIBIG_COMPOUNDS):
             ux, uy = _clustered_umap(bgc_class, jitter=1.5)
+            bgc_size = random.randint(10000, 80000)
+            start = random.randint(1000, 50000)
             mibig_bgcs.append(DashboardBgc(
                 genome=mibig_genome,
+                contig=mibig_contigs[i],
                 bgc_accession=f"MIBIG_{compound.upper().replace(' ', '_')[:20]}",
-                contig_accession="mibig_contig",
-                start_position=i * 100000,
-                end_position=i * 100000 + random.randint(10000, 80000),
+                contig_accession=mibig_contigs[i].accession,
+                start_position=start,
+                end_position=start + bgc_size,
                 classification_path=_build_classification_path(bgc_class),
                 classification_l1=bgc_class,
                 novelty_score=0.0,
                 domain_novelty=0.0,
-                size_kb=round(random.uniform(10, 80), 2),
+                size_kb=round(bgc_size / 1000.0, 2),
                 is_mibig=True,
+                is_validated=True,
                 umap_x=ux,
                 umap_y=uy,
                 detector_names="MIBiG",
                 source_bgc_id=50000 + i,
-                source_contig_id=60000,
+                source_contig_id=80000 + i,
             ))
         DashboardBgc.objects.bulk_create(mibig_bgcs)
+
+        # Create CDS + CdsSequence for MIBiG BGCs
+        mibig_cds_list = []
+        for bgc in mibig_bgcs:
+            bgc_length = bgc.end_position - bgc.start_position
+            n_cds = random.randint(3, 8)
+            slot_size = bgc_length // n_cds
+            for ci in range(n_cds):
+                slot_start = bgc.start_position + ci * slot_size
+                gene_len = min(random.randint(300, 1200), slot_size - 50)
+                gene_len = max(gene_len, 150)
+                margin = max(11, slot_size - gene_len - 10)
+                cds_start = slot_start + random.randint(10, margin)
+                cds_end = min(cds_start + gene_len, bgc.end_position)
+                cds_start = max(cds_start, bgc.start_position)
+                aa_len = gene_len // 3
+                aa_seq = _random_aa(aa_len)
+
+                cds = DashboardCds(
+                    bgc=bgc,
+                    protein_id_str=f"MIBIG_PROT_{bgc.source_bgc_id}_{ci}",
+                    start_position=cds_start,
+                    end_position=cds_end,
+                    strand=random.choice([1, -1]),
+                    protein_length=aa_len,
+                    gene_caller="Prodigal",
+                    cluster_representative="",
+                )
+                cds._aa_seq = aa_seq
+                mibig_cds_list.append(cds)
+
+        DashboardCds.objects.bulk_create(mibig_cds_list)
+        CdsSequence.objects.bulk_create([
+            CdsSequence(
+                cds=cds,
+                data=CdsSequence.compress_sequence(cds._aa_seq),
+            )
+            for cds in mibig_cds_list
+        ])
 
         mibig_refs = []
         for i, (compound, bgc_class) in enumerate(_MIBIG_COMPOUNDS):
@@ -514,7 +643,8 @@ class Command(BaseCommand):
 
         self.stdout.write(
             f"  {len(mibig_refs)} DashboardMibigReference rows "
-            f"(linked to {len(mibig_bgcs)} MIBiG DashboardBgc rows)."
+            f"(linked to {len(mibig_bgcs)} MIBiG DashboardBgc rows, "
+            f"{len(mibig_cds_list)} MIBiG CDS rows)."
         )
 
         # ── 9. DashboardBgcClass + DashboardDomain (precomputed counts)
@@ -604,11 +734,16 @@ class Command(BaseCommand):
 
         # ── Summary ─────────────────────────────────────────────────────
         total_bgcs = len(all_bgcs) + len(mibig_bgcs)
+        total_cds = len(all_cds) + len(mibig_cds_list)
+        total_contigs = len(all_contigs) + len(mibig_contigs)
         self.stdout.write(self.style.SUCCESS(
-            f"\nDone! Seeded all 12 discovery tables:\n"
+            f"\nDone! Seeded all discovery tables:\n"
             f"  DashboardGenome:          {len(genomes)}\n"
+            f"  DashboardContig:          {total_contigs}\n"
+            f"  ContigSequence:           {total_contigs}\n"
             f"  DashboardBgc:             {total_bgcs} ({len(mibig_bgcs)} MIBiG)\n"
-            f"  DashboardCds:             {len(all_cds)}\n"
+            f"  DashboardCds:             {total_cds}\n"
+            f"  CdsSequence:              {total_cds}\n"
             f"  BgcDomain:                {len(all_domains)}\n"
             f"  BgcEmbedding:             {len(bgc_embeddings) + len(mibig_embs)}\n"
             f"  ProteinEmbedding:         {len(prot_embeddings)}\n"

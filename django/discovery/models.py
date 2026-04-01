@@ -10,6 +10,8 @@ extension and creates functional GiST indexes so these columns support native
 hierarchical queries (``<@``, ``@>``, ``subpath``, ``nlevel``) when cast to ``ltree``.
 """
 
+import zlib
+
 from django.db import models
 from pgvector.django import HalfVectorField, HnswIndex, VectorField
 
@@ -100,6 +102,59 @@ class DashboardGenome(models.Model):
         return self.assembly_accession
 
 
+# ── Contig ──────────────────────────────────────────────────────────────────────
+
+
+class DashboardContig(models.Model):
+    """Contig within a genome — multiple BGCs may share the same contig."""
+
+    id = models.BigAutoField(primary_key=True)
+    genome = models.ForeignKey(
+        DashboardGenome,
+        on_delete=models.CASCADE,
+        related_name="contigs",
+        db_index=True,
+    )
+    accession = models.CharField(max_length=255, db_index=True)
+    length = models.IntegerField(default=0)
+
+    # Cross-reference to mgnify_bgcs.Contig (integer, NOT a Django FK)
+    source_contig_id = models.IntegerField(unique=True, db_index=True)
+
+    class Meta:
+        db_table = "discovery_contig"
+
+    def __str__(self):
+        return self.accession
+
+
+class ContigSequence(models.Model):
+    """On-demand nucleotide sequence for a contig — zlib-compressed."""
+
+    contig = models.OneToOneField(
+        DashboardContig,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="seq",
+    )
+    data = models.BinaryField(help_text="zlib-compressed nucleotide sequence")
+
+    class Meta:
+        db_table = "discovery_contig_sequence"
+
+    def get_sequence(self) -> str:
+        if self.data:
+            return zlib.decompress(bytes(self.data)).decode("utf-8")
+        return ""
+
+    @staticmethod
+    def compress_sequence(seq: str) -> bytes:
+        return zlib.compress(seq.encode("utf-8"))
+
+    def __str__(self):
+        return f"Sequence for {self.contig_id}"
+
+
 # ── BGC ─────────────────────────────────────────────────────────────────────────
 
 
@@ -113,6 +168,16 @@ class DashboardBgc(models.Model):
         DashboardGenome,
         on_delete=models.CASCADE,
         related_name="bgcs",
+        db_index=True,
+    )
+
+    # Parent contig (nullable — populated by data loading)
+    contig = models.ForeignKey(
+        DashboardContig,
+        on_delete=models.CASCADE,
+        related_name="bgcs",
+        null=True,
+        blank=True,
         db_index=True,
     )
 
@@ -252,7 +317,6 @@ class DashboardCds(models.Model):
     protein_length = models.IntegerField(default=0)
     gene_caller = models.CharField(max_length=100, blank=True, default="")
     cluster_representative = models.CharField(max_length=64, blank=True, default="")
-    sequence = models.TextField(blank=True, default="", help_text="Amino acid sequence")
 
     class Meta:
         db_table = "discovery_cds"
@@ -262,6 +326,33 @@ class DashboardCds(models.Model):
 
     def __str__(self):
         return f"CDS {self.protein_id_str} in BGC {self.bgc_id}"
+
+
+class CdsSequence(models.Model):
+    """On-demand amino acid sequence for a CDS — zlib-compressed."""
+
+    cds = models.OneToOneField(
+        DashboardCds,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="seq",
+    )
+    data = models.BinaryField(help_text="zlib-compressed amino acid sequence")
+
+    class Meta:
+        db_table = "discovery_cds_sequence"
+
+    def get_sequence(self) -> str:
+        if self.data:
+            return zlib.decompress(bytes(self.data)).decode("utf-8")
+        return ""
+
+    @staticmethod
+    def compress_sequence(seq: str) -> bytes:
+        return zlib.compress(seq.encode("utf-8"))
+
+    def __str__(self):
+        return f"Sequence for CDS {self.cds_id}"
 
 
 class BgcDomain(models.Model):
