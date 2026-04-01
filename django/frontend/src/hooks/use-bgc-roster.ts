@@ -4,7 +4,7 @@ import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useState } from "react";
 
-export function useBgcRoster() {
+export function useBgcRoster(assemblyIdOverride?: number) {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [sortBy, setSortBy] = useState("novelty_score");
@@ -13,9 +13,10 @@ export function useBgcRoster() {
   const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
   const genomeShortlist = useShortlistStore((s) => s.genomes);
 
-  // Show BGCs from all shortlisted genomes, or active genome if no shortlist
-  const assemblyIds =
-    genomeShortlist.length > 0
+  // When an override is provided, use it directly (e.g. assess mode)
+  const assemblyIds = assemblyIdOverride
+    ? [assemblyIdOverride]
+    : genomeShortlist.length > 0
       ? genomeShortlist.map((g) => g.id)
       : activeGenomeId
         ? [activeGenomeId]

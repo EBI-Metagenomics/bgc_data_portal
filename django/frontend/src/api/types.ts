@@ -402,6 +402,7 @@ export interface BgcNoveltyItem {
   novelty_vs_mibig: number;
   novelty_vs_db: number;
   domain_novelty: number;
+  is_partial: boolean;
 }
 
 export interface RedundancyCell {

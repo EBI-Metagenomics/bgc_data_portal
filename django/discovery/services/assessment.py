@@ -125,6 +125,7 @@ def compute_genome_assessment(assembly_id: int, weights: dict) -> dict:
                 else 0.0,
                 "novelty_vs_db": round(score.novelty_score, 4) if score else 0.0,
                 "domain_novelty": round(score.domain_novelty, 4) if score else 0.0,
+                "is_partial": bgc.is_partial,
             }
         )
     bgc_novelty_breakdown.sort(key=lambda x: x["novelty_vs_db"], reverse=True)

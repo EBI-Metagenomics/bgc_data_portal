@@ -419,6 +419,7 @@ class BgcNoveltyItem(Schema):
     novelty_vs_mibig: float = 0.0
     novelty_vs_db: float = 0.0
     domain_novelty: float = 0.0
+    is_partial: bool = False
 
 
 class RedundancyCell(Schema):

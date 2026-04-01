@@ -19,7 +19,12 @@ const BGC_CLASS_COLORS: Record<string, string> = {
   Other: "#6b7280",
 };
 
-export function BgcScatter() {
+interface BgcScatterProps {
+  assemblyIdsOverride?: number[];
+  markerSymbol?: string;
+}
+
+export function BgcScatter({ assemblyIdsOverride, markerSymbol }: BgcScatterProps = {}) {
   const [showMibig, setShowMibig] = useState(true);
   const mode = useModeStore((s) => s.mode);
   const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
@@ -28,12 +33,10 @@ export function BgcScatter() {
   const genomeShortlist = useShortlistStore((s) => s.genomes);
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
 
-  // Explore mode: filter by shortlisted/active genomes
-  const hasExploreFilter =
-    genomeShortlist.length > 0 || activeGenomeId != null;
-
-  const assemblyIds =
-    mode === "explore"
+  // When override is provided (e.g. assess mode), use it directly
+  const assemblyIds = assemblyIdsOverride
+    ? assemblyIdsOverride
+    : mode === "explore"
       ? genomeShortlist.length > 0
         ? genomeShortlist.map((g) => g.id)
         : activeGenomeId
@@ -42,14 +45,17 @@ export function BgcScatter() {
       : undefined;
 
   // Query mode: filter by query result BGC IDs
-  const bgcIds = mode === "query" ? resultBgcIds : undefined;
+  const bgcIds = !assemblyIdsOverride && mode === "query" ? resultBgcIds : undefined;
   const hasQueryResults = mode === "query" && resultBgcIds.length > 0;
 
-  const hasData =
-    mode === "explore" ? hasExploreFilter : hasQueryResults;
+  const hasData = assemblyIdsOverride
+    ? assemblyIdsOverride.length > 0
+    : mode === "explore"
+      ? (genomeShortlist.length > 0 || activeGenomeId != null)
+      : hasQueryResults;
 
   const { data: points, isLoading } = useBgcScatter({
-    assemblyIds,
+    assemblyIds: assemblyIds as number[] | undefined,
     bgcIds,
     includeMibig: showMibig,
     enabled: hasData,
@@ -107,8 +113,9 @@ export function BgcScatter() {
         text: pts.map((p) => `${p.bgc_class}<br>ID: ${p.id}`),
         hoverinfo: "text" as const,
         marker: {
+          symbol: markerSymbol || "circle",
           color: BGC_CLASS_COLORS[cls] ?? "#6b7280",
-          size: 8,
+          size: markerSymbol ? 10 : 8,
           opacity: 0.7,
           line: {
             color: pts.map((p) =>
@@ -136,9 +143,9 @@ export function BgcScatter() {
   if (!hasData) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        {mode === "explore"
-          ? "Select or shortlist genomes to view their BGC chemical space"
-          : "Run a query to see results"}
+        {mode === "query"
+          ? "Run a query to see results"
+          : "Select or shortlist genomes to view their BGC chemical space"}
       </p>
     );
   }
