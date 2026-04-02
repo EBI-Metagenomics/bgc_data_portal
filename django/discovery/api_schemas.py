@@ -8,8 +8,8 @@ from ninja import Schema
 # ── Weight parameters ─────────────────────────────────────────────────────────
 
 
-class GenomeWeightParams(Schema):
-    """Weights for the Explore Genomes composite priority score."""
+class AssemblyWeightParams(Schema):
+    """Weights for the Explore Assemblies composite priority score."""
 
     w_diversity: float = 0.30
     w_novelty: float = 0.45
@@ -35,20 +35,17 @@ class PaginationMeta(Schema):
     total_pages: int
 
 
-# ── Genome schemas ────────────────────────────────────────────────────────────
+# ── Assembly schemas ─────────────────────────────────────────────────────────
 
 
-class GenomeRosterItem(Schema):
+class AssemblyRosterItem(Schema):
     id: int
     accession: str
     organism_name: str = ""
-    taxonomy_kingdom: str = ""
-    taxonomy_phylum: str = ""
-    taxonomy_class: str = ""
-    taxonomy_order: str = ""
-    taxonomy_family: str = ""
-    taxonomy_genus: str = ""
-    taxonomy_species: str = ""
+    source_name: Optional[str] = None
+    assembly_type: str = "genome"
+    dominant_taxonomy_path: str = ""
+    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
     type_strain_catalog_url: str = ""
     # Scores
@@ -58,30 +55,27 @@ class GenomeRosterItem(Schema):
     bgc_novelty_score: float = 0.0
     bgc_density: float = 0.0
     taxonomic_novelty: float = 0.0
-    genome_quality: Optional[float] = None
+    assembly_quality: Optional[float] = None
     composite_score: float = 0.0
 
 
-class PaginatedGenomeResponse(Schema):
-    items: list[GenomeRosterItem]
+class PaginatedAssemblyResponse(Schema):
+    items: list[AssemblyRosterItem]
     pagination: PaginationMeta
 
 
-class GenomeDetail(Schema):
+class AssemblyDetail(Schema):
     id: int
     accession: str
     organism_name: str = ""
-    taxonomy_kingdom: str = ""
-    taxonomy_phylum: str = ""
-    taxonomy_class: str = ""
-    taxonomy_order: str = ""
-    taxonomy_family: str = ""
-    taxonomy_genus: str = ""
-    taxonomy_species: str = ""
+    source_name: Optional[str] = None
+    assembly_type: str = "genome"
+    dominant_taxonomy_path: str = ""
+    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
     type_strain_catalog_url: str = ""
-    genome_size_mb: Optional[float] = None
-    genome_quality: Optional[float] = None
+    assembly_size_mb: Optional[float] = None
+    assembly_quality: Optional[float] = None
     isolation_source: str = ""
     # Scores
     bgc_count: int = 0
@@ -93,12 +87,12 @@ class GenomeDetail(Schema):
     composite_score: float = 0.0
 
 
-class GenomeScatterPoint(Schema):
+class AssemblyScatterPoint(Schema):
     id: int
     x: float
     y: float
     composite_score: float
-    taxonomy_family: Optional[str] = None
+    dominant_taxonomy_label: str = ""
     organism_name: Optional[str] = None
     is_type_strain: bool = False
 
@@ -135,13 +129,14 @@ class DomainArchitectureItem(Schema):
     score: Optional[float] = None
 
 
-class ParentGenomeSummary(Schema):
+class ParentAssemblySummary(Schema):
     assembly_id: int
     accession: str
     organism_name: Optional[str] = None
-    taxonomy_family: Optional[str] = None
+    source_name: Optional[str] = None
+    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
-    genome_quality: Optional[float] = None
+    assembly_quality: Optional[float] = None
     isolation_source: Optional[str] = None
 
 
@@ -170,7 +165,7 @@ class BgcDetail(Schema):
     nearest_mibig_distance: Optional[float] = None
     is_validated: bool = False
     domain_architecture: list[DomainArchitectureItem] = []
-    parent_genome: Optional[ParentGenomeSummary] = None
+    parent_assembly: Optional[ParentAssemblySummary] = None
     natural_products: list[NaturalProductSummary] = []
 
 
@@ -252,8 +247,8 @@ class QueryResultBgc(Schema):
     domain_novelty: float = 0.0
     is_partial: bool = False
     relevance_score: float = 0.0
-    # Parent genome summary
-    genome_id: Optional[int] = None
+    # Parent assembly summary
+    assembly_id: Optional[int] = None
     assembly_accession: Optional[str] = None
     organism_name: Optional[str] = None
     is_type_strain: bool = False
@@ -264,11 +259,11 @@ class PaginatedQueryResultResponse(Schema):
     pagination: PaginationMeta
 
 
-class QueryResultGenomeAggregation(Schema):
-    genome_id: int
+class QueryResultAssemblyAggregation(Schema):
+    assembly_id: int
     accession: str
     organism_name: Optional[str] = None
-    taxonomy_family: Optional[str] = None
+    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
     hit_count: int = 0
     max_relevance: float = 0.0
@@ -276,8 +271,8 @@ class QueryResultGenomeAggregation(Schema):
     complete_fraction: float = 0.0
 
 
-class PaginatedGenomeAggregationResponse(Schema):
-    items: list[QueryResultGenomeAggregation]
+class PaginatedAssemblyAggregationResponse(Schema):
+    items: list[QueryResultAssemblyAggregation]
     pagination: PaginationMeta
 
 
@@ -308,14 +303,14 @@ class BgcClassCount(Schema):
     count: int = 0
 
 
-class GenomeStatsResponse(Schema):
+class AssemblyStatsResponse(Schema):
     taxonomy_sunburst: list[SunburstNode] = []
     score_distributions: list[ScoreDistribution] = []
     type_strain_count: int = 0
     non_type_strain_count: int = 0
-    mean_bgc_per_genome: float = 0.0
-    mean_l1_class_per_genome: float = 0.0
-    total_genomes: int = 0
+    mean_bgc_per_assembly: float = 0.0
+    mean_l1_class_per_assembly: float = 0.0
+    total_assemblies: int = 0
 
 
 class BgcStatsResponse(Schema):
@@ -393,7 +388,7 @@ class BgcRegionOut(Schema):
 
 class AssessmentAccepted(Schema):
     task_id: str
-    asset_type: str  # "genome" | "bgc"
+    asset_type: str  # "assembly" | "bgc"
 
 
 class AssessmentStatusResponse(Schema):
@@ -401,7 +396,7 @@ class AssessmentStatusResponse(Schema):
     result: Optional[dict] = None
 
 
-# -- Genome assessment --
+# -- Assembly assessment --
 
 
 class PercentileRank(Schema):
@@ -444,7 +439,7 @@ class AssessChemicalSpacePoint(Schema):
 
 
 class RadarReference(Schema):
-    """DB mean and 90th percentile for each GenomeScore dimension."""
+    """DB mean and 90th percentile for each AssemblyScore dimension."""
 
     dimension: str
     label: str
@@ -452,7 +447,7 @@ class RadarReference(Schema):
     db_p90: float
 
 
-class GenomeAssessmentResponse(Schema):
+class AssemblyAssessmentResponse(Schema):
     assembly_id: int
     accession: str
     organism_name: Optional[str] = None
@@ -488,7 +483,7 @@ class GcfDomainFrequency(Schema):
 
 
 class GcfTaxonomyCount(Schema):
-    taxonomy_family: str
+    taxonomy_label: str
     count: int = 0
 
 

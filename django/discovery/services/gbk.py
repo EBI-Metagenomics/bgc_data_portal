@@ -43,7 +43,7 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
     region_seq = contig_seq[window_start:window_end]
 
     contig_acc = bgc.contig_accession or contig.accession
-    genome = bgc.genome
+    assembly = bgc.assembly
 
     record = SeqRecord(
         Seq(region_seq),
@@ -57,10 +57,10 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
 
     record.annotations["molecule_type"] = "DNA"
     record.annotations["topology"] = "linear"
-    record.annotations["organism"] = genome.organism_name if genome else "Unknown"
+    record.annotations["organism"] = assembly.organism_name if assembly else "Unknown"
     record.annotations["source"] = json.dumps({
         "contig_accession": contig_acc,
-        "assembly_accession": genome.assembly_accession if genome else "",
+        "assembly_accession": assembly.assembly_accession if assembly else "",
         "bgc_accession": bgc.bgc_accession,
         "start_position": bgc.start_position + 1,
         "end_position": bgc.end_position,
@@ -136,7 +136,7 @@ def build_multi_bgc_gbk(bgc_ids: List[int]) -> str:
     """Build a multi-record GBK string for a list of dashboard BGC IDs."""
     bgcs = (
         DashboardBgc.objects.filter(id__in=bgc_ids)
-        .select_related("genome", "contig", "contig__seq")
+        .select_related("assembly", "contig", "contig__seq")
         .prefetch_related("cds_list", "cds_list__seq")
     )
 

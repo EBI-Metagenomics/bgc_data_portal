@@ -1,19 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchGenomeStats, type GenomeStatsParams } from "@/api/genomes";
+import { fetchAssemblyStats, type AssemblyStatsParams } from "@/api/assemblies";
 import { useFilterStore } from "@/stores/filter-store";
 
-export function useGenomeStats(assemblyIds?: string) {
+export function useAssemblyStats(assemblyIds?: string) {
   const filters = useFilterStore();
 
-  const params: GenomeStatsParams = {
+  const params: AssemblyStatsParams = {
     search: filters.search || undefined,
     type_strain_only: filters.typeStrainOnly || undefined,
-    taxonomy_kingdom: filters.taxonomyKingdom || undefined,
-    taxonomy_phylum: filters.taxonomyPhylum || undefined,
-    taxonomy_class: filters.taxonomyClass || undefined,
-    taxonomy_order: filters.taxonomyOrder || undefined,
-    taxonomy_family: filters.taxonomyFamily || undefined,
-    taxonomy_genus: filters.taxonomyGenus || undefined,
+    taxonomy_path: filters.taxonomyPath || undefined,
+    assembly_type: filters.assemblyType || undefined,
     bgc_class: filters.bgcClass || undefined,
     biome_lineage: filters.biomeLineage || undefined,
     bgc_accession: filters.bgcAccession || undefined,
@@ -22,8 +18,8 @@ export function useGenomeStats(assemblyIds?: string) {
   };
 
   return useQuery({
-    queryKey: ["genome-stats", params],
-    queryFn: () => fetchGenomeStats(params),
+    queryKey: ["assembly-stats", params],
+    queryFn: () => fetchAssemblyStats(params),
     staleTime: 30_000,
   });
 }

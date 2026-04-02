@@ -11,19 +11,19 @@ import { Plus, Replace, Microscope } from "lucide-react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
-interface GenomeContextMenuProps {
+interface AssemblyContextMenuProps {
   children: ReactNode;
-  genomeId: number;
+  assemblyId: number;
   label: string;
 }
 
-export function GenomeContextMenu({
+export function AssemblyContextMenu({
   children,
-  genomeId,
+  assemblyId,
   label,
-}: GenomeContextMenuProps) {
-  const addGenome = useShortlistStore((s) => s.addGenome);
-  const replaceGenomes = useShortlistStore((s) => s.replaceGenomes);
+}: AssemblyContextMenuProps) {
+  const addAssembly = useShortlistStore((s) => s.addAssembly);
+  const replaceAssemblies = useShortlistStore((s) => s.replaceAssemblies);
   const setMode = useModeStore((s) => s.setMode);
   const startAssessment = useAssessStore((s) => s.startAssessment);
 
@@ -33,7 +33,7 @@ export function GenomeContextMenu({
       <ContextMenuContent>
         <ContextMenuItem
           onClick={() => {
-            const ok = addGenome({ id: genomeId, label });
+            const ok = addAssembly({ id: assemblyId, label });
             if (!ok) toast.error("Shortlist full (max 20)");
           }}
         >
@@ -41,19 +41,19 @@ export function GenomeContextMenu({
           Add to shortlist
         </ContextMenuItem>
         <ContextMenuItem
-          onClick={() => replaceGenomes({ id: genomeId, label })}
+          onClick={() => replaceAssemblies({ id: assemblyId, label })}
         >
           <Replace className="mr-2 h-4 w-4" />
           Clear shortlist and add
         </ContextMenuItem>
         <ContextMenuItem
           onClick={() => {
-            startAssessment("genome", genomeId, label);
+            startAssessment("assembly", assemblyId, label);
             setMode("assess");
           }}
         >
           <Microscope className="mr-2 h-4 w-4" />
-          Evaluate Genome
+          Evaluate Assembly
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

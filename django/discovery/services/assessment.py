@@ -1,8 +1,8 @@
-"""Asset evaluation service — core computation for genome and BGC assessment.
+"""Asset evaluation service — core computation for assembly and BGC assessment.
 
-Uses the self-contained discovery models (DashboardGenome, DashboardBgc,
+Uses the self-contained discovery models (DashboardAssembly, DashboardBgc,
 BgcEmbedding, BgcDomain, DashboardGCF) instead of cross-schema joins.
-Precomputed percentile columns on DashboardGenome eliminate full-table scans.
+Precomputed percentile columns on DashboardAssembly eliminate full-table scans.
 """
 
 from __future__ import annotations
@@ -16,15 +16,15 @@ from discovery.models import (
     BgcEmbedding,
     DashboardBgc,
     DashboardGCF,
-    DashboardGenome,
+    DashboardAssembly,
     DashboardMibigReference,
     PrecomputedStats,
 )
 from discovery.services.scoring import compute_composite_priority
 
 
-# Score dimensions for genome percentile analysis
-GENOME_SCORE_DIMENSIONS = [
+# Score dimensions for assembly percentile analysis
+ASSEMBLY_SCORE_DIMENSIONS = [
     ("bgc_diversity_score", "Diversity"),
     ("bgc_novelty_score", "Novelty"),
     ("bgc_density", "Density"),
@@ -34,32 +34,32 @@ GENOME_SCORE_DIMENSIONS = [
 GCF_NOVELTY_DISTANCE_THRESHOLD = 0.7
 
 
-def compute_genome_assessment(genome_id: int, weights: dict) -> dict:
-    """Produce a full genome assessment report.
+def compute_assembly_assessment(assembly_id: int, weights: dict) -> dict:
+    """Produce a full assembly assessment report.
 
     Parameters
     ----------
-    genome_id : int
-        Primary key of the DashboardGenome to assess.
+    assembly_id : int
+        Primary key of the DashboardAssembly to assess.
     weights : dict
         User-selected weights for composite priority.
     """
-    genome = DashboardGenome.objects.get(pk=genome_id)
-    total_all = DashboardGenome.objects.count()
-    total_ts = DashboardGenome.objects.filter(is_type_strain=True).count()
+    assembly = DashboardAssembly.objects.get(pk=assembly_id)
+    total_all = DashboardAssembly.objects.count()
+    total_ts = DashboardAssembly.objects.filter(is_type_strain=True).count()
 
     # ── Percentile ranks (precomputed columns) ──────────────────────────
     pctl_map = {
-        "bgc_diversity_score": genome.pctl_diversity,
-        "bgc_novelty_score": genome.pctl_novelty,
-        "bgc_density": genome.pctl_density,
+        "bgc_diversity_score": assembly.pctl_diversity,
+        "bgc_novelty_score": assembly.pctl_novelty,
+        "bgc_density": assembly.pctl_density,
     }
     percentile_ranks = []
-    for dim, label in GENOME_SCORE_DIMENSIONS:
-        value = getattr(genome, dim)
+    for dim, label in ASSEMBLY_SCORE_DIMENSIONS:
+        value = getattr(assembly, dim)
         pctl_all = pctl_map[dim]
         # Type-strain percentile: SQL count
-        count_ts = DashboardGenome.objects.filter(
+        count_ts = DashboardAssembly.objects.filter(
             is_type_strain=True, **{f"{dim}__lte": value}
         ).count()
         percentile_ranks.append(
@@ -79,18 +79,18 @@ def compute_genome_assessment(genome_id: int, weights: dict) -> dict:
 
     composite = compute_composite_priority(
         scores={
-            "diversity": genome.bgc_diversity_score,
-            "novelty": genome.bgc_novelty_score,
-            "density": genome.bgc_density,
+            "diversity": assembly.bgc_diversity_score,
+            "novelty": assembly.bgc_novelty_score,
+            "density": assembly.bgc_density,
         },
         weights={"diversity": w_div, "novelty": w_nov, "density": w_den},
     )
 
-    # Count genomes with higher composite via SQL expression
+    # Count assemblies with higher composite via SQL expression
     from django.db.models import ExpressionWrapper, FloatField, Value
     w_sum = w_div + w_nov + w_den
     if w_sum > 0:
-        higher_count = DashboardGenome.objects.annotate(
+        higher_count = DashboardAssembly.objects.annotate(
             c=ExpressionWrapper(
                 (Value(w_div) * F("bgc_diversity_score")
                  + Value(w_nov) * F("bgc_novelty_score")
@@ -104,7 +104,7 @@ def compute_genome_assessment(genome_id: int, weights: dict) -> dict:
     db_rank = higher_count + 1
 
     # ── BGC novelty breakdown ────────────────────────────────────────────
-    bgcs = DashboardBgc.objects.filter(genome=genome)
+    bgcs = DashboardBgc.objects.filter(assembly=assembly)
     bgc_novelty_breakdown = [
         {
             "bgc_id": bgc.id,
@@ -155,9 +155,9 @@ def compute_genome_assessment(genome_id: int, weights: dict) -> dict:
             continue
 
         has_mibig = bool(gcf.mibig_accession)
-        # Check if any co-member's genome is a type strain
+        # Check if any co-member's assembly is a type strain
         has_type_strain = DashboardBgc.objects.filter(
-            gcf_id=gcf.id, genome__is_type_strain=True
+            gcf_id=gcf.id, assembly__is_type_strain=True
         ).exclude(id=bgc.id).exists()
 
         status = "known_gcf_type_strain" if has_type_strain else "known_gcf_no_type_strain"
@@ -217,14 +217,14 @@ def compute_genome_assessment(genome_id: int, weights: dict) -> dict:
 
     # ── Radar reference data (precomputed or on-the-fly) ────────────────
     try:
-        genome_stats = PrecomputedStats.objects.get(key="genome_global")
-        radar_references = genome_stats.data.get("radar_references", [])
+        assembly_stats = PrecomputedStats.objects.get(key="assembly_global")
+        radar_references = assembly_stats.data.get("radar_references", [])
     except PrecomputedStats.DoesNotExist:
         radar_references = []
-        for dim, label in GENOME_SCORE_DIMENSIONS:
-            agg = DashboardGenome.objects.aggregate(db_mean=Avg(dim))
+        for dim, label in ASSEMBLY_SCORE_DIMENSIONS:
+            agg = DashboardAssembly.objects.aggregate(db_mean=Avg(dim))
             vals = list(
-                DashboardGenome.objects.values_list(dim, flat=True)[:10_000]
+                DashboardAssembly.objects.values_list(dim, flat=True)[:10_000]
             )
             db_p90 = float(np.percentile(vals, 90)) if vals else 0.0
             radar_references.append(
@@ -237,10 +237,10 @@ def compute_genome_assessment(genome_id: int, weights: dict) -> dict:
             )
 
     return {
-        "assembly_id": genome.id,
-        "accession": genome.assembly_accession,
-        "organism_name": genome.organism_name,
-        "is_type_strain": genome.is_type_strain,
+        "assembly_id": assembly.id,
+        "accession": assembly.assembly_accession,
+        "organism_name": assembly.organism_name,
+        "is_type_strain": assembly.is_type_strain,
         "percentile_ranks": percentile_ranks,
         "db_rank": db_rank,
         "db_total": total_all,
@@ -263,7 +263,7 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
     bgc_id : int
         Primary key of the DashboardBgc to assess.
     """
-    bgc = DashboardBgc.objects.select_related("genome").get(pk=bgc_id)
+    bgc = DashboardBgc.objects.select_related("assembly").get(pk=bgc_id)
 
     classification_l1 = bgc.classification_l1
     classification_l2 = bgc.classification_l2
@@ -384,17 +384,17 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
     }
 
 
-def find_similar_genomes(genome_id: int, k: int = 10) -> list[int]:
-    """Find the K most similar genomes by mean BGC embedding distance.
+def find_similar_assemblies(assembly_id: int, k: int = 10) -> list[int]:
+    """Find the K most similar assemblies by mean BGC embedding distance.
 
-    Returns a list of DashboardGenome IDs.
+    Returns a list of DashboardAssembly IDs.
     """
-    genome = DashboardGenome.objects.get(pk=genome_id)
+    assembly = DashboardAssembly.objects.get(pk=assembly_id)
 
-    # Get BGC embeddings for this genome from the dedicated table
+    # Get BGC embeddings for this assembly from the dedicated table
     embeddings = list(
         BgcEmbedding.objects.filter(
-            bgc__genome=genome
+            bgc__assembly=assembly
         ).values_list("vector", flat=True)
     )
     if not embeddings:
@@ -404,19 +404,19 @@ def find_similar_genomes(genome_id: int, k: int = 10) -> list[int]:
 
     # ANN search on the lean embedding table
     nearest_bgcs = (
-        BgcEmbedding.objects.exclude(bgc__genome=genome)
+        BgcEmbedding.objects.exclude(bgc__assembly=assembly)
         .annotate(distance=CosineDistance("vector", mean_embedding))
         .order_by("distance")
         .select_related("bgc")[:k * 5]
     )
 
-    seen_genomes = set()
+    seen_assemblies = set()
     result = []
     for emb in nearest_bgcs:
-        gid = emb.bgc.genome_id
-        if gid not in seen_genomes:
-            seen_genomes.add(gid)
-            result.append(gid)
+        aid = emb.bgc.assembly_id
+        if aid not in seen_assemblies:
+            seen_assemblies.add(aid)
+            result.append(aid)
             if len(result) >= k:
                 break
 
@@ -428,16 +428,16 @@ def find_similar_genomes(genome_id: int, k: int = 10) -> list[int]:
 
 def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
     """Build the GCF context panel data."""
-    members = DashboardBgc.objects.filter(gcf_id=gcf.id).select_related("genome")
+    members = DashboardBgc.objects.filter(gcf_id=gcf.id).select_related("assembly")
 
     member_points = []
     novelty_values = []
     taxonomy_counts: dict[str, int] = {}
 
     for mbgc in members:
-        genome = mbgc.genome
-        is_ts = genome.is_type_strain if genome else False
-        tax_family = genome.taxonomy_family if genome else "Unknown"
+        assembly = mbgc.assembly
+        is_ts = assembly.is_type_strain if assembly else False
+        tax_label = assembly.dominant_taxonomy_label if assembly else "Unknown"
 
         member_points.append(
             {
@@ -453,7 +453,7 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
         )
         novelty_values.append(mbgc.novelty_score)
 
-        tf = tax_family or "Unknown"
+        tf = tax_label or "Unknown"
         taxonomy_counts[tf] = taxonomy_counts.get(tf, 0) + 1
 
     # Domain frequency via BgcDomain (single join)
@@ -461,7 +461,7 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
     domain_frequency = _compute_gcf_domain_frequency(member_bgc_ids)
 
     taxonomy_distribution = [
-        {"taxonomy_family": k, "count": v}
+        {"taxonomy_label": k, "count": v}
         for k, v in sorted(taxonomy_counts.items(), key=lambda x: -x[1])
     ]
 

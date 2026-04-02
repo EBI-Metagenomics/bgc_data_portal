@@ -1,15 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchGenomeRoster, type GenomeRosterParams } from "@/api/genomes";
-import { useGenomeWeightStore } from "@/stores/genome-weight-store";
+import { fetchAssemblyRoster, type AssemblyRosterParams } from "@/api/assemblies";
+import { useAssemblyWeightStore } from "@/stores/assembly-weight-store";
 import { useState } from "react";
 
-export function useQueryGenomeRoster(assemblyIds: number[]) {
+export function useQueryAssemblyRoster(assemblyIds: number[]) {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState("composite_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const weights = useGenomeWeightStore();
+  const weights = useAssemblyWeightStore();
 
-  const params: GenomeRosterParams = {
+  const params: AssemblyRosterParams = {
     page,
     page_size: 25,
     sort_by: sortBy,
@@ -23,8 +23,8 @@ export function useQueryGenomeRoster(assemblyIds: number[]) {
   const enabled = assemblyIds.length > 0;
 
   const query = useQuery({
-    queryKey: ["query-genome-roster", params],
-    queryFn: () => fetchGenomeRoster(params),
+    queryKey: ["query-assembly-roster", params],
+    queryFn: () => fetchAssemblyRoster(params),
     enabled,
   });
 

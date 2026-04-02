@@ -1,25 +1,19 @@
 import { useMemo } from "react";
 import Plot from "react-plotly.js";
-import { useGenomeStats } from "@/hooks/use-genome-stats";
+import { useAssemblyStats } from "@/hooks/use-assembly-stats";
 import { useFilterStore } from "@/stores/filter-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatsExportMenu } from "@/components/stats/StatsExportMenu";
-import { exportGenomeStats } from "@/api/exports";
+import { exportAssemblyStats } from "@/api/exports";
 
-export function GenomeStats({ assemblyIds }: { assemblyIds?: string }) {
-  const { data, isLoading } = useGenomeStats(assemblyIds);
+export function AssemblyStats({ assemblyIds }: { assemblyIds?: string }) {
+  const { data, isLoading } = useAssemblyStats(assemblyIds);
   const filters = useFilterStore();
 
   const exportParams = useMemo(
     () => ({
       search: filters.search || undefined,
       type_strain_only: filters.typeStrainOnly || undefined,
-      taxonomy_kingdom: filters.taxonomyKingdom || undefined,
-      taxonomy_phylum: filters.taxonomyPhylum || undefined,
-      taxonomy_class: filters.taxonomyClass || undefined,
-      taxonomy_order: filters.taxonomyOrder || undefined,
-      taxonomy_family: filters.taxonomyFamily || undefined,
-      taxonomy_genus: filters.taxonomyGenus || undefined,
       bgc_class: filters.bgcClass || undefined,
       biome_lineage: filters.biomeLineage || undefined,
       assembly_ids: assemblyIds,
@@ -31,10 +25,10 @@ export function GenomeStats({ assemblyIds }: { assemblyIds?: string }) {
     return <Skeleton className="h-[280px] w-full" />;
   }
 
-  if (!data || data.total_genomes === 0) {
+  if (!data || data.total_assemblies === 0) {
     return (
       <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
-        No genome data available
+        No assembly data available
       </div>
     );
   }
@@ -61,15 +55,15 @@ export function GenomeStats({ assemblyIds }: { assemblyIds?: string }) {
         </div>
         <div className="flex flex-col items-center justify-center gap-2">
           <div className="text-center">
-            <div className="text-2xl font-bold">{data.mean_bgc_per_genome}</div>
-            <div className="text-xs text-muted-foreground">Avg BGCs / genome</div>
+            <div className="text-2xl font-bold">{data.mean_bgc_per_assembly}</div>
+            <div className="text-xs text-muted-foreground">Avg BGCs / assembly</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold">{data.mean_l1_class_per_genome}</div>
-            <div className="text-xs text-muted-foreground">Avg classes / genome</div>
+            <div className="text-2xl font-bold">{data.mean_l1_class_per_assembly}</div>
+            <div className="text-xs text-muted-foreground">Avg classes / assembly</div>
           </div>
           <div className="text-center text-xs text-muted-foreground">
-            {data.total_genomes} genomes
+            {data.total_assemblies} assemblies
           </div>
         </div>
       </div>
@@ -77,18 +71,12 @@ export function GenomeStats({ assemblyIds }: { assemblyIds?: string }) {
   );
 }
 
-export function GenomeStatsActions({ assemblyIds }: { assemblyIds?: string }) {
+export function AssemblyStatsActions({ assemblyIds }: { assemblyIds?: string }) {
   const filters = useFilterStore();
   const params = useMemo(
     () => ({
       search: filters.search || undefined,
       type_strain_only: filters.typeStrainOnly || undefined,
-      taxonomy_kingdom: filters.taxonomyKingdom || undefined,
-      taxonomy_phylum: filters.taxonomyPhylum || undefined,
-      taxonomy_class: filters.taxonomyClass || undefined,
-      taxonomy_order: filters.taxonomyOrder || undefined,
-      taxonomy_family: filters.taxonomyFamily || undefined,
-      taxonomy_genus: filters.taxonomyGenus || undefined,
       bgc_class: filters.bgcClass || undefined,
       biome_lineage: filters.biomeLineage || undefined,
       assembly_ids: assemblyIds,
@@ -98,7 +86,7 @@ export function GenomeStatsActions({ assemblyIds }: { assemblyIds?: string }) {
 
   return (
     <StatsExportMenu
-      onExport={(format) => exportGenomeStats(params, format)}
+      onExport={(format) => exportAssemblyStats(params, format)}
     />
   );
 }

@@ -1,11 +1,11 @@
 import { QueryResultsRoster } from "@/components/query/QueryResultsRoster";
-import { QueryGenomeRoster } from "@/components/query/QueryGenomeRoster";
-import { QueryGenomeScatter } from "@/components/query/QueryGenomeScatter";
-import { GenomeDetail } from "@/components/genome/GenomeDetail";
+import { QueryAssemblyRoster } from "@/components/query/QueryAssemblyRoster";
+import { QueryAssemblyScatter } from "@/components/query/QueryAssemblyScatter";
+import { AssemblyDetail } from "@/components/assembly/AssemblyDetail";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { BgcDetail } from "@/components/bgc/BgcDetail";
 import { BgcStats, BgcStatsActions } from "@/components/bgc/BgcStats";
-import { GenomeStats, GenomeStatsActions } from "@/components/genome/GenomeStats";
+import { AssemblyStats, AssemblyStatsActions } from "@/components/assembly/AssemblyStats";
 import { PanelContainer } from "./PanelContainer";
 import { Badge } from "@/components/ui/badge";
 import { QueryActions } from "@/components/query/QueryActions";
@@ -14,7 +14,7 @@ import { useShortlistStore } from "@/stores/shortlist-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useParentAssemblies } from "@/hooks/use-parent-assemblies";
 
-function GenomeSourceBadge() {
+function AssemblySourceBadge() {
   const bgcShortlist = useShortlistStore((s) => s.bgcs);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
 
@@ -52,7 +52,7 @@ function useQueryAssemblyIds(): string | undefined {
 
 export function QueryLayout() {
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const queryAssemblyIds = useQueryAssemblyIds();
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
 
@@ -83,29 +83,29 @@ export function QueryLayout() {
         </PanelContainer>
       )}
 
-      {/* Genome panels — Roster full height left, Scatter + Stats stacked right */}
+      {/* Assembly panels — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="Genome Roster" className="min-h-[600px] xl:row-span-2" actions={<GenomeSourceBadge />}>
-          <QueryGenomeRoster />
+        <PanelContainer title="Assembly Roster" className="min-h-[600px] xl:row-span-2" actions={<AssemblySourceBadge />}>
+          <QueryAssemblyRoster />
         </PanelContainer>
         <div className="flex flex-col gap-4">
-          <PanelContainer title="Genome Space Map" className="min-h-[300px]" actions={<GenomeSourceBadge />}>
-            <QueryGenomeScatter />
+          <PanelContainer title="Assembly Space Map" className="min-h-[300px]" actions={<AssemblySourceBadge />}>
+            <QueryAssemblyScatter />
           </PanelContainer>
           <PanelContainer
-            title="Genome Stats"
+            title="Assembly Stats"
             className="min-h-[280px]"
-            actions={<GenomeStatsActions assemblyIds={queryAssemblyIds} />}
+            actions={<AssemblyStatsActions assemblyIds={queryAssemblyIds} />}
           >
-            <GenomeStats assemblyIds={queryAssemblyIds} />
+            <AssemblyStats assemblyIds={queryAssemblyIds} />
           </PanelContainer>
         </div>
       </div>
 
-      {/* Genome detail */}
-      {activeGenomeId && (
-        <PanelContainer title="Genome Detail" collapsible>
-          <GenomeDetail genomeId={activeGenomeId} />
+      {/* Assembly detail */}
+      {activeAssemblyId && (
+        <PanelContainer title="Assembly Detail" collapsible>
+          <AssemblyDetail assemblyId={activeAssemblyId} />
         </PanelContainer>
       )}
 

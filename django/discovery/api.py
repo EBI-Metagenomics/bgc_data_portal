@@ -37,13 +37,13 @@ from discovery.models import (
     DashboardCds,
     DashboardDomain,
     DashboardGCF,
-    DashboardGenome,
+    DashboardAssembly,
     DashboardMibigReference,
     DashboardNaturalProduct,
     PrecomputedStats,
 )
 from discovery.services.scoring import compute_composite_priority
-from discovery.services.stats import compute_bgc_stats, compute_genome_stats
+from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
 from discovery.api_schemas import (
     AssessmentAccepted,
     AssessmentStatusResponse,
@@ -56,27 +56,27 @@ from discovery.api_schemas import (
     BgcStatsResponse,
     ChemicalQueryRequest,
     CoreDomain,
-    GenomeStatsResponse,
+    AssemblyStatsResponse,
     PaginatedBgcRosterResponse,
     DomainArchitectureItem,
     DomainOption,
     DomainQueryRequest,
-    GenomeDetail,
-    GenomeRosterItem,
-    GenomeScatterPoint,
-    GenomeWeightParams,
+    AssemblyDetail,
+    AssemblyRosterItem,
+    AssemblyScatterPoint,
+    AssemblyWeightParams,
     MibigReferencePoint,
     NaturalProductSummary,
     NpClassLevel,
     PaginatedDomainResponse,
-    PaginatedGenomeAggregationResponse,
-    PaginatedGenomeResponse,
+    PaginatedAssemblyAggregationResponse,
+    PaginatedAssemblyResponse,
     PaginatedQueryResultResponse,
     PaginationMeta,
-    ParentGenomeSummary,
+    ParentAssemblySummary,
     PfamAnnotationOut,
     QueryResultBgc,
-    QueryResultGenomeAggregation,
+    QueryResultAssemblyAggregation,
     QueryWeightParams,
     RegionCdsOut,
     RegionClusterOut,
@@ -106,7 +106,7 @@ def _paginate(page: int, page_size: int, total_count: int):
     return page, page_size, total_pages, offset
 
 
-def _is_default_weights(weights: GenomeWeightParams) -> bool:
+def _is_default_weights(weights: AssemblyWeightParams) -> bool:
     return (
         abs(weights.w_diversity - _DEFAULT_W_DIVERSITY) < 1e-6
         and abs(weights.w_novelty - _DEFAULT_W_NOVELTY) < 1e-6
@@ -114,8 +114,8 @@ def _is_default_weights(weights: GenomeWeightParams) -> bool:
     )
 
 
-def _annotate_custom_composite(qs, weights: GenomeWeightParams):
-    """Annotate a DashboardGenome queryset with a SQL-computed composite score."""
+def _annotate_custom_composite(qs, weights: AssemblyWeightParams):
+    """Annotate a DashboardAssembly queryset with a SQL-computed composite score."""
     w_sum = weights.w_diversity + weights.w_novelty + weights.w_density
     if w_sum == 0:
         return qs.annotate(custom_composite=Value(0.0, output_field=FloatField()))
@@ -132,27 +132,24 @@ def _annotate_custom_composite(qs, weights: GenomeWeightParams):
     )
 
 
-def _genome_to_roster_item(genome: DashboardGenome, composite: float) -> GenomeRosterItem:
-    return GenomeRosterItem(
-        id=genome.id,
-        accession=genome.assembly_accession,
-        organism_name=genome.organism_name,
-        taxonomy_kingdom=genome.taxonomy_kingdom,
-        taxonomy_phylum=genome.taxonomy_phylum,
-        taxonomy_class=genome.taxonomy_class,
-        taxonomy_order=genome.taxonomy_order,
-        taxonomy_family=genome.taxonomy_family,
-        taxonomy_genus=genome.taxonomy_genus,
-        taxonomy_species=genome.taxonomy_species,
-        is_type_strain=genome.is_type_strain,
-        type_strain_catalog_url=genome.type_strain_catalog_url,
-        bgc_count=genome.bgc_count,
-        l1_class_count=genome.l1_class_count,
-        bgc_diversity_score=genome.bgc_diversity_score,
-        bgc_novelty_score=genome.bgc_novelty_score,
-        bgc_density=genome.bgc_density,
-        taxonomic_novelty=genome.taxonomic_novelty,
-        genome_quality=genome.genome_quality,
+def _assembly_to_roster_item(assembly: DashboardAssembly, composite: float) -> AssemblyRosterItem:
+    return AssemblyRosterItem(
+        id=assembly.id,
+        accession=assembly.assembly_accession,
+        organism_name=assembly.organism_name,
+        source_name=assembly.source.name if assembly.source else None,
+        assembly_type=assembly.get_assembly_type_display(),
+        dominant_taxonomy_path=assembly.dominant_taxonomy_path,
+        dominant_taxonomy_label=assembly.dominant_taxonomy_label,
+        is_type_strain=assembly.is_type_strain,
+        type_strain_catalog_url=assembly.type_strain_catalog_url,
+        bgc_count=assembly.bgc_count,
+        l1_class_count=assembly.l1_class_count,
+        bgc_diversity_score=assembly.bgc_diversity_score,
+        bgc_novelty_score=assembly.bgc_novelty_score,
+        bgc_density=assembly.bgc_density,
+        taxonomic_novelty=assembly.taxonomic_novelty,
+        assembly_quality=assembly.assembly_quality,
         composite_score=composite,
     )
 
@@ -160,50 +157,41 @@ def _genome_to_roster_item(genome: DashboardGenome, composite: float) -> GenomeR
 # ── Shared filter helpers ────────────────────────────────────────────────────
 
 
-def _apply_genome_filters(
+def _apply_assembly_filters(
     qs,
     *,
-    genome_ids: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    assembly_type: Optional[str] = None,
     type_strain_only: bool = False,
-    taxonomy_kingdom: Optional[str] = None,
-    taxonomy_phylum: Optional[str] = None,
-    taxonomy_class: Optional[str] = None,
-    taxonomy_order: Optional[str] = None,
-    taxonomy_family: Optional[str] = None,
-    taxonomy_genus: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
     search: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
 ):
-    """Apply common genome filters to a DashboardGenome queryset."""
-    if genome_ids:
-        ids = [int(x) for x in genome_ids.split(",") if x.strip().isdigit()]
+    """Apply common assembly filters to a DashboardAssembly queryset."""
+    if assembly_ids:
+        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
             qs = qs.filter(id__in=ids)
         else:
             qs = qs.none()
+    if assembly_type:
+        from discovery.models import AssemblyType
+        type_map = {v.label: v.value for v in AssemblyType}
+        if assembly_type.lower() in type_map:
+            qs = qs.filter(assembly_type=type_map[assembly_type.lower()])
     if type_strain_only:
         qs = qs.filter(is_type_strain=True)
-    if taxonomy_kingdom:
-        qs = qs.filter(taxonomy_kingdom__iexact=taxonomy_kingdom)
-    if taxonomy_phylum:
-        qs = qs.filter(taxonomy_phylum__iexact=taxonomy_phylum)
-    if taxonomy_class:
-        qs = qs.filter(taxonomy_class__iexact=taxonomy_class)
-    if taxonomy_order:
-        qs = qs.filter(taxonomy_order__iexact=taxonomy_order)
-    if taxonomy_family:
-        qs = qs.filter(taxonomy_family__iexact=taxonomy_family)
-    if taxonomy_genus:
-        qs = qs.filter(taxonomy_genus__iexact=taxonomy_genus)
+    if taxonomy_path:
+        from discovery.ltree import filter_contigs_by_taxonomy
+        matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
+        qs = qs.filter(contigs__in=matching_contigs).distinct()
     if search:
         qs = qs.filter(
             Q(organism_name__icontains=search)
-            | Q(taxonomy_species__icontains=search)
-            | Q(taxonomy_genus__icontains=search)
-            | Q(taxonomy_family__icontains=search)
+            | Q(dominant_taxonomy_label__icontains=search)
             | Q(assembly_accession__icontains=search)
         )
     if bgc_class:
@@ -221,12 +209,12 @@ def _apply_genome_filters(
     return qs
 
 
-def _apply_bgc_filters(qs, *, genome_ids: Optional[str] = None):
+def _apply_bgc_filters(qs, *, assembly_ids: Optional[str] = None):
     """Apply common BGC filters to a DashboardBgc queryset."""
-    if genome_ids:
-        ids = [int(x) for x in genome_ids.split(",") if x.strip().isdigit()]
+    if assembly_ids:
+        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
-            qs = qs.filter(genome_id__in=ids)
+            qs = qs.filter(assembly_id__in=ids)
         else:
             qs = qs.none()
     else:
@@ -234,42 +222,34 @@ def _apply_bgc_filters(qs, *, genome_ids: Optional[str] = None):
     return qs
 
 
-# ── Genome endpoints ─────────────────────────────────────────────────────────
+# ── Assembly endpoints ───────────────────────────────────────────────────────
 
 
-@discovery_router.get("/genomes/", response=PaginatedGenomeResponse)
-def genome_roster(
+@discovery_router.get("/assemblies/", response=PaginatedAssemblyResponse)
+def assembly_roster(
     request,
     page: int = 1,
     page_size: int = 25,
     sort_by: str = "composite_score",
     order: str = "desc",
     search: Optional[str] = None,
-    taxonomy_kingdom: Optional[str] = None,
-    taxonomy_phylum: Optional[str] = None,
-    taxonomy_class: Optional[str] = None,
-    taxonomy_order: Optional[str] = None,
-    taxonomy_family: Optional[str] = None,
-    taxonomy_genus: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
     type_strain_only: bool = False,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
-    weights: GenomeWeightParams = Query(...),
+    assembly_type: Optional[str] = None,
+    weights: AssemblyWeightParams = Query(...),
 ):
-    qs = DashboardGenome.objects.all()
-    qs = _apply_genome_filters(
+    qs = DashboardAssembly.objects.select_related("source").all()
+    qs = _apply_assembly_filters(
         qs,
-        genome_ids=assembly_ids,
+        assembly_ids=assembly_ids,
+        assembly_type=assembly_type,
         type_strain_only=type_strain_only,
-        taxonomy_kingdom=taxonomy_kingdom,
-        taxonomy_phylum=taxonomy_phylum,
-        taxonomy_class=taxonomy_class,
-        taxonomy_order=taxonomy_order,
-        taxonomy_family=taxonomy_family,
-        taxonomy_genus=taxonomy_genus,
+        taxonomy_path=taxonomy_path,
         search=search,
         bgc_class=bgc_class,
         biome_lineage=biome_lineage,
@@ -309,14 +289,14 @@ def genome_roster(
     page_qs = qs[offset: offset + page_size]
 
     items = []
-    for genome in page_qs:
+    for assembly in page_qs:
         if use_default:
-            composite = genome.composite_score
+            composite = assembly.composite_score
         else:
-            composite = getattr(genome, "custom_composite", genome.composite_score)
-        items.append(_genome_to_roster_item(genome, composite))
+            composite = getattr(assembly, "custom_composite", assembly.composite_score)
+        items.append(_assembly_to_roster_item(assembly, composite))
 
-    return PaginatedGenomeResponse(
+    return PaginatedAssemblyResponse(
         items=items,
         pagination=PaginationMeta(
             page=page,
@@ -327,21 +307,21 @@ def genome_roster(
     )
 
 
-@discovery_router.get("/genomes/{genome_id}/", response=GenomeDetail)
-def genome_detail(request, genome_id: int, weights: GenomeWeightParams = Query(...)):
+@discovery_router.get("/assemblies/{assembly_id}/", response=AssemblyDetail)
+def assembly_detail(request, assembly_id: int, weights: AssemblyWeightParams = Query(...)):
     try:
-        genome = DashboardGenome.objects.get(id=genome_id)
-    except DashboardGenome.DoesNotExist:
-        raise HttpError(404, "Genome not found")
+        assembly = DashboardAssembly.objects.select_related("source").get(id=assembly_id)
+    except DashboardAssembly.DoesNotExist:
+        raise HttpError(404, "Assembly not found")
 
     if _is_default_weights(weights):
-        composite = genome.composite_score
+        composite = assembly.composite_score
     else:
         composite = compute_composite_priority(
             scores={
-                "diversity": genome.bgc_diversity_score,
-                "novelty": genome.bgc_novelty_score,
-                "density": genome.bgc_density,
+                "diversity": assembly.bgc_diversity_score,
+                "novelty": assembly.bgc_novelty_score,
+                "density": assembly.bgc_density,
             },
             weights={
                 "diversity": weights.w_diversity,
@@ -350,35 +330,32 @@ def genome_detail(request, genome_id: int, weights: GenomeWeightParams = Query(.
             },
         )
 
-    return GenomeDetail(
-        id=genome.id,
-        accession=genome.assembly_accession,
-        organism_name=genome.organism_name,
-        taxonomy_kingdom=genome.taxonomy_kingdom,
-        taxonomy_phylum=genome.taxonomy_phylum,
-        taxonomy_class=genome.taxonomy_class,
-        taxonomy_order=genome.taxonomy_order,
-        taxonomy_family=genome.taxonomy_family,
-        taxonomy_genus=genome.taxonomy_genus,
-        taxonomy_species=genome.taxonomy_species,
-        is_type_strain=genome.is_type_strain,
-        type_strain_catalog_url=genome.type_strain_catalog_url,
-        genome_size_mb=genome.genome_size_mb,
-        genome_quality=genome.genome_quality,
-        isolation_source=genome.isolation_source,
-        bgc_count=genome.bgc_count,
-        l1_class_count=genome.l1_class_count,
-        bgc_diversity_score=genome.bgc_diversity_score,
-        bgc_novelty_score=genome.bgc_novelty_score,
-        bgc_density=genome.bgc_density,
-        taxonomic_novelty=genome.taxonomic_novelty,
+    return AssemblyDetail(
+        id=assembly.id,
+        accession=assembly.assembly_accession,
+        organism_name=assembly.organism_name,
+        source_name=assembly.source.name if assembly.source else None,
+        assembly_type=assembly.get_assembly_type_display(),
+        dominant_taxonomy_path=assembly.dominant_taxonomy_path,
+        dominant_taxonomy_label=assembly.dominant_taxonomy_label,
+        is_type_strain=assembly.is_type_strain,
+        type_strain_catalog_url=assembly.type_strain_catalog_url,
+        assembly_size_mb=assembly.assembly_size_mb,
+        assembly_quality=assembly.assembly_quality,
+        isolation_source=assembly.isolation_source,
+        bgc_count=assembly.bgc_count,
+        l1_class_count=assembly.l1_class_count,
+        bgc_diversity_score=assembly.bgc_diversity_score,
+        bgc_novelty_score=assembly.bgc_novelty_score,
+        bgc_density=assembly.bgc_density,
+        taxonomic_novelty=assembly.taxonomic_novelty,
         composite_score=composite,
     )
 
 
-@discovery_router.get("/genomes/{genome_id}/bgcs/", response=list[BgcRosterItem])
-def genome_bgc_roster(request, genome_id: int):
-    bgcs = DashboardBgc.objects.filter(genome_id=genome_id).order_by("-novelty_score")
+@discovery_router.get("/assemblies/{assembly_id}/bgcs/", response=list[BgcRosterItem])
+def assembly_bgc_roster(request, assembly_id: int):
+    bgcs = DashboardBgc.objects.filter(assembly_id=assembly_id).order_by("-novelty_score")
 
     return [
         BgcRosterItem(
@@ -407,8 +384,8 @@ def bgc_roster(
     page: int = 1,
     page_size: int = 25,
 ):
-    qs = DashboardBgc.objects.select_related("genome")
-    qs = _apply_bgc_filters(qs, genome_ids=assembly_ids)
+    qs = DashboardBgc.objects.select_related("assembly")
+    qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
 
     sort_map = {
         "novelty_score": "novelty_score",
@@ -438,7 +415,7 @@ def bgc_roster(
             is_partial=bgc.is_partial,
             nearest_mibig_accession=bgc.nearest_mibig_accession or None,
             nearest_mibig_distance=bgc.nearest_mibig_distance,
-            assembly_accession=bgc.genome.assembly_accession if bgc.genome else None,
+            assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
         )
         for bgc in page_qs
     ]
@@ -456,53 +433,55 @@ def bgc_parent_assemblies(request, bgc_ids: str):
         return []
     return list(
         DashboardBgc.objects.filter(id__in=ids)
-        .values_list("genome_id", flat=True)
+        .values_list("assembly_id", flat=True)
         .distinct()
     )
 
 
-@discovery_router.get("/genome-scatter/", response=list[GenomeScatterPoint])
-def genome_scatter(
+@discovery_router.get("/assembly-scatter/", response=list[AssemblyScatterPoint])
+def assembly_scatter(
     request,
     x_axis: str = "bgc_diversity_score",
     y_axis: str = "bgc_novelty_score",
     type_strain_only: bool = False,
-    taxonomy_family: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
     bgc_class: Optional[str] = None,
     assembly_ids: Optional[str] = None,
-    weights: GenomeWeightParams = Query(...),
+    weights: AssemblyWeightParams = Query(...),
 ):
     allowed_axes = {
         "bgc_diversity_score", "bgc_novelty_score", "bgc_density",
-        "taxonomic_novelty", "genome_quality",
+        "taxonomic_novelty", "assembly_quality",
     }
     if x_axis not in allowed_axes or y_axis not in allowed_axes:
         raise HttpError(400, f"Axis must be one of: {', '.join(sorted(allowed_axes))}")
 
-    qs = DashboardGenome.objects.all()
+    qs = DashboardAssembly.objects.all()
     if assembly_ids:
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
             qs = qs.filter(id__in=ids)
     if type_strain_only:
         qs = qs.filter(is_type_strain=True)
-    if taxonomy_family:
-        qs = qs.filter(taxonomy_family__iexact=taxonomy_family)
+    if taxonomy_path:
+        from discovery.ltree import filter_contigs_by_taxonomy
+        matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
+        qs = qs.filter(contigs__in=matching_contigs).distinct()
     if bgc_class:
         qs = qs.filter(bgcs__classification_l1__iexact=bgc_class).distinct()
 
     use_default = _is_default_weights(weights)
 
     points = []
-    for genome in qs:
+    for assembly in qs:
         if use_default:
-            composite = genome.composite_score
+            composite = assembly.composite_score
         else:
             composite = compute_composite_priority(
                 scores={
-                    "diversity": genome.bgc_diversity_score,
-                    "novelty": genome.bgc_novelty_score,
-                    "density": genome.bgc_density,
+                    "diversity": assembly.bgc_diversity_score,
+                    "novelty": assembly.bgc_novelty_score,
+                    "density": assembly.bgc_density,
                 },
                 weights={
                     "diversity": weights.w_diversity,
@@ -511,14 +490,14 @@ def genome_scatter(
                 },
             )
         points.append(
-            GenomeScatterPoint(
-                id=genome.id,
-                x=getattr(genome, x_axis, 0.0) or 0.0,
-                y=getattr(genome, y_axis, 0.0) or 0.0,
+            AssemblyScatterPoint(
+                id=assembly.id,
+                x=getattr(assembly, x_axis, 0.0) or 0.0,
+                y=getattr(assembly, y_axis, 0.0) or 0.0,
                 composite_score=composite,
-                taxonomy_family=genome.taxonomy_family,
-                organism_name=genome.organism_name,
-                is_type_strain=genome.is_type_strain,
+                dominant_taxonomy_label=assembly.dominant_taxonomy_label,
+                organism_name=assembly.organism_name,
+                is_type_strain=assembly.is_type_strain,
             )
         )
     return points
@@ -530,7 +509,7 @@ def genome_scatter(
 @discovery_router.get("/bgcs/{bgc_id}/", response=BgcDetail)
 def bgc_detail(request, bgc_id: int):
     try:
-        bgc = DashboardBgc.objects.select_related("genome").get(id=bgc_id)
+        bgc = DashboardBgc.objects.select_related("assembly", "assembly__source").get(id=bgc_id)
     except DashboardBgc.DoesNotExist:
         raise HttpError(404, "BGC not found")
 
@@ -547,18 +526,19 @@ def bgc_detail(request, bgc_id: int):
         for bd in BgcDomain.objects.filter(bgc=bgc).order_by("domain_acc")
     ]
 
-    # Parent genome
+    # Parent assembly
     parent = None
-    genome = bgc.genome
-    if genome:
-        parent = ParentGenomeSummary(
-            assembly_id=genome.id,
-            accession=genome.assembly_accession,
-            organism_name=genome.organism_name,
-            taxonomy_family=genome.taxonomy_family,
-            is_type_strain=genome.is_type_strain,
-            genome_quality=genome.genome_quality,
-            isolation_source=genome.isolation_source,
+    assembly = bgc.assembly
+    if assembly:
+        parent = ParentAssemblySummary(
+            assembly_id=assembly.id,
+            accession=assembly.assembly_accession,
+            organism_name=assembly.organism_name,
+            source_name=assembly.source.name if assembly.source else None,
+            dominant_taxonomy_label=assembly.dominant_taxonomy_label,
+            is_type_strain=assembly.is_type_strain,
+            assembly_quality=assembly.assembly_quality,
+            isolation_source=assembly.isolation_source,
         )
 
     # Natural products
@@ -591,7 +571,7 @@ def bgc_detail(request, bgc_id: int):
         nearest_mibig_distance=bgc.nearest_mibig_distance,
         is_validated=bgc.is_validated,
         domain_architecture=domain_arch,
-        parent_genome=parent,
+        parent_assembly=parent,
         natural_products=np_items,
     )
 
@@ -728,7 +708,7 @@ def bgc_scatter(
     elif assembly_ids:
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
-            qs = qs.filter(genome_id__in=ids)
+            qs = qs.filter(assembly_id__in=ids)
 
     total = qs.count()
     if total > max_points:
@@ -772,12 +752,7 @@ def domain_query(
     page: int = 1,
     page_size: int = 25,
     search: Optional[str] = None,
-    taxonomy_kingdom: Optional[str] = None,
-    taxonomy_phylum: Optional[str] = None,
-    taxonomy_class: Optional[str] = None,
-    taxonomy_order: Optional[str] = None,
-    taxonomy_family: Optional[str] = None,
-    taxonomy_genus: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
     type_strain_only: bool = False,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
@@ -788,34 +763,25 @@ def domain_query(
     required = [d.acc for d in body.domains if d.required]
     excluded = [d.acc for d in body.domains if not d.required]
 
-    qs = DashboardBgc.objects.select_related("genome")
+    qs = DashboardBgc.objects.select_related("assembly")
 
-    # Sidebar filters via parent genome
+    # Sidebar filters via parent assembly
     if type_strain_only:
-        qs = qs.filter(genome__is_type_strain=True)
-    if taxonomy_kingdom:
-        qs = qs.filter(genome__taxonomy_kingdom__iexact=taxonomy_kingdom)
-    if taxonomy_phylum:
-        qs = qs.filter(genome__taxonomy_phylum__iexact=taxonomy_phylum)
-    if taxonomy_class:
-        qs = qs.filter(genome__taxonomy_class__iexact=taxonomy_class)
-    if taxonomy_order:
-        qs = qs.filter(genome__taxonomy_order__iexact=taxonomy_order)
-    if taxonomy_family:
-        qs = qs.filter(genome__taxonomy_family__iexact=taxonomy_family)
-    if taxonomy_genus:
-        qs = qs.filter(genome__taxonomy_genus__iexact=taxonomy_genus)
+        qs = qs.filter(assembly__is_type_strain=True)
+    if taxonomy_path:
+        from discovery.ltree import filter_contigs_by_taxonomy
+        qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
     if search:
         qs = qs.filter(
-            Q(genome__organism_name__icontains=search)
-            | Q(genome__assembly_accession__icontains=search)
+            Q(assembly__organism_name__icontains=search)
+            | Q(assembly__assembly_accession__icontains=search)
         )
     if bgc_class:
         qs = qs.filter(classification_l1__iexact=bgc_class)
     if biome_lineage:
-        qs = qs.filter(genome__biome_path__icontains=biome_lineage)
+        qs = qs.filter(assembly__biome_path__icontains=biome_lineage)
     if assembly_accession:
-        qs = qs.filter(genome__assembly_accession__icontains=assembly_accession)
+        qs = qs.filter(assembly__assembly_accession__icontains=assembly_accession)
     if bgc_accession:
         bgc_accession = bgc_accession.strip()
         qs = qs.filter(bgc_accession__icontains=bgc_accession)
@@ -868,10 +834,10 @@ def domain_query(
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
             relevance_score=round(bgc.relevance, 4),
-            genome_id=bgc.genome_id,
-            assembly_accession=bgc.genome.assembly_accession if bgc.genome else None,
-            organism_name=bgc.genome.organism_name if bgc.genome else None,
-            is_type_strain=bgc.genome.is_type_strain if bgc.genome else False,
+            assembly_id=bgc.assembly_id,
+            assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
+            organism_name=bgc.assembly.organism_name if bgc.assembly else None,
+            is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
         )
         for bgc in page_qs
     ]
@@ -904,7 +870,7 @@ def similar_bgc_query(
         .annotate(distance=CosineDistance("vector", source_emb.vector))
         .filter(distance__lte=max_distance)
         .order_by("distance")
-        .select_related("bgc__genome")
+        .select_related("bgc__assembly")
     )
 
     # Materialize similarity scores and compute relevance
@@ -944,10 +910,10 @@ def similar_bgc_query(
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
             relevance_score=round(relevance, 4),
-            genome_id=bgc.genome_id,
-            assembly_accession=bgc.genome.assembly_accession if bgc.genome else None,
-            organism_name=bgc.genome.organism_name if bgc.genome else None,
-            is_type_strain=bgc.genome.is_type_strain if bgc.genome else False,
+            assembly_id=bgc.assembly_id,
+            assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
+            organism_name=bgc.assembly.organism_name if bgc.assembly else None,
+            is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
         )
         for bgc, relevance in page_results
     ]
@@ -965,12 +931,7 @@ def chemical_query(
     page: int = 1,
     page_size: int = 25,
     search: Optional[str] = None,
-    taxonomy_kingdom: Optional[str] = None,
-    taxonomy_phylum: Optional[str] = None,
-    taxonomy_class: Optional[str] = None,
-    taxonomy_order: Optional[str] = None,
-    taxonomy_family: Optional[str] = None,
-    taxonomy_genus: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
     type_strain_only: bool = False,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
@@ -1018,34 +979,25 @@ def chemical_query(
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
-    qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("genome")
+    qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
 
     # Sidebar filters
     if type_strain_only:
-        qs = qs.filter(genome__is_type_strain=True)
-    if taxonomy_kingdom:
-        qs = qs.filter(genome__taxonomy_kingdom__iexact=taxonomy_kingdom)
-    if taxonomy_phylum:
-        qs = qs.filter(genome__taxonomy_phylum__iexact=taxonomy_phylum)
-    if taxonomy_class:
-        qs = qs.filter(genome__taxonomy_class__iexact=taxonomy_class)
-    if taxonomy_order:
-        qs = qs.filter(genome__taxonomy_order__iexact=taxonomy_order)
-    if taxonomy_family:
-        qs = qs.filter(genome__taxonomy_family__iexact=taxonomy_family)
-    if taxonomy_genus:
-        qs = qs.filter(genome__taxonomy_genus__iexact=taxonomy_genus)
+        qs = qs.filter(assembly__is_type_strain=True)
+    if taxonomy_path:
+        from discovery.ltree import filter_contigs_by_taxonomy
+        qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
     if search:
         qs = qs.filter(
-            Q(genome__organism_name__icontains=search)
-            | Q(genome__assembly_accession__icontains=search)
+            Q(assembly__organism_name__icontains=search)
+            | Q(assembly__assembly_accession__icontains=search)
         )
     if bgc_class:
         qs = qs.filter(classification_l1__iexact=bgc_class)
     if biome_lineage:
-        qs = qs.filter(genome__biome_path__icontains=biome_lineage)
+        qs = qs.filter(assembly__biome_path__icontains=biome_lineage)
     if assembly_accession:
-        qs = qs.filter(genome__assembly_accession__icontains=assembly_accession)
+        qs = qs.filter(assembly__assembly_accession__icontains=assembly_accession)
     if bgc_accession:
         qs = qs.filter(bgc_accession__icontains=bgc_accession.strip())
 
@@ -1084,10 +1036,10 @@ def chemical_query(
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
             relevance_score=round(relevance, 4),
-            genome_id=bgc.genome_id,
-            assembly_accession=bgc.genome.assembly_accession if bgc.genome else None,
-            organism_name=bgc.genome.organism_name if bgc.genome else None,
-            is_type_strain=bgc.genome.is_type_strain if bgc.genome else False,
+            assembly_id=bgc.assembly_id,
+            assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
+            organism_name=bgc.assembly.organism_name if bgc.assembly else None,
+            is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
         )
         for bgc, relevance in page_results
     ]
@@ -1099,9 +1051,9 @@ def chemical_query(
 
 
 @discovery_router.get(
-    "/query-results/genomes/", response=PaginatedGenomeAggregationResponse
+    "/query-results/assemblies/", response=PaginatedAssemblyAggregationResponse
 )
-def query_results_genome_aggregation(
+def query_results_assembly_aggregation(
     request,
     bgc_ids: str,
     page: int = 1,
@@ -1111,20 +1063,20 @@ def query_results_genome_aggregation(
 ):
     ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
     if not ids:
-        return PaginatedGenomeAggregationResponse(
+        return PaginatedAssemblyAggregationResponse(
             items=[],
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
     # SQL aggregation instead of Python grouping
-    genome_agg = (
+    assembly_agg = (
         DashboardBgc.objects.filter(id__in=ids)
         .values(
-            "genome__id",
-            "genome__assembly_accession",
-            "genome__organism_name",
-            "genome__taxonomy_family",
-            "genome__is_type_strain",
+            "assembly__id",
+            "assembly__assembly_accession",
+            "assembly__organism_name",
+            "assembly__dominant_taxonomy_label",
+            "assembly__is_type_strain",
         )
         .annotate(
             hit_count=Count("id"),
@@ -1149,19 +1101,19 @@ def query_results_genome_aggregation(
     }
     order_field = sort_map.get(sort_by, "max_relevance")
     prefix = "-" if order == "desc" else ""
-    genome_agg = genome_agg.order_by(f"{prefix}{order_field}")
+    assembly_agg = assembly_agg.order_by(f"{prefix}{order_field}")
 
-    total_count = genome_agg.count()
+    total_count = assembly_agg.count()
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_agg = genome_agg[offset: offset + ps]
+    page_agg = assembly_agg[offset: offset + ps]
 
     items = [
-        QueryResultGenomeAggregation(
-            genome_id=row["genome__id"],
-            accession=row["genome__assembly_accession"],
-            organism_name=row["genome__organism_name"],
-            taxonomy_family=row["genome__taxonomy_family"],
-            is_type_strain=row["genome__is_type_strain"],
+        QueryResultAssemblyAggregation(
+            assembly_id=row["assembly__id"],
+            accession=row["assembly__assembly_accession"],
+            organism_name=row["assembly__organism_name"],
+            dominant_taxonomy_label=row["assembly__dominant_taxonomy_label"],
+            is_type_strain=row["assembly__is_type_strain"],
             hit_count=row["hit_count"],
             max_relevance=round(row["max_relevance"] or 0.0, 4),
             mean_relevance=round(row["mean_relevance"] or 0.0, 4),
@@ -1170,7 +1122,7 @@ def query_results_genome_aggregation(
         for row in page_agg
     ]
 
-    return PaginatedGenomeAggregationResponse(
+    return PaginatedAssemblyAggregationResponse(
         items=items,
         pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
     )
@@ -1181,33 +1133,24 @@ def query_results_genome_aggregation(
 
 @discovery_router.get("/filters/taxonomy/", response=list[TaxonomyNode])
 def taxonomy_tree(request):
-    qs = DashboardGenome.objects.values(
-        "taxonomy_kingdom",
-        "taxonomy_phylum",
-        "taxonomy_class",
-        "taxonomy_order",
-        "taxonomy_family",
-        "taxonomy_genus",
+    from discovery.models import DashboardContig
+
+    RANK_NAMES = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
+
+    qs = DashboardContig.objects.exclude(taxonomy_path="").values_list(
+        "taxonomy_path", flat=True
     )
 
     tree: dict = {}
-    for row in qs:
-        ranks = [
-            ("kingdom", row["taxonomy_kingdom"]),
-            ("phylum", row["taxonomy_phylum"]),
-            ("class", row["taxonomy_class"]),
-            ("order", row["taxonomy_order"]),
-            ("family", row["taxonomy_family"]),
-            ("genus", row["taxonomy_genus"]),
-        ]
+    for path in qs:
+        parts = path.split(".")
         node = tree
-        for rank, name in ranks:
-            if not name:
-                break
-            if name not in node:
-                node[name] = {"_rank": rank, "_count": 0, "_children": {}}
-            node[name]["_count"] += 1
-            node = node[name]["_children"]
+        for depth, label in enumerate(parts):
+            rank = RANK_NAMES[depth] if depth < len(RANK_NAMES) else f"rank_{depth}"
+            if label not in node:
+                node[label] = {"_rank": rank, "_count": 0, "_children": {}}
+            node[label]["_count"] += 1
+            node = node[label]["_children"]
 
     def _build_nodes(level: dict) -> list[TaxonomyNode]:
         nodes = []
@@ -1318,16 +1261,11 @@ def domain_list(
 # ── Stats endpoints ──────────────────────────────────────────────────────────
 
 
-@discovery_router.get("/stats/genomes/", response=GenomeStatsResponse)
-def genome_stats(
+@discovery_router.get("/stats/assemblies/", response=AssemblyStatsResponse)
+def assembly_stats(
     request,
     search: Optional[str] = None,
-    taxonomy_kingdom: Optional[str] = None,
-    taxonomy_phylum: Optional[str] = None,
-    taxonomy_class: Optional[str] = None,
-    taxonomy_order: Optional[str] = None,
-    taxonomy_family: Optional[str] = None,
-    taxonomy_genus: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
     type_strain_only: bool = False,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
@@ -1335,24 +1273,19 @@ def genome_stats(
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
 ):
-    qs = DashboardGenome.objects.all()
-    qs = _apply_genome_filters(
+    qs = DashboardAssembly.objects.all()
+    qs = _apply_assembly_filters(
         qs,
-        genome_ids=assembly_ids,
+        assembly_ids=assembly_ids,
         type_strain_only=type_strain_only,
-        taxonomy_kingdom=taxonomy_kingdom,
-        taxonomy_phylum=taxonomy_phylum,
-        taxonomy_class=taxonomy_class,
-        taxonomy_order=taxonomy_order,
-        taxonomy_family=taxonomy_family,
-        taxonomy_genus=taxonomy_genus,
+        taxonomy_path=taxonomy_path,
         search=search,
         bgc_class=bgc_class,
         biome_lineage=biome_lineage,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
     )
-    return compute_genome_stats(qs)
+    return compute_assembly_stats(qs)
 
 
 @discovery_router.get("/stats/bgcs/", response=BgcStatsResponse)
@@ -1366,21 +1299,16 @@ def bgc_stats(
         ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
         qs = qs.filter(id__in=ids) if ids else qs.none()
     else:
-        qs = _apply_bgc_filters(qs, genome_ids=assembly_ids)
+        qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
     return compute_bgc_stats(qs)
 
 
-@discovery_router.get("/stats/genomes/export/")
-def genome_stats_export(
+@discovery_router.get("/stats/assemblies/export/")
+def export_assembly_stats(
     request,
     format: str = "json",
     search: Optional[str] = None,
-    taxonomy_kingdom: Optional[str] = None,
-    taxonomy_phylum: Optional[str] = None,
-    taxonomy_class: Optional[str] = None,
-    taxonomy_order: Optional[str] = None,
-    taxonomy_family: Optional[str] = None,
-    taxonomy_genus: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
     type_strain_only: bool = False,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
@@ -1388,33 +1316,28 @@ def genome_stats_export(
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
 ):
-    qs = DashboardGenome.objects.all()
-    qs = _apply_genome_filters(
+    qs = DashboardAssembly.objects.all()
+    qs = _apply_assembly_filters(
         qs,
-        genome_ids=assembly_ids,
+        assembly_ids=assembly_ids,
         type_strain_only=type_strain_only,
-        taxonomy_kingdom=taxonomy_kingdom,
-        taxonomy_phylum=taxonomy_phylum,
-        taxonomy_class=taxonomy_class,
-        taxonomy_order=taxonomy_order,
-        taxonomy_family=taxonomy_family,
-        taxonomy_genus=taxonomy_genus,
+        taxonomy_path=taxonomy_path,
         search=search,
         bgc_class=bgc_class,
         biome_lineage=biome_lineage,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
     )
-    stats = compute_genome_stats(qs)
+    stats = compute_assembly_stats(qs)
 
     if format == "tsv":
-        return _stats_to_tsv_response(stats, "genome_stats.tsv")
+        return _stats_to_tsv_response(stats, "assembly_stats.tsv")
 
     response = HttpResponse(
         json.dumps(stats, default=str),
         content_type="application/json",
     )
-    response["Content-Disposition"] = 'attachment; filename="genome_stats.json"'
+    response["Content-Disposition"] = 'attachment; filename="assembly_stats.json"'
     return response
 
 
@@ -1430,7 +1353,7 @@ def bgc_stats_export(
         ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
         qs = qs.filter(id__in=ids) if ids else qs.none()
     else:
-        qs = _apply_bgc_filters(qs, genome_ids=assembly_ids)
+        qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
     stats = compute_bgc_stats(qs)
 
     if format == "tsv":
@@ -1468,41 +1391,39 @@ def _stats_to_tsv_response(stats: dict, filename: str) -> HttpResponse:
 # ── Export endpoints ─────────────────────────────────────────────────────────
 
 
-@discovery_router.post("/shortlist/genome/export/")
-def export_genome_shortlist(request, body: ShortlistExportRequest):
+@discovery_router.post("/shortlist/assembly/export/")
+def export_assembly_shortlist(request, body: ShortlistExportRequest):
     if not body.ids:
-        raise HttpError(400, "No genome IDs provided")
+        raise HttpError(400, "No assembly IDs provided")
     if len(body.ids) > 20:
-        raise HttpError(400, "Maximum 20 genomes per export")
+        raise HttpError(400, "Maximum 20 assemblies per export")
 
-    genomes = DashboardGenome.objects.filter(id__in=body.ids)
+    assemblies = DashboardAssembly.objects.filter(id__in=body.ids)
 
     buf = StringIO()
     writer = csv.writer(buf)
     writer.writerow([
         "accession", "organism_name",
-        "taxonomy_kingdom", "taxonomy_phylum", "taxonomy_class",
-        "taxonomy_order", "taxonomy_family", "taxonomy_genus", "taxonomy_species",
+        "dominant_taxonomy_path", "dominant_taxonomy_label",
         "is_type_strain", "type_strain_catalog_url",
-        "genome_size_mb", "genome_quality", "isolation_source",
+        "assembly_size_mb", "assembly_quality", "isolation_source",
         "bgc_count", "l1_class_count",
         "bgc_diversity_score", "bgc_novelty_score", "bgc_density", "taxonomic_novelty",
     ])
 
-    for g in genomes:
+    for g in assemblies:
         writer.writerow([
             g.assembly_accession,
             g.organism_name,
-            g.taxonomy_kingdom, g.taxonomy_phylum, g.taxonomy_class,
-            g.taxonomy_order, g.taxonomy_family, g.taxonomy_genus, g.taxonomy_species,
+            g.dominant_taxonomy_path, g.dominant_taxonomy_label,
             g.is_type_strain, g.type_strain_catalog_url,
-            g.genome_size_mb or "", g.genome_quality or "", g.isolation_source,
+            g.assembly_size_mb or "", g.assembly_quality or "", g.isolation_source,
             g.bgc_count, g.l1_class_count,
             g.bgc_diversity_score, g.bgc_novelty_score, g.bgc_density, g.taxonomic_novelty,
         ])
 
     response = HttpResponse(buf.getvalue(), content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="genome_shortlist.csv"'
+    response["Content-Disposition"] = 'attachment; filename="assembly_shortlist.csv"'
     return response
 
 
@@ -1527,13 +1448,13 @@ def export_bgc_shortlist(request, body: ShortlistExportRequest):
 
 
 @discovery_router.post(
-    "/assess/genome/{genome_id}/",
+    "/assess/assembly/{assembly_id}/",
     response={202: AssessmentAccepted},
     tags=["Assessment"],
 )
-def assess_genome(request, genome_id: int, body: GenomeWeightParams = None):
-    if not DashboardGenome.objects.filter(pk=genome_id).exists():
-        raise HttpError(404, "Genome not found")
+def assess_assembly(request, assembly_id: int, body: AssemblyWeightParams = None):
+    if not DashboardAssembly.objects.filter(pk=assembly_id).exists():
+        raise HttpError(404, "Assembly not found")
 
     weights = {
         "w_diversity": body.w_diversity if body else 0.30,
@@ -1541,10 +1462,10 @@ def assess_genome(request, genome_id: int, body: GenomeWeightParams = None):
         "w_density": body.w_density if body else 0.25,
     }
 
-    from discovery.tasks import assess_genome as assess_genome_task
+    from discovery.tasks import assess_assembly as assess_assembly_task
 
-    result = assess_genome_task.delay(genome_id, weights)
-    return 202, AssessmentAccepted(task_id=result.id, asset_type="genome")
+    result = assess_assembly_task.delay(assembly_id, weights)
+    return 202, AssessmentAccepted(task_id=result.id, asset_type="assembly")
 
 
 @discovery_router.post(
@@ -1578,17 +1499,17 @@ def assess_status(request, task_id: str):
 
 
 @discovery_router.get(
-    "/assess/genome/{genome_id}/similar-genomes/",
+    "/assess/assembly/{assembly_id}/similar-assemblies/",
     response=list[int],
     tags=["Assessment"],
 )
-def similar_genomes(request, genome_id: int):
-    if not DashboardGenome.objects.filter(pk=genome_id).exists():
-        raise HttpError(404, "Genome not found")
+def similar_assemblies(request, assembly_id: int):
+    if not DashboardAssembly.objects.filter(pk=assembly_id).exists():
+        raise HttpError(404, "Assembly not found")
 
-    from discovery.services.assessment import find_similar_genomes
+    from discovery.services.assessment import find_similar_assemblies
 
-    return find_similar_genomes(genome_id, k=10)
+    return find_similar_assemblies(assembly_id, k=10)
 
 
 @discovery_router.get(

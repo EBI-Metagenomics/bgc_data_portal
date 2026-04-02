@@ -44,7 +44,7 @@ export function ChemicalSpaceMap({
     });
   }
 
-  // Genome BGCs as stars, colored by class
+  // Assembly BGCs as stars, colored by class
   if (points.length > 0) {
     traces.push({
       type: "scatter",
@@ -64,7 +64,7 @@ export function ChemicalSpaceMap({
           `${p.accession}<br>${p.classification_l1}<br>MIBiG dist: ${p.nearest_mibig_distance.toFixed(3)}${p.is_sparse ? "<br>(sparse region)" : ""}`
       ),
       hoverinfo: "text",
-      name: "Genome BGCs",
+      name: "Assembly BGCs",
     });
   }
 

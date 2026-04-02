@@ -1,7 +1,7 @@
-import { useGenomeAggregation } from "@/hooks/use-genome-aggregation";
+import { useAssemblyAggregation } from "@/hooks/use-assembly-aggregation";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useModeStore } from "@/stores/mode-store";
-import { GenomeContextMenu } from "@/components/genome/GenomeContextMenu";
+import { AssemblyContextMenu } from "@/components/assembly/AssemblyContextMenu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -34,7 +34,7 @@ const SORT_OPTIONS = [
   { value: "complete_fraction", label: "Completeness" },
 ];
 
-export function GenomeAggregationRoster() {
+export function AssemblyAggregationRoster() {
   const {
     data,
     isLoading,
@@ -45,15 +45,15 @@ export function GenomeAggregationRoster() {
     setSortBy,
     order,
     setOrder,
-  } = useGenomeAggregation();
+  } = useAssemblyAggregation();
 
-  const setActiveGenomeId = useSelectionStore((s) => s.setActiveGenomeId);
+  const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
   const setMode = useModeStore((s) => s.setMode);
 
   if (!hasResults) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        Run a query to see genome aggregation
+        Run a query to see assembly aggregation
       </p>
     );
   }
@@ -101,7 +101,7 @@ export function GenomeAggregationRoster() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">Organism</TableHead>
-              <TableHead className="text-xs">Family</TableHead>
+              <TableHead className="text-xs">Taxonomy</TableHead>
               <TableHead className="text-xs text-center">Hits</TableHead>
               <TableHead className="text-xs text-right">Max Rel.</TableHead>
               <TableHead className="text-xs text-right">Mean Rel.</TableHead>
@@ -110,45 +110,45 @@ export function GenomeAggregationRoster() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((genome) => (
-              <GenomeContextMenu
-                key={genome.assembly_id}
-                genomeId={genome.assembly_id}
-                label={genome.organism_name ?? genome.accession}
+            {items.map((assembly) => (
+              <AssemblyContextMenu
+                key={assembly.assembly_id}
+                assemblyId={assembly.assembly_id}
+                label={assembly.organism_name ?? assembly.accession}
               >
                 <TableRow className="cursor-pointer">
                   <TableCell className="max-w-[180px] truncate text-xs">
                     <div className="flex items-center gap-1">
-                      {genome.is_type_strain && (
+                      {assembly.is_type_strain && (
                         <Star className="h-3 w-3 flex-shrink-0 fill-amber-400 text-amber-400" />
                       )}
-                      {genome.organism_name ?? genome.accession}
+                      {assembly.organism_name ?? assembly.accession}
                     </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {genome.taxonomy_family ?? "-"}
+                    {assembly.dominant_taxonomy_label ?? "-"}
                   </TableCell>
                   <TableCell className="text-center font-mono text-xs">
-                    {genome.hit_count}
+                    {assembly.hit_count}
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
-                    {genome.max_relevance.toFixed(2)}
+                    {assembly.max_relevance.toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
-                    {genome.mean_relevance.toFixed(2)}
+                    {assembly.mean_relevance.toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
-                    {(genome.complete_fraction * 100).toFixed(0)}%
+                    {(assembly.complete_fraction * 100).toFixed(0)}%
                   </TableCell>
                   <TableCell>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0"
-                      title="Explore this genome"
+                      title="Explore this assembly"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setActiveGenomeId(genome.assembly_id);
+                        setActiveAssemblyId(assembly.assembly_id);
                         setMode("explore");
                       }}
                     >
@@ -156,7 +156,7 @@ export function GenomeAggregationRoster() {
                     </Button>
                   </TableCell>
                 </TableRow>
-              </GenomeContextMenu>
+              </AssemblyContextMenu>
             ))}
           </TableBody>
         </Table>
@@ -165,7 +165,7 @@ export function GenomeAggregationRoster() {
       {pagination && pagination.total_pages > 1 && (
         <div className="flex items-center justify-between pt-2">
           <span className="text-xs text-muted-foreground">
-            {pagination.total_count} genomes
+            {pagination.total_count} assemblies
           </span>
           <div className="flex items-center gap-1">
             <Button

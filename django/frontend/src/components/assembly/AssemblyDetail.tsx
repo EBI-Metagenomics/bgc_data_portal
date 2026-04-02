@@ -1,11 +1,11 @@
-import { useGenomeDetail } from "@/hooks/use-genome-detail";
+import { useAssemblyDetail } from "@/hooks/use-assembly-detail";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Star, ExternalLink } from "lucide-react";
 
-interface GenomeDetailProps {
-  genomeId: number;
+interface AssemblyDetailProps {
+  assemblyId: number;
 }
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
@@ -23,8 +23,8 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function GenomeDetail({ genomeId }: GenomeDetailProps) {
-  const { data: genome, isLoading } = useGenomeDetail(genomeId);
+export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
+  const { data: assembly, isLoading } = useAssemblyDetail(assemblyId);
 
   if (isLoading) {
     return (
@@ -35,25 +35,13 @@ export function GenomeDetail({ genomeId }: GenomeDetailProps) {
     );
   }
 
-  if (!genome) {
+  if (!assembly) {
     return (
       <p className="py-4 text-center text-sm text-muted-foreground">
-        Genome not found
+        Assembly not found
       </p>
     );
   }
-
-  const taxonomy = [
-    genome.taxonomy_kingdom,
-    genome.taxonomy_phylum,
-    genome.taxonomy_class,
-    genome.taxonomy_order,
-    genome.taxonomy_family,
-    genome.taxonomy_genus,
-    genome.taxonomy_species,
-  ]
-    .filter(Boolean)
-    .join(" > ");
 
   return (
     <div className="vf-grid vf-grid__col-2" style={{ gap: "1.5rem" }}>
@@ -62,39 +50,39 @@ export function GenomeDetail({ genomeId }: GenomeDetailProps) {
         <div>
           <div className="flex items-center gap-2">
             <h4 className="vf-summary__title">
-              {genome.organism_name ?? genome.accession}
+              {assembly.organism_name ?? assembly.accession}
             </h4>
-            {genome.is_type_strain && (
+            {assembly.is_type_strain && (
               <Badge variant="outline" className="gap-1 border-amber-300 text-amber-600">
                 <Star className="h-3 w-3 fill-amber-400" />
                 Type Strain
               </Badge>
             )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{genome.accession}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{assembly.accession}</p>
         </div>
 
         <div className="space-y-1 text-xs">
           <div>
             <span className="text-muted-foreground">Taxonomy: </span>
-            {taxonomy || "-"}
+            {assembly.dominant_taxonomy_label || "-"}
           </div>
-          {genome.genome_size_mb && (
+          {assembly.assembly_size_mb && (
             <div>
-              <span className="text-muted-foreground">Genome size: </span>
-              {genome.genome_size_mb.toFixed(2)} Mb
+              <span className="text-muted-foreground">Assembly size: </span>
+              {assembly.assembly_size_mb.toFixed(2)} Mb
             </div>
           )}
-          {genome.isolation_source && (
+          {assembly.isolation_source && (
             <div>
               <span className="text-muted-foreground">Isolation source: </span>
-              {genome.isolation_source}
+              {assembly.isolation_source}
             </div>
           )}
-          {genome.type_strain_catalog_url && (
+          {assembly.type_strain_catalog_url && (
             <div>
               <a
-                href={genome.type_strain_catalog_url}
+                href={assembly.type_strain_catalog_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"
@@ -111,20 +99,20 @@ export function GenomeDetail({ genomeId }: GenomeDetailProps) {
       <div className="vf-stack vf-stack--200">
         <h4 className="vf-section-header__heading" style={{ fontSize: "0.875rem" }}>Scores</h4>
         <Separator />
-        <ScoreBar label="Composite" value={genome.composite_score} />
-        <ScoreBar label="BGC Novelty" value={genome.bgc_novelty_score} />
-        <ScoreBar label="BGC Diversity" value={genome.bgc_diversity_score} />
-        <ScoreBar label="BGC Density" value={genome.bgc_density} />
-        <ScoreBar label="Taxonomic Novelty" value={genome.taxonomic_novelty} />
-        {genome.genome_quality !== null && (
-          <ScoreBar label="Genome Quality" value={genome.genome_quality} />
+        <ScoreBar label="Composite" value={assembly.composite_score} />
+        <ScoreBar label="BGC Novelty" value={assembly.bgc_novelty_score} />
+        <ScoreBar label="BGC Diversity" value={assembly.bgc_diversity_score} />
+        <ScoreBar label="BGC Density" value={assembly.bgc_density} />
+        <ScoreBar label="Taxonomic Novelty" value={assembly.taxonomic_novelty} />
+        {assembly.assembly_quality !== null && (
+          <ScoreBar label="Assembly Quality" value={assembly.assembly_quality} />
         )}
         <div className="flex gap-4 pt-2 text-xs">
           <span>
-            <strong>{genome.bgc_count}</strong> BGCs
+            <strong>{assembly.bgc_count}</strong> BGCs
           </span>
           <span>
-            <strong>{genome.l1_class_count}</strong> classes
+            <strong>{assembly.l1_class_count}</strong> classes
           </span>
         </div>
       </div>

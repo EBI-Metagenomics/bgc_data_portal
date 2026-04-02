@@ -1,7 +1,7 @@
 import { apiGet, apiPost } from "./client";
 import type {
   DomainQueryRequest,
-  PaginatedGenomeAggregationResponse,
+  PaginatedAssemblyAggregationResponse,
   PaginatedQueryResultResponse,
   QueryWeightParams,
 } from "./types";
@@ -11,12 +11,7 @@ export interface DomainQueryParams extends Partial<QueryWeightParams> {
   page_size?: number;
   search?: string;
   type_strain_only?: boolean;
-  taxonomy_kingdom?: string;
-  taxonomy_phylum?: string;
-  taxonomy_class?: string;
-  taxonomy_order?: string;
-  taxonomy_family?: string;
-  taxonomy_genus?: string;
+  taxonomy_path?: string;
   bgc_class?: string;
   biome_lineage?: string;
   assembly_accession?: string;
@@ -69,12 +64,7 @@ export interface ChemicalQueryParams extends Partial<QueryWeightParams> {
   page_size?: number;
   search?: string;
   type_strain_only?: boolean;
-  taxonomy_kingdom?: string;
-  taxonomy_phylum?: string;
-  taxonomy_class?: string;
-  taxonomy_order?: string;
-  taxonomy_family?: string;
-  taxonomy_genus?: string;
+  taxonomy_path?: string;
   bgc_class?: string;
   biome_lineage?: string;
   assembly_accession?: string;
@@ -96,7 +86,7 @@ export function postChemicalQuery(
   );
 }
 
-export interface GenomeAggregationParams {
+export interface AssemblyAggregationParams {
   bgc_ids: string;
   page?: number;
   page_size?: number;
@@ -104,9 +94,9 @@ export interface GenomeAggregationParams {
   order?: "asc" | "desc";
 }
 
-export function fetchQueryResultGenomes(params: GenomeAggregationParams) {
-  return apiGet<PaginatedGenomeAggregationResponse>(
-    "/query-results/genomes/",
+export function fetchQueryResultAssemblies(params: AssemblyAggregationParams) {
+  return apiGet<PaginatedAssemblyAggregationResponse>(
+    "/query-results/assemblies/",
     params as unknown as Record<string, string | number | boolean | undefined>
   );
 }

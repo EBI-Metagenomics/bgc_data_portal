@@ -1,31 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchGenomeRoster, type GenomeRosterParams } from "@/api/genomes";
+import { fetchAssemblyRoster, type AssemblyRosterParams } from "@/api/assemblies";
 import { useFilterStore } from "@/stores/filter-store";
-import { useGenomeWeightStore } from "@/stores/genome-weight-store";
+import { useAssemblyWeightStore } from "@/stores/assembly-weight-store";
 import { useState } from "react";
 
-export function useGenomeRoster() {
+export function useAssemblyRoster() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [sortBy, setSortBy] = useState("composite_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
 
   const filters = useFilterStore();
-  const weights = useGenomeWeightStore();
+  const weights = useAssemblyWeightStore();
 
-  const params: GenomeRosterParams = {
+  const params: AssemblyRosterParams = {
     page,
     page_size: pageSize,
     sort_by: sortBy,
     order,
     search: filters.search || undefined,
     type_strain_only: filters.typeStrainOnly || undefined,
-    taxonomy_kingdom: filters.taxonomyKingdom || undefined,
-    taxonomy_phylum: filters.taxonomyPhylum || undefined,
-    taxonomy_class: filters.taxonomyClass || undefined,
-    taxonomy_order: filters.taxonomyOrder || undefined,
-    taxonomy_family: filters.taxonomyFamily || undefined,
-    taxonomy_genus: filters.taxonomyGenus || undefined,
+    taxonomy_path: filters.taxonomyPath || undefined,
+    assembly_type: filters.assemblyType || undefined,
     bgc_class: filters.bgcClass || undefined,
     biome_lineage: filters.biomeLineage || undefined,
     bgc_accession: filters.bgcAccession || undefined,
@@ -37,8 +33,8 @@ export function useGenomeRoster() {
   };
 
   const query = useQuery({
-    queryKey: ["genome-roster", params],
-    queryFn: () => fetchGenomeRoster(params),
+    queryKey: ["assembly-roster", params],
+    queryFn: () => fetchAssemblyRoster(params),
   });
 
   return {

@@ -41,7 +41,7 @@ export function Header() {
                     setMode("explore");
                   }}
                 >
-                  Explore Genomes
+                  Explore Assemblies
                 </a>
               </li>
               <li className="vf-tabs__item">

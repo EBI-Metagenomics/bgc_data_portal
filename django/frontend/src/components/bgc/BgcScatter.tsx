@@ -29,10 +29,10 @@ interface BgcScatterProps {
 export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId, markerSymbol }: BgcScatterProps = {}) {
   const [showMibig, setShowMibig] = useState(true);
   const mode = useModeStore((s) => s.mode);
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
-  const genomeShortlist = useShortlistStore((s) => s.genomes);
+  const assemblyShortlist = useShortlistStore((s) => s.assemblies);
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
 
   // When bgcIdsOverride is provided (e.g. assess mode), use it directly
@@ -41,10 +41,10 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
     : assemblyIdsOverride
       ? assemblyIdsOverride
       : mode === "explore"
-        ? genomeShortlist.length > 0
-          ? genomeShortlist.map((g) => g.id)
-          : activeGenomeId
-            ? [activeGenomeId]
+        ? assemblyShortlist.length > 0
+          ? assemblyShortlist.map((g) => g.id)
+          : activeAssemblyId
+            ? [activeAssemblyId]
             : []
         : undefined;
 
@@ -59,7 +59,7 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
     : assemblyIdsOverride
       ? assemblyIdsOverride.length > 0
       : mode === "explore"
-        ? (genomeShortlist.length > 0 || activeGenomeId != null)
+        ? (assemblyShortlist.length > 0 || activeAssemblyId != null)
         : hasQueryResults;
 
   const { data: points, isLoading } = useBgcScatter({
@@ -176,7 +176,7 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
       <p className="py-8 text-center text-sm text-muted-foreground">
         {mode === "query"
           ? "Run a query to see results"
-          : "Select or shortlist genomes to view their BGC chemical space"}
+          : "Select or shortlist assemblies to view their BGC chemical space"}
       </p>
     );
   }

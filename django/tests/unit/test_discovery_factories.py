@@ -7,7 +7,7 @@ from tests.factories.discovery_models import (
     GCFMembershipFactory,
     NaturalProductFactory,
     MibigReferenceFactory,
-    GenomeScoreFactory,
+    AssemblyScoreFactory,
     BgcScoreFactory,
 )
 
@@ -44,8 +44,8 @@ class TestDiscoveryFactories:
         assert ref.embedding is not None
         assert len(ref.embedding) == 1152
 
-    def test_genome_score_factory(self):
-        gs = GenomeScoreFactory()
+    def test_assembly_score_factory(self):
+        gs = AssemblyScoreFactory()
         assert gs.pk is not None
         assert 0.0 <= gs.bgc_diversity_score <= 1.0
         assert 0.0 <= gs.bgc_novelty_score <= 1.0

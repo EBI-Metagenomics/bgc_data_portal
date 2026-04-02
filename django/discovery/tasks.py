@@ -18,18 +18,18 @@ log = logging.getLogger(__name__)
 ASSESSMENT_TTL = 86_400  # 24 hours
 
 
-@shared_task(name="discovery.tasks.assess_genome", bind=True, acks_late=True)
-def assess_genome(self, genome_id: int, weights: dict) -> bool:
-    """Run a full genome assessment and cache the result."""
+@shared_task(name="discovery.tasks.assess_assembly", bind=True, acks_late=True)
+def assess_assembly(self, assembly_id: int, weights: dict) -> bool:
+    """Run a full assembly assessment and cache the result."""
     task_id = self.request.id
-    search_key = f"assess_genome:{genome_id}"
+    search_key = f"assess_assembly:{assembly_id}"
 
     # Mark as pending
     set_job_cache(search_key=search_key, task_id=task_id, timeout=ASSESSMENT_TTL)
 
-    from discovery.services.assessment import compute_genome_assessment
+    from discovery.services.assessment import compute_assembly_assessment
 
-    result = compute_genome_assessment(genome_id, weights)
+    result = compute_assembly_assessment(assembly_id, weights)
 
     set_job_cache(
         search_key=search_key,
@@ -37,7 +37,7 @@ def assess_genome(self, genome_id: int, weights: dict) -> bool:
         task_id=task_id,
         timeout=ASSESSMENT_TTL,
     )
-    log.info("Genome assessment completed for genome %s (task %s)", genome_id, task_id)
+    log.info("Assembly assessment completed for assembly %s (task %s)", assembly_id, task_id)
     return True
 
 

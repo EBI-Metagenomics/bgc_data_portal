@@ -30,12 +30,7 @@ export function QueryActions() {
     hasConditions ||
     hasSmilesQuery ||
     !!filters.bgcClass ||
-    !!filters.taxonomyKingdom ||
-    !!filters.taxonomyPhylum ||
-    !!filters.taxonomyClass ||
-    !!filters.taxonomyOrder ||
-    !!filters.taxonomyFamily ||
-    !!filters.taxonomyGenus ||
+    !!filters.taxonomyPath ||
     !!filters.biomeLineage ||
     !!filters.assemblyAccession ||
     !!filters.bgcAccession ||

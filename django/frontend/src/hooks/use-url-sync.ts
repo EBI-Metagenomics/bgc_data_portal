@@ -29,21 +29,15 @@ export function useUrlSync() {
     const search = searchParams.get("search");
     if (search) useFilterStore.getState().setSearch(search);
 
-    for (const rank of [
-      "kingdom",
-      "phylum",
-      "class",
-      "order",
-      "family",
-      "genus",
-    ]) {
-      const val = searchParams.get(`taxonomy_${rank}`);
-      if (val) useFilterStore.getState().setTaxonomy(rank, val);
-    }
+    const taxonomyPath = searchParams.get("taxonomy_path");
+    if (taxonomyPath) useFilterStore.getState().setTaxonomyPath(taxonomyPath);
 
-    const genomeId = searchParams.get("genome");
-    if (genomeId) {
-      useSelectionStore.getState().setActiveGenomeId(Number(genomeId));
+    const assemblyType = searchParams.get("assembly_type");
+    if (assemblyType) useFilterStore.getState().setAssemblyType(assemblyType);
+
+    const assemblyId = searchParams.get("assembly");
+    if (assemblyId) {
+      useSelectionStore.getState().setActiveAssemblyId(Number(assemblyId));
     }
   }, [searchParams]);
 
@@ -55,15 +49,11 @@ export function useUrlSync() {
         updateUrl("type_strain_only", state.typeStrainOnly ? "true" : "");
         updateUrl("bgc_class", state.bgcClass);
         updateUrl("search", state.search);
-        updateUrl("taxonomy_kingdom", state.taxonomyKingdom);
-        updateUrl("taxonomy_phylum", state.taxonomyPhylum);
-        updateUrl("taxonomy_class", state.taxonomyClass);
-        updateUrl("taxonomy_order", state.taxonomyOrder);
-        updateUrl("taxonomy_family", state.taxonomyFamily);
-        updateUrl("taxonomy_genus", state.taxonomyGenus);
+        updateUrl("taxonomy_path", state.taxonomyPath);
+        updateUrl("assembly_type", state.assemblyType);
       }),
       useSelectionStore.subscribe((state) => {
-        updateUrl("genome", state.activeGenomeId?.toString() ?? "");
+        updateUrl("assembly", state.activeAssemblyId?.toString() ?? "");
       }),
     ];
 

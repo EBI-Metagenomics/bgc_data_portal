@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import type {
   BgcAssessmentResult,
-  GenomeAssessmentResult,
+  AssemblyAssessmentResult,
 } from "@/api/types";
 
-export type AssessAssetType = "genome" | "bgc";
+export type AssessAssetType = "assembly" | "bgc";
 
 interface AssessState {
   assetType: AssessAssetType | null;
@@ -12,11 +12,11 @@ interface AssessState {
   assetLabel: string;
   taskId: string | null;
   status: "idle" | "pending" | "success" | "error";
-  result: GenomeAssessmentResult | BgcAssessmentResult | null;
+  result: AssemblyAssessmentResult | BgcAssessmentResult | null;
 
   startAssessment: (type: AssessAssetType, id: number, label: string) => void;
   setTaskId: (taskId: string) => void;
-  setResult: (result: GenomeAssessmentResult | BgcAssessmentResult) => void;
+  setResult: (result: AssemblyAssessmentResult | BgcAssessmentResult) => void;
   setStatus: (status: "idle" | "pending" | "success" | "error") => void;
   clearAssessment: () => void;
 }

@@ -5,6 +5,7 @@ import { TypeStrainToggle } from "./TypeStrainToggle";
 import { TaxonomyFilter } from "./TaxonomyFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
 import { NpClassFilter } from "./NpClassFilter";
+import { AssemblyTypeFilter } from "./AssemblyTypeFilter";
 import { DomainQueryBuilder } from "./DomainQueryBuilder";
 import { ChemicalStructureSearch } from "./ChemicalStructureSearch";
 import { useFilterStore } from "@/stores/filter-store";
@@ -53,6 +54,7 @@ export function FilterPanel() {
       </div>
 
       <TypeStrainToggle />
+      <AssemblyTypeFilter />
 
       {mode === "query" ? (
         <Tabs defaultValue="filters">

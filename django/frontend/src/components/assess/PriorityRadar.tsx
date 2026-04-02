@@ -46,7 +46,7 @@ export function PriorityRadar({
           type: "scatterpolar",
           r: closedValues,
           theta: closedLabels,
-          name: "This genome",
+          name: "This assembly",
           fill: "toself",
           fillcolor: "rgba(59,130,246,0.2)",
           line: { color: "rgb(59,130,246)", width: 2 },

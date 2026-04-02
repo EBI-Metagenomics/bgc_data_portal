@@ -1,17 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchGenomeScatter, type GenomeScatterParams } from "@/api/genomes";
+import { fetchAssemblyScatter, type AssemblyScatterParams } from "@/api/assemblies";
 import { useFilterStore } from "@/stores/filter-store";
-import { useGenomeWeightStore } from "@/stores/genome-weight-store";
+import { useAssemblyWeightStore } from "@/stores/assembly-weight-store";
 
-export function useGenomeScatter(xAxis: string, yAxis: string) {
+export function useAssemblyScatter(xAxis: string, yAxis: string) {
   const filters = useFilterStore();
-  const weights = useGenomeWeightStore();
+  const weights = useAssemblyWeightStore();
 
-  const params: GenomeScatterParams = {
+  const params: AssemblyScatterParams = {
     x_axis: xAxis,
     y_axis: yAxis,
     type_strain_only: filters.typeStrainOnly || undefined,
-    taxonomy_family: filters.taxonomyFamily || undefined,
+    taxonomy_path: filters.taxonomyPath || undefined,
+    assembly_type: filters.assemblyType || undefined,
     bgc_class: filters.bgcClass || undefined,
     w_diversity: weights.w_diversity,
     w_novelty: weights.w_novelty,
@@ -19,7 +20,7 @@ export function useGenomeScatter(xAxis: string, yAxis: string) {
   };
 
   return useQuery({
-    queryKey: ["genome-scatter", params],
-    queryFn: () => fetchGenomeScatter(params),
+    queryKey: ["assembly-scatter", params],
+    queryFn: () => fetchAssemblyScatter(params),
   });
 }

@@ -1,9 +1,9 @@
 import { useAssessStore } from "@/stores/assess-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useGenomeAssessment } from "@/hooks/use-genome-assessment";
+import { useAssemblyAssessment } from "@/hooks/use-assembly-assessment";
 import { PanelContainer } from "@/components/panels/PanelContainer";
 import { AssessmentLoading } from "./AssessmentLoading";
-import { GenomeRankCard } from "./GenomeRankCard";
+import { AssemblyRankCard } from "./AssemblyRankCard";
 import { PriorityRadar } from "./PriorityRadar";
 import { PercentileCharts } from "./PercentileCharts";
 import { RedundancyMatrix } from "./RedundancyMatrix";
@@ -16,9 +16,9 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, ListPlus } from "lucide-react";
 import { toast } from "sonner";
 
-export function GenomeAssessmentView() {
+export function AssemblyAssessmentView() {
   const assetLabel = useAssessStore((s) => s.assetLabel);
-  const { isLoading, isError, result, retry } = useGenomeAssessment();
+  const { isLoading, isError, result, retry } = useAssemblyAssessment();
 
   if (isLoading) {
     return <AssessmentLoading label={assetLabel} />;
@@ -45,7 +45,7 @@ export function GenomeAssessmentView() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">
-            Genome Assessment: {result.organism_name || result.accession}
+            Assembly Assessment: {result.organism_name || result.accession}
           </h2>
           <p className="text-xs text-muted-foreground">
             {result.accession}
@@ -61,11 +61,11 @@ export function GenomeAssessmentView() {
             variant="outline"
             size="sm"
             onClick={() => {
-              const ok = useShortlistStore.getState().addGenome({
+              const ok = useShortlistStore.getState().addAssembly({
                 id: result.assembly_id,
                 label: result.organism_name || result.accession,
               });
-              if (ok) toast.success("Added to genome shortlist");
+              if (ok) toast.success("Added to assembly shortlist");
               else toast.error("Shortlist full (max 20)");
             }}
           >
@@ -73,14 +73,14 @@ export function GenomeAssessmentView() {
             Add to Shortlist
           </Button>
           <AssessmentExportButton />
-          <CrossModeActions assetType="genome" assetId={result.assembly_id} />
+          <CrossModeActions assetType="assembly" assetId={result.assembly_id} />
         </div>
       </div>
 
       {/* Top row: Rank Card + Radar */}
       <div className="grid gap-4 xl:grid-cols-2">
         <PanelContainer title="Priority Ranking">
-          <GenomeRankCard
+          <AssemblyRankCard
             dbRank={result.db_rank}
             dbTotal={result.db_total}
             compositeScore={result.composite_score}

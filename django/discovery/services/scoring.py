@@ -1,8 +1,8 @@
 """
 Runtime scoring for the Discovery Platform.
 
-All BGC-level and genome-level sub-scores are precomputed and stored in
-GenomeScore / BgcScore.  Only the composite priority score is computed at
+All BGC-level and assembly-level sub-scores are precomputed and stored in
+AssemblyScore / BgcScore.  Only the composite priority score is computed at
 query time, because its weights are user-tunable via dashboard sliders.
 """
 
@@ -17,7 +17,7 @@ def compute_composite_priority(
     ----------
     scores : dict
         Mapping of score names to their [0, 1] values.
-        In Explore Genomes mode these come from GenomeScore:
+        In Explore Assemblies mode these come from AssemblyScore:
             bgc_diversity_score, bgc_novelty_score, bgc_density
         In Query mode these come from BgcScore:
             query_similarity, novelty_score, domain_novelty

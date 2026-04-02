@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
 import Plot from "react-plotly.js";
-import { useGenomeScatter } from "@/hooks/use-genome-scatter";
+import { useAssemblyScatter } from "@/hooks/use-assembly-scatter";
 import { useSelectionStore } from "@/stores/selection-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -16,46 +16,46 @@ const AXIS_OPTIONS = [
   { value: "bgc_novelty_score", label: "Novelty" },
   { value: "bgc_density", label: "Density" },
   { value: "taxonomic_novelty", label: "Tax. Novelty" },
-  { value: "genome_quality", label: "Quality" },
+  { value: "assembly_quality", label: "Quality" },
 ];
 
-// Color palette for taxonomy families
-const FAMILY_COLORS = [
+// Color palette for taxonomy
+const TAXONOMY_COLORS = [
   "#3b82f6", "#ef4444", "#22c55e", "#f97316", "#a855f7",
   "#14b8a6", "#ec4899", "#eab308", "#6366f1", "#84cc16",
   "#f43f5e", "#06b6d4", "#d946ef", "#f59e0b", "#10b981",
 ];
 
-export function GenomeScatter() {
+export function AssemblyScatter() {
   const [xAxis, setXAxis] = useState("bgc_diversity_score");
   const [yAxis, setYAxis] = useState("bgc_novelty_score");
-  const { data: points, isLoading } = useGenomeScatter(xAxis, yAxis);
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
-  const setActiveGenomeId = useSelectionStore((s) => s.setActiveGenomeId);
+  const { data: points, isLoading } = useAssemblyScatter(xAxis, yAxis);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
+  const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
 
-  // Group by taxonomy family for coloring
+  // Group by dominant taxonomy label for coloring
   const traces = useMemo(() => {
     if (!points?.length) return [];
     const groups = new Map<string, typeof points>();
     for (const pt of points) {
-      const family = pt.taxonomy_family ?? "Unknown";
-      const existing = groups.get(family);
+      const taxonomy = pt.dominant_taxonomy_label ?? "Unknown";
+      const existing = groups.get(taxonomy);
       if (existing) {
         existing.push(pt);
       } else {
-        groups.set(family, [pt]);
+        groups.set(taxonomy, [pt]);
       }
     }
 
     let colorIdx = 0;
     const result: Plotly.Data[] = [];
-    for (const [family, pts] of groups) {
-      const color = FAMILY_COLORS[colorIdx % FAMILY_COLORS.length]!;
+    for (const [taxonomy, pts] of groups) {
+      const color = TAXONOMY_COLORS[colorIdx % TAXONOMY_COLORS.length]!;
       colorIdx++;
       result.push({
         type: "scatter" as const,
         mode: "markers" as const,
-        name: family,
+        name: taxonomy,
         x: pts.map((p) => p.x),
         y: pts.map((p) => p.y),
         customdata: pts.map((p) => p.id),
@@ -70,24 +70,24 @@ export function GenomeScatter() {
           opacity: 0.7,
           line: {
             color: pts.map((p) =>
-              p.id === activeGenomeId ? "#000" : "transparent"
+              p.id === activeAssemblyId ? "#000" : "transparent"
             ),
-            width: pts.map((p) => (p.id === activeGenomeId ? 2 : 0)),
+            width: pts.map((p) => (p.id === activeAssemblyId ? 2 : 0)),
           },
         },
       });
     }
     return result;
-  }, [points, activeGenomeId]);
+  }, [points, activeAssemblyId]);
 
   const handleClick = useCallback(
     (event: Plotly.PlotMouseEvent) => {
       const point = event.points[0];
       if (point?.customdata) {
-        setActiveGenomeId(point.customdata as number);
+        setActiveAssemblyId(point.customdata as number);
       }
     },
-    [setActiveGenomeId]
+    [setActiveAssemblyId]
   );
 
   const xLabel = AXIS_OPTIONS.find((o) => o.value === xAxis)?.label ?? xAxis;

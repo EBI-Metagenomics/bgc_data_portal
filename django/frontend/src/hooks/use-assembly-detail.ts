@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchGenomeDetail } from "@/api/genomes";
+import { fetchAssemblyDetail } from "@/api/assemblies";
 
-export function useGenomeDetail(genomeId: number | null) {
+export function useAssemblyDetail(assemblyId: number | null) {
   return useQuery({
-    queryKey: ["genome-detail", genomeId],
-    queryFn: () => fetchGenomeDetail(genomeId!),
-    enabled: genomeId !== null,
+    queryKey: ["assembly-detail", assemblyId],
+    queryFn: () => fetchAssemblyDetail(assemblyId!),
+    enabled: assemblyId !== null,
   });
 }

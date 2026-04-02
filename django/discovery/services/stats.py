@@ -1,6 +1,6 @@
 """Aggregation statistics for the Discovery Platform stats panels.
 
-Uses DashboardGenome/DashboardBgc and the denormalized BgcDomain table
+Uses DashboardAssembly/DashboardBgc and the denormalized BgcDomain table
 instead of cross-schema joins.  For unfiltered views, reads from
 PrecomputedStats to avoid full-table scans.
 """
@@ -13,7 +13,7 @@ from django.db.models import Avg, Count, Q
 from discovery.models import (
     BgcDomain,
     DashboardBgc,
-    DashboardGenome,
+    DashboardAssembly,
     DashboardNaturalProduct,
     PrecomputedStats,
 )
@@ -29,19 +29,19 @@ def _sample_values(values: list[float], limit: int = MAX_BOXPLOT_VALUES) -> list
     return random.sample(values, limit)
 
 
-# ── Genome stats ─────────────────────────────────────────────────────────────
+# ── Assembly stats ───────────────────────────────────────────────────────────
 
 
-def compute_genome_stats(genome_qs) -> dict:
-    """Compute aggregate statistics for a filtered DashboardGenome queryset.
+def compute_assembly_stats(assembly_qs) -> dict:
+    """Compute aggregate statistics for a filtered DashboardAssembly queryset.
 
-    Returns a dict ready to be serialised into GenomeStatsResponse.
+    Returns a dict ready to be serialised into AssemblyStatsResponse.
     """
-    taxonomy_sunburst = _build_taxonomy_sunburst(genome_qs)
+    taxonomy_sunburst = _build_taxonomy_sunburst(assembly_qs)
 
     # Score distributions for boxplots
     score_rows = list(
-        genome_qs.values_list(
+        assembly_qs.values_list(
             "bgc_diversity_score",
             "bgc_novelty_score",
             "bgc_density",
@@ -58,13 +58,13 @@ def compute_genome_stats(genome_qs) -> dict:
     ]
 
     # Type strain counts
-    strain_agg = genome_qs.aggregate(
+    strain_agg = assembly_qs.aggregate(
         type_strain=Count("id", filter=Q(is_type_strain=True)),
         non_type_strain=Count("id", filter=Q(is_type_strain=False)),
     )
 
-    # Average BGC count and L1 class count per genome
-    avg_agg = genome_qs.aggregate(
+    # Average BGC count and L1 class count per assembly
+    avg_agg = assembly_qs.aggregate(
         mean_bgc=Avg("bgc_count"),
         mean_l1=Avg("l1_class_count"),
     )
@@ -74,46 +74,43 @@ def compute_genome_stats(genome_qs) -> dict:
         "score_distributions": score_distributions,
         "type_strain_count": strain_agg["type_strain"],
         "non_type_strain_count": strain_agg["non_type_strain"],
-        "mean_bgc_per_genome": round(avg_agg["mean_bgc"] or 0.0, 2),
-        "mean_l1_class_per_genome": round(avg_agg["mean_l1"] or 0.0, 2),
-        "total_genomes": genome_qs.count(),
+        "mean_bgc_per_assembly": round(avg_agg["mean_bgc"] or 0.0, 2),
+        "mean_l1_class_per_assembly": round(avg_agg["mean_l1"] or 0.0, 2),
+        "total_assemblies": assembly_qs.count(),
     }
 
 
-def _build_taxonomy_sunburst(genome_qs) -> list[dict]:
-    """Build a flat list for Plotly sunburst from taxonomy columns.
+def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
+    """Build a flat list for Plotly sunburst from contig taxonomy_path (ltree).
 
     Returns [{id, label, parent, count}, ...] where parent="" for root nodes.
     """
-    ranks = [
-        "taxonomy_kingdom",
-        "taxonomy_phylum",
-        "taxonomy_class",
-        "taxonomy_order",
-        "taxonomy_family",
-        "taxonomy_genus",
-    ]
+    from discovery.models import DashboardContig
 
-    rows = genome_qs.values(*ranks).annotate(count=Count("id"))
+    RANK_NAMES = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
+
+    contig_paths = (
+        DashboardContig.objects.filter(assembly__in=assembly_qs)
+        .exclude(taxonomy_path="")
+        .values_list("taxonomy_path", flat=True)
+    )
 
     nodes: dict[str, dict] = {}
 
-    for row in rows:
-        count = row["count"]
+    for path in contig_paths:
+        parts = path.split(".")
         parent_id = ""
-        for rank in ranks:
-            value = row[rank]
-            if not value:
-                break
-            node_id = f"{rank}:{value}"
+        for depth, label in enumerate(parts):
+            rank = RANK_NAMES[depth] if depth < len(RANK_NAMES) else f"rank_{depth}"
+            node_id = f"{rank}:{label}"
             if node_id not in nodes:
                 nodes[node_id] = {
                     "id": node_id,
-                    "label": value,
+                    "label": label,
                     "parent": parent_id,
                     "count": 0,
                 }
-            nodes[node_id]["count"] += count
+            nodes[node_id]["count"] += 1
             parent_id = node_id
 
     return list(nodes.values())

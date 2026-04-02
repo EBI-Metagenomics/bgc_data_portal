@@ -10,16 +10,16 @@ export function useBgcRoster(assemblyIdOverride?: number) {
   const [sortBy, setSortBy] = useState("novelty_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
 
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
-  const genomeShortlist = useShortlistStore((s) => s.genomes);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
+  const assemblyShortlist = useShortlistStore((s) => s.assemblies);
 
   // When an override is provided, use it directly (e.g. assess mode)
   const assemblyIds = assemblyIdOverride
     ? [assemblyIdOverride]
-    : genomeShortlist.length > 0
-      ? genomeShortlist.map((g) => g.id)
-      : activeGenomeId
-        ? [activeGenomeId]
+    : assemblyShortlist.length > 0
+      ? assemblyShortlist.map((g) => g.id)
+      : activeAssemblyId
+        ? [activeAssemblyId]
         : [];
 
   const params: BgcRosterParams = {

@@ -1,25 +1,25 @@
 import type { PercentileRank } from "@/api/types";
 
-interface GenomeRankCardProps {
+interface AssemblyRankCardProps {
   dbRank: number;
   dbTotal: number;
   compositeScore: number;
   percentileRanks: PercentileRank[];
 }
 
-export function GenomeRankCard({
+export function AssemblyRankCard({
   dbRank,
   dbTotal,
   compositeScore,
   percentileRanks,
-}: GenomeRankCardProps) {
+}: AssemblyRankCardProps) {
   return (
     <div className="space-y-4">
       {/* Hero rank */}
       <div className="flex items-baseline gap-3">
         <span className="text-4xl font-bold text-primary">#{dbRank}</span>
         <span className="text-sm text-muted-foreground">
-          of {dbTotal.toLocaleString()} genomes by priority score
+          of {dbTotal.toLocaleString()} assemblies by priority score
         </span>
       </div>
       <div className="text-sm">

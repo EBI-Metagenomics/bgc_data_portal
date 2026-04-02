@@ -41,8 +41,8 @@ export function GcfContextPanel({
   }
 
   // Build sunburst data from taxonomy distribution
-  const sunburstIds = gcfContext.taxonomy_distribution.map((t) => t.taxonomy_family);
-  const sunburstLabels = gcfContext.taxonomy_distribution.map((t) => t.taxonomy_family);
+  const sunburstIds = gcfContext.taxonomy_distribution.map((t) => t.taxonomy_label);
+  const sunburstLabels = gcfContext.taxonomy_distribution.map((t) => t.taxonomy_label);
   const sunburstParents = gcfContext.taxonomy_distribution.map(() => "");
   const sunburstValues = gcfContext.taxonomy_distribution.map((t) => t.count);
 

@@ -35,8 +35,8 @@ def _make_assembly(accession, family="Streptomycetaceae", is_type_strain=False):
         taxonomy_species="Streptomyces coelicolor",
         organism_name=f"S. coelicolor {accession}",
         is_type_strain=is_type_strain,
-        genome_size_mb=8.5,
-        genome_quality=0.95,
+        assembly_size_mb=8.5,
+        assembly_quality=0.95,
     )
 
 
@@ -69,7 +69,7 @@ def _score_assembly(assembly, bgcs):
         bgc_novelty_score=0.4,
         bgc_density=0.3,
         taxonomic_novelty=0.5,
-        genome_quality=0.9,
+        assembly_quality=0.9,
         l1_class_count=2,
     )
 
@@ -129,9 +129,9 @@ _WEIGHT_QS = "w_diversity=0.25&w_novelty=0.4&w_density=0.15&w_taxonomic=0.1&w_qu
 
 
 @pytest.mark.django_db
-class TestGenomeRoster:
+class TestAssemblyRoster:
     def test_returns_paginated_list(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genomes/?{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/?{_WEIGHT_QS}")
         assert r.status_code == 200
         data = json.loads(r.content)
         assert "items" in data
@@ -139,68 +139,68 @@ class TestGenomeRoster:
         assert data["pagination"]["total_count"] == 2
 
     def test_pagination(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genomes/?page=1&page_size=1&{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/?page=1&page_size=1&{_WEIGHT_QS}")
         data = json.loads(r.content)
         assert len(data["items"]) == 1
         assert data["pagination"]["total_pages"] == 2
 
     def test_type_strain_filter(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genomes/?type_strain_only=true&{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/?type_strain_only=true&{_WEIGHT_QS}")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
         assert data["items"][0]["is_type_strain"] is True
 
     def test_taxonomy_filter(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genomes/?taxonomy_family=Pseudomonadaceae&{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/?taxonomy_family=Pseudomonadaceae&{_WEIGHT_QS}")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
 
     def test_search(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genomes/?search=TEST_ERZ001&{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/?search=TEST_ERZ001&{_WEIGHT_QS}")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
 
     def test_sort_by_bgc_count(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genomes/?sort_by=bgc_count&order=desc&{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/?sort_by=bgc_count&order=desc&{_WEIGHT_QS}")
         data = json.loads(r.content)
         assert data["items"][0]["bgc_count"] >= data["items"][1]["bgc_count"]
 
 
 @pytest.mark.django_db
-class TestGenomeDetail:
+class TestAssemblyDetail:
     def test_returns_detail(self, api_client, seeded_data):
         aid = seeded_data["assemblies"][0].id
-        r = api_client.get(f"/api/dashboard/genomes/{aid}/?{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/{aid}/?{_WEIGHT_QS}")
         assert r.status_code == 200
         data = json.loads(r.content)
         assert data["accession"] == "TEST_ERZ001"
-        assert data["genome_size_mb"] == 8.5
+        assert data["assembly_size_mb"] == 8.5
         assert data["is_type_strain"] is True
 
     def test_404_for_missing(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genomes/99999/?{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/99999/?{_WEIGHT_QS}")
         assert r.status_code == 404
 
 
 @pytest.mark.django_db
-class TestGenomeBgcRoster:
-    def test_returns_bgcs_for_genome(self, api_client, seeded_data):
+class TestAssemblyBgcRoster:
+    def test_returns_bgcs_for_assembly(self, api_client, seeded_data):
         aid = seeded_data["assemblies"][0].id
-        r = api_client.get(f"/api/dashboard/genomes/{aid}/bgcs/")
+        r = api_client.get(f"/api/dashboard/assemblies/{aid}/bgcs/")
         assert r.status_code == 200
         data = json.loads(r.content)
         assert len(data) == 2
 
     def test_empty_for_unknown(self, api_client, seeded_data):
-        r = api_client.get("/api/dashboard/genomes/99999/bgcs/")
+        r = api_client.get("/api/dashboard/assemblies/99999/bgcs/")
         assert r.status_code == 200
         assert json.loads(r.content) == []
 
 
 @pytest.mark.django_db
-class TestGenomeScatter:
+class TestAssemblyScatter:
     def test_returns_points(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genome-scatter/?{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assembly-scatter/?{_WEIGHT_QS}")
         assert r.status_code == 200
         data = json.loads(r.content)
         assert len(data) == 2
@@ -209,7 +209,7 @@ class TestGenomeScatter:
         assert "composite_score" in data[0]
 
     def test_bad_axis_returns_400(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/genome-scatter/?x_axis=invalid&{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assembly-scatter/?x_axis=invalid&{_WEIGHT_QS}")
         assert r.status_code == 400
 
 
@@ -221,8 +221,8 @@ class TestBgcDetail:
         assert r.status_code == 200
         data = json.loads(r.content)
         assert data["classification_l1"] == "Polyketide"
-        assert data["parent_genome"] is not None
-        assert data["parent_genome"]["accession"] == "TEST_ERZ001"
+        assert data["parent_assembly"] is not None
+        assert data["parent_assembly"]["accession"] == "TEST_ERZ001"
 
     def test_404_for_missing(self, api_client, seeded_data):
         r = api_client.get("/api/dashboard/bgcs/99999/")
@@ -300,31 +300,31 @@ class TestFilters:
 
 @pytest.mark.django_db
 class TestExports:
-    def test_genome_csv_export(self, api_client, seeded_data):
+    def test_assembly_csv_export(self, api_client, seeded_data):
         ids = [a.id for a in seeded_data["assemblies"]]
         r = api_client.post(
-            "/api/dashboard/shortlist/genome/export/",
+            "/api/dashboard/shortlist/assembly/export/",
             data=json.dumps({"ids": ids}),
             content_type="application/json",
         )
         assert r.status_code == 200
         assert r["Content-Type"] == "text/csv"
-        assert "genome_shortlist.csv" in r["Content-Disposition"]
+        assert "assembly_shortlist.csv" in r["Content-Disposition"]
         content = r.content.decode()
         assert "accession" in content
         assert "TEST_ERZ001" in content
 
-    def test_genome_export_empty_ids(self, api_client, seeded_data):
+    def test_assembly_export_empty_ids(self, api_client, seeded_data):
         r = api_client.post(
-            "/api/dashboard/shortlist/genome/export/",
+            "/api/dashboard/shortlist/assembly/export/",
             data=json.dumps({"ids": []}),
             content_type="application/json",
         )
         assert r.status_code == 400
 
-    def test_genome_export_max_20(self, api_client, seeded_data):
+    def test_assembly_export_max_20(self, api_client, seeded_data):
         r = api_client.post(
-            "/api/dashboard/shortlist/genome/export/",
+            "/api/dashboard/shortlist/assembly/export/",
             data=json.dumps({"ids": list(range(1, 25))}),
             content_type="application/json",
         )

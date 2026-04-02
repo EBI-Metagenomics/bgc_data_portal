@@ -30,12 +30,8 @@ export function useDomainQuery() {
           w_domain_novelty: weights.w_domain_novelty,
           search: filters.search || undefined,
           type_strain_only: filters.typeStrainOnly || undefined,
-          taxonomy_kingdom: filters.taxonomyKingdom || undefined,
-          taxonomy_phylum: filters.taxonomyPhylum || undefined,
-          taxonomy_class: filters.taxonomyClass || undefined,
-          taxonomy_order: filters.taxonomyOrder || undefined,
-          taxonomy_family: filters.taxonomyFamily || undefined,
-          taxonomy_genus: filters.taxonomyGenus || undefined,
+          taxonomy_path: filters.taxonomyPath || undefined,
+          assembly_type: filters.assemblyType || undefined,
           bgc_class: filters.bgcClass || undefined,
           biome_lineage: filters.biomeLineage || undefined,
           assembly_accession: filters.assemblyAccession || undefined,
@@ -45,7 +41,7 @@ export function useDomainQuery() {
     enabled,
   });
 
-  // Store result IDs for genome aggregation
+  // Store result IDs for assembly aggregation
   useEffect(() => {
     if (query.data) {
       setResultBgcIds(query.data.items.map((r) => r.id));

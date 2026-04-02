@@ -8,17 +8,17 @@ export function useBgcStats(options?: {
   bgcIds?: number[];
 }) {
   const { assemblyIdOverride, bgcIds } = options ?? {};
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
-  const genomeShortlist = useShortlistStore((s) => s.genomes);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
+  const assemblyShortlist = useShortlistStore((s) => s.assemblies);
 
   const hasBgcIds = bgcIds != null && bgcIds.length > 0;
 
   const assemblyIds = assemblyIdOverride
     ? [assemblyIdOverride]
-    : genomeShortlist.length > 0
-      ? genomeShortlist.map((g) => g.id)
-      : activeGenomeId
-        ? [activeGenomeId]
+    : assemblyShortlist.length > 0
+      ? assemblyShortlist.map((g) => g.id)
+      : activeAssemblyId
+        ? [activeAssemblyId]
         : [];
 
   const bgcIdsStr = hasBgcIds ? bgcIds.join(",") : undefined;

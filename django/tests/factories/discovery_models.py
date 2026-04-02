@@ -212,7 +212,7 @@ class MibigReferenceFactory(DjangoModelFactory):
         return round(random.uniform(-10, 10), 4)
 
 
-class GenomeScoreFactory(DjangoModelFactory):
+class AssemblyScoreFactory(DjangoModelFactory):
     class Meta:
         model = GenomeScore
 
@@ -222,7 +222,7 @@ class GenomeScoreFactory(DjangoModelFactory):
     bgc_novelty_score = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
     bgc_density = factory.LazyFunction(lambda: round(random.betavariate(2, 3), 4))
     taxonomic_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 4), 4))
-    genome_quality = factory.LazyFunction(lambda: round(random.betavariate(8, 2), 4))
+    assembly_quality = factory.LazyFunction(lambda: round(random.betavariate(8, 2), 4))
     l1_class_count = factory.LazyFunction(lambda: random.randint(1, 7))
 
 

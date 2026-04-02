@@ -5,9 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronDown, Info, RotateCcw } from "lucide-react";
 import { useModeStore } from "@/stores/mode-store";
-import { useGenomeWeightStore } from "@/stores/genome-weight-store";
+import { useAssemblyWeightStore } from "@/stores/assembly-weight-store";
 import { useQueryWeightStore } from "@/stores/query-weight-store";
-import type { GenomeWeightParams, QueryWeightParams } from "@/api/types";
+import type { AssemblyWeightParams, QueryWeightParams } from "@/api/types";
 import { useState } from "react";
 
 interface WeightSliderProps {
@@ -52,8 +52,8 @@ function WeightSlider({ label, tooltip, value, onChange }: WeightSliderProps) {
   );
 }
 
-const GENOME_WEIGHT_CONFIG: {
-  key: keyof GenomeWeightParams;
+const ASSEMBLY_WEIGHT_CONFIG: {
+  key: keyof AssemblyWeightParams;
   label: string;
   tooltip: string;
 }[] = [
@@ -70,7 +70,7 @@ const GENOME_WEIGHT_CONFIG: {
   {
     key: "w_density",
     label: "Density",
-    tooltip: "BGC count per megabase of genome",
+    tooltip: "BGC count per megabase of assembly",
   },
 ];
 
@@ -105,7 +105,7 @@ export function WeightTuner() {
   const [open, setOpen] = useState(true);
   const mode = useModeStore((s) => s.mode);
 
-  const genomeWeights = useGenomeWeightStore();
+  const assemblyWeights = useAssemblyWeightStore();
   const queryWeights = useQueryWeightStore();
 
   return (
@@ -124,7 +124,7 @@ export function WeightTuner() {
           onClick={() =>
             mode === "query"
               ? queryWeights.resetDefaults()
-              : genomeWeights.resetDefaults()
+              : assemblyWeights.resetDefaults()
           }
         >
           <RotateCcw className="h-3 w-3" />
@@ -142,13 +142,13 @@ export function WeightTuner() {
                 onChange={(v) => queryWeights.setWeight(cfg.key, v)}
               />
             ))
-          : GENOME_WEIGHT_CONFIG.map((cfg) => (
+          : ASSEMBLY_WEIGHT_CONFIG.map((cfg) => (
               <WeightSlider
                 key={cfg.key}
                 label={cfg.label}
                 tooltip={cfg.tooltip}
-                value={genomeWeights[cfg.key]}
-                onChange={(v) => genomeWeights.setWeight(cfg.key, v)}
+                value={assemblyWeights[cfg.key]}
+                onChange={(v) => assemblyWeights.setWeight(cfg.key, v)}
               />
             ))}
       </CollapsibleContent>

@@ -1,40 +1,40 @@
 import { create } from "zustand";
 
 interface SelectionState {
-  selectedGenomeIds: number[];
-  activeGenomeId: number | null;
+  selectedAssemblyIds: number[];
+  activeAssemblyId: number | null;
   selectedBgcId: number | null;
   activeBgcId: number | null;
 
-  setSelectedGenomeIds: (ids: number[]) => void;
-  toggleGenomeId: (id: number) => void;
-  setActiveGenomeId: (id: number | null) => void;
+  setSelectedAssemblyIds: (ids: number[]) => void;
+  toggleAssemblyId: (id: number) => void;
+  setActiveAssemblyId: (id: number | null) => void;
   setSelectedBgcId: (id: number | null) => void;
   setActiveBgcId: (id: number | null) => void;
   clearSelections: () => void;
 }
 
 export const useSelectionStore = create<SelectionState>((set) => ({
-  selectedGenomeIds: [],
-  activeGenomeId: null,
+  selectedAssemblyIds: [],
+  activeAssemblyId: null,
   selectedBgcId: null,
   activeBgcId: null,
 
-  setSelectedGenomeIds: (ids) => set({ selectedGenomeIds: ids }),
-  toggleGenomeId: (id) =>
+  setSelectedAssemblyIds: (ids) => set({ selectedAssemblyIds: ids }),
+  toggleAssemblyId: (id) =>
     set((state) => {
-      const ids = state.selectedGenomeIds.includes(id)
-        ? state.selectedGenomeIds.filter((x) => x !== id)
-        : [...state.selectedGenomeIds, id];
-      return { selectedGenomeIds: ids };
+      const ids = state.selectedAssemblyIds.includes(id)
+        ? state.selectedAssemblyIds.filter((x) => x !== id)
+        : [...state.selectedAssemblyIds, id];
+      return { selectedAssemblyIds: ids };
     }),
-  setActiveGenomeId: (id) => set({ activeGenomeId: id }),
+  setActiveAssemblyId: (id) => set({ activeAssemblyId: id }),
   setSelectedBgcId: (id) => set({ selectedBgcId: id }),
   setActiveBgcId: (id) => set({ activeBgcId: id }),
   clearSelections: () =>
     set({
-      selectedGenomeIds: [],
-      activeGenomeId: null,
+      selectedAssemblyIds: [],
+      activeAssemblyId: null,
       selectedBgcId: null,
       activeBgcId: null,
     }),

@@ -21,7 +21,7 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
   const { data: bgc, isLoading } = useBgcDetail(bgcId);
   const { data: regionData, isLoading: regionLoading } = useBgcRegion(bgcId);
   const setMode = useModeStore((s) => s.setMode);
-  const setActiveGenomeId = useSelectionStore((s) => s.setActiveGenomeId);
+  const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
   const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
   const [selectedCds, setSelectedCds] = useState<RegionCds | null>(null);
 
@@ -70,18 +70,18 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          {bgc.parent_genome && (
+          {bgc.parent_assembly && (
             <Button
               variant="outline"
               size="sm"
               className="gap-1 text-xs"
               onClick={() => {
-                setActiveGenomeId(bgc.parent_genome!.assembly_id);
+                setActiveAssemblyId(bgc.parent_assembly!.assembly_id);
                 setMode("explore");
               }}
             >
               <Microscope className="h-3 w-3" />
-              Explore parent genome
+              Explore parent assembly
             </Button>
           )}
           <Button
@@ -127,32 +127,32 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
       <Separator />
 
       {/* Parent assembly */}
-      {bgc.parent_genome && (
+      {bgc.parent_assembly && (
         <>
           <div className="text-xs">
             <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>Parent Assembly</h5>
             <div className="flex items-center gap-2">
               <a
-                href={`https://www.ebi.ac.uk/ena/browser/view/${bgc.parent_genome.accession}`}
+                href={`https://www.ebi.ac.uk/ena/browser/view/${bgc.parent_assembly.accession}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-blue-600 hover:underline"
               >
-                {bgc.parent_genome.organism_name ?? bgc.parent_genome.accession}
+                {bgc.parent_assembly.organism_name ?? bgc.parent_assembly.accession}
                 <ExternalLink className="h-3 w-3" />
               </a>
-              {bgc.parent_genome.is_type_strain && (
+              {bgc.parent_assembly.is_type_strain && (
                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
               )}
-              {bgc.parent_genome.taxonomy_family && (
+              {bgc.parent_assembly.dominant_taxonomy_label && (
                 <Badge variant="outline" className="text-[10px]">
-                  {bgc.parent_genome.taxonomy_family}
+                  {bgc.parent_assembly.dominant_taxonomy_label}
                 </Badge>
               )}
             </div>
-            {bgc.parent_genome.isolation_source && (
+            {bgc.parent_assembly.isolation_source && (
               <div className="mt-1 text-muted-foreground">
-                Isolation source: {bgc.parent_genome.isolation_source}
+                Isolation source: {bgc.parent_assembly.isolation_source}
               </div>
             )}
           </div>

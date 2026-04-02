@@ -16,11 +16,36 @@ from django.db import models
 from pgvector.django import HalfVectorField, HnswIndex, VectorField
 
 
-# ── Genome ──────────────────────────────────────────────────────────────────────
+# ── Assembly source lookup ─────────────────────────────────────────────────────
 
 
-class DashboardGenome(models.Model):
-    """Denormalized genome row: Assembly metadata + GenomeScore in one table."""
+class AssemblySource(models.Model):
+    """Lookup table for assembly data sources (auto-populated via get_or_create)."""
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        db_table = "discovery_assembly_source"
+
+    def __str__(self):
+        return self.name
+
+
+# ── Assembly type choices ─────────────────────────────────────────────────────
+
+
+class AssemblyType(models.IntegerChoices):
+    METAGENOME = 1, "metagenome"
+    GENOME = 2, "genome"
+    REGION = 3, "region"
+
+
+# ── Assembly ───────────────────────────────────────────────────────────────────
+
+
+class DashboardAssembly(models.Model):
+    """Denormalized assembly row: Assembly metadata + score in one table."""
 
     id = models.BigAutoField(primary_key=True)
 
@@ -28,20 +53,36 @@ class DashboardGenome(models.Model):
     assembly_accession = models.CharField(max_length=255, unique=True, db_index=True)
     organism_name = models.CharField(max_length=255, blank=True, default="")
 
-    # Taxonomy — ltree dot-path + individual rank columns for exact-match filtering
-    taxonomy_path = models.CharField(
+    # Source database/collection
+    source = models.ForeignKey(
+        AssemblySource,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assemblies",
+        db_index=True,
+    )
+
+    # Assembly type
+    assembly_type = models.SmallIntegerField(
+        choices=AssemblyType.choices,
+        default=AssemblyType.GENOME,
+        db_index=True,
+    )
+
+    # Dominant taxonomy — precomputed from contigs at load time
+    dominant_taxonomy_path = models.CharField(
         max_length=1024,
         blank=True,
         default="",
-        help_text="ltree dot-path, e.g. Bacteria.Actinobacteriota.Actinomycetia",
+        help_text="Most common taxonomy_path among contigs, or empty if mixed",
     )
-    taxonomy_kingdom = models.CharField(max_length=100, blank=True, default="")
-    taxonomy_phylum = models.CharField(max_length=100, blank=True, default="")
-    taxonomy_class = models.CharField(max_length=100, blank=True, default="")
-    taxonomy_order = models.CharField(max_length=100, blank=True, default="")
-    taxonomy_family = models.CharField(max_length=100, blank=True, default="")
-    taxonomy_genus = models.CharField(max_length=100, blank=True, default="")
-    taxonomy_species = models.CharField(max_length=100, blank=True, default="")
+    dominant_taxonomy_label = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Species name or 'Mixed (N taxa)'",
+    )
 
     # Biome — ltree dot-path
     biome_path = models.CharField(
@@ -51,11 +92,11 @@ class DashboardGenome(models.Model):
         help_text="ltree dot-path, e.g. root.Environmental.Terrestrial.Soil",
     )
 
-    # Genome metadata
+    # Assembly metadata
     is_type_strain = models.BooleanField(default=False, db_index=True)
     type_strain_catalog_url = models.URLField(blank=True, default="")
-    genome_size_mb = models.FloatField(null=True, blank=True)
-    genome_quality = models.FloatField(null=True, blank=True)
+    assembly_size_mb = models.FloatField(null=True, blank=True)
+    assembly_quality = models.FloatField(null=True, blank=True)
     isolation_source = models.CharField(max_length=255, blank=True, default="")
 
     # Scores (denormalized from GenomeScore)
@@ -80,22 +121,19 @@ class DashboardGenome(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "discovery_genome"
+        db_table = "discovery_assembly"
         indexes = [
             # Roster sort columns
-            models.Index(fields=["-composite_score"], name="idx_dg_composite_desc"),
-            models.Index(fields=["-bgc_novelty_score"], name="idx_dg_novelty_desc"),
-            models.Index(fields=["-bgc_diversity_score"], name="idx_dg_diversity_desc"),
-            models.Index(fields=["-bgc_density"], name="idx_dg_density_desc"),
-            # Taxonomy filters
-            models.Index(fields=["taxonomy_kingdom"], name="idx_dg_tax_kingdom"),
-            models.Index(fields=["taxonomy_phylum"], name="idx_dg_tax_phylum"),
-            models.Index(fields=["taxonomy_family"], name="idx_dg_tax_family"),
-            models.Index(fields=["taxonomy_genus"], name="idx_dg_tax_genus"),
+            models.Index(fields=["-composite_score"], name="idx_da_composite_desc"),
+            models.Index(fields=["-bgc_novelty_score"], name="idx_da_novelty_desc"),
+            models.Index(fields=["-bgc_diversity_score"], name="idx_da_diversity_desc"),
+            models.Index(fields=["-bgc_density"], name="idx_da_density_desc"),
             # Text search
-            models.Index(fields=["organism_name"], name="idx_dg_organism"),
+            models.Index(fields=["organism_name"], name="idx_da_organism"),
             # Biome prefix queries (btree; ltree GiST index added via RunSQL)
-            models.Index(fields=["biome_path"], name="idx_dg_biome"),
+            models.Index(fields=["biome_path"], name="idx_da_biome"),
+            # Dominant taxonomy prefix queries
+            models.Index(fields=["dominant_taxonomy_path"], name="idx_da_dom_tax"),
         ]
 
     def __str__(self):
@@ -106,11 +144,11 @@ class DashboardGenome(models.Model):
 
 
 class DashboardContig(models.Model):
-    """Contig within a genome — multiple BGCs may share the same contig."""
+    """Contig within an assembly — multiple BGCs may share the same contig."""
 
     id = models.BigAutoField(primary_key=True)
-    genome = models.ForeignKey(
-        DashboardGenome,
+    assembly = models.ForeignKey(
+        DashboardAssembly,
         on_delete=models.CASCADE,
         related_name="contigs",
         db_index=True,
@@ -118,11 +156,22 @@ class DashboardContig(models.Model):
     accession = models.CharField(max_length=255, db_index=True)
     length = models.IntegerField(default=0)
 
+    # Taxonomy — ltree dot-path for this contig
+    taxonomy_path = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="ltree dot-path, e.g. Bacteria.Actinomycetota.Actinomycetia...",
+    )
+
     # Cross-reference to mgnify_bgcs.Contig (integer, NOT a Django FK)
     source_contig_id = models.IntegerField(unique=True, db_index=True)
 
     class Meta:
         db_table = "discovery_contig"
+        indexes = [
+            models.Index(fields=["taxonomy_path"], name="idx_dcontig_tax_path"),
+        ]
 
     def __str__(self):
         return self.accession
@@ -163,9 +212,9 @@ class DashboardBgc(models.Model):
 
     id = models.BigAutoField(primary_key=True)
 
-    # Parent genome (FK within discovery schema)
-    genome = models.ForeignKey(
-        DashboardGenome,
+    # Parent assembly (FK within discovery schema)
+    assembly = models.ForeignKey(
+        DashboardAssembly,
         on_delete=models.CASCADE,
         related_name="bgcs",
         db_index=True,
@@ -233,7 +282,7 @@ class DashboardBgc(models.Model):
             models.Index(fields=["-novelty_score"], name="idx_db_novelty_desc"),
             models.Index(fields=["-domain_novelty"], name="idx_db_domain_nov_desc"),
             models.Index(fields=["-size_kb"], name="idx_db_size_desc"),
-            models.Index(fields=["genome", "-novelty_score"], name="idx_db_genome_novelty"),
+            models.Index(fields=["assembly", "-novelty_score"], name="idx_db_assembly_novelty"),
             models.Index(fields=["umap_x", "umap_y"], name="idx_db_umap"),
         ]
 

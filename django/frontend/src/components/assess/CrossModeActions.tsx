@@ -1,13 +1,13 @@
 import { useModeStore } from "@/stores/mode-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useFilterStore } from "@/stores/filter-store";
-import { fetchSimilarGenomes } from "@/api/assessment";
+import { fetchSimilarAssemblies } from "@/api/assessment";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 interface CrossModeActionsProps {
-  assetType: "genome" | "bgc";
+  assetType: "assembly" | "bgc";
   assetId: number;
 }
 
@@ -16,26 +16,26 @@ export function CrossModeActions({ assetType, assetId }: CrossModeActionsProps) 
   const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
   const setAssemblyIds = useFilterStore((s) => s.setAssemblyIds);
 
-  if (assetType === "genome") {
+  if (assetType === "assembly") {
     return (
       <Button
         variant="outline"
         size="sm"
         onClick={async () => {
           try {
-            const ids = await fetchSimilarGenomes(assetId);
+            const ids = await fetchSimilarAssemblies(assetId);
             if (ids.length === 0) {
-              toast.info("No similar genomes found");
+              toast.info("No similar assemblies found");
               return;
             }
             setAssemblyIds(ids.join(","));
             setMode("explore");
           } catch {
-            toast.error("Failed to find similar genomes");
+            toast.error("Failed to find similar assemblies");
           }
         }}
       >
-        Browse similar genomes
+        Browse similar assemblies
         <ArrowRight className="ml-1 h-3 w-3" />
       </Button>
     );

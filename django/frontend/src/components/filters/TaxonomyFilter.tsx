@@ -84,19 +84,31 @@ export function TaxonomyFilter() {
   const [searchText, setSearchText] = useState("");
   const filterStore = useFilterStore();
 
-  // Determine current deepest selection
-  const ranks = [
-    { key: "kingdom", value: filterStore.taxonomyKingdom },
-    { key: "phylum", value: filterStore.taxonomyPhylum },
-    { key: "class", value: filterStore.taxonomyClass },
-    { key: "order", value: filterStore.taxonomyOrder },
-    { key: "family", value: filterStore.taxonomyFamily },
-    { key: "genus", value: filterStore.taxonomyGenus },
-  ];
+  // Parse the current taxonomy path to determine deepest selection
+  const taxonomyPath = filterStore.taxonomyPath;
+  const pathParts = taxonomyPath ? taxonomyPath.split(";").filter(Boolean) : [];
+  const RANK_ORDER = ["kingdom", "phylum", "class", "order", "family", "genus"];
+  const ranks = RANK_ORDER.map((key, i) => ({
+    key,
+    value: pathParts[i] ?? "",
+  }));
   const deepest = [...ranks].reverse().find((r) => r.value);
 
   function handleSelect(rank: string, value: string) {
-    filterStore.setTaxonomy(rank, value);
+    if (!value) {
+      // Clearing a rank: truncate path at this rank level
+      const rankIndex = RANK_ORDER.indexOf(rank);
+      const newParts = pathParts.slice(0, rankIndex);
+      filterStore.setTaxonomyPath(newParts.length > 0 ? newParts.join(";") : "");
+    } else {
+      // Setting a rank: build path up to this rank
+      const rankIndex = RANK_ORDER.indexOf(rank);
+      const newParts = [...pathParts];
+      newParts[rankIndex] = value;
+      // Truncate anything deeper
+      const trimmed = newParts.slice(0, rankIndex + 1);
+      filterStore.setTaxonomyPath(trimmed.join(";"));
+    }
   }
 
   function filterTree(nodes: TaxonomyNode[]): TaxonomyNode[] {

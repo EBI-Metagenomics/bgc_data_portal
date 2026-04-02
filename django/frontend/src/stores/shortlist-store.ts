@@ -9,13 +9,13 @@ interface ShortlistItem {
 }
 
 interface ShortlistState {
-  genomes: ShortlistItem[];
+  assemblies: ShortlistItem[];
   bgcs: ShortlistItem[];
 
-  addGenome: (item: ShortlistItem) => boolean;
-  removeGenome: (id: number) => void;
-  clearGenomes: () => void;
-  replaceGenomes: (item: ShortlistItem) => void;
+  addAssembly: (item: ShortlistItem) => boolean;
+  removeAssembly: (id: number) => void;
+  clearAssemblies: () => void;
+  replaceAssemblies: (item: ShortlistItem) => void;
 
   addBgc: (item: ShortlistItem) => boolean;
   removeBgc: (id: number) => void;
@@ -26,20 +26,20 @@ interface ShortlistState {
 export const useShortlistStore = create<ShortlistState>()(
   persist(
     (set, get) => ({
-      genomes: [],
+      assemblies: [],
       bgcs: [],
 
-      addGenome: (item) => {
-        const current = get().genomes;
+      addAssembly: (item) => {
+        const current = get().assemblies;
         if (current.length >= MAX_SHORTLIST) return false;
         if (current.some((g) => g.id === item.id)) return true;
-        set({ genomes: [...current, item] });
+        set({ assemblies: [...current, item] });
         return true;
       },
-      removeGenome: (id) =>
-        set((s) => ({ genomes: s.genomes.filter((g) => g.id !== id) })),
-      clearGenomes: () => set({ genomes: [] }),
-      replaceGenomes: (item) => set({ genomes: [item] }),
+      removeAssembly: (id) =>
+        set((s) => ({ assemblies: s.assemblies.filter((g) => g.id !== id) })),
+      clearAssemblies: () => set({ assemblies: [] }),
+      replaceAssemblies: (item) => set({ assemblies: [item] }),
 
       addBgc: (item) => {
         const current = get().bgcs;

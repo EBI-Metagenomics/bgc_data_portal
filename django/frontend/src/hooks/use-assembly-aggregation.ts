@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchQueryResultGenomes } from "@/api/queries";
+import { fetchQueryResultAssemblies } from "@/api/queries";
 import { useQueryStore } from "@/stores/query-store";
 import { useState } from "react";
 
-export function useGenomeAggregation() {
+export function useAssemblyAggregation() {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState("max_relevance");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
@@ -12,9 +12,9 @@ export function useGenomeAggregation() {
   const hasResults = resultBgcIds.length > 0;
 
   const query = useQuery({
-    queryKey: ["genome-aggregation", resultBgcIds, page, sortBy, order],
+    queryKey: ["assembly-aggregation", resultBgcIds, page, sortBy, order],
     queryFn: () =>
-      fetchQueryResultGenomes({
+      fetchQueryResultAssemblies({
         bgc_ids: resultBgcIds.join(","),
         page,
         page_size: 25,

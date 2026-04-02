@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    DashboardGenome,
+    DashboardAssembly,
     DashboardBgc,
     BgcEmbedding,
     BgcDomain,
@@ -14,14 +14,14 @@ from .models import (
 )
 
 
-@admin.register(DashboardGenome)
-class DashboardGenomeAdmin(admin.ModelAdmin):
+@admin.register(DashboardAssembly)
+class DashboardAssemblyAdmin(admin.ModelAdmin):
     list_display = (
-        "assembly_accession", "organism_name", "taxonomy_family",
+        "assembly_accession", "organism_name", "dominant_taxonomy_label",
         "bgc_count", "composite_score", "is_type_strain",
     )
     search_fields = ("assembly_accession", "organism_name")
-    list_filter = ("is_type_strain", "taxonomy_kingdom")
+    list_filter = ("is_type_strain",)
 
 
 @admin.register(DashboardBgc)

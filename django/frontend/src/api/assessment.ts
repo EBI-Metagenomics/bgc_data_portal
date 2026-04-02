@@ -2,15 +2,15 @@ import { apiGet, apiPost, downloadBlob } from "./client";
 import type {
   AssessmentAccepted,
   AssessmentStatusResponse,
-  GenomeWeightParams,
+  AssemblyWeightParams,
 } from "./types";
 
-export async function postGenomeAssessment(
+export async function postAssemblyAssessment(
   assemblyId: number,
-  weights: GenomeWeightParams
+  weights: AssemblyWeightParams
 ): Promise<AssessmentAccepted> {
   return apiPost<AssessmentAccepted>(
-    `/assess/genome/${assemblyId}/`,
+    `/assess/assembly/${assemblyId}/`,
     weights
   );
 }
@@ -27,10 +27,10 @@ export async function fetchAssessmentStatus(
   return apiGet<AssessmentStatusResponse>(`/assess/status/${taskId}/`);
 }
 
-export async function fetchSimilarGenomes(
+export async function fetchSimilarAssemblies(
   assemblyId: number
 ): Promise<number[]> {
-  return apiGet<number[]>(`/assess/genome/${assemblyId}/similar-genomes/`);
+  return apiGet<number[]>(`/assess/assembly/${assemblyId}/similar-assemblies/`);
 }
 
 export async function exportAssessmentJson(taskId: string): Promise<void> {

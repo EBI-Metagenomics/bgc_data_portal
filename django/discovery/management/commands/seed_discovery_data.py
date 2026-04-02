@@ -7,7 +7,7 @@ field, relationship, and dashboard feature.
 Usage:
     python manage.py seed_discovery_data
     python manage.py seed_discovery_data --clear   # wipe discovery tables first
-    python manage.py seed_discovery_data --small    # smaller dataset (20 genomes)
+    python manage.py seed_discovery_data --small    # smaller dataset (20 assemblies)
 """
 
 import hashlib
@@ -19,17 +19,19 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
 from discovery.models import (
+    AssemblySource,
+    AssemblyType,
     BgcDomain,
     BgcEmbedding,
     CdsSequence,
     ContigSequence,
+    DashboardAssembly,
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
     DashboardContig,
     DashboardDomain,
     DashboardGCF,
-    DashboardGenome,
     DashboardMibigReference,
     DashboardNaturalProduct,
     PrecomputedStats,
@@ -179,7 +181,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--clear", action="store_true", help="Delete all discovery data first")
-        parser.add_argument("--small", action="store_true", help="Create a smaller dataset (20 genomes)")
+        parser.add_argument("--small", action="store_true", help="Create a smaller dataset (20 assemblies)")
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -192,18 +194,26 @@ class Command(BaseCommand):
                 DashboardNaturalProduct, DashboardMibigReference,
                 DashboardBgc,
                 ContigSequence, DashboardContig,
-                DashboardGCF, DashboardGenome,
+                DashboardGCF, DashboardAssembly,
                 DashboardBgcClass, DashboardDomain, PrecomputedStats,
+                AssemblySource,
             ]:
                 model.objects.all().delete()
             self.stdout.write(self.style.SUCCESS("Cleared."))
 
-        n_genomes = 20 if options["small"] else 80
-        self.stdout.write(f"Seeding {n_genomes} genomes...")
+        n_assemblies = 20 if options["small"] else 80
+        self.stdout.write(f"Seeding {n_assemblies} assemblies...")
 
-        # ── 1. DashboardGenome ──────────────────────────────────────────
-        genomes = []
-        for i in range(n_genomes):
+        # ── 0. AssemblySource (lookup table) ──────────────────────────────
+        _SOURCES = ["MGnify", "GTDB", "NCBI", "MIBiG"]
+        source_objs = {}
+        for name in _SOURCES:
+            obj, _ = AssemblySource.objects.get_or_create(name=name)
+            source_objs[name] = obj
+
+        # ── 1. DashboardAssembly ──────────────────────────────────────────
+        assemblies = []
+        for i in range(n_assemblies):
             tax = random.choice(_TAXONOMY_POOL)
             is_ts = random.random() < 0.12
             gq = round(random.betavariate(8, 2), 3)
@@ -216,25 +226,30 @@ class Command(BaseCommand):
                 (0.30 * diversity + 0.45 * novelty + 0.25 * density), 4
             )
 
-            genomes.append(DashboardGenome(
+            # Weighted random: 60% genome, 30% metagenome, 10% region
+            _type_roll = random.random()
+            if _type_roll < 0.6:
+                atype = AssemblyType.GENOME
+            elif _type_roll < 0.9:
+                atype = AssemblyType.METAGENOME
+            else:
+                atype = AssemblyType.REGION
+
+            asm = DashboardAssembly(
                 assembly_accession=f"DISC_ERZ{i:07d}",
                 organism_name=f"{tax[6]} strain {chr(65 + i % 26)}{i}",
-                taxonomy_path=_build_taxonomy_path(tax),
-                taxonomy_kingdom=tax[0],
-                taxonomy_phylum=tax[1],
-                taxonomy_class=tax[2],
-                taxonomy_order=tax[3],
-                taxonomy_family=tax[4],
-                taxonomy_genus=tax[5],
-                taxonomy_species=tax[6],
+                source=source_objs[random.choice(["MGnify", "GTDB", "NCBI"])],
+                assembly_type=atype,
+                dominant_taxonomy_path=_build_taxonomy_path(tax),
+                dominant_taxonomy_label=tax[6],  # species as label
                 biome_path=random.choice(_BIOME_LINEAGES),
                 is_type_strain=is_ts,
                 type_strain_catalog_url=(
                     f"https://www.dsmz.de/collection/catalogue/details/culture/DSM-{random.randint(1000, 99999)}"
                     if is_ts else ""
                 ),
-                genome_size_mb=gsm,
-                genome_quality=gq,
+                assembly_size_mb=gsm,
+                assembly_quality=gq,
                 isolation_source=random.choice(_ISOLATION_SOURCES),
                 bgc_diversity_score=diversity,
                 bgc_novelty_score=novelty,
@@ -242,13 +257,15 @@ class Command(BaseCommand):
                 taxonomic_novelty=round(random.betavariate(2, 4), 4),
                 composite_score=composite,
                 source_assembly_id=10000 + i,
-            ))
+            )
+            asm._tax = tax  # stash for contig taxonomy assignment
+            assemblies.append(asm)
 
-        DashboardGenome.objects.bulk_create(genomes)
-        self.stdout.write(f"  {len(genomes)} DashboardGenome rows.")
+        DashboardAssembly.objects.bulk_create(assemblies)
+        self.stdout.write(f"  {len(assemblies)} DashboardAssembly rows.")
 
         # ── 2. DashboardGCF ─────────────────────────────────────────────
-        n_gcfs = max(5, n_genomes // 4)
+        n_gcfs = max(5, n_assemblies // 4)
         gcf_list = []
         for gi in range(n_gcfs):
             has_mibig = random.random() < 0.3
@@ -275,20 +292,28 @@ class Command(BaseCommand):
         contig_map = {}  # (source_assembly_id, contig_idx) -> DashboardContig
         contig_counter = 0
 
-        for genome in genomes:
+        for assembly in assemblies:
             n_contigs = 3  # enough for bi // 4 grouping (up to 12 BGCs -> indices 0,1,2)
+            base_tax = assembly._tax
             for ci in range(n_contigs):
-                contig_acc = f"contig_{genome.source_assembly_id}_{ci}"
+                # For metagenomes, mix taxonomies across contigs
+                if assembly.assembly_type == AssemblyType.METAGENOME and ci > 0:
+                    contig_tax = random.choice(_TAXONOMY_POOL)
+                else:
+                    contig_tax = base_tax
+
+                contig_acc = f"contig_{assembly.source_assembly_id}_{ci}"
                 seq_len = random.randint(500000, 1000000)
                 raw_seq = _random_nt(seq_len)
                 contig = DashboardContig(
-                    genome=genome,
+                    assembly=assembly,
                     accession=contig_acc,
                     length=seq_len,
+                    taxonomy_path=_build_taxonomy_path(contig_tax),
                     source_contig_id=70000 + contig_counter,
                 )
                 all_contigs.append(contig)
-                contig_map[(genome.source_assembly_id, ci)] = (contig, raw_seq)
+                contig_map[(assembly.source_assembly_id, ci)] = (contig, raw_seq)
                 contig_counter += 1
 
         DashboardContig.objects.bulk_create(all_contigs)
@@ -299,6 +324,33 @@ class Command(BaseCommand):
                 data=ContigSequence.compress_sequence(raw_seq),
             ))
         ContigSequence.objects.bulk_create(contig_seqs)
+
+        # Recompute dominant taxonomy for metagenome assemblies
+        from collections import Counter
+        assemblies_to_update = []
+        for assembly in assemblies:
+            contig_paths = [
+                c.taxonomy_path for c in all_contigs
+                if c.assembly_id == assembly.id and c.taxonomy_path
+            ]
+            if not contig_paths:
+                continue
+            counts = Counter(contig_paths)
+            if len(counts) == 1:
+                dominant_path = contig_paths[0]
+                label = dominant_path.rsplit(".", 1)[-1]  # last component
+            else:
+                dominant_path, _ = counts.most_common(1)[0]
+                label = f"Mixed ({len(counts)} taxa)"
+            if assembly.dominant_taxonomy_path != dominant_path or assembly.dominant_taxonomy_label != label:
+                assembly.dominant_taxonomy_path = dominant_path
+                assembly.dominant_taxonomy_label = label
+                assemblies_to_update.append(assembly)
+        if assemblies_to_update:
+            DashboardAssembly.objects.bulk_update(
+                assemblies_to_update, ["dominant_taxonomy_path", "dominant_taxonomy_label"]
+            )
+
         self.stdout.write(
             f"  {len(all_contigs)} DashboardContig rows, "
             f"{len(contig_seqs)} ContigSequence rows."
@@ -308,7 +360,7 @@ class Command(BaseCommand):
         all_bgcs = []
         bgc_counter = 0
 
-        for genome in genomes:
+        for assembly in assemblies:
             n_bgcs = random.randint(3, 12)
             for bi in range(n_bgcs):
                 bgc_class = random.choice(_BGC_L1_CLASSES)
@@ -328,13 +380,13 @@ class Command(BaseCommand):
 
                 gcf = random.choice(gcf_list)
                 contig_idx = bi // 4
-                contig_obj, _ = contig_map[(genome.source_assembly_id, contig_idx)]
+                contig_obj, _ = contig_map[(assembly.source_assembly_id, contig_idx)]
 
                 all_bgcs.append(DashboardBgc(
-                    genome=genome,
+                    assembly=assembly,
                     contig=contig_obj,
                     bgc_accession=f"MGYB{10000 + bgc_counter:012d}",
-                    contig_accession=f"contig_{genome.source_assembly_id}_{contig_idx}",
+                    contig_accession=f"contig_{assembly.source_assembly_id}_{contig_idx}",
                     start_position=start,
                     end_position=start + bgc_size,
                     classification_path=_build_classification_path(bgc_class, l2, l3),
@@ -362,12 +414,12 @@ class Command(BaseCommand):
         DashboardBgc.objects.bulk_create(all_bgcs)
         self.stdout.write(f"  {len(all_bgcs)} DashboardBgc rows.")
 
-        # Update genome bgc_count and l1_class_count
-        for genome in genomes:
-            bgcs = [b for b in all_bgcs if b.genome_id == genome.id]
-            genome.bgc_count = len(bgcs)
-            genome.l1_class_count = len({b.classification_l1 for b in bgcs if b.classification_l1})
-        DashboardGenome.objects.bulk_update(genomes, ["bgc_count", "l1_class_count"])
+        # Update assembly bgc_count and l1_class_count
+        for assembly in assemblies:
+            bgcs = [b for b in all_bgcs if b.assembly_id == assembly.id]
+            assembly.bgc_count = len(bgcs)
+            assembly.l1_class_count = len({b.classification_l1 for b in bgcs if b.classification_l1})
+        DashboardAssembly.objects.bulk_update(assemblies, ["bgc_count", "l1_class_count"])
 
         # Update GCF member counts + representative BGC
         for gcf in gcf_list:
@@ -517,7 +569,7 @@ class Command(BaseCommand):
                 chemical_class_l3=l3,
                 structure_svg_base64=svg_placeholder,
                 producing_organism=(
-                    bgc.genome.organism_name if bgc.genome else ""
+                    bgc.assembly.organism_name if bgc.assembly else ""
                 ),
                 morgan_fp=_morgan_fp_bytes(smiles) or None,
             ))
@@ -527,7 +579,7 @@ class Command(BaseCommand):
         # ── 8. DashboardMibigReference (with dashboard_bgc link) ───────
         self.stdout.write("Creating MIBiG references...")
         # Create MIBiG contigs first (one per compound for simplicity)
-        mibig_genome = genomes[0]  # attach to first genome for simplicity
+        mibig_assembly = assemblies[0]  # attach to first assembly for simplicity
         mibig_contigs = []
         mibig_contig_seqs_data = []
         for i, (compound, _) in enumerate(_MIBIG_COMPOUNDS):
@@ -535,9 +587,10 @@ class Command(BaseCommand):
             seq_len = random.randint(100000, 500000)
             raw_seq = _random_nt(seq_len)
             contig = DashboardContig(
-                genome=mibig_genome,
+                assembly=mibig_assembly,
                 accession=contig_acc,
                 length=seq_len,
+                taxonomy_path=_build_taxonomy_path(random.choice(_TAXONOMY_POOL)),
                 source_contig_id=80000 + i,
             )
             mibig_contigs.append(contig)
@@ -558,7 +611,7 @@ class Command(BaseCommand):
             bgc_size = random.randint(10000, 80000)
             start = random.randint(1000, 50000)
             mibig_bgcs.append(DashboardBgc(
-                genome=mibig_genome,
+                assembly=mibig_assembly,
                 contig=mibig_contigs[i],
                 bgc_accession=f"MIBIG_{compound.upper().replace(' ', '_')[:20]}",
                 contig_accession=mibig_contigs[i].accession,
@@ -672,7 +725,7 @@ class Command(BaseCommand):
         self.stdout.write("Computing percentile ranks...")
         with connection.cursor() as cursor:
             cursor.execute("""
-                UPDATE discovery_genome SET
+                UPDATE discovery_assembly SET
                     pctl_diversity = sub.pctl_d,
                     pctl_novelty = sub.pctl_n,
                     pctl_density = sub.pctl_den
@@ -681,20 +734,20 @@ class Command(BaseCommand):
                         PERCENT_RANK() OVER (ORDER BY bgc_diversity_score) * 100 AS pctl_d,
                         PERCENT_RANK() OVER (ORDER BY bgc_novelty_score) * 100 AS pctl_n,
                         PERCENT_RANK() OVER (ORDER BY bgc_density) * 100 AS pctl_den
-                    FROM discovery_genome
+                    FROM discovery_assembly
                 ) sub
-                WHERE discovery_genome.id = sub.id
+                WHERE discovery_assembly.id = sub.id
             """)
         self.stdout.write("  Percentile ranks computed.")
 
         # ── 11. PrecomputedStats ────────────────────────────────────────
         self.stdout.write("Computing precomputed stats...")
-        from discovery.services.stats import compute_genome_stats, compute_bgc_stats
+        from discovery.services.stats import compute_assembly_stats, compute_bgc_stats
 
-        genome_qs = DashboardGenome.objects.all()
+        assembly_qs = DashboardAssembly.objects.all()
         bgc_qs = DashboardBgc.objects.all()
 
-        genome_stats = compute_genome_stats(genome_qs)
+        assembly_stats = compute_assembly_stats(assembly_qs)
         bgc_stats = compute_bgc_stats(bgc_qs)
 
         # Enrich bgc_global with sparse_threshold
@@ -705,7 +758,7 @@ class Command(BaseCommand):
         sparse_threshold = float(np.percentile(all_dists, 75)) if all_dists else 0.5
         bgc_stats["sparse_threshold"] = sparse_threshold
 
-        # Enrich genome_global with radar references
+        # Enrich assembly_global with radar references
         radar_refs = []
         for dim, label in [
             ("bgc_diversity_score", "Diversity"),
@@ -713,8 +766,8 @@ class Command(BaseCommand):
             ("bgc_density", "Density"),
         ]:
             from django.db.models import Avg
-            agg = DashboardGenome.objects.aggregate(db_mean=Avg(dim))
-            vals = list(DashboardGenome.objects.values_list(dim, flat=True)[:10000])
+            agg = DashboardAssembly.objects.aggregate(db_mean=Avg(dim))
+            vals = list(DashboardAssembly.objects.values_list(dim, flat=True)[:10000])
             db_p90 = float(np.percentile(vals, 90)) if vals else 0.0
             radar_refs.append({
                 "dimension": dim,
@@ -722,10 +775,10 @@ class Command(BaseCommand):
                 "db_mean": round(agg["db_mean"] or 0.0, 4),
                 "db_p90": round(db_p90, 4),
             })
-        genome_stats["radar_references"] = radar_refs
+        assembly_stats["radar_references"] = radar_refs
 
         PrecomputedStats.objects.update_or_create(
-            key="genome_global", defaults={"data": genome_stats},
+            key="assembly_global", defaults={"data": assembly_stats},
         )
         PrecomputedStats.objects.update_or_create(
             key="bgc_global", defaults={"data": bgc_stats},
@@ -738,7 +791,7 @@ class Command(BaseCommand):
         total_contigs = len(all_contigs) + len(mibig_contigs)
         self.stdout.write(self.style.SUCCESS(
             f"\nDone! Seeded all discovery tables:\n"
-            f"  DashboardGenome:          {len(genomes)}\n"
+            f"  DashboardAssembly:        {len(assemblies)}\n"
             f"  DashboardContig:          {total_contigs}\n"
             f"  ContigSequence:           {total_contigs}\n"
             f"  DashboardBgc:             {total_bgcs} ({len(mibig_bgcs)} MIBiG)\n"

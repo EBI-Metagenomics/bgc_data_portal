@@ -1,6 +1,6 @@
-import { useGenomeRoster } from "@/hooks/use-genome-roster";
+import { useAssemblyRoster } from "@/hooks/use-assembly-roster";
 import { useSelectionStore } from "@/stores/selection-store";
-import { GenomeContextMenu } from "./GenomeContextMenu";
+import { AssemblyContextMenu } from "./AssemblyContextMenu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -30,7 +30,7 @@ const SORT_OPTIONS = [
   { value: "organism_name", label: "Organism" },
 ];
 
-export function GenomeRoster() {
+export function AssemblyRoster() {
   const {
     data,
     isLoading,
@@ -40,10 +40,10 @@ export function GenomeRoster() {
     setSortBy,
     order,
     setOrder,
-  } = useGenomeRoster();
+  } = useAssemblyRoster();
 
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
-  const setActiveGenomeId = useSelectionStore((s) => s.setActiveGenomeId);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
+  const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
 
   if (isLoading) {
@@ -90,47 +90,47 @@ export function GenomeRoster() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">Organism</TableHead>
-              <TableHead className="text-xs">Family</TableHead>
+              <TableHead className="text-xs">Taxonomy</TableHead>
               <TableHead className="text-xs text-center">BGCs</TableHead>
               <TableHead className="text-xs text-center">Classes</TableHead>
               <TableHead className="text-xs text-right">Score</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((genome) => (
-              <GenomeContextMenu
-                key={genome.id}
-                genomeId={genome.id}
-                label={genome.organism_name ?? genome.accession}
+            {items.map((assembly) => (
+              <AssemblyContextMenu
+                key={assembly.id}
+                assemblyId={assembly.id}
+                label={assembly.organism_name ?? assembly.accession}
               >
                 <TableRow
                   className={cn(
                     "cursor-pointer",
-                    activeGenomeId === genome.id && "bg-primary/5"
+                    activeAssemblyId === assembly.id && "bg-primary/5"
                   )}
                   onClick={() => {
-                    setActiveGenomeId(genome.id);
+                    setActiveAssemblyId(assembly.id);
                     setActiveBgcId(null);
                   }}
                 >
                   <TableCell className="max-w-[200px] truncate text-xs">
                     <div className="flex items-center gap-1">
-                      {genome.is_type_strain && (
+                      {assembly.is_type_strain && (
                         <Star className="h-3 w-3 flex-shrink-0 fill-amber-400 text-amber-400" />
                       )}
                       <span className="truncate">
-                        {genome.organism_name ?? genome.accession}
+                        {assembly.organism_name ?? assembly.accession}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {genome.taxonomy_family ?? "-"}
+                    {assembly.dominant_taxonomy_label ?? "-"}
                   </TableCell>
                   <TableCell className="text-center text-xs">
-                    {genome.bgc_count}
+                    {assembly.bgc_count}
                   </TableCell>
                   <TableCell className="text-center text-xs">
-                    {genome.l1_class_count}
+                    {assembly.l1_class_count}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -138,17 +138,17 @@ export function GenomeRoster() {
                         <div
                           className="h-full rounded-full bg-primary"
                           style={{
-                            width: `${Math.round(genome.composite_score * 100)}%`,
+                            width: `${Math.round(assembly.composite_score * 100)}%`,
                           }}
                         />
                       </div>
                       <span className="font-mono text-xs">
-                        {genome.composite_score.toFixed(2)}
+                        {assembly.composite_score.toFixed(2)}
                       </span>
                     </div>
                   </TableCell>
                 </TableRow>
-              </GenomeContextMenu>
+              </AssemblyContextMenu>
             ))}
             {items.length === 0 && (
               <TableRow>
@@ -156,7 +156,7 @@ export function GenomeRoster() {
                   colSpan={5}
                   className="py-8 text-center text-sm text-muted-foreground"
                 >
-                  No genomes match current filters
+                  No assemblies match current filters
                 </TableCell>
               </TableRow>
             )}
@@ -168,7 +168,7 @@ export function GenomeRoster() {
       {pagination && pagination.total_pages > 1 && (
         <div className="flex items-center justify-between pt-2">
           <span className="text-xs text-muted-foreground">
-            {pagination.total_count} genomes
+            {pagination.total_count} assemblies
           </span>
           <div className="flex items-center gap-1">
             <Button

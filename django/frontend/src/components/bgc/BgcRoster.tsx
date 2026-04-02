@@ -49,8 +49,8 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
 
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
-  const genomeShortlist = useShortlistStore((s) => s.genomes);
-  const showGenomeBadge = genomeShortlist.length > 1;
+  const assemblyShortlist = useShortlistStore((s) => s.assemblies);
+  const showAssemblyBadge = assemblyShortlist.length > 1;
 
   const items = data?.items ?? [];
   const pagination = data?.pagination;
@@ -58,7 +58,7 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
   if (!data && !isLoading) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        Add genomes to shortlist to view their BGCs
+        Add assemblies to shortlist to view their BGCs
       </p>
     );
   }
@@ -128,7 +128,7 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
                   <TableCell className="font-mono text-xs">
                     <div className="flex items-center gap-1">
                       {bgc.accession}
-                      {showGenomeBadge && bgc.assembly_accession && (
+                      {showAssemblyBadge && bgc.assembly_accession && (
                         <Badge variant="outline" className="text-[9px] px-1 py-0">
                           {bgc.assembly_accession}
                         </Badge>

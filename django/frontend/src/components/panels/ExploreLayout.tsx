@@ -1,7 +1,7 @@
-import { GenomeRoster } from "@/components/genome/GenomeRoster";
-import { GenomeScatter } from "@/components/genome/GenomeScatter";
-import { GenomeDetail } from "@/components/genome/GenomeDetail";
-import { GenomeStats, GenomeStatsActions } from "@/components/genome/GenomeStats";
+import { AssemblyRoster } from "@/components/assembly/AssemblyRoster";
+import { AssemblyScatter } from "@/components/assembly/AssemblyScatter";
+import { AssemblyDetail } from "@/components/assembly/AssemblyDetail";
+import { AssemblyStats, AssemblyStatsActions } from "@/components/assembly/AssemblyStats";
 import { BgcRoster } from "@/components/bgc/BgcRoster";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { BgcDetail } from "@/components/bgc/BgcDetail";
@@ -12,20 +12,20 @@ import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 
 function BgcSourceBadge() {
-  const genomeShortlist = useShortlistStore((s) => s.genomes);
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
+  const assemblyShortlist = useShortlistStore((s) => s.assemblies);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
 
-  if (genomeShortlist.length > 0) {
+  if (assemblyShortlist.length > 0) {
     return (
       <Badge variant="outline" className="text-[10px]">
-        From {genomeShortlist.length} shortlisted genome{genomeShortlist.length > 1 ? "s" : ""}
+        From {assemblyShortlist.length} shortlisted assembl{assemblyShortlist.length > 1 ? "ies" : "y"}
       </Badge>
     );
   }
-  if (activeGenomeId) {
+  if (activeAssemblyId) {
     return (
       <Badge variant="outline" className="text-[10px]">
-        From selected genome
+        From selected assembly
       </Badge>
     );
   }
@@ -33,30 +33,30 @@ function BgcSourceBadge() {
 }
 
 export function ExploreLayout() {
-  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
+  const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
-      {/* Top section: Genome panels — Roster full height left, Map + Stats stacked right */}
+      {/* Top section: Assembly panels — Roster full height left, Map + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="Genome Roster" className="min-h-[600px] xl:row-span-2">
-          <GenomeRoster />
+        <PanelContainer title="Assembly Roster" className="min-h-[600px] xl:row-span-2">
+          <AssemblyRoster />
         </PanelContainer>
         <div className="flex flex-col gap-4">
-          <PanelContainer title="Genome Space Map" className="min-h-[300px]">
-            <GenomeScatter />
+          <PanelContainer title="Assembly Space Map" className="min-h-[300px]">
+            <AssemblyScatter />
           </PanelContainer>
-          <PanelContainer title="Genome Stats" className="min-h-[280px]" actions={<GenomeStatsActions />}>
-            <GenomeStats />
+          <PanelContainer title="Assembly Stats" className="min-h-[280px]" actions={<AssemblyStatsActions />}>
+            <AssemblyStats />
           </PanelContainer>
         </div>
       </div>
 
-      {/* Genome detail */}
-      {activeGenomeId && (
-        <PanelContainer title="Genome Detail" collapsible>
-          <GenomeDetail genomeId={activeGenomeId} />
+      {/* Assembly detail */}
+      {activeAssemblyId && (
+        <PanelContainer title="Assembly Detail" collapsible>
+          <AssemblyDetail assemblyId={activeAssemblyId} />
         </PanelContainer>
       )}
 

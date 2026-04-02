@@ -1,12 +1,12 @@
 // ── Weight parameters ──────────────────────────────────────────────────────
 
-export interface GenomeWeightParams {
+export interface AssemblyWeightParams {
   w_diversity: number;
   w_novelty: number;
   w_density: number;
 }
 
-export const GENOME_WEIGHT_DEFAULTS: GenomeWeightParams = {
+export const ASSEMBLY_WEIGHT_DEFAULTS: AssemblyWeightParams = {
   w_diversity: 0.3,
   w_novelty: 0.45,
   w_density: 0.25,
@@ -35,19 +35,16 @@ export interface PaginationMeta {
   total_pages: number;
 }
 
-// ── Genome schemas ────────────────────────────────────────────────────────
+// ── Assembly schemas ────────────────────────────────────────────────────────
 
-export interface GenomeRosterItem {
+export interface AssemblyRosterItem {
   id: number;
   accession: string;
   organism_name: string | null;
-  taxonomy_kingdom: string | null;
-  taxonomy_phylum: string | null;
-  taxonomy_class: string | null;
-  taxonomy_order: string | null;
-  taxonomy_family: string | null;
-  taxonomy_genus: string | null;
-  taxonomy_species: string | null;
+  dominant_taxonomy_path: string;
+  dominant_taxonomy_label: string;
+  source_name: string | null;
+  assembly_type: string;
   is_type_strain: boolean;
   type_strain_catalog_url: string | null;
   bgc_count: number;
@@ -56,30 +53,27 @@ export interface GenomeRosterItem {
   bgc_novelty_score: number;
   bgc_density: number;
   taxonomic_novelty: number;
-  genome_quality: number;
+  assembly_quality: number;
   composite_score: number;
 }
 
-export interface PaginatedGenomeResponse {
-  items: GenomeRosterItem[];
+export interface PaginatedAssemblyResponse {
+  items: AssemblyRosterItem[];
   pagination: PaginationMeta;
 }
 
-export interface GenomeDetail {
+export interface AssemblyDetail {
   id: number;
   accession: string;
   organism_name: string | null;
-  taxonomy_kingdom: string | null;
-  taxonomy_phylum: string | null;
-  taxonomy_class: string | null;
-  taxonomy_order: string | null;
-  taxonomy_family: string | null;
-  taxonomy_genus: string | null;
-  taxonomy_species: string | null;
+  dominant_taxonomy_path: string;
+  dominant_taxonomy_label: string;
+  source_name: string | null;
+  assembly_type: string;
   is_type_strain: boolean;
   type_strain_catalog_url: string | null;
-  genome_size_mb: number | null;
-  genome_quality: number | null;
+  assembly_size_mb: number | null;
+  assembly_quality: number | null;
   isolation_source: string | null;
   bgc_count: number;
   l1_class_count: number;
@@ -90,12 +84,12 @@ export interface GenomeDetail {
   composite_score: number;
 }
 
-export interface GenomeScatterPoint {
+export interface AssemblyScatterPoint {
   id: number;
   x: number;
   y: number;
   composite_score: number;
-  taxonomy_family: string | null;
+  dominant_taxonomy_label: string | null;
   organism_name: string | null;
   is_type_strain: boolean;
 }
@@ -131,13 +125,15 @@ export interface DomainArchitectureItem {
   score: number | null;
 }
 
-export interface ParentGenomeSummary {
+export interface ParentAssemblySummary {
   assembly_id: number;
   accession: string;
   organism_name: string | null;
-  taxonomy_family: string | null;
+  dominant_taxonomy_label: string | null;
+  source_name: string | null;
+  assembly_type: string;
   is_type_strain: boolean;
-  genome_quality: number | null;
+  assembly_quality: number | null;
   isolation_source: string | null;
 }
 
@@ -166,7 +162,7 @@ export interface BgcDetail {
   nearest_mibig_distance: number | null;
   is_validated: boolean;
   domain_architecture: DomainArchitectureItem[];
-  parent_genome: ParentGenomeSummary | null;
+  parent_assembly: ParentAssemblySummary | null;
   natural_products: NaturalProductSummary[];
 }
 
@@ -252,11 +248,11 @@ export interface PaginatedQueryResultResponse {
   pagination: PaginationMeta;
 }
 
-export interface QueryResultGenomeAggregation {
+export interface QueryResultAssemblyAggregation {
   assembly_id: number;
   accession: string;
   organism_name: string | null;
-  taxonomy_family: string | null;
+  dominant_taxonomy_label: string | null;
   is_type_strain: boolean;
   hit_count: number;
   max_relevance: number;
@@ -264,8 +260,8 @@ export interface QueryResultGenomeAggregation {
   complete_fraction: number;
 }
 
-export interface PaginatedGenomeAggregationResponse {
-  items: QueryResultGenomeAggregation[];
+export interface PaginatedAssemblyAggregationResponse {
+  items: QueryResultAssemblyAggregation[];
   pagination: PaginationMeta;
 }
 
@@ -347,14 +343,14 @@ export interface BgcClassCount {
   count: number;
 }
 
-export interface GenomeStatsResponse {
+export interface AssemblyStatsResponse {
   taxonomy_sunburst: SunburstNode[];
   score_distributions: ScoreDistribution[];
   type_strain_count: number;
   non_type_strain_count: number;
-  mean_bgc_per_genome: number;
-  mean_l1_class_per_genome: number;
-  total_genomes: number;
+  mean_bgc_per_assembly: number;
+  mean_l1_class_per_assembly: number;
+  total_assemblies: number;
 }
 
 export interface BgcStatsResponse {
@@ -377,15 +373,15 @@ export interface ShortlistExportRequest {
 
 export interface AssessmentAccepted {
   task_id: string;
-  asset_type: "genome" | "bgc";
+  asset_type: "assembly" | "bgc";
 }
 
 export interface AssessmentStatusResponse {
   status: "PENDING" | "SUCCESS" | "FAILURE" | "UNKNOWN";
-  result: GenomeAssessmentResult | BgcAssessmentResult | null;
+  result: AssemblyAssessmentResult | BgcAssessmentResult | null;
 }
 
-// -- Genome assessment --
+// -- Assembly assessment --
 
 export interface PercentileRank {
   dimension: string;
@@ -433,7 +429,7 @@ export interface RadarReference {
   db_p90: number;
 }
 
-export interface GenomeAssessmentResult {
+export interface AssemblyAssessmentResult {
   assembly_id: number;
   accession: string;
   organism_name: string | null;
@@ -462,9 +458,10 @@ export interface GcfDomainFrequency {
 }
 
 export interface GcfTaxonomyCount {
-  taxonomy_family: string;
+  taxonomy_label: string;
   count: number;
 }
+
 
 export interface GcfMemberPoint {
   bgc_id: number;
