@@ -42,10 +42,14 @@ function getAxisOptions(mode: string) {
   return mode === "query" ? QUERY_AXIS_OPTIONS : EXPLORE_AXIS_OPTIONS;
 }
 
-function getDefaultAxes(mode: string) {
-  return mode === "query"
-    ? { x: "similarity_score", y: "novelty_score" }
-    : { x: "novelty_score", y: "domain_novelty" };
+function getDefaultAxes(mode: string, hasSmilesQuery: boolean) {
+  if (mode === "query" && hasSmilesQuery) {
+    return { x: "similarity_score", y: "novelty_score" };
+  }
+  if (mode === "query") {
+    return { x: "domain_novelty", y: "novelty_score" };
+  }
+  return { x: "novelty_score", y: "domain_novelty" };
 }
 
 interface BgcScatterProps {
@@ -64,17 +68,19 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
   const assemblyShortlist = useShortlistStore((s) => s.assemblies);
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
   const resultBgcData = useQueryStore((s) => s.resultBgcData);
+  const smilesQuery = useQueryStore((s) => s.smilesQuery);
+  const hasSmilesQuery = smilesQuery.trim().length > 0;
 
-  const defaults = getDefaultAxes(mode);
+  const defaults = getDefaultAxes(mode, hasSmilesQuery);
   const [xAxis, setXAxis] = useState(defaults.x);
   const [yAxis, setYAxis] = useState(defaults.y);
 
-  // Reset axes to defaults when mode changes
+  // Reset axes to defaults when mode or SMILES query changes
   useEffect(() => {
-    const d = getDefaultAxes(mode);
+    const d = getDefaultAxes(mode, hasSmilesQuery);
     setXAxis(d.x);
     setYAxis(d.y);
-  }, [mode]);
+  }, [mode, hasSmilesQuery]);
 
   const axisOptions = getAxisOptions(mode);
 

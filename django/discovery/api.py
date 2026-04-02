@@ -860,7 +860,9 @@ def chemical_query(
         body.smiles.strip(), body.similarity_threshold
     )
     try:
-        bgc_similarities: dict[int, float] = async_result.get(timeout=120)
+        raw_result = async_result.get(timeout=120)
+        # Celery JSON serialization converts int keys to strings; convert back
+        bgc_similarities: dict[int, float] = {int(k): v for k, v in raw_result.items()}
     except Exception as e:
         logger.error("Chemical similarity search failed: %s", e)
         raise HttpError(500, "Chemical similarity search failed")
