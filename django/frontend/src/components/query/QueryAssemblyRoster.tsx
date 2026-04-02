@@ -24,9 +24,8 @@ import { Star, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const SORT_OPTIONS = [
-  { value: "composite_score", label: "Priority Score" },
-  { value: "bgc_count", label: "BGC Count" },
   { value: "bgc_novelty_score", label: "Novelty" },
+  { value: "bgc_count", label: "BGC Count" },
   { value: "bgc_diversity_score", label: "Diversity" },
   { value: "bgc_density", label: "Density" },
   { value: "organism_name", label: "Organism" },
@@ -125,7 +124,6 @@ export function QueryAssemblyRoster() {
               <TableHead className="text-xs">Taxonomy</TableHead>
               <TableHead className="text-xs text-center">BGCs</TableHead>
               <TableHead className="text-xs text-center">Classes</TableHead>
-              <TableHead className="text-xs text-right">Score</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -163,28 +161,13 @@ export function QueryAssemblyRoster() {
                   <TableCell className="text-center text-xs">
                     {assembly.l1_class_count}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <div className="h-2 w-16 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{
-                            width: `${Math.round(assembly.composite_score * 100)}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="font-mono text-xs">
-                        {assembly.composite_score.toFixed(2)}
-                      </span>
-                    </div>
-                  </TableCell>
                 </TableRow>
               </AssemblyContextMenu>
             ))}
             {items.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={4}
                   className="py-8 text-center text-sm text-muted-foreground"
                 >
                   No assemblies found

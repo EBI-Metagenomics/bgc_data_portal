@@ -19,7 +19,7 @@ ASSESSMENT_TTL = 86_400  # 24 hours
 
 
 @shared_task(name="discovery.tasks.assess_assembly", bind=True, acks_late=True)
-def assess_assembly(self, assembly_id: int, weights: dict) -> bool:
+def assess_assembly(self, assembly_id: int) -> bool:
     """Run a full assembly assessment and cache the result."""
     task_id = self.request.id
     search_key = f"assess_assembly:{assembly_id}"
@@ -29,7 +29,7 @@ def assess_assembly(self, assembly_id: int, weights: dict) -> bool:
 
     from discovery.services.assessment import compute_assembly_assessment
 
-    result = compute_assembly_assessment(assembly_id, weights)
+    result = compute_assembly_assessment(assembly_id)
 
     set_job_cache(
         search_key=search_key,

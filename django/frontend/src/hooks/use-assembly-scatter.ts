@@ -1,11 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchAssemblyScatter, type AssemblyScatterParams } from "@/api/assemblies";
 import { useFilterStore } from "@/stores/filter-store";
-import { useAssemblyWeightStore } from "@/stores/assembly-weight-store";
 
 export function useAssemblyScatter(xAxis: string, yAxis: string) {
   const filters = useFilterStore();
-  const weights = useAssemblyWeightStore();
 
   const params: AssemblyScatterParams = {
     x_axis: xAxis,
@@ -14,9 +12,6 @@ export function useAssemblyScatter(xAxis: string, yAxis: string) {
     taxonomy_path: filters.taxonomyPath || undefined,
     assembly_type: filters.assemblyType || undefined,
     bgc_class: filters.bgcClass || undefined,
-    w_diversity: weights.w_diversity,
-    w_novelty: weights.w_novelty,
-    w_density: weights.w_density,
   };
 
   return useQuery({

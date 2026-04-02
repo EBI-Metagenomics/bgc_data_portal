@@ -18,7 +18,7 @@ from .models import (
 class DashboardAssemblyAdmin(admin.ModelAdmin):
     list_display = (
         "assembly_accession", "organism_name", "dominant_taxonomy_label",
-        "bgc_count", "composite_score", "is_type_strain",
+        "bgc_count", "bgc_novelty_score", "is_type_strain",
     )
     search_fields = ("assembly_accession", "organism_name")
     list_filter = ("is_type_strain",)

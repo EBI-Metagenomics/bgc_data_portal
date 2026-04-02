@@ -5,7 +5,7 @@ import { useState } from "react";
 
 export function useAssemblyAggregation() {
   const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState("max_relevance");
+  const [sortBy, setSortBy] = useState("hit_count");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
 

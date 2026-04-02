@@ -99,7 +99,6 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
       <div className="vf-stack vf-stack--200">
         <h4 className="vf-section-header__heading" style={{ fontSize: "0.875rem" }}>Scores</h4>
         <Separator />
-        <ScoreBar label="Composite" value={assembly.composite_score} />
         <ScoreBar label="BGC Novelty" value={assembly.bgc_novelty_score} />
         <ScoreBar label="BGC Diversity" value={assembly.bgc_diversity_score} />
         <ScoreBar label="BGC Density" value={assembly.bgc_density} />

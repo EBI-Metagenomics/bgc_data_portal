@@ -3,14 +3,12 @@ import type { PercentileRank } from "@/api/types";
 interface AssemblyRankCardProps {
   dbRank: number;
   dbTotal: number;
-  compositeScore: number;
   percentileRanks: PercentileRank[];
 }
 
 export function AssemblyRankCard({
   dbRank,
   dbTotal,
-  compositeScore,
   percentileRanks,
 }: AssemblyRankCardProps) {
   return (
@@ -19,12 +17,8 @@ export function AssemblyRankCard({
       <div className="flex items-baseline gap-3">
         <span className="text-4xl font-bold text-primary">#{dbRank}</span>
         <span className="text-sm text-muted-foreground">
-          of {dbTotal.toLocaleString()} assemblies by priority score
+          of {dbTotal.toLocaleString()} assemblies by novelty score
         </span>
-      </div>
-      <div className="text-sm">
-        Composite score:{" "}
-        <span className="font-semibold">{(compositeScore * 100).toFixed(1)}%</span>
       </div>
 
       {/* Percentile table */}

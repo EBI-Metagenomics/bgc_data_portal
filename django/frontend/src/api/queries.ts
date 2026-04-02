@@ -3,15 +3,17 @@ import type {
   DomainQueryRequest,
   PaginatedAssemblyAggregationResponse,
   PaginatedQueryResultResponse,
-  QueryWeightParams,
 } from "./types";
 
-export interface DomainQueryParams extends Partial<QueryWeightParams> {
+export interface DomainQueryParams {
   page?: number;
   page_size?: number;
+  sort_by?: string;
+  order?: "asc" | "desc";
   search?: string;
   type_strain_only?: boolean;
   taxonomy_path?: string;
+  assembly_type?: string;
   bgc_class?: string;
   biome_lineage?: string;
   assembly_accession?: string;
@@ -33,10 +35,12 @@ export function postDomainQuery(
   );
 }
 
-export interface SimilarBgcParams extends Partial<QueryWeightParams> {
+export interface SimilarBgcParams {
   max_distance?: number;
   page?: number;
   page_size?: number;
+  sort_by?: string;
+  order?: "asc" | "desc";
 }
 
 export function postSimilarBgcQuery(
@@ -59,12 +63,15 @@ export interface ChemicalQueryRequest {
   similarity_threshold: number;
 }
 
-export interface ChemicalQueryParams extends Partial<QueryWeightParams> {
+export interface ChemicalQueryParams {
   page?: number;
   page_size?: number;
+  sort_by?: string;
+  order?: "asc" | "desc";
   search?: string;
   type_strain_only?: boolean;
   taxonomy_path?: string;
+  assembly_type?: string;
   bgc_class?: string;
   biome_lineage?: string;
   assembly_accession?: string;

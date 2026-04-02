@@ -3,12 +3,16 @@ import { fetchBgcScatter, type BgcScatterParams } from "@/api/bgcs";
 import { useFilterStore } from "@/stores/filter-store";
 
 export function useBgcScatter(options: {
+  xAxis?: string;
+  yAxis?: string;
   assemblyIds?: number[];
   bgcIds?: number[];
   includeMibig?: boolean;
   enabled?: boolean;
 }) {
   const {
+    xAxis,
+    yAxis,
     assemblyIds,
     bgcIds,
     includeMibig = true,
@@ -22,6 +26,8 @@ export function useBgcScatter(options: {
     bgc_class: bgcClass || undefined,
     assembly_ids: assemblyIds?.join(",") || undefined,
     bgc_ids: bgcIds?.join(",") || undefined,
+    xAxis,
+    yAxis,
   };
 
   return useQuery({

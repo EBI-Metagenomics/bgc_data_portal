@@ -107,9 +107,6 @@ class DashboardAssembly(models.Model):
     bgc_density = models.FloatField(default=0.0)
     taxonomic_novelty = models.FloatField(default=0.0)
 
-    # Precomputed composite score (default weights: diversity=0.30, novelty=0.45, density=0.25)
-    composite_score = models.FloatField(default=0.0, db_index=True)
-
     # Precomputed percentile ranks (0–100)
     pctl_diversity = models.FloatField(default=0.0)
     pctl_novelty = models.FloatField(default=0.0)
@@ -124,7 +121,6 @@ class DashboardAssembly(models.Model):
         db_table = "discovery_assembly"
         indexes = [
             # Roster sort columns
-            models.Index(fields=["-composite_score"], name="idx_da_composite_desc"),
             models.Index(fields=["-bgc_novelty_score"], name="idx_da_novelty_desc"),
             models.Index(fields=["-bgc_diversity_score"], name="idx_da_diversity_desc"),
             models.Index(fields=["-bgc_density"], name="idx_da_density_desc"),

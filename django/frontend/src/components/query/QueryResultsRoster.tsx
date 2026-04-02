@@ -14,8 +14,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowUpDown, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const SORT_OPTIONS = [
+  { value: "similarity_score", label: "Query Similarity" },
+  { value: "novelty_score", label: "Novelty" },
+  { value: "domain_novelty", label: "Domain Novelty" },
+  { value: "size_kb", label: "Size" },
+  { value: "classification_l1", label: "Class" },
+  { value: "accession", label: "Accession" },
+];
 
 export function QueryResultsRoster() {
   const similarBgcSourceId = useQueryStore((s) => s.similarBgcSourceId);
@@ -33,7 +49,7 @@ export function QueryResultsRoster() {
     : smilesQuery.trim()
       ? chemicalQuery
       : domainQuery;
-  const { data, isLoading, page, setPage } = query;
+  const { data, isLoading, page, setPage, sortBy, setSortBy, order, setOrder } = query;
 
   if (isLoading) {
     return (
@@ -60,6 +76,30 @@ export function QueryResultsRoster() {
 
   return (
     <div className="space-y-2">
+      {/* Sort controls */}
+      <div className="flex items-center gap-2">
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="h-7 w-40 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={() => setOrder(order === "asc" ? "desc" : "asc")}
+        >
+          <ArrowUpDown className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
       <div className="overflow-auto">
         <Table>
           <TableHeader>
@@ -67,7 +107,8 @@ export function QueryResultsRoster() {
               <TableHead className="text-xs">Accession</TableHead>
               <TableHead className="text-xs">Class</TableHead>
               <TableHead className="text-xs">Organism</TableHead>
-              <TableHead className="text-xs text-right">Relevance</TableHead>
+              <TableHead className="text-xs text-right">Query Similarity</TableHead>
+              <TableHead className="text-xs text-right">Domain Novelty</TableHead>
               <TableHead className="text-xs text-right">Novelty</TableHead>
             </TableRow>
           </TableHeader>
@@ -99,20 +140,11 @@ export function QueryResultsRoster() {
                       {bgc.organism_name ?? bgc.assembly_accession ?? "-"}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <div className="h-2 w-12 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-query"
-                          style={{
-                            width: `${Math.round(bgc.relevance_score * 100)}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="font-mono text-xs">
-                        {bgc.relevance_score.toFixed(2)}
-                      </span>
-                    </div>
+                  <TableCell className="text-right font-mono text-xs">
+                    {bgc.similarity_score.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs">
+                    {bgc.domain_novelty.toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
                     {bgc.novelty_score.toFixed(2)}

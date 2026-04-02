@@ -2,16 +2,14 @@ import { apiGet, apiPost, downloadBlob } from "./client";
 import type {
   AssessmentAccepted,
   AssessmentStatusResponse,
-  AssemblyWeightParams,
 } from "./types";
 
 export async function postAssemblyAssessment(
-  assemblyId: number,
-  weights: AssemblyWeightParams
+  assemblyId: number
 ): Promise<AssessmentAccepted> {
   return apiPost<AssessmentAccepted>(
     `/assess/assembly/${assemblyId}/`,
-    weights
+    {}
   );
 }
 

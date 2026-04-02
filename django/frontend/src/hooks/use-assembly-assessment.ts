@@ -2,7 +2,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { postAssemblyAssessment, fetchAssessmentStatus } from "@/api/assessment";
 import { useAssessStore } from "@/stores/assess-store";
-import { useAssemblyWeightStore } from "@/stores/assembly-weight-store";
 import type { AssemblyAssessmentResult } from "@/api/types";
 
 export function useAssemblyAssessment() {
@@ -10,15 +9,10 @@ export function useAssemblyAssessment() {
   const setTaskId = useAssessStore((s) => s.setTaskId);
   const setResult = useAssessStore((s) => s.setResult);
   const setStatus = useAssessStore((s) => s.setStatus);
-  const weights = useAssemblyWeightStore();
 
   const mutation = useMutation({
     mutationFn: (assemblyId: number) =>
-      postAssemblyAssessment(assemblyId, {
-        w_diversity: weights.w_diversity,
-        w_novelty: weights.w_novelty,
-        w_density: weights.w_density,
-      }),
+      postAssemblyAssessment(assemblyId),
     onSuccess: (data) => {
       setTaskId(data.task_id);
     },
@@ -27,19 +21,12 @@ export function useAssemblyAssessment() {
     },
   });
 
-  // Auto-trigger assessment when assetId or weights change
+  // Auto-trigger assessment when assetId changes
   useEffect(() => {
     if (assetType === "assembly" && assetId && status === "idle") {
       mutation.mutate(assetId);
     }
-  }, [assetType, assetId, weights.w_diversity, weights.w_novelty, weights.w_density]);
-
-  // Reset to idle when weights change so re-assessment triggers
-  useEffect(() => {
-    if (assetType === "assembly" && assetId && status === "success") {
-      useAssessStore.getState().setStatus("idle");
-    }
-  }, [weights.w_diversity, weights.w_novelty, weights.w_density]);
+  }, [assetType, assetId]);
 
   // Poll for results
   const poll = useQuery({

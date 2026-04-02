@@ -5,26 +5,6 @@ from typing import Optional
 from ninja import Schema
 
 
-# ── Weight parameters ─────────────────────────────────────────────────────────
-
-
-class AssemblyWeightParams(Schema):
-    """Weights for the Explore Assemblies composite priority score."""
-
-    w_diversity: float = 0.30
-    w_novelty: float = 0.45
-    w_density: float = 0.25
-
-
-class QueryWeightParams(Schema):
-    """Weights for the Query mode result relevance score."""
-
-    w_similarity: float = 0.40
-    w_novelty: float = 0.30
-    w_completeness: float = 0.15
-    w_domain_novelty: float = 0.15
-
-
 # ── Pagination ────────────────────────────────────────────────────────────────
 
 
@@ -56,7 +36,6 @@ class AssemblyRosterItem(Schema):
     bgc_density: float = 0.0
     taxonomic_novelty: float = 0.0
     assembly_quality: Optional[float] = None
-    composite_score: float = 0.0
 
 
 class PaginatedAssemblyResponse(Schema):
@@ -84,14 +63,12 @@ class AssemblyDetail(Schema):
     bgc_novelty_score: float = 0.0
     bgc_density: float = 0.0
     taxonomic_novelty: float = 0.0
-    composite_score: float = 0.0
 
 
 class AssemblyScatterPoint(Schema):
     id: int
     x: float
     y: float
-    composite_score: float
     dominant_taxonomy_label: str = ""
     organism_name: Optional[str] = None
     is_type_strain: bool = False
@@ -171,11 +148,14 @@ class BgcDetail(Schema):
 
 class BgcScatterPoint(Schema):
     id: int
-    umap_x: float
-    umap_y: float
+    x: float
+    y: float
     bgc_class: str = ""
     is_mibig: bool = False
     compound_name: Optional[str] = None
+    novelty_score: float = 0.0
+    domain_novelty: float = 0.0
+    similarity_score: Optional[float] = None
 
 
 class MibigReferencePoint(Schema):
@@ -246,7 +226,7 @@ class QueryResultBgc(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
-    relevance_score: float = 0.0
+    similarity_score: float = 0.0
     # Parent assembly summary
     assembly_id: Optional[int] = None
     assembly_accession: Optional[str] = None
@@ -266,8 +246,6 @@ class QueryResultAssemblyAggregation(Schema):
     dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
     hit_count: int = 0
-    max_relevance: float = 0.0
-    mean_relevance: float = 0.0
     complete_fraction: float = 0.0
 
 
@@ -457,7 +435,6 @@ class AssemblyAssessmentResponse(Schema):
     # DB rank
     db_rank: int = 0
     db_total: int = 0
-    composite_score: float = 0.0
     # Per-BGC novelty
     bgc_novelty_breakdown: list[BgcNoveltyItem] = []
     # Redundancy matrix

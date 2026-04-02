@@ -15,10 +15,18 @@ export interface BgcScatterParams {
   assembly_ids?: string;
   bgc_ids?: string;
   max_points?: number;
+  xAxis?: string;
+  yAxis?: string;
 }
 
 export function fetchBgcScatter(params: BgcScatterParams = {}) {
-  return apiGet<BgcScatterPoint[]>("/bgc-scatter/", params as Record<string, string | number | boolean | undefined>);
+  const { xAxis, yAxis, ...rest } = params;
+  const queryParams: Record<string, string | number | boolean | undefined> = {
+    ...rest,
+    ...(xAxis !== undefined && { x_axis: xAxis }),
+    ...(yAxis !== undefined && { y_axis: yAxis }),
+  };
+  return apiGet<BgcScatterPoint[]>("/bgc-scatter/", queryParams);
 }
 
 export interface BgcRosterParams {

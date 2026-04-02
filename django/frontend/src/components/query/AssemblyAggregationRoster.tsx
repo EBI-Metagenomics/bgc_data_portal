@@ -28,8 +28,6 @@ import {
 } from "lucide-react";
 
 const SORT_OPTIONS = [
-  { value: "max_relevance", label: "Max Relevance" },
-  { value: "mean_relevance", label: "Mean Relevance" },
   { value: "hit_count", label: "Hit Count" },
   { value: "complete_fraction", label: "Completeness" },
 ];
@@ -103,8 +101,6 @@ export function AssemblyAggregationRoster() {
               <TableHead className="text-xs">Organism</TableHead>
               <TableHead className="text-xs">Taxonomy</TableHead>
               <TableHead className="text-xs text-center">Hits</TableHead>
-              <TableHead className="text-xs text-right">Max Rel.</TableHead>
-              <TableHead className="text-xs text-right">Mean Rel.</TableHead>
               <TableHead className="text-xs text-right">Complete %</TableHead>
               <TableHead className="w-8" />
             </TableRow>
@@ -130,12 +126,6 @@ export function AssemblyAggregationRoster() {
                   </TableCell>
                   <TableCell className="text-center font-mono text-xs">
                     {assembly.hit_count}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs">
-                    {assembly.max_relevance.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs">
-                    {assembly.mean_relevance.toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
                     {(assembly.complete_fraction * 100).toFixed(0)}%

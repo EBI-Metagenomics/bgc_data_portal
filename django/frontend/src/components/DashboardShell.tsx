@@ -7,7 +7,6 @@ import { useModeStore } from "@/stores/mode-store";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { FilterPanel } from "@/components/filters/FilterPanel";
-import { WeightTuner } from "@/components/WeightTuner";
 import { SidebarShortlists } from "@/components/trays/SidebarShortlists";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -35,8 +34,6 @@ export function DashboardShell() {
               <ScrollArea className="h-full">
                 <div className="space-y-4 p-4">
                   <FilterPanel />
-                  <Separator />
-                  <WeightTuner />
                   <Separator />
                   <SidebarShortlists />
                 </div>

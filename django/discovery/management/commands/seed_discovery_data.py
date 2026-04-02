@@ -222,9 +222,6 @@ class Command(BaseCommand):
             diversity = round(random.betavariate(3, 3), 4)
             novelty = round(random.betavariate(2, 5), 4)
             density = round(random.uniform(0.0, 1.0), 4)
-            composite = round(
-                (0.30 * diversity + 0.45 * novelty + 0.25 * density), 4
-            )
 
             # Weighted random: 60% genome, 30% metagenome, 10% region
             _type_roll = random.random()
@@ -255,7 +252,6 @@ class Command(BaseCommand):
                 bgc_novelty_score=novelty,
                 bgc_density=density,
                 taxonomic_novelty=round(random.betavariate(2, 4), 4),
-                composite_score=composite,
                 source_assembly_id=10000 + i,
             )
             asm._tax = tax  # stash for contig taxonomy assignment

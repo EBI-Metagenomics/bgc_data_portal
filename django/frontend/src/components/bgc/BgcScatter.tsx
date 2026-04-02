@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import Plot from "react-plotly.js";
 import { useBgcScatter } from "@/hooks/use-bgc-scatter";
 import { useSelectionStore } from "@/stores/selection-store";
@@ -8,6 +8,13 @@ import { useQueryStore } from "@/stores/query-store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const BGC_CLASS_COLORS: Record<string, string> = {
   Polyketide: "#3b82f6",
@@ -18,6 +25,27 @@ const BGC_CLASS_COLORS: Record<string, string> = {
   Alkaloid: "#14b8a6",
   Other: "#6b7280",
 };
+
+const QUERY_AXIS_OPTIONS = [
+  { value: "similarity_score", label: "Query Similarity" },
+  { value: "novelty_score", label: "Novelty" },
+  { value: "domain_novelty", label: "Domain Novelty" },
+];
+
+const EXPLORE_AXIS_OPTIONS = [
+  { value: "novelty_score", label: "Novelty" },
+  { value: "domain_novelty", label: "Domain Novelty" },
+];
+
+function getAxisOptions(mode: string) {
+  return mode === "query" ? QUERY_AXIS_OPTIONS : EXPLORE_AXIS_OPTIONS;
+}
+
+function getDefaultAxes(mode: string) {
+  return mode === "query"
+    ? { x: "similarity_score", y: "novelty_score" }
+    : { x: "novelty_score", y: "domain_novelty" };
+}
 
 interface BgcScatterProps {
   assemblyIdsOverride?: number[];
@@ -34,6 +62,19 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
   const assemblyShortlist = useShortlistStore((s) => s.assemblies);
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
+
+  const defaults = getDefaultAxes(mode);
+  const [xAxis, setXAxis] = useState(defaults.x);
+  const [yAxis, setYAxis] = useState(defaults.y);
+
+  // Reset axes to defaults when mode changes
+  useEffect(() => {
+    const d = getDefaultAxes(mode);
+    setXAxis(d.x);
+    setYAxis(d.y);
+  }, [mode]);
+
+  const axisOptions = getAxisOptions(mode);
 
   // When bgcIdsOverride is provided (e.g. assess mode), use it directly
   const assemblyIds = bgcIdsOverride
@@ -63,6 +104,8 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
         : hasQueryResults;
 
   const { data: points, isLoading } = useBgcScatter({
+    xAxis,
+    yAxis,
     assemblyIds: assemblyIds as number[] | undefined,
     bgcIds,
     includeMibig: showMibig,
@@ -95,8 +138,8 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
         type: "scatter" as const,
         mode: "markers" as const,
         name: "MIBiG references",
-        x: mibigPts.map((p) => p.umap_x),
-        y: mibigPts.map((p) => p.umap_y),
+        x: mibigPts.map((p) => p.x),
+        y: mibigPts.map((p) => p.y),
         customdata: mibigPts.map((p) => p.id),
         text: mibigPts.map((p) => p.compound_name ?? p.bgc_class),
         hoverinfo: "text" as const,
@@ -115,8 +158,8 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
         type: "scatter" as const,
         mode: "markers" as const,
         name: cls,
-        x: pts.map((p) => p.umap_x),
-        y: pts.map((p) => p.umap_y),
+        x: pts.map((p) => p.x),
+        y: pts.map((p) => p.y),
         customdata: pts.map((p) => p.id),
         text: pts.map((p) => `${p.bgc_class}<br>ID: ${p.id}`),
         hoverinfo: "text" as const,
@@ -143,8 +186,8 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
           type: "scatter" as const,
           mode: "markers" as const,
           name: "Assessed BGC",
-          x: [hp.umap_x],
-          y: [hp.umap_y],
+          x: [hp.x],
+          y: [hp.y],
           customdata: [hp.id],
           text: [`Assessed: ${hp.bgc_class}<br>ID: ${hp.id}`],
           hoverinfo: "text" as const,
@@ -171,6 +214,9 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
     [setActiveBgcId]
   );
 
+  const xLabel = axisOptions.find((o) => o.value === xAxis)?.label ?? xAxis;
+  const yLabel = axisOptions.find((o) => o.value === yAxis)?.label ?? yAxis;
+
   if (!hasData) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -188,6 +234,32 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">X:</span>
+        <Select value={xAxis} onValueChange={setXAxis}>
+          <SelectTrigger className="h-7 w-28 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {axisOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="text-xs">
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">Y:</span>
+        <Select value={yAxis} onValueChange={setYAxis}>
+          <SelectTrigger className="h-7 w-28 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {axisOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="text-xs">
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Checkbox
           id="show-mibig"
           checked={showMibig}
@@ -203,8 +275,8 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
           autosize: true,
           height: 300,
           margin: { l: 40, r: 10, t: 10, b: 40 },
-          xaxis: { title: { text: "UMAP 1", font: { size: 11 } } },
-          yaxis: { title: { text: "UMAP 2", font: { size: 11 } } },
+          xaxis: { title: { text: xLabel, font: { size: 11 } } },
+          yaxis: { title: { text: yLabel, font: { size: 11 } } },
           showlegend: true,
           legend: { font: { size: 9 }, orientation: "h" as const, y: -0.3 },
           hovermode: "closest" as const,

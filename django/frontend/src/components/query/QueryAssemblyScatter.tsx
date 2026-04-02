@@ -77,12 +77,12 @@ export function QueryAssemblyScatter() {
         customdata: pts.map((p) => p.id),
         text: pts.map(
           (p) =>
-            `${p.organism_name ?? "Unknown"}<br>Score: ${p.composite_score.toFixed(2)}${p.is_type_strain ? "<br>Type Strain" : ""}`
+            `${p.organism_name ?? "Unknown"}${p.is_type_strain ? "<br>Type Strain" : ""}`
         ),
         hoverinfo: "text" as const,
         marker: {
           color,
-          size: pts.map((p) => 6 + p.composite_score * 14),
+          size: 8,
           opacity: 0.7,
           line: {
             color: pts.map((p) =>

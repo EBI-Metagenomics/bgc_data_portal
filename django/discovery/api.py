@@ -16,16 +16,14 @@ from django.db.models import (
     Avg,
     Case,
     Count,
-    ExpressionWrapper,
     F,
     FloatField,
-    Max,
     Q,
     Value,
     When,
 )
 from django.http import HttpResponse
-from ninja import Router, Query
+from ninja import Router
 from ninja.errors import HttpError
 from pgvector.django import CosineDistance
 
@@ -42,7 +40,6 @@ from discovery.models import (
     DashboardNaturalProduct,
     PrecomputedStats,
 )
-from discovery.services.scoring import compute_composite_priority
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
 from discovery.api_schemas import (
     AssessmentAccepted,
@@ -64,7 +61,6 @@ from discovery.api_schemas import (
     AssemblyDetail,
     AssemblyRosterItem,
     AssemblyScatterPoint,
-    AssemblyWeightParams,
     MibigReferencePoint,
     NaturalProductSummary,
     NpClassLevel,
@@ -77,7 +73,6 @@ from discovery.api_schemas import (
     PfamAnnotationOut,
     QueryResultBgc,
     QueryResultAssemblyAggregation,
-    QueryWeightParams,
     RegionCdsOut,
     RegionClusterOut,
     RegionDomainOut,
@@ -88,11 +83,6 @@ from discovery.api_schemas import (
 )
 
 discovery_router = Router(tags=["Discovery Platform"])
-
-# Default composite weights
-_DEFAULT_W_DIVERSITY = 0.30
-_DEFAULT_W_NOVELTY = 0.45
-_DEFAULT_W_DENSITY = 0.25
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -106,33 +96,7 @@ def _paginate(page: int, page_size: int, total_count: int):
     return page, page_size, total_pages, offset
 
 
-def _is_default_weights(weights: AssemblyWeightParams) -> bool:
-    return (
-        abs(weights.w_diversity - _DEFAULT_W_DIVERSITY) < 1e-6
-        and abs(weights.w_novelty - _DEFAULT_W_NOVELTY) < 1e-6
-        and abs(weights.w_density - _DEFAULT_W_DENSITY) < 1e-6
-    )
-
-
-def _annotate_custom_composite(qs, weights: AssemblyWeightParams):
-    """Annotate a DashboardAssembly queryset with a SQL-computed composite score."""
-    w_sum = weights.w_diversity + weights.w_novelty + weights.w_density
-    if w_sum == 0:
-        return qs.annotate(custom_composite=Value(0.0, output_field=FloatField()))
-    return qs.annotate(
-        custom_composite=ExpressionWrapper(
-            (
-                Value(weights.w_diversity) * F("bgc_diversity_score")
-                + Value(weights.w_novelty) * F("bgc_novelty_score")
-                + Value(weights.w_density) * F("bgc_density")
-            )
-            / Value(w_sum),
-            output_field=FloatField(),
-        )
-    )
-
-
-def _assembly_to_roster_item(assembly: DashboardAssembly, composite: float) -> AssemblyRosterItem:
+def _assembly_to_roster_item(assembly: DashboardAssembly) -> AssemblyRosterItem:
     return AssemblyRosterItem(
         id=assembly.id,
         accession=assembly.assembly_accession,
@@ -150,7 +114,6 @@ def _assembly_to_roster_item(assembly: DashboardAssembly, composite: float) -> A
         bgc_density=assembly.bgc_density,
         taxonomic_novelty=assembly.taxonomic_novelty,
         assembly_quality=assembly.assembly_quality,
-        composite_score=composite,
     )
 
 
@@ -230,7 +193,7 @@ def assembly_roster(
     request,
     page: int = 1,
     page_size: int = 25,
-    sort_by: str = "composite_score",
+    sort_by: str = "bgc_novelty_score",
     order: str = "desc",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
@@ -241,7 +204,6 @@ def assembly_roster(
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
     assembly_type: Optional[str] = None,
-    weights: AssemblyWeightParams = Query(...),
 ):
     qs = DashboardAssembly.objects.select_related("source").all()
     qs = _apply_assembly_filters(
@@ -257,44 +219,25 @@ def assembly_roster(
         assembly_accession=assembly_accession,
     )
 
-    # Sort in DB — use precomputed composite or SQL expression
-    use_default = _is_default_weights(weights)
     score_fields = {
-        "composite_score", "bgc_count", "bgc_diversity_score",
+        "bgc_count", "bgc_diversity_score",
         "bgc_novelty_score", "bgc_density", "taxonomic_novelty",
         "l1_class_count",
     }
-    reverse = order == "desc"
-    prefix = "-" if reverse else ""
+    prefix = "-" if order == "desc" else ""
 
-    if sort_by == "composite_score":
-        if use_default:
-            qs = qs.order_by(f"{prefix}composite_score")
-        else:
-            qs = _annotate_custom_composite(qs, weights)
-            qs = qs.order_by(f"{prefix}custom_composite")
-    elif sort_by in score_fields:
+    if sort_by in score_fields:
         qs = qs.order_by(f"{prefix}{sort_by}")
     elif sort_by == "organism_name":
         qs = qs.order_by(f"{prefix}organism_name")
     else:
-        if use_default:
-            qs = qs.order_by("-composite_score")
-        else:
-            qs = _annotate_custom_composite(qs, weights)
-            qs = qs.order_by("-custom_composite")
+        qs = qs.order_by("-bgc_novelty_score")
 
     total_count = qs.count()
     page, page_size, total_pages, offset = _paginate(page, page_size, total_count)
     page_qs = qs[offset: offset + page_size]
 
-    items = []
-    for assembly in page_qs:
-        if use_default:
-            composite = assembly.composite_score
-        else:
-            composite = getattr(assembly, "custom_composite", assembly.composite_score)
-        items.append(_assembly_to_roster_item(assembly, composite))
+    items = [_assembly_to_roster_item(assembly) for assembly in page_qs]
 
     return PaginatedAssemblyResponse(
         items=items,
@@ -308,27 +251,11 @@ def assembly_roster(
 
 
 @discovery_router.get("/assemblies/{assembly_id}/", response=AssemblyDetail)
-def assembly_detail(request, assembly_id: int, weights: AssemblyWeightParams = Query(...)):
+def assembly_detail(request, assembly_id: int):
     try:
         assembly = DashboardAssembly.objects.select_related("source").get(id=assembly_id)
     except DashboardAssembly.DoesNotExist:
         raise HttpError(404, "Assembly not found")
-
-    if _is_default_weights(weights):
-        composite = assembly.composite_score
-    else:
-        composite = compute_composite_priority(
-            scores={
-                "diversity": assembly.bgc_diversity_score,
-                "novelty": assembly.bgc_novelty_score,
-                "density": assembly.bgc_density,
-            },
-            weights={
-                "diversity": weights.w_diversity,
-                "novelty": weights.w_novelty,
-                "density": weights.w_density,
-            },
-        )
 
     return AssemblyDetail(
         id=assembly.id,
@@ -349,7 +276,6 @@ def assembly_detail(request, assembly_id: int, weights: AssemblyWeightParams = Q
         bgc_novelty_score=assembly.bgc_novelty_score,
         bgc_density=assembly.bgc_density,
         taxonomic_novelty=assembly.taxonomic_novelty,
-        composite_score=composite,
     )
 
 
@@ -447,7 +373,6 @@ def assembly_scatter(
     taxonomy_path: Optional[str] = None,
     bgc_class: Optional[str] = None,
     assembly_ids: Optional[str] = None,
-    weights: AssemblyWeightParams = Query(...),
 ):
     allowed_axes = {
         "bgc_diversity_score", "bgc_novelty_score", "bgc_density",
@@ -470,37 +395,17 @@ def assembly_scatter(
     if bgc_class:
         qs = qs.filter(bgcs__classification_l1__iexact=bgc_class).distinct()
 
-    use_default = _is_default_weights(weights)
-
-    points = []
-    for assembly in qs:
-        if use_default:
-            composite = assembly.composite_score
-        else:
-            composite = compute_composite_priority(
-                scores={
-                    "diversity": assembly.bgc_diversity_score,
-                    "novelty": assembly.bgc_novelty_score,
-                    "density": assembly.bgc_density,
-                },
-                weights={
-                    "diversity": weights.w_diversity,
-                    "novelty": weights.w_novelty,
-                    "density": weights.w_density,
-                },
-            )
-        points.append(
-            AssemblyScatterPoint(
-                id=assembly.id,
-                x=getattr(assembly, x_axis, 0.0) or 0.0,
-                y=getattr(assembly, y_axis, 0.0) or 0.0,
-                composite_score=composite,
-                dominant_taxonomy_label=assembly.dominant_taxonomy_label,
-                organism_name=assembly.organism_name,
-                is_type_strain=assembly.is_type_strain,
-            )
+    return [
+        AssemblyScatterPoint(
+            id=assembly.id,
+            x=getattr(assembly, x_axis, 0.0) or 0.0,
+            y=getattr(assembly, y_axis, 0.0) or 0.0,
+            dominant_taxonomy_label=assembly.dominant_taxonomy_label,
+            organism_name=assembly.organism_name,
+            is_type_strain=assembly.is_type_strain,
         )
-    return points
+        for assembly in qs
+    ]
 
 
 # ── BGC endpoints ────────────────────────────────────────────────────────────
@@ -691,12 +596,18 @@ def bgc_region(request, bgc_id: int):
 @discovery_router.get("/bgc-scatter/", response=list[BgcScatterPoint])
 def bgc_scatter(
     request,
+    x_axis: str = "novelty_score",
+    y_axis: str = "domain_novelty",
     include_mibig: bool = True,
     bgc_class: Optional[str] = None,
     assembly_ids: Optional[str] = None,
     bgc_ids: Optional[str] = None,
     max_points: int = 2000,
 ):
+    allowed_axes = {"novelty_score", "domain_novelty"}
+    if x_axis not in allowed_axes or y_axis not in allowed_axes:
+        raise HttpError(400, f"Axis must be one of: {', '.join(sorted(allowed_axes))}")
+
     qs = DashboardBgc.objects.all()
 
     if bgc_class:
@@ -717,25 +628,33 @@ def bgc_scatter(
     points = [
         BgcScatterPoint(
             id=bgc.id,
-            umap_x=bgc.umap_x,
-            umap_y=bgc.umap_y,
+            x=getattr(bgc, x_axis, 0.0) or 0.0,
+            y=getattr(bgc, y_axis, 0.0) or 0.0,
             bgc_class=bgc.classification_l1,
             is_mibig=False,
             compound_name=None,
+            novelty_score=bgc.novelty_score,
+            domain_novelty=bgc.domain_novelty,
         )
         for bgc in qs
     ]
 
     if include_mibig:
-        for ref in DashboardMibigReference.objects.all():
+        mibig_refs = DashboardMibigReference.objects.select_related("dashboard_bgc").all()
+        for ref in mibig_refs:
+            db_bgc = ref.dashboard_bgc
+            x_val = getattr(db_bgc, x_axis, 0.0) if db_bgc else 0.0
+            y_val = getattr(db_bgc, y_axis, 0.0) if db_bgc else 0.0
             points.append(
                 BgcScatterPoint(
                     id=ref.id,
-                    umap_x=ref.umap_x,
-                    umap_y=ref.umap_y,
+                    x=x_val or 0.0,
+                    y=y_val or 0.0,
                     bgc_class=ref.bgc_class,
                     is_mibig=True,
                     compound_name=ref.compound_name,
+                    novelty_score=db_bgc.novelty_score if db_bgc else 0.0,
+                    domain_novelty=db_bgc.domain_novelty if db_bgc else 0.0,
                 )
             )
 
@@ -751,6 +670,8 @@ def domain_query(
     body: DomainQueryRequest,
     page: int = 1,
     page_size: int = 25,
+    sort_by: str = "novelty_score",
+    order: str = "desc",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     type_strain_only: bool = False,
@@ -758,7 +679,6 @@ def domain_query(
     biome_lineage: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
-    weights: QueryWeightParams = Query(...),
 ):
     required = [d.acc for d in body.domains if d.required]
     excluded = [d.acc for d in body.domains if not d.required]
@@ -797,27 +717,18 @@ def domain_query(
     if excluded:
         qs = qs.exclude(bgc_domains__domain_acc__in=excluded)
 
-    # Compute relevance in SQL
-    w_sum = (
-        weights.w_similarity + weights.w_novelty
-        + weights.w_completeness + weights.w_domain_novelty
-    )
-    if w_sum > 0:
-        qs = qs.annotate(
-            relevance=ExpressionWrapper(
-                (
-                    Value(weights.w_similarity) * Value(1.0)
-                    + Value(weights.w_novelty) * F("novelty_score")
-                    + Value(weights.w_completeness)
-                    * Case(When(is_partial=True, then=0.0), default=1.0, output_field=FloatField())
-                    + Value(weights.w_domain_novelty) * F("domain_novelty")
-                )
-                / Value(w_sum),
-                output_field=FloatField(),
-            )
-        ).order_by("-relevance")
-    else:
-        qs = qs.annotate(relevance=Value(0.0, output_field=FloatField()))
+    # Domain queries use similarity_score=1.0 (domain match is binary)
+    # Sort
+    sort_map = {
+        "novelty_score": "novelty_score",
+        "domain_novelty": "domain_novelty",
+        "size_kb": "size_kb",
+        "classification_l1": "classification_l1",
+        "accession": "id",
+    }
+    order_field = sort_map.get(sort_by, "novelty_score")
+    prefix = "-" if order == "desc" else ""
+    qs = qs.order_by(f"{prefix}{order_field}")
 
     total_count = qs.count()
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
@@ -833,7 +744,7 @@ def domain_query(
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            relevance_score=round(bgc.relevance, 4),
+            similarity_score=1.0,
             assembly_id=bgc.assembly_id,
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
@@ -856,8 +767,9 @@ def similar_bgc_query(
     bgc_id: int,
     page: int = 1,
     page_size: int = 25,
+    sort_by: str = "similarity_score",
+    order: str = "desc",
     max_distance: float = 0.5,
-    weights: QueryWeightParams = Query(...),
 ):
     try:
         source_emb = BgcEmbedding.objects.get(bgc_id=bgc_id)
@@ -873,28 +785,23 @@ def similar_bgc_query(
         .select_related("bgc__assembly")
     )
 
-    # Materialize similarity scores and compute relevance
+    # Materialize similarity scores
     results = []
     for emb in emb_qs:
         bgc = emb.bgc
-        similarity = 1.0 - float(emb.distance)
-        relevance = compute_composite_priority(
-            scores={
-                "similarity": similarity,
-                "novelty": bgc.novelty_score,
-                "completeness": 0.0 if bgc.is_partial else 1.0,
-                "domain_novelty": bgc.domain_novelty,
-            },
-            weights={
-                "similarity": weights.w_similarity,
-                "novelty": weights.w_novelty,
-                "completeness": weights.w_completeness,
-                "domain_novelty": weights.w_domain_novelty,
-            },
-        )
-        results.append((bgc, relevance))
+        similarity = round(1.0 - float(emb.distance), 4)
+        results.append((bgc, similarity))
 
-    results.sort(key=lambda x: x[1], reverse=True)
+    # Sort
+    sort_key_map = {
+        "similarity_score": lambda x: x[1],
+        "novelty_score": lambda x: x[0].novelty_score,
+        "domain_novelty": lambda x: x[0].domain_novelty,
+        "size_kb": lambda x: x[0].size_kb,
+    }
+    key_fn = sort_key_map.get(sort_by, sort_key_map["similarity_score"])
+    results.sort(key=key_fn, reverse=(order == "desc"))
+
     total_count = len(results)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_results = results[offset: offset + ps]
@@ -909,13 +816,13 @@ def similar_bgc_query(
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            relevance_score=round(relevance, 4),
+            similarity_score=similarity,
             assembly_id=bgc.assembly_id,
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
             is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
         )
-        for bgc, relevance in page_results
+        for bgc, similarity in page_results
     ]
 
     return PaginatedQueryResultResponse(
@@ -930,6 +837,8 @@ def chemical_query(
     body: ChemicalQueryRequest,
     page: int = 1,
     page_size: int = 25,
+    sort_by: str = "similarity_score",
+    order: str = "desc",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     type_strain_only: bool = False,
@@ -937,7 +846,6 @@ def chemical_query(
     biome_lineage: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
-    weights: QueryWeightParams = Query(...),
 ):
     if not body.smiles or not body.smiles.strip():
         raise HttpError(400, "SMILES string is required")
@@ -1003,24 +911,19 @@ def chemical_query(
 
     results = []
     for bgc in qs:
-        similarity = bgc_similarities.get(bgc.id, 0.0)
-        relevance = compute_composite_priority(
-            scores={
-                "similarity": similarity,
-                "novelty": bgc.novelty_score,
-                "completeness": 0.0 if bgc.is_partial else 1.0,
-                "domain_novelty": bgc.domain_novelty,
-            },
-            weights={
-                "similarity": weights.w_similarity,
-                "novelty": weights.w_novelty,
-                "completeness": weights.w_completeness,
-                "domain_novelty": weights.w_domain_novelty,
-            },
-        )
-        results.append((bgc, relevance))
+        similarity = round(bgc_similarities.get(bgc.id, 0.0), 4)
+        results.append((bgc, similarity))
 
-    results.sort(key=lambda x: x[1], reverse=True)
+    # Sort
+    sort_key_map = {
+        "similarity_score": lambda x: x[1],
+        "novelty_score": lambda x: x[0].novelty_score,
+        "domain_novelty": lambda x: x[0].domain_novelty,
+        "size_kb": lambda x: x[0].size_kb,
+    }
+    key_fn = sort_key_map.get(sort_by, sort_key_map["similarity_score"])
+    results.sort(key=key_fn, reverse=(order == "desc"))
+
     total_count = len(results)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_results = results[offset: offset + ps]
@@ -1035,13 +938,13 @@ def chemical_query(
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            relevance_score=round(relevance, 4),
+            similarity_score=similarity,
             assembly_id=bgc.assembly_id,
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
             is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
         )
-        for bgc, relevance in page_results
+        for bgc, similarity in page_results
     ]
 
     return PaginatedQueryResultResponse(
@@ -1058,7 +961,7 @@ def query_results_assembly_aggregation(
     bgc_ids: str,
     page: int = 1,
     page_size: int = 25,
-    sort_by: str = "max_relevance",
+    sort_by: str = "hit_count",
     order: str = "desc",
 ):
     ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
@@ -1080,8 +983,6 @@ def query_results_assembly_aggregation(
         )
         .annotate(
             hit_count=Count("id"),
-            max_relevance=Max("novelty_score"),
-            mean_relevance=Avg("novelty_score"),
             complete_fraction=Avg(
                 Case(
                     When(is_partial=False, then=1.0),
@@ -1094,12 +995,10 @@ def query_results_assembly_aggregation(
 
     # Sort
     sort_map = {
-        "max_relevance": "max_relevance",
-        "mean_relevance": "mean_relevance",
         "hit_count": "hit_count",
         "complete_fraction": "complete_fraction",
     }
-    order_field = sort_map.get(sort_by, "max_relevance")
+    order_field = sort_map.get(sort_by, "hit_count")
     prefix = "-" if order == "desc" else ""
     assembly_agg = assembly_agg.order_by(f"{prefix}{order_field}")
 
@@ -1115,8 +1014,6 @@ def query_results_assembly_aggregation(
             dominant_taxonomy_label=row["assembly__dominant_taxonomy_label"],
             is_type_strain=row["assembly__is_type_strain"],
             hit_count=row["hit_count"],
-            max_relevance=round(row["max_relevance"] or 0.0, 4),
-            mean_relevance=round(row["mean_relevance"] or 0.0, 4),
             complete_fraction=round(row["complete_fraction"] or 0.0, 4),
         )
         for row in page_agg
@@ -1452,19 +1349,13 @@ def export_bgc_shortlist(request, body: ShortlistExportRequest):
     response={202: AssessmentAccepted},
     tags=["Assessment"],
 )
-def assess_assembly(request, assembly_id: int, body: AssemblyWeightParams = None):
+def assess_assembly(request, assembly_id: int):
     if not DashboardAssembly.objects.filter(pk=assembly_id).exists():
         raise HttpError(404, "Assembly not found")
 
-    weights = {
-        "w_diversity": body.w_diversity if body else 0.30,
-        "w_novelty": body.w_novelty if body else 0.45,
-        "w_density": body.w_density if body else 0.25,
-    }
-
     from discovery.tasks import assess_assembly as assess_assembly_task
 
-    result = assess_assembly_task.delay(assembly_id, weights)
+    result = assess_assembly_task.delay(assembly_id)
     return 202, AssessmentAccepted(task_id=result.id, asset_type="assembly")
 
 

@@ -1,31 +1,3 @@
-// ── Weight parameters ──────────────────────────────────────────────────────
-
-export interface AssemblyWeightParams {
-  w_diversity: number;
-  w_novelty: number;
-  w_density: number;
-}
-
-export const ASSEMBLY_WEIGHT_DEFAULTS: AssemblyWeightParams = {
-  w_diversity: 0.3,
-  w_novelty: 0.45,
-  w_density: 0.25,
-};
-
-export interface QueryWeightParams {
-  w_similarity: number;
-  w_novelty: number;
-  w_completeness: number;
-  w_domain_novelty: number;
-}
-
-export const QUERY_WEIGHT_DEFAULTS: QueryWeightParams = {
-  w_similarity: 0.4,
-  w_novelty: 0.3,
-  w_completeness: 0.15,
-  w_domain_novelty: 0.15,
-};
-
 // ── Pagination ────────────────────────────────────────────────────────────
 
 export interface PaginationMeta {
@@ -54,7 +26,6 @@ export interface AssemblyRosterItem {
   bgc_density: number;
   taxonomic_novelty: number;
   assembly_quality: number;
-  composite_score: number;
 }
 
 export interface PaginatedAssemblyResponse {
@@ -81,14 +52,12 @@ export interface AssemblyDetail {
   bgc_novelty_score: number;
   bgc_density: number;
   taxonomic_novelty: number;
-  composite_score: number;
 }
 
 export interface AssemblyScatterPoint {
   id: number;
   x: number;
   y: number;
-  composite_score: number;
   dominant_taxonomy_label: string | null;
   organism_name: string | null;
   is_type_strain: boolean;
@@ -168,11 +137,14 @@ export interface BgcDetail {
 
 export interface BgcScatterPoint {
   id: number;
-  umap_x: number;
-  umap_y: number;
+  x: number;
+  y: number;
   bgc_class: string;
   is_mibig: boolean;
   compound_name: string | null;
+  novelty_score: number;
+  domain_novelty: number;
+  similarity_score: number | null;
 }
 
 export interface MibigReferencePoint {
@@ -236,7 +208,7 @@ export interface QueryResultBgc {
   novelty_score: number;
   domain_novelty: number;
   is_partial: boolean;
-  relevance_score: number;
+  similarity_score: number;
   assembly_id: number | null;
   assembly_accession: string | null;
   organism_name: string | null;
@@ -255,8 +227,6 @@ export interface QueryResultAssemblyAggregation {
   dominant_taxonomy_label: string | null;
   is_type_strain: boolean;
   hit_count: number;
-  max_relevance: number;
-  mean_relevance: number;
   complete_fraction: number;
 }
 
@@ -437,7 +407,6 @@ export interface AssemblyAssessmentResult {
   percentile_ranks: PercentileRank[];
   db_rank: number;
   db_total: number;
-  composite_score: number;
   bgc_novelty_breakdown: BgcNoveltyItem[];
   redundancy_matrix: RedundancyCell[];
   chemical_space_points: AssessChemicalSpacePoint[];

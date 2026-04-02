@@ -125,13 +125,11 @@ def seeded_data():
     }
 
 
-_WEIGHT_QS = "w_diversity=0.25&w_novelty=0.4&w_density=0.15&w_taxonomic=0.1&w_quality=0.1"
-
 
 @pytest.mark.django_db
 class TestAssemblyRoster:
     def test_returns_paginated_list(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assemblies/?{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assemblies/")
         assert r.status_code == 200
         data = json.loads(r.content)
         assert "items" in data
@@ -139,29 +137,29 @@ class TestAssemblyRoster:
         assert data["pagination"]["total_count"] == 2
 
     def test_pagination(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assemblies/?page=1&page_size=1&{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assemblies/?page=1&page_size=1")
         data = json.loads(r.content)
         assert len(data["items"]) == 1
         assert data["pagination"]["total_pages"] == 2
 
     def test_type_strain_filter(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assemblies/?type_strain_only=true&{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assemblies/?type_strain_only=true")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
         assert data["items"][0]["is_type_strain"] is True
 
     def test_taxonomy_filter(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assemblies/?taxonomy_family=Pseudomonadaceae&{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assemblies/?taxonomy_family=Pseudomonadaceae")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
 
     def test_search(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assemblies/?search=TEST_ERZ001&{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assemblies/?search=TEST_ERZ001")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
 
     def test_sort_by_bgc_count(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assemblies/?sort_by=bgc_count&order=desc&{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assemblies/?sort_by=bgc_count&order=desc")
         data = json.loads(r.content)
         assert data["items"][0]["bgc_count"] >= data["items"][1]["bgc_count"]
 
@@ -170,7 +168,7 @@ class TestAssemblyRoster:
 class TestAssemblyDetail:
     def test_returns_detail(self, api_client, seeded_data):
         aid = seeded_data["assemblies"][0].id
-        r = api_client.get(f"/api/dashboard/assemblies/{aid}/?{_WEIGHT_QS}")
+        r = api_client.get(f"/api/dashboard/assemblies/{aid}/")
         assert r.status_code == 200
         data = json.loads(r.content)
         assert data["accession"] == "TEST_ERZ001"
@@ -178,7 +176,7 @@ class TestAssemblyDetail:
         assert data["is_type_strain"] is True
 
     def test_404_for_missing(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assemblies/99999/?{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assemblies/99999/")
         assert r.status_code == 404
 
 
@@ -200,16 +198,16 @@ class TestAssemblyBgcRoster:
 @pytest.mark.django_db
 class TestAssemblyScatter:
     def test_returns_points(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assembly-scatter/?{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assembly-scatter/")
         assert r.status_code == 200
         data = json.loads(r.content)
         assert len(data) == 2
         assert "x" in data[0]
         assert "y" in data[0]
-        assert "composite_score" in data[0]
+        assert "dominant_taxonomy_label" in data[0]
 
     def test_bad_axis_returns_400(self, api_client, seeded_data):
-        r = api_client.get(f"/api/dashboard/assembly-scatter/?x_axis=invalid&{_WEIGHT_QS}")
+        r = api_client.get("/api/dashboard/assembly-scatter/?x_axis=invalid")
         assert r.status_code == 400
 
 

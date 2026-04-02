@@ -83,7 +83,6 @@ export function AssemblyAssessmentView() {
           <AssemblyRankCard
             dbRank={result.db_rank}
             dbTotal={result.db_total}
-            compositeScore={result.composite_score}
             percentileRanks={result.percentile_ranks}
           />
         </PanelContainer>

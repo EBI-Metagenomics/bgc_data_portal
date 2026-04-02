@@ -20,7 +20,6 @@ from discovery.models import (
     DashboardMibigReference,
     PrecomputedStats,
 )
-from discovery.services.scoring import compute_composite_priority
 
 
 # Score dimensions for assembly percentile analysis
@@ -34,15 +33,13 @@ ASSEMBLY_SCORE_DIMENSIONS = [
 GCF_NOVELTY_DISTANCE_THRESHOLD = 0.7
 
 
-def compute_assembly_assessment(assembly_id: int, weights: dict) -> dict:
+def compute_assembly_assessment(assembly_id: int) -> dict:
     """Produce a full assembly assessment report.
 
     Parameters
     ----------
     assembly_id : int
         Primary key of the DashboardAssembly to assess.
-    weights : dict
-        User-selected weights for composite priority.
     """
     assembly = DashboardAssembly.objects.get(pk=assembly_id)
     total_all = DashboardAssembly.objects.count()
@@ -72,35 +69,10 @@ def compute_assembly_assessment(assembly_id: int, weights: dict) -> dict:
             }
         )
 
-    # ── Composite score and DB rank (SQL aggregate, not Python loop) ────
-    w_div = weights.get("w_diversity", 0.30)
-    w_nov = weights.get("w_novelty", 0.45)
-    w_den = weights.get("w_density", 0.25)
-
-    composite = compute_composite_priority(
-        scores={
-            "diversity": assembly.bgc_diversity_score,
-            "novelty": assembly.bgc_novelty_score,
-            "density": assembly.bgc_density,
-        },
-        weights={"diversity": w_div, "novelty": w_nov, "density": w_den},
-    )
-
-    # Count assemblies with higher composite via SQL expression
-    from django.db.models import ExpressionWrapper, FloatField, Value
-    w_sum = w_div + w_nov + w_den
-    if w_sum > 0:
-        higher_count = DashboardAssembly.objects.annotate(
-            c=ExpressionWrapper(
-                (Value(w_div) * F("bgc_diversity_score")
-                 + Value(w_nov) * F("bgc_novelty_score")
-                 + Value(w_den) * F("bgc_density")) / Value(w_sum),
-                output_field=FloatField(),
-            )
-        ).filter(c__gt=composite).count()
-    else:
-        higher_count = 0
-
+    # ── DB rank by novelty score ────
+    higher_count = DashboardAssembly.objects.filter(
+        bgc_novelty_score__gt=assembly.bgc_novelty_score
+    ).count()
     db_rank = higher_count + 1
 
     # ── BGC novelty breakdown ────────────────────────────────────────────
@@ -244,7 +216,6 @@ def compute_assembly_assessment(assembly_id: int, weights: dict) -> dict:
         "percentile_ranks": percentile_ranks,
         "db_rank": db_rank,
         "db_total": total_all,
-        "composite_score": round(composite, 4),
         "bgc_novelty_breakdown": bgc_novelty_breakdown,
         "redundancy_matrix": redundancy_matrix,
         "chemical_space_points": chemical_space_points,

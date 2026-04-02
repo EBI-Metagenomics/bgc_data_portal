@@ -4,11 +4,10 @@ import type {
   AssemblyDetail,
   AssemblyScatterPoint,
   AssemblyStatsResponse,
-  AssemblyWeightParams,
   PaginatedAssemblyResponse,
 } from "./types";
 
-export interface AssemblyRosterParams extends Partial<AssemblyWeightParams> {
+export interface AssemblyRosterParams {
   page?: number;
   page_size?: number;
   sort_by?: string;
@@ -21,6 +20,7 @@ export interface AssemblyRosterParams extends Partial<AssemblyWeightParams> {
   bgc_accession?: string;
   assembly_accession?: string;
   assembly_ids?: string;
+  assembly_type?: string;
 }
 
 export function fetchAssemblyRoster(params: AssemblyRosterParams = {}) {
@@ -35,13 +35,14 @@ export function fetchAssemblyBgcs(assemblyId: number) {
   return apiGet<BgcRosterItem[]>(`/assemblies/${assemblyId}/bgcs/`);
 }
 
-export interface AssemblyScatterParams extends Partial<AssemblyWeightParams> {
+export interface AssemblyScatterParams {
   x_axis?: string;
   y_axis?: string;
   type_strain_only?: boolean;
   taxonomy_path?: string;
   bgc_class?: string;
   assembly_ids?: string;
+  assembly_type?: string;
 }
 
 export function fetchAssemblyScatter(params: AssemblyScatterParams = {}) {
