@@ -56,6 +56,7 @@ class AssemblyDetail(Schema):
     assembly_size_mb: Optional[float] = None
     assembly_quality: Optional[float] = None
     isolation_source: str = ""
+    biome_path: str = ""
     # Scores
     bgc_count: int = 0
     l1_class_count: int = 0

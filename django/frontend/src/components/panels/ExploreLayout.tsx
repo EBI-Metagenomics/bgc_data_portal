@@ -7,9 +7,11 @@ import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { BgcDetail } from "@/components/bgc/BgcDetail";
 import { BgcStats, BgcStatsActions } from "@/components/bgc/BgcStats";
 import { PanelContainer } from "./PanelContainer";
+import { ExploreActions } from "./ExploreActions";
 import { Badge } from "@/components/ui/badge";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
+import { useFilterStore } from "@/stores/filter-store";
 
 function BgcSourceBadge() {
   const assemblyShortlist = useShortlistStore((s) => s.assemblies);
@@ -35,9 +37,13 @@ function BgcSourceBadge() {
 export function ExploreLayout() {
   const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
+  const exploreQueryTriggered = useFilterStore((s) => s.exploreQueryTriggered);
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
+      {/* Query controls */}
+      <ExploreActions />
+
       {/* Top section: Assembly panels — Roster full height left, Map + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2">
         <PanelContainer title="Assembly Roster" className="min-h-[600px] xl:row-span-2">
@@ -48,7 +54,7 @@ export function ExploreLayout() {
             <AssemblyScatter />
           </PanelContainer>
           <PanelContainer title="Assembly Stats" className="min-h-[280px]" actions={<AssemblyStatsActions />}>
-            <AssemblyStats />
+            <AssemblyStats enabled={exploreQueryTriggered} />
           </PanelContainer>
         </div>
       </div>
@@ -62,11 +68,11 @@ export function ExploreLayout() {
 
       {/* Bottom section: BGC panels — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="BGC Roster" className="min-h-[600px] xl:row-span-2" actions={<BgcSourceBadge />}>
+        <PanelContainer title="BGC Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2" actions={<BgcSourceBadge />}>
           <BgcRoster />
         </PanelContainer>
         <div className="flex flex-col gap-4">
-          <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[300px]" actions={<BgcSourceBadge />}>
+          <PanelContainer title="BGC Space Map" className="min-h-[300px]" actions={<BgcSourceBadge />}>
             <BgcScatter />
           </PanelContainer>
           <PanelContainer title="BGC Stats" className="min-h-[280px]" actions={<BgcStatsActions />}>

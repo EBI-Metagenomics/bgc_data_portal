@@ -74,7 +74,7 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col h-full gap-2">
       {/* Sort controls */}
       <div className="flex items-center gap-2">
         <Select value={sortBy} onValueChange={setSortBy}>
@@ -99,7 +99,7 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
         </Button>
       </div>
 
-      <div className="overflow-auto">
+      <div className="overflow-auto flex-1 min-h-0">
         <Table>
           <TableHeader>
             <TableRow>

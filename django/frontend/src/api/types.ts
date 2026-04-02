@@ -46,6 +46,7 @@ export interface AssemblyDetail {
   assembly_size_mb: number | null;
   assembly_quality: number | null;
   isolation_source: string | null;
+  biome_path: string;
   bgc_count: number;
   l1_class_count: number;
   bgc_diversity_score: number;

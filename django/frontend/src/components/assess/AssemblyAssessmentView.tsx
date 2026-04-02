@@ -8,6 +8,7 @@ import { PriorityRadar } from "./PriorityRadar";
 import { PercentileCharts } from "./PercentileCharts";
 import { RedundancyMatrix } from "./RedundancyMatrix";
 import { AssessmentBgcStats } from "./AssessmentBgcStats";
+import { ChemicalSpaceMap } from "./ChemicalSpaceMap";
 import { BgcRoster } from "@/components/bgc/BgcRoster";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { CrossModeActions } from "./CrossModeActions";
@@ -124,6 +125,18 @@ export function AssemblyAssessmentView() {
       <PanelContainer title="Redundancy Matrix" className="min-h-[300px]">
         <RedundancyMatrix matrix={result.redundancy_matrix} />
       </PanelContainer>
+
+      {/* Real UMAP Chemical Space */}
+      {result.chemical_space_points.length > 0 && (
+        <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[400px]">
+          <ChemicalSpaceMap
+            points={result.chemical_space_points}
+            mibigPoints={result.mibig_reference_points}
+            meanMibigDistance={result.mean_nearest_mibig_distance}
+            sparseFraction={result.sparse_fraction}
+          />
+        </PanelContainer>
+      )}
     </>
   );
 }

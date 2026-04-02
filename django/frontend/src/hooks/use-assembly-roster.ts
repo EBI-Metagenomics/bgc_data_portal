@@ -30,6 +30,7 @@ export function useAssemblyRoster() {
   const query = useQuery({
     queryKey: ["assembly-roster", params],
     queryFn: () => fetchAssemblyRoster(params),
+    enabled: filters.exploreQueryTriggered,
   });
 
   return {

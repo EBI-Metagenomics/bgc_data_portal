@@ -6,8 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatsExportMenu } from "@/components/stats/StatsExportMenu";
 import { exportAssemblyStats } from "@/api/exports";
 
-export function AssemblyStats({ assemblyIds }: { assemblyIds?: string }) {
-  const { data, isLoading } = useAssemblyStats(assemblyIds);
+export function AssemblyStats({ assemblyIds, enabled = true }: { assemblyIds?: string; enabled?: boolean }) {
+  const { data, isLoading } = useAssemblyStats(assemblyIds, enabled);
   const filters = useFilterStore();
 
   const exportParams = useMemo(

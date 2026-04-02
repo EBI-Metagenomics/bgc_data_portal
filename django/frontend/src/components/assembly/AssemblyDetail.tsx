@@ -1,8 +1,13 @@
 import { useAssemblyDetail } from "@/hooks/use-assembly-detail";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Star, ExternalLink } from "lucide-react";
+import { useShortlistStore } from "@/stores/shortlist-store";
+import { useAssessStore } from "@/stores/assess-store";
+import { useModeStore } from "@/stores/mode-store";
+import { Star, ExternalLink, ListPlus, Microscope } from "lucide-react";
+import { toast } from "sonner";
 
 interface AssemblyDetailProps {
   assemblyId: number;
@@ -25,6 +30,9 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
 
 export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
   const { data: assembly, isLoading } = useAssemblyDetail(assemblyId);
+  const addAssembly = useShortlistStore((s) => s.addAssembly);
+  const startAssessment = useAssessStore((s) => s.startAssessment);
+  const setMode = useModeStore((s) => s.setMode);
 
   if (isLoading) {
     return (
@@ -43,7 +51,39 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
     );
   }
 
+  const label = assembly.organism_name ?? assembly.accession;
+
   return (
+    <div className="vf-stack vf-stack--400">
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1 text-xs"
+          onClick={() => {
+            const ok = addAssembly({ id: assembly.id, label });
+            if (ok) toast.success("Added to assembly shortlist");
+            else toast.error("Shortlist full (max 20)");
+          }}
+        >
+          <ListPlus className="h-3 w-3" />
+          Add to Assembly Shortlist
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1 text-xs"
+          onClick={() => {
+            startAssessment("assembly", assembly.id, label);
+            setMode("assess");
+          }}
+        >
+          <Microscope className="h-3 w-3" />
+          Evaluate Asset
+        </Button>
+      </div>
+
     <div className="vf-grid vf-grid__col-2" style={{ gap: "1.5rem" }}>
       {/* Profile */}
       <div className="vf-stack vf-stack--400">
@@ -67,6 +107,12 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
             <span className="text-muted-foreground">Taxonomy: </span>
             {assembly.dominant_taxonomy_label || "-"}
           </div>
+          {assembly.biome_path && (
+            <div>
+              <span className="text-muted-foreground">Biome: </span>
+              {assembly.biome_path.replace(/\./g, " > ")}
+            </div>
+          )}
           {assembly.assembly_size_mb && (
             <div>
               <span className="text-muted-foreground">Assembly size: </span>
@@ -115,6 +161,7 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
           </span>
         </div>
       </div>
+    </div>
     </div>
   );
 }

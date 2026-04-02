@@ -13,6 +13,7 @@ interface FilterState {
   bgcAccession: string;
   assemblyAccession: string;
   assemblyIds: string;
+  exploreQueryTriggered: boolean;
 
   setTypeStrainOnly: (v: boolean) => void;
   setTaxonomyPath: (value: string) => void;
@@ -24,6 +25,7 @@ interface FilterState {
   setBgcAccession: (v: string) => void;
   setAssemblyAccession: (v: string) => void;
   setAssemblyIds: (v: string) => void;
+  runExploreQuery: () => void;
   clearFilters: () => void;
 }
 
@@ -40,30 +42,32 @@ const initialState = {
   bgcAccession: "",
   assemblyAccession: "",
   assemblyIds: "",
+  exploreQueryTriggered: false,
 };
 
 export const useFilterStore = create<FilterState>((set) => ({
   ...initialState,
 
-  setTypeStrainOnly: (v) => set({ typeStrainOnly: v }),
+  setTypeStrainOnly: (v) => set({ typeStrainOnly: v, exploreQueryTriggered: false }),
 
-  setTaxonomyPath: (value) => set({ taxonomyPath: value }),
+  setTaxonomyPath: (value) => set({ taxonomyPath: value, exploreQueryTriggered: false }),
 
-  setAssemblyType: (v) => set({ assemblyType: v }),
+  setAssemblyType: (v) => set({ assemblyType: v, exploreQueryTriggered: false }),
 
-  setBgcClass: (v) => set({ bgcClass: v }),
+  setBgcClass: (v) => set({ bgcClass: v, exploreQueryTriggered: false }),
   setNpClass: (level, values) =>
     set(
       level === "l1"
-        ? { npClassL1: values }
+        ? { npClassL1: values, exploreQueryTriggered: false }
         : level === "l2"
-          ? { npClassL2: values }
-          : { npClassL3: values }
+          ? { npClassL2: values, exploreQueryTriggered: false }
+          : { npClassL3: values, exploreQueryTriggered: false }
     ),
-  setSearch: (v) => set({ search: v }),
-  setBiomeLineage: (v) => set({ biomeLineage: v }),
-  setBgcAccession: (v) => set({ bgcAccession: v }),
-  setAssemblyAccession: (v) => set({ assemblyAccession: v }),
-  setAssemblyIds: (v) => set({ assemblyIds: v }),
+  setSearch: (v) => set({ search: v, exploreQueryTriggered: false }),
+  setBiomeLineage: (v) => set({ biomeLineage: v, exploreQueryTriggered: false }),
+  setBgcAccession: (v) => set({ bgcAccession: v, exploreQueryTriggered: false }),
+  setAssemblyAccession: (v) => set({ assemblyAccession: v, exploreQueryTriggered: false }),
+  setAssemblyIds: (v) => set({ assemblyIds: v, exploreQueryTriggered: false }),
+  runExploreQuery: () => set({ exploreQueryTriggered: true }),
   clearFilters: () => set(initialState),
 }));

@@ -273,6 +273,7 @@ def assembly_detail(request, assembly_id: int):
         assembly_size_mb=assembly.assembly_size_mb,
         assembly_quality=assembly.assembly_quality,
         isolation_source=assembly.isolation_source,
+        biome_path=assembly.biome_path,
         bgc_count=assembly.bgc_count,
         l1_class_count=assembly.l1_class_count,
         bgc_diversity_score=assembly.bgc_diversity_score,

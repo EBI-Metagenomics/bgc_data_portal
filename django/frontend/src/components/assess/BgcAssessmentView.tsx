@@ -8,6 +8,7 @@ import { GcfContextPanel } from "./GcfContextPanel";
 import { NoveltyGauges } from "./NoveltyGauges";
 import { DomainDifferentialChart } from "./DomainDifferentialChart";
 import { DomainArchitectureComparison } from "./DomainArchitectureComparison";
+import { BgcChemicalSpaceMap } from "./BgcChemicalSpaceMap";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { CrossModeActions } from "./CrossModeActions";
 import { AssessmentExportButton } from "./AssessmentExportButton";
@@ -122,12 +123,23 @@ export function BgcAssessmentView() {
         </PanelContainer>
       )}
 
-      {/* BGC Chemical Space (UMAP) */}
+      {/* BGC Chemical Space (UMAP) — metric axes */}
       {assessBgcIds.length > 0 && (
         <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[400px]">
           <BgcScatter
             bgcIdsOverride={assessBgcIds}
             highlightBgcId={result.bgc_id}
+          />
+        </PanelContainer>
+      )}
+
+      {/* Real UMAP Chemical Space */}
+      {result.submitted_point && (
+        <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[400px]">
+          <BgcChemicalSpaceMap
+            submittedPoint={result.submitted_point}
+            neighbors={result.nearest_neighbors}
+            mibigPoints={result.mibig_reference_points}
           />
         </PanelContainer>
       )}

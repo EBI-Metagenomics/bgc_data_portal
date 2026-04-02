@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAssemblyStats, type AssemblyStatsParams } from "@/api/assemblies";
 import { useFilterStore } from "@/stores/filter-store";
 
-export function useAssemblyStats(assemblyIds?: string) {
+export function useAssemblyStats(assemblyIds?: string, enabled: boolean = true) {
   const filters = useFilterStore();
 
   const params: AssemblyStatsParams = {
@@ -21,5 +21,6 @@ export function useAssemblyStats(assemblyIds?: string) {
     queryKey: ["assembly-stats", params],
     queryFn: () => fetchAssemblyStats(params),
     staleTime: 30_000,
+    enabled,
   });
 }

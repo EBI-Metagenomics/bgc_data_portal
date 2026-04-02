@@ -17,5 +17,6 @@ export function useAssemblyScatter(xAxis: string, yAxis: string) {
   return useQuery({
     queryKey: ["assembly-scatter", params],
     queryFn: () => fetchAssemblyScatter(params),
+    enabled: filters.exploreQueryTriggered,
   });
 }

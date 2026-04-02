@@ -63,11 +63,11 @@ export function QueryLayout() {
 
       {/* BGC results — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="BGC Roster" className="min-h-[600px] xl:row-span-2">
+        <PanelContainer title="BGC Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2">
           <QueryResultsRoster />
         </PanelContainer>
         <div className="flex flex-col gap-4">
-          <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[300px]">
+          <PanelContainer title="BGC Space Map" className="min-h-[300px]">
             <BgcScatter />
           </PanelContainer>
           <PanelContainer title="BGC Stats" className="min-h-[280px]" actions={<BgcStatsActions bgcIds={resultBgcIds} />}>
@@ -97,7 +97,7 @@ export function QueryLayout() {
             className="min-h-[280px]"
             actions={<AssemblyStatsActions assemblyIds={queryAssemblyIds} />}
           >
-            <AssemblyStats assemblyIds={queryAssemblyIds} />
+            <AssemblyStats assemblyIds={queryAssemblyIds} enabled={!!queryAssemblyIds} />
           </PanelContainer>
         </div>
       </div>

@@ -68,7 +68,7 @@ export function DomainDifferentialChart({
       />
 
       {/* Domain detail table */}
-      <div className="max-h-64 overflow-auto">
+      <div className="max-h-96 overflow-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b text-left text-muted-foreground">
