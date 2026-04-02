@@ -104,21 +104,19 @@ export function AssemblyAssessmentView() {
       </PanelContainer>
 
       {/* BGC Triad — same layout as ExploreLayout */}
-      <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="BGC Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2">
+      <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[300px_280px]">
+        <PanelContainer title="BGC Roster" className="xl:row-span-2">
           <BgcRoster assemblyIdOverride={result.assembly_id} />
         </PanelContainer>
-        <div className="flex flex-col gap-4">
-          <PanelContainer title="BGC Space Map" className="min-h-[300px]">
-            <BgcScatter
-              assemblyIdsOverride={[result.assembly_id]}
-              markerSymbol="star"
-            />
-          </PanelContainer>
-          <PanelContainer title="BGC Stats" className="min-h-[280px]">
-            <AssessmentBgcStats bgcNovelty={result.bgc_novelty_breakdown} />
-          </PanelContainer>
-        </div>
+        <PanelContainer title="BGC Space Map" className="h-full">
+          <BgcScatter
+            assemblyIdsOverride={[result.assembly_id]}
+            markerSymbol="star"
+          />
+        </PanelContainer>
+        <PanelContainer title="BGC Stats" className="h-full">
+          <AssessmentBgcStats bgcNovelty={result.bgc_novelty_breakdown} />
+        </PanelContainer>
       </div>
 
       {/* Redundancy Matrix */}

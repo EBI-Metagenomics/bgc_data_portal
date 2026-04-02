@@ -25,7 +25,7 @@ export function PanelContainer({
   return (
     <article
       className={cn(
-        "vf-card vf-card--brand vf-card--bordered flex flex-col",
+        "vf-card vf-card--brand vf-card--bordered flex flex-col overflow-hidden min-h-0",
         className
       )}
     >
@@ -50,7 +50,7 @@ export function PanelContainer({
             )}
           </div>
         </div>
-        {!collapsed && <div className="flex-1 overflow-auto">{children}</div>}
+        {!collapsed && <div className="flex-1 overflow-auto min-h-0">{children}</div>}
       </div>
     </article>
   );

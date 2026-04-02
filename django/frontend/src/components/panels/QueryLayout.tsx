@@ -62,18 +62,16 @@ export function QueryLayout() {
       <QueryActions />
 
       {/* BGC results — Roster full height left, Scatter + Stats stacked right */}
-      <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="BGC Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2">
+      <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[300px_280px]">
+        <PanelContainer title="BGC Roster" className="xl:row-span-2">
           <QueryResultsRoster />
         </PanelContainer>
-        <div className="flex flex-col gap-4">
-          <PanelContainer title="BGC Space Map" className="min-h-[300px]">
-            <BgcScatter />
-          </PanelContainer>
-          <PanelContainer title="BGC Stats" className="min-h-[280px]" actions={<BgcStatsActions bgcIds={resultBgcIds} />}>
-            <BgcStats bgcIds={resultBgcIds} />
-          </PanelContainer>
-        </div>
+        <PanelContainer title="BGC Space Map" className="h-full">
+          <BgcScatter />
+        </PanelContainer>
+        <PanelContainer title="BGC Stats" className="h-full" actions={<BgcStatsActions bgcIds={resultBgcIds} />}>
+          <BgcStats bgcIds={resultBgcIds} />
+        </PanelContainer>
       </div>
 
       {/* BGC detail */}
@@ -84,22 +82,20 @@ export function QueryLayout() {
       )}
 
       {/* Assembly panels — Roster full height left, Scatter + Stats stacked right */}
-      <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="Assembly Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2" actions={<AssemblySourceBadge />}>
+      <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[300px_280px]">
+        <PanelContainer title="Assembly Roster" className="xl:row-span-2" actions={<AssemblySourceBadge />}>
           <QueryAssemblyRoster />
         </PanelContainer>
-        <div className="flex flex-col gap-4">
-          <PanelContainer title="Assembly Space Map" className="min-h-[300px]" actions={<AssemblySourceBadge />}>
-            <QueryAssemblyScatter />
-          </PanelContainer>
-          <PanelContainer
-            title="Assembly Stats"
-            className="min-h-[280px]"
-            actions={<AssemblyStatsActions assemblyIds={queryAssemblyIds} />}
-          >
-            <AssemblyStats assemblyIds={queryAssemblyIds} enabled={!!queryAssemblyIds} />
-          </PanelContainer>
-        </div>
+        <PanelContainer title="Assembly Space Map" className="h-full" actions={<AssemblySourceBadge />}>
+          <QueryAssemblyScatter />
+        </PanelContainer>
+        <PanelContainer
+          title="Assembly Stats"
+          className="h-full"
+          actions={<AssemblyStatsActions assemblyIds={queryAssemblyIds} />}
+        >
+          <AssemblyStats assemblyIds={queryAssemblyIds} enabled={!!queryAssemblyIds} />
+        </PanelContainer>
       </div>
 
       {/* Assembly detail */}
