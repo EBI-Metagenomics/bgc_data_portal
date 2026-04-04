@@ -105,16 +105,16 @@ export function AssemblyAssessmentView() {
 
       {/* BGC Triad — same layout as ExploreLayout */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="BGC Roster" className="xl:row-span-2">
+        <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained>
           <BgcRoster assemblyIdOverride={result.assembly_id} />
         </PanelContainer>
-        <PanelContainer title="BGC Space Map" className="h-full">
+        <PanelContainer title="BGC Space Map" className="h-full" constrained>
           <BgcScatter
             assemblyIdsOverride={[result.assembly_id]}
             markerSymbol="star"
           />
         </PanelContainer>
-        <PanelContainer title="BGC Stats" className="h-full">
+        <PanelContainer title="BGC Stats" className="h-full" constrained>
           <AssessmentBgcStats bgcNovelty={result.bgc_novelty_breakdown} />
         </PanelContainer>
       </div>

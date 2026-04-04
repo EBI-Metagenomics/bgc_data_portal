@@ -46,13 +46,13 @@ export function ExploreLayout() {
 
       {/* Top section: Assembly panels — Roster full height left, Map + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="Assembly Roster" className="xl:row-span-2">
+        <PanelContainer title="Assembly Roster" className="xl:row-span-2" constrained>
           <AssemblyRoster />
         </PanelContainer>
-        <PanelContainer title="Assembly Space Map" className="h-full">
+        <PanelContainer title="Assembly Space Map" className="h-full" constrained>
           <AssemblyScatter />
         </PanelContainer>
-        <PanelContainer title="Assembly Stats" className="h-full" actions={<AssemblyStatsActions />}>
+        <PanelContainer title="Assembly Stats" className="h-full" constrained actions={<AssemblyStatsActions />}>
           <AssemblyStats enabled={exploreQueryTriggered} />
         </PanelContainer>
       </div>
@@ -66,13 +66,13 @@ export function ExploreLayout() {
 
       {/* Bottom section: BGC panels — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="BGC Roster" className="xl:row-span-2" actions={<BgcSourceBadge />}>
+        <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained actions={<BgcSourceBadge />}>
           <BgcRoster />
         </PanelContainer>
-        <PanelContainer title="BGC Space Map" className="h-full" actions={<BgcSourceBadge />}>
+        <PanelContainer title="BGC Space Map" className="h-full" constrained actions={<BgcSourceBadge />}>
           <BgcScatter />
         </PanelContainer>
-        <PanelContainer title="BGC Stats" className="h-full" actions={<BgcStatsActions />}>
+        <PanelContainer title="BGC Stats" className="h-full" constrained actions={<BgcStatsActions />}>
           <BgcStats />
         </PanelContainer>
       </div>

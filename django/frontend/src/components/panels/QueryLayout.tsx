@@ -63,13 +63,13 @@ export function QueryLayout() {
 
       {/* BGC results — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="BGC Roster" className="xl:row-span-2">
+        <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained>
           <QueryResultsRoster />
         </PanelContainer>
-        <PanelContainer title="BGC Space Map" className="h-full">
+        <PanelContainer title="BGC Space Map" className="h-full" constrained>
           <BgcScatter />
         </PanelContainer>
-        <PanelContainer title="BGC Stats" className="h-full" actions={<BgcStatsActions bgcIds={resultBgcIds} />}>
+        <PanelContainer title="BGC Stats" className="h-full" constrained actions={<BgcStatsActions bgcIds={resultBgcIds} />}>
           <BgcStats bgcIds={resultBgcIds} />
         </PanelContainer>
       </div>
@@ -83,15 +83,16 @@ export function QueryLayout() {
 
       {/* Assembly panels — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="Assembly Roster" className="xl:row-span-2" actions={<AssemblySourceBadge />}>
+        <PanelContainer title="Assembly Roster" className="xl:row-span-2" constrained actions={<AssemblySourceBadge />}>
           <QueryAssemblyRoster />
         </PanelContainer>
-        <PanelContainer title="Assembly Space Map" className="h-full" actions={<AssemblySourceBadge />}>
+        <PanelContainer title="Assembly Space Map" className="h-full" constrained actions={<AssemblySourceBadge />}>
           <QueryAssemblyScatter />
         </PanelContainer>
         <PanelContainer
           title="Assembly Stats"
           className="h-full"
+          constrained
           actions={<AssemblyStatsActions assemblyIds={queryAssemblyIds} />}
         >
           <AssemblyStats assemblyIds={queryAssemblyIds} enabled={!!queryAssemblyIds} />

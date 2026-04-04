@@ -10,6 +10,7 @@ interface PanelContainerProps {
   collapsible?: boolean;
   defaultCollapsed?: boolean;
   actions?: ReactNode;
+  constrained?: boolean;
 }
 
 export function PanelContainer({
@@ -19,17 +20,22 @@ export function PanelContainer({
   collapsible = false,
   defaultCollapsed = false,
   actions,
+  constrained = false,
 }: PanelContainerProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   return (
     <article
       className={cn(
-        "vf-card vf-card--brand vf-card--bordered flex flex-col overflow-hidden min-h-0",
+        "vf-card vf-card--brand vf-card--bordered flex flex-col",
+        constrained && "overflow-hidden min-h-0",
         className
       )}
     >
-      <div className="vf-card__content | vf-stack vf-stack--200 flex-1 flex flex-col min-h-0">
+      <div className={cn(
+        "vf-card__content | vf-stack vf-stack--200 flex flex-col",
+        constrained && "flex-1 min-h-0"
+      )}>
         <div className="flex items-center justify-between">
           <h3 className="vf-card__heading" style={{ margin: 0 }}>{title}</h3>
           <div className="flex items-center gap-2">
@@ -50,7 +56,7 @@ export function PanelContainer({
             )}
           </div>
         </div>
-        {!collapsed && <div className="flex-1 overflow-auto min-h-0">{children}</div>}
+        {!collapsed && <div className={cn("flex-1 overflow-auto", constrained && "min-h-0")}>{children}</div>}
       </div>
     </article>
   );
