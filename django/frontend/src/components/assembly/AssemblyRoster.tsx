@@ -125,7 +125,7 @@ export function AssemblyRoster() {
                     </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {assembly.dominant_taxonomy_label ?? "-"}
+                    {assembly.organism_name ?? "-"}
                   </TableCell>
                   <TableCell className="text-center text-xs">
                     {assembly.bgc_count}

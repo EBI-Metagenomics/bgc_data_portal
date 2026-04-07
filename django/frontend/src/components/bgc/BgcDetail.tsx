@@ -52,13 +52,9 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
     );
   }
 
-  const classification = [
-    bgc.classification_l1,
-    bgc.classification_l2,
-    bgc.classification_l3,
-  ]
-    .filter(Boolean)
-    .join(" > ");
+  const classification = bgc.classification_path
+    ? bgc.classification_path.replace(/\./g, " > ")
+    : "";
 
   return (
     <div className="vf-stack vf-stack--400">
@@ -174,17 +170,12 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
               {bgc.parent_assembly.is_type_strain && (
                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
               )}
-              {bgc.parent_assembly.dominant_taxonomy_label && (
+              {bgc.parent_assembly.organism_name && (
                 <Badge variant="outline" className="text-[10px]">
-                  {bgc.parent_assembly.dominant_taxonomy_label}
+                  {bgc.parent_assembly.organism_name}
                 </Badge>
               )}
             </div>
-            {bgc.parent_assembly.isolation_source && (
-              <div className="mt-1 text-muted-foreground">
-                Isolation source: {bgc.parent_assembly.isolation_source}
-              </div>
-            )}
           </div>
           <Separator />
         </>
@@ -219,9 +210,9 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                   <div className="text-xs">
                     <div className="font-medium">{np.name}</div>
                     <div className="text-muted-foreground">
-                      {[np.chemical_class_l1, np.chemical_class_l2, np.chemical_class_l3]
-                        .filter(Boolean)
-                        .join(" > ")}
+                      {np.np_class_path
+                        ? np.np_class_path.replace(/\./g, " > ")
+                        : ""}
                     </div>
                     <div className="mt-1 font-mono text-[10px] text-muted-foreground break-all">
                       {np.smiles}

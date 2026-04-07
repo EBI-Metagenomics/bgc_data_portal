@@ -32,12 +32,12 @@ export function BgcNoveltyStrip({ bgcNovelty }: BgcNoveltyStripProps) {
           x: sorted.map((b) => b.novelty_vs_db),
           marker: {
             color: sorted.map(
-              (b) => BGC_CLASS_COLORS[b.classification_l1] || BGC_CLASS_COLORS.Other
+              (b) => BGC_CLASS_COLORS[b.classification_path?.split('.')[0]] || BGC_CLASS_COLORS.Other
             ),
           },
           text: sorted.map(
             (b) =>
-              `${b.classification_l1}<br>vs DB: ${b.novelty_vs_db.toFixed(3)}<br>vs MIBiG: ${b.novelty_vs_mibig.toFixed(3)}`
+              `${b.classification_path}<br>vs DB: ${b.novelty_vs_db.toFixed(3)}<br>vs MIBiG: ${b.novelty_vs_mibig.toFixed(3)}`
           ),
           hoverinfo: "text",
         },

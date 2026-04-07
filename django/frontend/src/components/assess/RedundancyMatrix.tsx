@@ -33,7 +33,7 @@ export function RedundancyMatrix({ matrix }: RedundancyMatrixProps) {
   const hoverText = matrix.map((r) =>
     categories.map((cat) => {
       if (r.status === cat) {
-        return `${r.accession}<br>${r.classification_l1}<br>${STATUS_LABELS[cat]}${r.gcf_family_id ? `<br>GCF: ${r.gcf_family_id} (${r.gcf_member_count} members)` : ""}`;
+        return `${r.accession}<br>${r.classification_path}<br>${STATUS_LABELS[cat]}${r.gcf_family_id ? `<br>GCF: ${r.gcf_family_id} (${r.gcf_member_count} members)` : ""}`;
       }
       return "";
     })

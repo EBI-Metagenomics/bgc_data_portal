@@ -37,7 +37,7 @@ class TestDiscoveryFactories:
         assert bgc.pk is not None
         assert bgc.assembly is not None
         assert bgc.contig is not None
-        assert bgc.classification_l1 in (
+        assert bgc.classification_path.split(".")[0] in (
             "Polyketide", "NRP", "Alkaloid", "RiPP",
             "Terpene", "Saccharide", "Other",
         )
@@ -54,7 +54,7 @@ class TestDiscoveryFactories:
         np_ = DashboardNaturalProductFactory()
         assert np_.pk is not None
         assert np_.smiles
-        assert np_.chemical_class_l1 in (
+        assert np_.np_class_path.split(".")[0] in (
             "Polyketide", "NRP", "Alkaloid", "RiPP",
             "Terpene", "Saccharide", "Other",
         )

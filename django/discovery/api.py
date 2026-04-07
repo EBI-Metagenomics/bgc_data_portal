@@ -107,8 +107,6 @@ def _assembly_to_roster_item(assembly: DashboardAssembly) -> AssemblyRosterItem:
         organism_name=assembly.organism_name,
         source_name=assembly.source.name if assembly.source else None,
         assembly_type=assembly.get_assembly_type_display(),
-        dominant_taxonomy_path=assembly.dominant_taxonomy_path,
-        dominant_taxonomy_label=assembly.dominant_taxonomy_label,
         is_type_strain=assembly.is_type_strain,
         type_strain_catalog_url=assembly.type_strain_catalog_url,
         bgc_count=assembly.bgc_count,
@@ -117,7 +115,6 @@ def _assembly_to_roster_item(assembly: DashboardAssembly) -> AssemblyRosterItem:
         bgc_novelty_score=assembly.bgc_novelty_score,
         bgc_density=assembly.bgc_density,
         taxonomic_novelty=assembly.taxonomic_novelty,
-        assembly_quality=assembly.assembly_quality,
     )
 
 
@@ -158,11 +155,13 @@ def _apply_assembly_filters(
     if search:
         qs = qs.filter(
             Q(organism_name__icontains=search)
-            | Q(dominant_taxonomy_label__icontains=search)
             | Q(assembly_accession__icontains=search)
         )
     if bgc_class:
-        qs = qs.filter(bgcs__classification_l1__iexact=bgc_class).distinct()
+        qs = qs.filter(
+            Q(bgcs__classification_path__istartswith=bgc_class + ".")
+            | Q(bgcs__classification_path__iexact=bgc_class)
+        ).distinct()
     if biome_lineage:
         qs = qs.filter(biome_path__icontains=biome_lineage)
     if bgc_accession:
@@ -314,13 +313,9 @@ def assembly_detail(request, assembly_id: int):
         organism_name=assembly.organism_name,
         source_name=assembly.source.name if assembly.source else None,
         assembly_type=assembly.get_assembly_type_display(),
-        dominant_taxonomy_path=assembly.dominant_taxonomy_path,
-        dominant_taxonomy_label=assembly.dominant_taxonomy_label,
         is_type_strain=assembly.is_type_strain,
         type_strain_catalog_url=assembly.type_strain_catalog_url,
         assembly_size_mb=assembly.assembly_size_mb,
-        assembly_quality=assembly.assembly_quality,
-        isolation_source=assembly.isolation_source,
         biome_path=assembly.biome_path,
         url=assembly.url,
         bgc_count=assembly.bgc_count,
@@ -340,9 +335,7 @@ def assembly_bgc_roster(request, assembly_id: int):
         BgcRosterItem(
             id=bgc.id,
             accession=bgc.bgc_accession,
-            classification_l1=bgc.classification_l1,
-            classification_l2=bgc.classification_l2 or None,
-            classification_l3=bgc.classification_l3 or None,
+            classification_path=bgc.classification_path,
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -374,7 +367,7 @@ def bgc_roster(
         "novelty_score": "novelty_score",
         "size_kb": "size_kb",
         "domain_novelty": "domain_novelty",
-        "classification_l1": "classification_l1",
+        "classification_path": "classification_path",
         "accession": "id",
     }
     order_field = sort_map.get(sort_by, "novelty_score")
@@ -389,9 +382,7 @@ def bgc_roster(
         BgcRosterItem(
             id=bgc.id,
             accession=bgc.bgc_accession,
-            classification_l1=bgc.classification_l1,
-            classification_l2=bgc.classification_l2 or None,
-            classification_l3=bgc.classification_l3 or None,
+            classification_path=bgc.classification_path,
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -433,7 +424,7 @@ def assembly_scatter(
 ):
     allowed_axes = {
         "bgc_diversity_score", "bgc_novelty_score", "bgc_density",
-        "taxonomic_novelty", "assembly_quality",
+        "taxonomic_novelty",
     }
     if x_axis not in allowed_axes or y_axis not in allowed_axes:
         raise HttpError(400, f"Axis must be one of: {', '.join(sorted(allowed_axes))}")
@@ -450,14 +441,16 @@ def assembly_scatter(
         matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
         qs = qs.filter(contigs__in=matching_contigs).distinct()
     if bgc_class:
-        qs = qs.filter(bgcs__classification_l1__iexact=bgc_class).distinct()
+        qs = qs.filter(
+            Q(bgcs__classification_path__istartswith=bgc_class + ".")
+            | Q(bgcs__classification_path__iexact=bgc_class)
+        ).distinct()
 
     return [
         AssemblyScatterPoint(
             id=assembly.id,
             x=getattr(assembly, x_axis, 0.0) or 0.0,
             y=getattr(assembly, y_axis, 0.0) or 0.0,
-            dominant_taxonomy_label=assembly.dominant_taxonomy_label,
             organism_name=assembly.organism_name,
             is_type_strain=assembly.is_type_strain,
         )
@@ -499,10 +492,7 @@ def bgc_detail(request, bgc_id: int):
             accession=assembly.assembly_accession,
             organism_name=assembly.organism_name,
             source_name=assembly.source.name if assembly.source else None,
-            dominant_taxonomy_label=assembly.dominant_taxonomy_label,
             is_type_strain=assembly.is_type_strain,
-            assembly_quality=assembly.assembly_quality,
-            isolation_source=assembly.isolation_source,
         )
 
     # Natural products
@@ -515,9 +505,7 @@ def bgc_detail(request, bgc_id: int):
                 smiles=np_obj.smiles,
                 smiles_svg="",
                 structure_thumbnail=np_obj.structure_svg_base64,
-                chemical_class_l1=np_obj.chemical_class_l1,
-                chemical_class_l2=np_obj.chemical_class_l2 or None,
-                chemical_class_l3=np_obj.chemical_class_l3 or None,
+                np_class_path=np_obj.np_class_path,
             )
         )
 
@@ -535,9 +523,7 @@ def bgc_detail(request, bgc_id: int):
     return BgcDetail(
         id=bgc.id,
         accession=bgc.bgc_accession,
-        classification_l1=bgc.classification_l1,
-        classification_l2=bgc.classification_l2 or None,
-        classification_l3=bgc.classification_l3 or None,
+        classification_path=bgc.classification_path,
         size_kb=bgc.size_kb,
         novelty_score=bgc.novelty_score,
         domain_novelty=bgc.domain_novelty,
@@ -641,17 +627,17 @@ def bgc_region(request, bgc_id: int):
 
     # Overlapping BGC clusters in the same contig region
     overlapping_bgcs = DashboardBgc.objects.filter(
-        contig_accession=bgc.contig_accession,
+        contig=bgc.contig,
         start_position__lte=window_end,
         end_position__gte=window_start,
-    )
+    ).select_related("detector")
     cluster_list = [
         RegionClusterOut(
             accession=ob.bgc_accession,
             start=max(0, ob.start_position - window_start),
             end=max(0, ob.end_position - window_start),
-            source=ob.detector_names,
-            bgc_classes=[ob.classification_l1] if ob.classification_l1 else [],
+            source=ob.detector.name if ob.detector else "",
+            bgc_classes=[ob.classification_path.split(".")[0]] if ob.classification_path else [],
         )
         for ob in overlapping_bgcs
     ]
@@ -749,7 +735,10 @@ def bgc_scatter(
     qs = DashboardBgc.objects.all()
 
     if bgc_class:
-        qs = qs.filter(classification_l1__iexact=bgc_class)
+        qs = qs.filter(
+            Q(classification_path__istartswith=bgc_class + ".")
+            | Q(classification_path__iexact=bgc_class)
+        )
     if bgc_ids:
         ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
         if ids:
@@ -768,7 +757,7 @@ def bgc_scatter(
             id=bgc.id,
             x=getattr(bgc, x_axis, 0.0) or 0.0,
             y=getattr(bgc, y_axis, 0.0) or 0.0,
-            bgc_class=bgc.classification_l1,
+            bgc_class=bgc.classification_path.split(".")[0] if bgc.classification_path else "",
             is_mibig=False,
             compound_name=None,
             novelty_score=bgc.novelty_score,
@@ -835,7 +824,10 @@ def domain_query(
             | Q(assembly__assembly_accession__icontains=search)
         )
     if bgc_class:
-        qs = qs.filter(classification_l1__iexact=bgc_class)
+        qs = qs.filter(
+            Q(classification_path__istartswith=bgc_class + ".")
+            | Q(classification_path__iexact=bgc_class)
+        )
     if biome_lineage:
         qs = qs.filter(assembly__biome_path__icontains=biome_lineage)
     if assembly_accession:
@@ -861,7 +853,7 @@ def domain_query(
         "novelty_score": "novelty_score",
         "domain_novelty": "domain_novelty",
         "size_kb": "size_kb",
-        "classification_l1": "classification_l1",
+        "classification_path": "classification_path",
         "accession": "id",
     }
     order_field = sort_map.get(sort_by, "novelty_score")
@@ -876,8 +868,7 @@ def domain_query(
         QueryResultBgc(
             id=bgc.id,
             accession=bgc.bgc_accession,
-            classification_l1=bgc.classification_l1,
-            classification_l2=bgc.classification_l2 or None,
+            classification_path=bgc.classification_path,
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -948,8 +939,7 @@ def similar_bgc_query(
         QueryResultBgc(
             id=bgc.id,
             accession=bgc.bgc_accession,
-            classification_l1=bgc.classification_l1,
-            classification_l2=bgc.classification_l2 or None,
+            classification_path=bgc.classification_path,
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -1022,7 +1012,10 @@ def chemical_query(
             | Q(assembly__assembly_accession__icontains=search)
         )
     if bgc_class:
-        qs = qs.filter(classification_l1__iexact=bgc_class)
+        qs = qs.filter(
+            Q(classification_path__istartswith=bgc_class + ".")
+            | Q(classification_path__iexact=bgc_class)
+        )
     if biome_lineage:
         qs = qs.filter(assembly__biome_path__icontains=biome_lineage)
     if assembly_accession:
@@ -1053,8 +1046,7 @@ def chemical_query(
         QueryResultBgc(
             id=bgc.id,
             accession=bgc.bgc_accession,
-            classification_l1=bgc.classification_l1,
-            classification_l2=bgc.classification_l2 or None,
+            classification_path=bgc.classification_path,
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -1099,7 +1091,6 @@ def query_results_assembly_aggregation(
             "assembly__id",
             "assembly__assembly_accession",
             "assembly__organism_name",
-            "assembly__dominant_taxonomy_label",
             "assembly__is_type_strain",
         )
         .annotate(
@@ -1132,7 +1123,6 @@ def query_results_assembly_aggregation(
             assembly_id=row["assembly__id"],
             accession=row["assembly__assembly_accession"],
             organism_name=row["assembly__organism_name"],
-            dominant_taxonomy_label=row["assembly__dominant_taxonomy_label"],
             is_type_strain=row["assembly__is_type_strain"],
             hit_count=row["hit_count"],
             complete_fraction=round(row["complete_fraction"] or 0.0, 4),
@@ -1198,35 +1188,34 @@ def bgc_classes(request):
 
 @discovery_router.get("/filters/np-classes/", response=list[NpClassLevel])
 def np_classes(request):
-    qs = (
-        DashboardNaturalProduct.objects.values(
-            "chemical_class_l1", "chemical_class_l2", "chemical_class_l3"
-        )
-        .annotate(count=Count("id"))
+    paths = (
+        DashboardNaturalProduct.objects
+        .exclude(np_class_path="")
+        .values_list("np_class_path", flat=True)
     )
 
     tree: dict = {}
-    for row in qs:
-        l1 = row["chemical_class_l1"]
-        l2 = row["chemical_class_l2"]
-        l3 = row["chemical_class_l3"]
-        cnt = row["count"]
+    for path in paths:
+        parts = path.split(".")
+        l1 = parts[0] if len(parts) > 0 else ""
+        l2 = parts[1] if len(parts) > 1 else ""
+        l3 = parts[2] if len(parts) > 2 else ""
 
         if not l1:
             continue
         if l1 not in tree:
             tree[l1] = {"count": 0, "children": {}}
-        tree[l1]["count"] += cnt
+        tree[l1]["count"] += 1
 
         if l2:
             if l2 not in tree[l1]["children"]:
                 tree[l1]["children"][l2] = {"count": 0, "children": {}}
-            tree[l1]["children"][l2]["count"] += cnt
+            tree[l1]["children"][l2]["count"] += 1
 
             if l3:
                 if l3 not in tree[l1]["children"][l2]["children"]:
                     tree[l1]["children"][l2]["children"][l3] = {"count": 0, "children": {}}
-                tree[l1]["children"][l2]["children"][l3]["count"] += cnt
+                tree[l1]["children"][l2]["children"][l3]["count"] += 1
 
     def _build(level: dict) -> list[NpClassLevel]:
         return [
@@ -1430,9 +1419,9 @@ def export_assembly_shortlist(request, body: ShortlistExportRequest):
     writer = csv.writer(buf)
     writer.writerow([
         "accession", "organism_name",
-        "dominant_taxonomy_path", "dominant_taxonomy_label",
+        "biome_path",
         "is_type_strain", "type_strain_catalog_url",
-        "assembly_size_mb", "assembly_quality", "isolation_source",
+        "assembly_size_mb",
         "bgc_count", "l1_class_count",
         "bgc_diversity_score", "bgc_novelty_score", "bgc_density", "taxonomic_novelty",
     ])
@@ -1441,9 +1430,9 @@ def export_assembly_shortlist(request, body: ShortlistExportRequest):
         writer.writerow([
             g.assembly_accession,
             g.organism_name,
-            g.dominant_taxonomy_path, g.dominant_taxonomy_label,
+            g.biome_path,
             g.is_type_strain, g.type_strain_catalog_url,
-            g.assembly_size_mb or "", g.assembly_quality or "", g.isolation_source,
+            g.assembly_size_mb or "",
             g.bgc_count, g.l1_class_count,
             g.bgc_diversity_score, g.bgc_novelty_score, g.bgc_density, g.taxonomic_novelty,
         ])

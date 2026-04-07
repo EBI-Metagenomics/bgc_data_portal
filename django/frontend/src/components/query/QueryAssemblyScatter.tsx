@@ -18,7 +18,6 @@ const AXIS_OPTIONS = [
   { value: "bgc_novelty_score", label: "Novelty" },
   { value: "bgc_density", label: "Density" },
   { value: "taxonomic_novelty", label: "Tax. Novelty" },
-  { value: "assembly_quality", label: "Quality" },
 ];
 
 const TAXONOMY_COLORS = [
@@ -54,7 +53,7 @@ export function QueryAssemblyScatter() {
     if (!points?.length) return [];
     const groups = new Map<string, typeof points>();
     for (const pt of points) {
-      const taxonomy = pt.dominant_taxonomy_label ?? "Unknown";
+      const taxonomy = pt.organism_name ?? "Unknown";
       const existing = groups.get(taxonomy);
       if (existing) {
         existing.push(pt);

@@ -26,14 +26,11 @@ def api_client():
     return Client()
 
 
-def _make_assembly(accession, taxonomy_path, is_type_strain=False, **kwargs):
+def _make_assembly(accession, taxonomy_path="", is_type_strain=False, **kwargs):
     defaults = {
         "organism_name": f"Organism {accession}",
-        "dominant_taxonomy_path": taxonomy_path,
-        "dominant_taxonomy_label": f"Label {accession}",
         "biome_path": "root.Environmental.Terrestrial.Soil",
         "assembly_size_mb": 8.5,
-        "assembly_quality": 0.95,
         "is_type_strain": is_type_strain,
         "bgc_count": 0,
         "l1_class_count": 0,
@@ -45,31 +42,30 @@ def _make_assembly(accession, taxonomy_path, is_type_strain=False, **kwargs):
     defaults.update(kwargs)
     return DashboardAssembly.objects.create(
         assembly_accession=accession,
-        source_assembly_id=abs(hash(accession)) % 1_000_000,
         **defaults,
     )
 
 
 def _make_contig(assembly, idx=0, taxonomy_path=""):
+    import hashlib
+    sha = hashlib.sha256(f"{assembly.assembly_accession}_{idx}".encode()).hexdigest()
     return DashboardContig.objects.create(
         assembly=assembly,
+        sequence_sha256=sha,
         accession=f"CONTIG_{assembly.assembly_accession}_{idx}",
         length=100_000,
-        taxonomy_path=taxonomy_path or assembly.dominant_taxonomy_path,
-        source_contig_id=abs(hash(f"{assembly.pk}_{idx}")) % 1_000_000,
+        taxonomy_path=taxonomy_path,
     )
 
 
-def _make_bgc(assembly, contig, idx=0, class_l1="Polyketide"):
+def _make_bgc(assembly, contig, idx=0, class_path="Polyketide"):
     return DashboardBgc.objects.create(
         assembly=assembly,
         contig=contig,
         bgc_accession=f"MGYB{abs(hash(f'{assembly.pk}_{idx}')):08d}.ANT.1.01",
-        contig_accession=contig.accession,
-        start_position=1000,
-        end_position=20000,
-        classification_path=class_l1,
-        classification_l1=class_l1,
+        start_position=1000 + idx * 100000,
+        end_position=20000 + idx * 100000,
+        classification_path=class_path,
         novelty_score=0.35,
         domain_novelty=0.2,
         size_kb=19.0,
@@ -77,7 +73,6 @@ def _make_bgc(assembly, contig, idx=0, class_l1="Polyketide"):
         nearest_mibig_distance=0.65,
         umap_x=1.0 + idx,
         umap_y=2.0 + idx,
-        source_bgc_id=abs(hash(f"bgc_{assembly.pk}_{idx}")) % 1_000_000,
     )
 
 
@@ -126,8 +121,7 @@ def seeded_data():
     DashboardNaturalProduct.objects.create(
         name="test_compound",
         smiles="CC(=O)O",
-        chemical_class_l1="Polyketide",
-        chemical_class_l2="Macrolide",
+        np_class_path="Polyketide.Macrolide",
         bgc=bgc1,
     )
 
@@ -223,7 +217,7 @@ class TestAssemblyScatter:
         assert len(data) == 2
         assert "x" in data[0]
         assert "y" in data[0]
-        assert "dominant_taxonomy_label" in data[0]
+        assert "organism_name" in data[0]
 
     def test_bad_axis_returns_400(self, api_client, seeded_data):
         r = api_client.get("/api/dashboard/assembly-scatter/?x_axis=invalid")
@@ -237,7 +231,7 @@ class TestBgcDetail:
         r = api_client.get(f"/api/dashboard/bgcs/{bid}/")
         assert r.status_code == 200
         data = json.loads(r.content)
-        assert data["classification_l1"] == "Polyketide"
+        assert data["classification_path"] == "Polyketide"
         assert data["parent_assembly"] is not None
         assert data["parent_assembly"]["accession"] == "TEST_ERZ001"
 
@@ -283,9 +277,7 @@ class TestSimilarBgcQuery:
         bgc = DashboardBgc.objects.create(
             assembly=a, contig=c,
             bgc_accession="MGYB_NO_EMB.ANT.1.01",
-            contig_accession=c.accession,
-            start_position=1, end_position=100,
-            source_bgc_id=999999,
+            start_position=500000, end_position=600000,
         )
         r = api_client.post(
             f"/api/dashboard/query/similar-bgc/{bgc.id}/?max_distance=2.0",

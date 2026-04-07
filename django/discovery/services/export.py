@@ -33,14 +33,14 @@ def build_bgc_fna(bgc: DashboardBgc) -> str:
         length = max(1, bgc.end_position - bgc.start_position)
         seq = "N" * length
         description = f"BGC {bgc.bgc_accession} (sequence unavailable)"
-        contig_acc = bgc.contig_accession or "unknown"
+        contig_acc = (contig.accession if contig else None) or "unknown"
     else:
         contig_seq = contig_seq_obj.get_sequence()
         contig_len = len(contig_seq)
         window_start = max(0, bgc.start_position - FLANKING_WINDOW)
         window_end = min(contig_len, bgc.end_position + FLANKING_WINDOW)
         seq = contig_seq[window_start:window_end]
-        contig_acc = bgc.contig_accession or contig.accession
+        contig_acc = contig.accession or contig.sequence_sha256
         description = (
             f"Region {window_start}-{window_end} on "
             f"{contig_acc} (BGC {bgc.bgc_accession})"
@@ -129,15 +129,12 @@ def build_bgc_json(bgc: DashboardBgc) -> dict:
         "bgc_accession": bgc.bgc_accession,
         "assembly_accession": assembly.assembly_accession if assembly else None,
         "organism_name": assembly.organism_name if assembly else None,
-        "contig_accession": bgc.contig_accession,
+        "contig_accession": bgc.contig.accession if bgc.contig else None,
         "start_position": bgc.start_position,
         "end_position": bgc.end_position,
         "size_kb": bgc.size_kb,
         "classification": {
             "path": bgc.classification_path,
-            "l1": bgc.classification_l1,
-            "l2": bgc.classification_l2,
-            "l3": bgc.classification_l3,
         },
         "scores": {
             "novelty_score": bgc.novelty_score,

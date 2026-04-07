@@ -24,8 +24,6 @@ class AssemblyRosterItem(Schema):
     organism_name: str = ""
     source_name: Optional[str] = None
     assembly_type: str = "genome"
-    dominant_taxonomy_path: str = ""
-    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
     type_strain_catalog_url: str = ""
     # Scores
@@ -35,7 +33,6 @@ class AssemblyRosterItem(Schema):
     bgc_novelty_score: float = 0.0
     bgc_density: float = 0.0
     taxonomic_novelty: float = 0.0
-    assembly_quality: Optional[float] = None
 
 
 class PaginatedAssemblyResponse(Schema):
@@ -49,13 +46,9 @@ class AssemblyDetail(Schema):
     organism_name: str = ""
     source_name: Optional[str] = None
     assembly_type: str = "genome"
-    dominant_taxonomy_path: str = ""
-    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
     type_strain_catalog_url: str = ""
     assembly_size_mb: Optional[float] = None
-    assembly_quality: Optional[float] = None
-    isolation_source: str = ""
     biome_path: str = ""
     url: str = ""
     # Scores
@@ -71,7 +64,6 @@ class AssemblyScatterPoint(Schema):
     id: int
     x: float
     y: float
-    dominant_taxonomy_label: str = ""
     organism_name: Optional[str] = None
     is_type_strain: bool = False
 
@@ -99,9 +91,7 @@ class RegionOut(Schema):
 class BgcRosterItem(Schema):
     id: int
     accession: str
-    classification_l1: str = ""
-    classification_l2: Optional[str] = None
-    classification_l3: Optional[str] = None
+    classification_path: str = ""
     size_kb: float = 0.0
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
@@ -132,10 +122,7 @@ class ParentAssemblySummary(Schema):
     accession: str
     organism_name: Optional[str] = None
     source_name: Optional[str] = None
-    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
-    assembly_quality: Optional[float] = None
-    isolation_source: Optional[str] = None
 
 
 class NaturalProductSummary(Schema):
@@ -144,17 +131,13 @@ class NaturalProductSummary(Schema):
     smiles: str
     smiles_svg: str = ""
     structure_thumbnail: str = ""
-    chemical_class_l1: str = ""
-    chemical_class_l2: Optional[str] = None
-    chemical_class_l3: Optional[str] = None
+    np_class_path: str = ""
 
 
 class BgcDetail(Schema):
     id: int
     accession: str
-    classification_l1: str = ""
-    classification_l2: Optional[str] = None
-    classification_l3: Optional[str] = None
+    classification_path: str = ""
     size_kb: float = 0.0
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
@@ -243,8 +226,7 @@ class DomainQueryRequest(Schema):
 class QueryResultBgc(Schema):
     id: int
     accession: str
-    classification_l1: str = ""
-    classification_l2: Optional[str] = None
+    classification_path: str = ""
     size_kb: float = 0.0
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
@@ -266,7 +248,6 @@ class QueryResultAssemblyAggregation(Schema):
     assembly_id: int
     accession: str
     organism_name: Optional[str] = None
-    dominant_taxonomy_label: str = ""
     is_type_strain: bool = False
     hit_count: int = 0
     complete_fraction: float = 0.0
@@ -412,7 +393,7 @@ class PercentileRank(Schema):
 class BgcNoveltyItem(Schema):
     bgc_id: int
     accession: str
-    classification_l1: str = ""
+    classification_path: str = ""
     novelty_vs_mibig: float = 0.0
     novelty_vs_db: float = 0.0
     domain_novelty: float = 0.0
@@ -422,7 +403,7 @@ class BgcNoveltyItem(Schema):
 class RedundancyCell(Schema):
     bgc_id: int
     accession: str
-    classification_l1: str = ""
+    classification_path: str = ""
     gcf_family_id: Optional[str] = None
     gcf_member_count: int = 0
     gcf_has_mibig: bool = False
@@ -435,7 +416,7 @@ class AssessChemicalSpacePoint(Schema):
     accession: str
     umap_x: float
     umap_y: float
-    classification_l1: str = ""
+    classification_path: str = ""
     nearest_mibig_distance: float = 0.0
     is_sparse: bool = False
 
@@ -537,8 +518,7 @@ class AssessNearestNeighborPoint(Schema):
 class BgcAssessmentResponse(Schema):
     bgc_id: int
     accession: str
-    classification_l1: str = ""
-    classification_l2: Optional[str] = None
+    classification_path: str = ""
     # GCF placement
     gcf_context: Optional[GcfContext] = None
     distance_to_gcf_representative: Optional[float] = None

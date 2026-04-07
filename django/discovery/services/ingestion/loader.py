@@ -31,6 +31,7 @@ from pathlib import Path
 
 from django.db import connection, transaction
 from django.db.models import Avg, Count, F, Q
+from django.db.models.expressions import RawSQL
 
 from discovery.models import (
     AssemblySource,
@@ -194,16 +195,11 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
                     organism_name=row.get("organism_name", ""),
                     source=source,
                     assembly_type=int(row.get("assembly_type", 2)),
-                    dominant_taxonomy_path=row.get("dominant_taxonomy_path", ""),
-                    dominant_taxonomy_label=row.get("dominant_taxonomy_label", ""),
                     biome_path=row.get("biome_path", ""),
                     is_type_strain=row.get("is_type_strain", "").lower() in ("true", "1"),
                     type_strain_catalog_url=row.get("type_strain_catalog_url", ""),
                     assembly_size_mb=float(row["assembly_size_mb"]) if row.get("assembly_size_mb") else None,
-                    assembly_quality=float(row["assembly_quality"]) if row.get("assembly_quality") else None,
-                    isolation_source=row.get("isolation_source", ""),
                     url=row.get("url", ""),
-                    source_assembly_id=int(row["source_assembly_id"]),
                 )
             )
 
@@ -221,7 +217,7 @@ def load_contigs(
 ) -> dict[str, int]:
     """Load contigs.tsv → DashboardContig.
 
-    Returns ``{contig_accession: contig_id}``.
+    Returns ``{sequence_sha256: contig_id}``.
     """
     path = data_dir / "contigs.tsv"
     if not path.exists():
@@ -235,20 +231,25 @@ def load_contigs(
             assembly_acc = row["assembly_accession"]
             assembly_id = assembly_lookup.get(assembly_acc)
             if assembly_id is None:
-                logger.warning("Unknown assembly %s for contig %s, skipping", assembly_acc, row["accession"])
+                logger.warning(
+                    "Unknown assembly %s for contig %s, skipping",
+                    assembly_acc, row.get("accession", row["sequence_sha256"]),
+                )
                 continue
+            src_id = row.get("source_contig_id")
             rows.append(
                 DashboardContig(
                     assembly_id=assembly_id,
-                    accession=row["accession"],
+                    sequence_sha256=row["sequence_sha256"],
+                    accession=row.get("accession", ""),
                     length=int(row.get("length", 0)),
                     taxonomy_path=row.get("taxonomy_path", ""),
-                    source_contig_id=int(row["source_contig_id"]),
+                    source_contig_id=int(src_id) if src_id else None,
                 )
             )
 
     DashboardContig.objects.bulk_create(rows, batch_size=BATCH_SIZE)
-    lookup = dict(DashboardContig.objects.values_list("accession", "id"))
+    lookup = dict(DashboardContig.objects.values_list("sequence_sha256", "id"))
     logger.info("Loaded %d contigs", len(lookup))
     return lookup
 
@@ -272,10 +273,10 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            contig_acc = row["contig_accession"]
-            contig_id = contig_lookup.get(contig_acc)
+            contig_sha = row["contig_sha256"]
+            contig_id = contig_lookup.get(contig_sha)
             if contig_id is None:
-                logger.warning("Unknown contig %s for sequence, skipping", contig_acc)
+                logger.warning("Unknown contig %s for sequence, skipping", contig_sha)
                 continue
 
             raw_zlib = base64.b64decode(row["sequence_base64"])
@@ -294,15 +295,30 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
     return total
 
 
+def _build_bgc_lookup() -> dict[tuple[str, int, int, str], int]:
+    """Build composite-key lookup from existing BGCs in the database.
+
+    Returns ``{(contig_sha256, start, end, detector_name): bgc_id}``.
+    """
+    lookup: dict[tuple[str, int, int, str], int] = {}
+    qs = DashboardBgc.objects.select_related("contig", "detector").only(
+        "id", "contig__sequence_sha256", "start_position", "end_position", "detector__name",
+    )
+    for bgc in qs.iterator():
+        key = (bgc.contig.sequence_sha256, bgc.start_position, bgc.end_position, bgc.detector.name)
+        lookup[key] = bgc.id
+    return lookup
+
+
 def load_bgcs(
     data_dir: Path,
     contig_lookup: dict[str, int],
     detector_lookup: dict[str, tuple[int, str]],
     assembly_lookup: dict[str, int],
-) -> dict[int, int]:
+) -> dict[tuple[str, int, int, str], int]:
     """Load bgcs.tsv → DashboardBgc + DashboardRegion (via region assignment).
 
-    Returns ``{source_bgc_id: dashboard_bgc_id}``.
+    Returns ``{(contig_sha256, start, end, detector_name): dashboard_bgc_id}``.
     """
     path = data_dir / "bgcs.tsv"
     if not path.exists():
@@ -321,10 +337,10 @@ def load_bgcs(
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            contig_acc = row["contig_accession"]
-            contig_id = contig_lookup.get(contig_acc)
+            contig_sha = row["contig_sha256"]
+            contig_id = contig_lookup.get(contig_sha)
             if contig_id is None:
-                logger.warning("Unknown contig %s, skipping BGC", contig_acc)
+                logger.warning("Unknown contig %s, skipping BGC", contig_sha)
                 continue
 
             detector_name = row["detector_name"]
@@ -352,13 +368,9 @@ def load_bgcs(
                     assembly_id=assembly_id,
                     contig_id=contig_id,
                     bgc_accession=accession,
-                    contig_accession=contig_acc,
                     start_position=start,
                     end_position=end,
                     classification_path=row.get("classification_path", ""),
-                    classification_l1=row.get("classification_l1", ""),
-                    classification_l2=row.get("classification_l2", ""),
-                    classification_l3=row.get("classification_l3", ""),
                     novelty_score=float(row.get("novelty_score", 0)),
                     domain_novelty=float(row.get("domain_novelty", 0)),
                     size_kb=float(row.get("size_kb", 0)),
@@ -370,11 +382,8 @@ def load_bgcs(
                     umap_x=float(row.get("umap_x", 0)),
                     umap_y=float(row.get("umap_y", 0)),
                     detector_id=detector_id,
-                    detector_names=detector_name,
                     region_id=region_id,
                     bgc_number=bgc_number,
-                    source_bgc_id=int(row["source_bgc_id"]),
-                    source_contig_id=contig_id,
                 )
             )
 
@@ -387,15 +396,29 @@ def load_bgcs(
         DashboardBgc.objects.bulk_create(batch, ignore_conflicts=True)
         total += len(batch)
 
-    lookup = dict(DashboardBgc.objects.values_list("source_bgc_id", "id"))
+    lookup = _build_bgc_lookup()
     logger.info("Loaded %d BGCs across %d regions", total, DashboardRegion.objects.count())
     return lookup
 
 
-def load_cds(data_dir: Path, bgc_lookup: dict[int, int]) -> dict[tuple[int, str], int]:
+def _resolve_bgc_key(row: dict, bgc_lookup: dict[tuple[str, int, int, str], int]) -> int | None:
+    """Resolve a BGC composite key from a TSV row to a database ID."""
+    key = (
+        row["contig_sha256"],
+        int(row["bgc_start"]),
+        int(row["bgc_end"]),
+        row["detector_name"],
+    )
+    return bgc_lookup.get(key)
+
+
+def load_cds(
+    data_dir: Path,
+    bgc_lookup: dict[tuple[str, int, int, str], int],
+) -> dict[tuple[int, str], int]:
     """Load cds.tsv → DashboardCds.
 
-    Returns ``{(source_bgc_id, protein_id_str): cds_id}``.
+    Returns ``{(bgc_db_id, protein_id_str): cds_id}``.
     """
     path = data_dir / "cds.tsv"
     if not path.exists():
@@ -408,8 +431,7 @@ def load_cds(data_dir: Path, bgc_lookup: dict[int, int]) -> dict[tuple[int, str]
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            src_bgc = int(row["source_bgc_id"])
-            bgc_id = bgc_lookup.get(src_bgc)
+            bgc_id = _resolve_bgc_key(row, bgc_lookup)
             if bgc_id is None:
                 continue
 
@@ -437,15 +459,16 @@ def load_cds(data_dir: Path, bgc_lookup: dict[int, int]) -> dict[tuple[int, str]
 
     logger.info("Loaded %d CDS rows", total)
 
-    # Build lookup for domain loading
-    cds_lookup = {}
-    for cds in DashboardCds.objects.select_related("bgc").only("id", "protein_id_str", "bgc__source_bgc_id"):
-        cds_lookup[(cds.bgc.source_bgc_id, cds.protein_id_str)] = cds.id
+    # Build lookup for domain loading: (bgc_db_id, protein_id_str) → cds_id
+    cds_lookup: dict[tuple[int, str], int] = {}
+    for cds in DashboardCds.objects.only("id", "protein_id_str", "bgc_id"):
+        cds_lookup[(cds.bgc_id, cds.protein_id_str)] = cds.id
     return cds_lookup
 
 
 def load_cds_sequences(
     data_dir: Path,
+    bgc_lookup: dict[tuple[str, int, int, str], int],
     cds_lookup: dict[tuple[int, str], int],
 ) -> int:
     """Load cds_sequences.tsv → CdsSequence.
@@ -466,9 +489,11 @@ def load_cds_sequences(
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            src_bgc = int(row["source_bgc_id"])
+            bgc_id = _resolve_bgc_key(row, bgc_lookup)
+            if bgc_id is None:
+                continue
             protein_id = row["protein_id_str"]
-            cds_id = cds_lookup.get((src_bgc, protein_id))
+            cds_id = cds_lookup.get((bgc_id, protein_id))
             if cds_id is None:
                 continue
 
@@ -490,7 +515,7 @@ def load_cds_sequences(
 
 def load_domains(
     data_dir: Path,
-    bgc_lookup: dict[int, int],
+    bgc_lookup: dict[tuple[str, int, int, str], int],
     cds_lookup: dict[tuple[int, str], int],
 ) -> int:
     """Load domains.tsv → BgcDomain. Returns row count."""
@@ -505,13 +530,12 @@ def load_domains(
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            src_bgc = int(row["source_bgc_id"])
-            bgc_id = bgc_lookup.get(src_bgc)
+            bgc_id = _resolve_bgc_key(row, bgc_lookup)
             if bgc_id is None:
                 continue
 
             protein_id = row.get("protein_id_str", "")
-            cds_id = cds_lookup.get((src_bgc, protein_id))
+            cds_id = cds_lookup.get((bgc_id, protein_id))
 
             batch.append(
                 BgcDomain(
@@ -540,7 +564,10 @@ def load_domains(
     return total
 
 
-def load_embeddings(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
+def load_embeddings(
+    data_dir: Path,
+    bgc_lookup: dict[tuple[str, int, int, str], int],
+) -> int:
     """Load embeddings_bgc.tsv → BgcEmbedding. Returns row count."""
     path = data_dir / "embeddings_bgc.tsv"
     if not path.exists():
@@ -553,8 +580,7 @@ def load_embeddings(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            src_bgc = int(row["source_bgc_id"])
-            bgc_id = bgc_lookup.get(src_bgc)
+            bgc_id = _resolve_bgc_key(row, bgc_lookup)
             if bgc_id is None:
                 continue
 
@@ -576,7 +602,10 @@ def load_embeddings(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
     return total
 
 
-def load_natural_products(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
+def load_natural_products(
+    data_dir: Path,
+    bgc_lookup: dict[tuple[str, int, int, str], int],
+) -> int:
     """Load natural_products.tsv → DashboardNaturalProduct."""
     path = data_dir / "natural_products.tsv"
     if not path.exists():
@@ -589,8 +618,7 @@ def load_natural_products(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            src_bgc = int(row["source_bgc_id"])
-            bgc_id = bgc_lookup.get(src_bgc)
+            bgc_id = _resolve_bgc_key(row, bgc_lookup)
             if bgc_id is None:
                 continue
 
@@ -604,11 +632,7 @@ def load_natural_products(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
                     name=row["name"],
                     smiles=row.get("smiles", ""),
                     np_class_path=row.get("np_class_path", ""),
-                    chemical_class_l1=row.get("chemical_class_l1", ""),
-                    chemical_class_l2=row.get("chemical_class_l2", ""),
-                    chemical_class_l3=row.get("chemical_class_l3", ""),
                     structure_svg_base64=row.get("structure_svg_base64", ""),
-                    producing_organism=row.get("producing_organism", ""),
                     morgan_fp=morgan_fp,
                 )
             )
@@ -626,7 +650,10 @@ def load_natural_products(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
     return total
 
 
-def load_mibig_references(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
+def load_mibig_references(
+    data_dir: Path,
+    bgc_lookup: dict[tuple[str, int, int, str], int],
+) -> int:
     """Load mibig_references.tsv → DashboardMibigReference."""
     path = data_dir / "mibig_references.tsv"
     if not path.exists():
@@ -644,8 +671,9 @@ def load_mibig_references(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
                 raw = base64.b64decode(row["embedding_base64"])
                 embedding = list(struct.unpack(f"<{len(raw)//4}f", raw))
 
-            src_bgc = int(row["source_bgc_id"]) if row.get("source_bgc_id") else None
-            dashboard_bgc_id = bgc_lookup.get(src_bgc) if src_bgc else None
+            dashboard_bgc_id = None
+            if row.get("contig_sha256") and row.get("bgc_start"):
+                dashboard_bgc_id = _resolve_bgc_key(row, bgc_lookup)
 
             batch.append(
                 DashboardMibigReference(
@@ -672,7 +700,10 @@ def load_mibig_references(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
     return total
 
 
-def load_gcf(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
+def load_gcf(
+    data_dir: Path,
+    bgc_lookup: dict[tuple[str, int, int, str], int],
+) -> int:
     """Load gcf.tsv → DashboardGCF."""
     path = data_dir / "gcf.tsv"
     if not path.exists():
@@ -685,8 +716,9 @@ def load_gcf(data_dir: Path, bgc_lookup: dict[int, int]) -> int:
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
-            rep_src = int(row["representative_source_bgc_id"]) if row.get("representative_source_bgc_id") else None
-            rep_id = bgc_lookup.get(rep_src) if rep_src else None
+            rep_id = None
+            if row.get("contig_sha256") and row.get("bgc_start"):
+                rep_id = _resolve_bgc_key(row, bgc_lookup)
 
             batch.append(
                 DashboardGCF(
@@ -722,7 +754,10 @@ def compute_assembly_scores() -> None:
 
     assemblies = DashboardAssembly.objects.annotate(
         _bgc_count=Count("bgcs"),
-        _l1_class_count=Count("bgcs__classification_l1", distinct=True),
+        _l1_class_count=Count(
+            RawSQL("SPLIT_PART(discovery_bgc.classification_path, '.', 1)", []),
+            distinct=True,
+        ),
         _avg_novelty=Avg("bgcs__novelty_score"),
     )
 
@@ -751,15 +786,16 @@ def compute_catalog_counts() -> None:
     """Recompute BGC class and domain catalog counts."""
     logger.info("Computing catalog counts ...")
 
-    # BGC classes from classification_l1
+    # BGC classes from first segment of classification_path
     class_counts = (
-        DashboardBgc.objects.exclude(classification_l1="")
-        .values("classification_l1")
+        DashboardBgc.objects.exclude(classification_path="")
+        .annotate(class_l1=RawSQL("SPLIT_PART(classification_path, '.', 1)", []))
+        .values("class_l1")
         .annotate(cnt=Count("id"))
     )
     DashboardBgcClass.objects.all().delete()
     DashboardBgcClass.objects.bulk_create(
-        [DashboardBgcClass(name=r["classification_l1"], bgc_count=r["cnt"]) for r in class_counts],
+        [DashboardBgcClass(name=r["class_l1"], bgc_count=r["cnt"]) for r in class_counts],
         batch_size=BATCH_SIZE,
     )
 
@@ -827,7 +863,7 @@ def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bo
     cds_lookup = load_cds(data_dir, bgc_lookup)
 
     # 5.5. CDS sequences
-    load_cds_sequences(data_dir, cds_lookup)
+    load_cds_sequences(data_dir, bgc_lookup, cds_lookup)
 
     # 6. Domains
     load_domains(data_dir, bgc_lookup, cds_lookup)

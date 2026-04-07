@@ -117,10 +117,6 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
         </div>
 
         <div className="space-y-1 text-xs">
-          <div>
-            <span className="text-muted-foreground">Taxonomy: </span>
-            {assembly.dominant_taxonomy_label || "-"}
-          </div>
           {assembly.biome_path && (
             <div>
               <span className="text-muted-foreground">Biome: </span>
@@ -131,12 +127,6 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
             <div>
               <span className="text-muted-foreground">Assembly size: </span>
               {assembly.assembly_size_mb.toFixed(2)} Mb
-            </div>
-          )}
-          {assembly.isolation_source && (
-            <div>
-              <span className="text-muted-foreground">Isolation source: </span>
-              {assembly.isolation_source}
             </div>
           )}
           {assembly.type_strain_catalog_url && (
@@ -163,9 +153,6 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
         <ScoreBar label="BGC Diversity" value={assembly.bgc_diversity_score} />
         <ScoreBar label="BGC Density" value={assembly.bgc_density} />
         <ScoreBar label="Taxonomic Novelty" value={assembly.taxonomic_novelty} />
-        {assembly.assembly_quality !== null && (
-          <ScoreBar label="Assembly Quality" value={assembly.assembly_quality} />
-        )}
         <div className="flex gap-4 pt-2 text-xs">
           <span>
             <strong>{assembly.bgc_count}</strong> BGCs

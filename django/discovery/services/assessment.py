@@ -81,7 +81,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
         {
             "bgc_id": bgc.id,
             "accession": bgc.bgc_accession,
-            "classification_l1": bgc.classification_l1,
+            "classification_path": bgc.classification_path,
             "novelty_vs_mibig": round(bgc.nearest_mibig_distance or 0.0, 4),
             "novelty_vs_db": round(bgc.novelty_score, 4),
             "domain_novelty": round(bgc.domain_novelty, 4),
@@ -99,7 +99,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
                 {
                     "bgc_id": bgc.id,
                     "accession": bgc.bgc_accession,
-                    "classification_l1": bgc.classification_l1,
+                    "classification_path": bgc.classification_path,
                     "gcf_family_id": None,
                     "gcf_member_count": 0,
                     "gcf_has_mibig": False,
@@ -116,7 +116,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
                 {
                     "bgc_id": bgc.id,
                     "accession": bgc.bgc_accession,
-                    "classification_l1": bgc.classification_l1,
+                    "classification_path": bgc.classification_path,
                     "gcf_family_id": None,
                     "gcf_member_count": 0,
                     "gcf_has_mibig": False,
@@ -138,7 +138,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
             {
                 "bgc_id": bgc.id,
                 "accession": bgc.bgc_accession,
-                "classification_l1": bgc.classification_l1,
+                "classification_path": bgc.classification_path,
                 "gcf_family_id": gcf.family_id,
                 "gcf_member_count": gcf.member_count,
                 "gcf_has_mibig": has_mibig,
@@ -166,7 +166,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
             "accession": bgc.bgc_accession,
             "umap_x": bgc.umap_x,
             "umap_y": bgc.umap_y,
-            "classification_l1": bgc.classification_l1,
+            "classification_path": bgc.classification_path,
             "nearest_mibig_distance": round(bgc.nearest_mibig_distance or 0.0, 4),
             "is_sparse": (bgc.nearest_mibig_distance or 0.0) > sparse_threshold,
         }
@@ -236,8 +236,7 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
     """
     bgc = DashboardBgc.objects.select_related("assembly").get(pk=bgc_id)
 
-    classification_l1 = bgc.classification_l1
-    classification_l2 = bgc.classification_l2
+    classification_path = bgc.classification_path
 
     # ── GCF placement ────────────────────────────────────────────────────
     gcf_context = None
@@ -314,7 +313,7 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         "accession": bgc.bgc_accession,
         "umap_x": bgc.umap_x,
         "umap_y": bgc.umap_y,
-        "classification_l1": classification_l1,
+        "classification_path": classification_path,
         "nearest_mibig_distance": round(bgc.nearest_mibig_distance or 0.0, 4),
         "is_sparse": False,
     }
@@ -339,8 +338,7 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
     return {
         "bgc_id": bgc.id,
         "accession": bgc.bgc_accession,
-        "classification_l1": classification_l1,
-        "classification_l2": classification_l2,
+        "classification_path": classification_path,
         "gcf_context": gcf_context,
         "distance_to_gcf_representative": round(distance_to_rep, 4) if distance_to_rep is not None else None,
         "is_novel_singleton": is_novel_singleton,
@@ -408,7 +406,7 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
     for mbgc in members:
         assembly = mbgc.assembly
         is_ts = assembly.is_type_strain if assembly else False
-        tax_label = assembly.dominant_taxonomy_label if assembly else "Unknown"
+        tax_label = assembly.organism_name if assembly else "Unknown"
 
         member_points.append(
             {

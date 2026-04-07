@@ -120,11 +120,6 @@ _BIOME_LINEAGES = [
     "root.Host_associated.Insecta",
 ]
 
-_ISOLATION_SOURCES = [
-    "soil", "marine sediment", "freshwater", "rhizosphere",
-    "human gut", "insect symbiont", "cave sediment", "hot spring",
-]
-
 _AA_ALPHABET = "ACDEFGHIKLMNPQRSTVWY"
 _NT_ALPHABET = "ACGT"
 
@@ -224,7 +219,6 @@ class Command(BaseCommand):
         for i in range(n_assemblies):
             tax = random.choice(_TAXONOMY_POOL)
             is_ts = random.random() < 0.12
-            gq = round(random.betavariate(8, 2), 3)
             gsm = round(random.uniform(2.5, 12.0), 2)
 
             diversity = round(random.betavariate(3, 3), 4)
@@ -245,8 +239,6 @@ class Command(BaseCommand):
                 organism_name=f"{tax[6]} strain {chr(65 + i % 26)}{i}",
                 source=source_objs[random.choice(["MGnify", "GTDB", "NCBI"])],
                 assembly_type=atype,
-                dominant_taxonomy_path=_build_taxonomy_path(tax),
-                dominant_taxonomy_label=tax[6],  # species as label
                 biome_path=random.choice(_BIOME_LINEAGES),
                 is_type_strain=is_ts,
                 type_strain_catalog_url=(
@@ -255,13 +247,10 @@ class Command(BaseCommand):
                 ),
                 url=f"https://www.ncbi.nlm.nih.gov/datasets/genome/DISC_ERZ{i:07d}/",
                 assembly_size_mb=gsm,
-                assembly_quality=gq,
-                isolation_source=random.choice(_ISOLATION_SOURCES),
                 bgc_diversity_score=diversity,
                 bgc_novelty_score=novelty,
                 bgc_density=density,
                 taxonomic_novelty=round(random.betavariate(2, 4), 4),
-                source_assembly_id=10000 + i,
             )
             asm._tax = tax  # stash for contig taxonomy assignment
             assemblies.append(asm)
@@ -294,7 +283,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating contigs with sequences...")
         all_contigs = []
         contig_seqs = []
-        contig_map = {}  # (source_assembly_id, contig_idx) -> DashboardContig
+        contig_map = {}  # (assembly_accession, contig_idx) -> DashboardContig
         contig_counter = 0
 
         for assembly in assemblies:
@@ -307,7 +296,7 @@ class Command(BaseCommand):
                 else:
                     contig_tax = base_tax
 
-                contig_acc = f"contig_{assembly.source_assembly_id}_{ci}"
+                contig_acc = f"contig_{assembly.assembly_accession}_{ci}"
                 seq_len = random.randint(500000, 1000000)
                 raw_seq = _random_nt(seq_len)
                 contig = DashboardContig(
@@ -316,9 +305,10 @@ class Command(BaseCommand):
                     length=seq_len,
                     taxonomy_path=_build_taxonomy_path(contig_tax),
                     source_contig_id=70000 + contig_counter,
+                    sequence_sha256=hashlib.sha256(f"contig_{assembly.assembly_accession}_{ci}".encode()).hexdigest(),
                 )
                 all_contigs.append(contig)
-                contig_map[(assembly.source_assembly_id, ci)] = (contig, raw_seq)
+                contig_map[(assembly.assembly_accession, ci)] = (contig, raw_seq)
                 contig_counter += 1
 
         DashboardContig.objects.bulk_create(all_contigs)
@@ -329,32 +319,6 @@ class Command(BaseCommand):
                 data=ContigSequence.compress_sequence(raw_seq),
             ))
         ContigSequence.objects.bulk_create(contig_seqs)
-
-        # Recompute dominant taxonomy for metagenome assemblies
-        from collections import Counter
-        assemblies_to_update = []
-        for assembly in assemblies:
-            contig_paths = [
-                c.taxonomy_path for c in all_contigs
-                if c.assembly_id == assembly.id and c.taxonomy_path
-            ]
-            if not contig_paths:
-                continue
-            counts = Counter(contig_paths)
-            if len(counts) == 1:
-                dominant_path = contig_paths[0]
-                label = dominant_path.rsplit(".", 1)[-1]  # last component
-            else:
-                dominant_path, _ = counts.most_common(1)[0]
-                label = f"Mixed ({len(counts)} taxa)"
-            if assembly.dominant_taxonomy_path != dominant_path or assembly.dominant_taxonomy_label != label:
-                assembly.dominant_taxonomy_path = dominant_path
-                assembly.dominant_taxonomy_label = label
-                assemblies_to_update.append(assembly)
-        if assemblies_to_update:
-            DashboardAssembly.objects.bulk_update(
-                assemblies_to_update, ["dominant_taxonomy_path", "dominant_taxonomy_label"]
-            )
 
         self.stdout.write(
             f"  {len(all_contigs)} DashboardContig rows, "
@@ -415,7 +379,7 @@ class Command(BaseCommand):
 
                 gcf = random.choice(gcf_list)
                 contig_idx = bi // 4
-                contig_obj, _ = contig_map[(assembly.source_assembly_id, contig_idx)]
+                contig_obj, _ = contig_map[(assembly.assembly_accession, contig_idx)]
 
                 # Pick a detector
                 det_name = random.choices(_det_names, weights=_det_weights, k=1)[0]
@@ -430,17 +394,15 @@ class Command(BaseCommand):
                     tool_code=det.tool_name_code,
                 )
 
-                all_bgcs.append(DashboardBgc(
+                # Create each BGC immediately so RegionAssigner merges
+                # can redirect region references via UPDATE queries.
+                bgc_obj = DashboardBgc.objects.create(
                     assembly=assembly,
                     contig=contig_obj,
                     bgc_accession=accession,
-                    contig_accession=f"contig_{assembly.source_assembly_id}_{contig_idx}",
                     start_position=start,
                     end_position=start + bgc_size,
                     classification_path=_build_classification_path(bgc_class, l2, l3),
-                    classification_l1=bgc_class,
-                    classification_l2=l2 or "",
-                    classification_l3=l3 or "",
                     novelty_score=round(random.betavariate(2, 5), 4),
                     domain_novelty=round(random.betavariate(2, 6), 4),
                     size_kb=round(bgc_size / 1000.0, 2),
@@ -454,15 +416,12 @@ class Command(BaseCommand):
                     gcf_id=gcf.id,
                     distance_to_gcf_representative=round(random.uniform(0.0, 0.5), 4),
                     detector=det,
-                    detector_names=det.tool,
                     region_id=region_id,
                     bgc_number=bgc_number,
-                    source_bgc_id=20000 + bgc_counter,
-                    source_contig_id=30000 + bgc_counter,
-                ))
+                )
+                all_bgcs.append(bgc_obj)
                 bgc_counter += 1
 
-        DashboardBgc.objects.bulk_create(all_bgcs)
         self.stdout.write(f"  {len(all_bgcs)} DashboardBgc rows.")
         self.stdout.write(f"  {DashboardRegion.objects.count()} DashboardRegion rows.")
 
@@ -470,7 +429,7 @@ class Command(BaseCommand):
         for assembly in assemblies:
             bgcs = [b for b in all_bgcs if b.assembly_id == assembly.id]
             assembly.bgc_count = len(bgcs)
-            assembly.l1_class_count = len({b.classification_l1 for b in bgcs if b.classification_l1})
+            assembly.l1_class_count = len({b.classification_path.split(".")[0] for b in bgcs if b.classification_path})
         DashboardAssembly.objects.bulk_update(assemblies, ["bgc_count", "l1_class_count"])
 
         # Update GCF member counts + representative BGC
@@ -606,7 +565,7 @@ class Command(BaseCommand):
         nps = []
         sampled = random.sample(all_bgcs, min(len(all_bgcs) // 3, len(all_bgcs)))
         for bgc in sampled:
-            l1 = bgc.classification_l1
+            l1 = bgc.classification_path.split(".")[0] if bgc.classification_path else ""
             if l1 not in _NP_CLASSES:
                 l1 = random.choice(list(_NP_CLASSES.keys()))
             l2 = random.choice(list(_NP_CLASSES[l1].keys()))
@@ -614,16 +573,10 @@ class Command(BaseCommand):
             smiles = random.choice(_SMILES_POOL)
             nps.append(DashboardNaturalProduct(
                 bgc=bgc,
-                name=f"compound_{bgc.source_bgc_id}",
+                name=f"compound_{bgc.id}",
                 smiles=smiles,
                 np_class_path=_build_classification_path(l1, l2, l3),
-                chemical_class_l1=l1,
-                chemical_class_l2=l2,
-                chemical_class_l3=l3,
                 structure_svg_base64=svg_placeholder,
-                producing_organism=(
-                    bgc.assembly.organism_name if bgc.assembly else ""
-                ),
                 morgan_fp=_morgan_fp_bytes(smiles) or None,
             ))
         DashboardNaturalProduct.objects.bulk_create(nps)
@@ -645,6 +598,7 @@ class Command(BaseCommand):
                 length=seq_len,
                 taxonomy_path=_build_taxonomy_path(random.choice(_TAXONOMY_POOL)),
                 source_contig_id=80000 + i,
+                sequence_sha256=hashlib.sha256(f"mibig_contig_{i}".encode()).hexdigest(),
             )
             mibig_contigs.append(contig)
             mibig_contig_seqs_data.append(raw_seq)
@@ -682,11 +636,9 @@ class Command(BaseCommand):
                 assembly=mibig_assembly,
                 contig=mibig_contigs[i],
                 bgc_accession=accession,
-                contig_accession=mibig_contigs[i].accession,
                 start_position=start,
                 end_position=start + bgc_size,
                 classification_path=_build_classification_path(bgc_class),
-                classification_l1=bgc_class,
                 novelty_score=0.0,
                 domain_novelty=0.0,
                 size_kb=round(bgc_size / 1000.0, 2),
@@ -695,11 +647,8 @@ class Command(BaseCommand):
                 umap_x=ux,
                 umap_y=uy,
                 detector=mibig_det,
-                detector_names="MIBiG",
                 region_id=region_id,
                 bgc_number=bgc_number,
-                source_bgc_id=50000 + i,
-                source_contig_id=80000 + i,
             ))
         DashboardBgc.objects.bulk_create(mibig_bgcs)
 
@@ -722,7 +671,7 @@ class Command(BaseCommand):
 
                 cds = DashboardCds(
                     bgc=bgc,
-                    protein_id_str=f"MIBIG_PROT_{bgc.source_bgc_id}_{ci}",
+                    protein_id_str=f"MIBIG_PROT_{bgc.id}_{ci}",
                     start_position=cds_start,
                     end_position=cds_end,
                     strand=random.choice([1, -1]),
@@ -775,7 +724,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating catalog tables...")
         bgc_class_objs = []
         for class_name in _BGC_L1_CLASSES:
-            count = DashboardBgc.objects.filter(classification_l1=class_name).count()
+            count = DashboardBgc.objects.filter(classification_path__startswith=class_name).count()
             bgc_class_objs.append(DashboardBgcClass(name=class_name, bgc_count=count))
         DashboardBgcClass.objects.bulk_create(bgc_class_objs)
 

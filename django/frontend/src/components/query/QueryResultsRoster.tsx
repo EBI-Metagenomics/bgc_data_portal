@@ -29,7 +29,7 @@ const SORT_OPTIONS = [
   { value: "novelty_score", label: "Novelty" },
   { value: "domain_novelty", label: "Domain Novelty" },
   { value: "size_kb", label: "Size" },
-  { value: "classification_l1", label: "Class" },
+  { value: "classification_path", label: "Class" },
   { value: "accession", label: "Accession" },
 ];
 
@@ -130,7 +130,7 @@ export function QueryResultsRoster() {
                     {bgc.accession}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {bgc.classification_l1}
+                    {bgc.classification_path?.split('.')[0] || ''}
                   </TableCell>
                   <TableCell className="max-w-[150px] truncate text-xs">
                     <div className="flex items-center gap-1">

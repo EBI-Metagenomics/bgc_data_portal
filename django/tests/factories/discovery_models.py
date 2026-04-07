@@ -8,6 +8,7 @@ Usage:
     assembly = DashboardAssemblyFactory()
 """
 
+import hashlib
 import random
 
 import factory
@@ -141,14 +142,10 @@ class DashboardAssemblyFactory(DjangoModelFactory):
             "Pseudomonas fluorescens",
         ])
     )
-    source_assembly_id = factory.Sequence(lambda n: n + 1)
     assembly_type = 2  # genome
-    dominant_taxonomy_path = "Bacteria.Actinomycetota.Actinomycetia.Streptomycetales.Streptomycetaceae.Streptomyces"
-    dominant_taxonomy_label = factory.LazyAttribute(lambda o: o.organism_name)
     biome_path = "root.Environmental.Terrestrial.Soil"
     is_type_strain = False
     assembly_size_mb = factory.LazyFunction(lambda: round(random.uniform(4.0, 12.0), 2))
-    assembly_quality = factory.LazyFunction(lambda: round(random.betavariate(8, 2), 4))
 
     # Denormalized scores
     bgc_count = factory.LazyFunction(lambda: random.randint(1, 30))
@@ -167,50 +164,31 @@ class DashboardContigFactory(DjangoModelFactory):
         model = DashboardContig
 
     assembly = factory.SubFactory(DashboardAssemblyFactory)
+    sequence_sha256 = factory.Sequence(lambda n: hashlib.sha256(f"contig_{n}".encode()).hexdigest())
     accession = factory.Sequence(lambda n: f"MGYC_TEST_{n:08d}")
     length = factory.LazyFunction(lambda: random.randint(50_000, 1_000_000))
     taxonomy_path = "Bacteria.Actinomycetota.Actinomycetia.Streptomycetales.Streptomycetaceae.Streptomyces"
-    source_contig_id = factory.Sequence(lambda n: n + 1)
 
 
 class DashboardBgcFactory(DjangoModelFactory):
     class Meta:
         model = DashboardBgc
-        exclude = ("_classification",)
 
     assembly = factory.SubFactory(DashboardAssemblyFactory)
     contig = factory.SubFactory(DashboardContigFactory, assembly=factory.SelfAttribute("..assembly"))
     bgc_accession = factory.Sequence(lambda n: f"MGYB{n:08d}.ANT.1.01")
-    contig_accession = factory.LazyAttribute(lambda o: o.contig.accession)
     start_position = factory.LazyFunction(lambda: random.randint(1000, 50_000))
     end_position = factory.LazyAttribute(lambda o: o.start_position + random.randint(5000, 80_000))
-    source_bgc_id = factory.Sequence(lambda n: n + 1)
 
     # Classification
     @factory.lazy_attribute
-    def _classification(self):
+    def classification_path(self):
         l1 = random.choice(list(_NP_CLASSES.keys()))
         l2 = random.choice(list(_NP_CLASSES[l1].keys()))
         l3 = random.choice(_NP_CLASSES[l1][l2])
-        return l1, l2, l3
-
-    @factory.lazy_attribute
-    def classification_l1(self):
-        return self._classification[0]
-
-    @factory.lazy_attribute
-    def classification_l2(self):
-        return self._classification[1]
-
-    @factory.lazy_attribute
-    def classification_l3(self):
-        return self._classification[2] or ""
-
-    @factory.lazy_attribute
-    def classification_path(self):
-        parts = [self.classification_l1, self.classification_l2]
-        if self.classification_l3:
-            parts.append(self.classification_l3)
+        parts = [l1, l2]
+        if l3:
+            parts.append(l3)
         return ".".join(parts)
 
     # Scores
@@ -257,39 +235,20 @@ class DashboardGCFFactory(DjangoModelFactory):
 class DashboardNaturalProductFactory(DjangoModelFactory):
     class Meta:
         model = DashboardNaturalProduct
-        exclude = ("_np_class",)
 
     name = factory.Faker("word")
     smiles = factory.LazyFunction(lambda: random.choice(_SMILES_POOL))
     bgc = factory.SubFactory(DashboardBgcFactory)
 
     @factory.lazy_attribute
-    def _np_class(self):
+    def np_class_path(self):
         l1 = random.choice(list(_NP_CLASSES.keys()))
         l2 = random.choice(list(_NP_CLASSES[l1].keys()))
         l3 = random.choice(_NP_CLASSES[l1][l2])
-        return l1, l2, l3
-
-    @factory.lazy_attribute
-    def chemical_class_l1(self):
-        return self._np_class[0]
-
-    @factory.lazy_attribute
-    def chemical_class_l2(self):
-        return self._np_class[1]
-
-    @factory.lazy_attribute
-    def chemical_class_l3(self):
-        return self._np_class[2] or ""
-
-    @factory.lazy_attribute
-    def producing_organism(self):
-        return random.choice([
-            "Streptomyces coelicolor", "Streptomyces griseus",
-            "Amycolatopsis mediterranei", "Bacillus subtilis",
-            "Pseudomonas fluorescens", "Myxococcus xanthus",
-            "",
-        ])
+        parts = [l1, l2]
+        if l3:
+            parts.append(l3)
+        return ".".join(parts)
 
 
 class DashboardMibigReferenceFactory(DjangoModelFactory):

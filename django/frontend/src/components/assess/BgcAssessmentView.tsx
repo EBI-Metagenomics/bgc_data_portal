@@ -61,8 +61,7 @@ export function BgcAssessmentView() {
             BGC Assessment: {result.accession}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {result.classification_l1}
-            {result.classification_l2 && ` / ${result.classification_l2}`}
+            {result.classification_path}
             {result.is_novel_singleton && (
               <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
                 Novel Singleton

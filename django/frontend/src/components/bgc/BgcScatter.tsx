@@ -136,7 +136,7 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
       id: item.id,
       x: axisValue(item, xAxis),
       y: axisValue(item, yAxis),
-      bgc_class: item.classification_l1,
+      bgc_class: item.classification_path?.split('.')[0] || 'Other',
       is_mibig: false,
       compound_name: null,
       novelty_score: item.novelty_score,

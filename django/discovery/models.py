@@ -70,20 +70,6 @@ class DashboardAssembly(models.Model):
         db_index=True,
     )
 
-    # Dominant taxonomy — precomputed from contigs at load time
-    dominant_taxonomy_path = models.CharField(
-        max_length=1024,
-        blank=True,
-        default="",
-        help_text="Most common taxonomy_path among contigs, or empty if mixed",
-    )
-    dominant_taxonomy_label = models.CharField(
-        max_length=255,
-        blank=True,
-        default="",
-        help_text="Species name or 'Mixed (N taxa)'",
-    )
-
     # Biome — ltree dot-path
     biome_path = models.CharField(
         max_length=512,
@@ -96,8 +82,6 @@ class DashboardAssembly(models.Model):
     is_type_strain = models.BooleanField(default=False, db_index=True)
     type_strain_catalog_url = models.URLField(blank=True, default="")
     assembly_size_mb = models.FloatField(null=True, blank=True)
-    assembly_quality = models.FloatField(null=True, blank=True)
-    isolation_source = models.CharField(max_length=255, blank=True, default="")
     url = models.URLField(max_length=512, blank=True, default="")
 
     # Scores (denormalized from GenomeScore)
@@ -113,9 +97,6 @@ class DashboardAssembly(models.Model):
     pctl_novelty = models.FloatField(default=0.0)
     pctl_density = models.FloatField(default=0.0)
 
-    # Cross-reference to mgnify_bgcs.Assembly (integer, NOT a Django FK)
-    source_assembly_id = models.IntegerField(unique=True, db_index=True)
-
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -129,8 +110,6 @@ class DashboardAssembly(models.Model):
             models.Index(fields=["organism_name"], name="idx_da_organism"),
             # Biome prefix queries (btree; ltree GiST index added via RunSQL)
             models.Index(fields=["biome_path"], name="idx_da_biome"),
-            # Dominant taxonomy prefix queries
-            models.Index(fields=["dominant_taxonomy_path"], name="idx_da_dom_tax"),
         ]
 
     def __str__(self):
@@ -150,7 +129,8 @@ class DashboardContig(models.Model):
         related_name="contigs",
         db_index=True,
     )
-    accession = models.CharField(max_length=255, db_index=True)
+    sequence_sha256 = models.CharField(max_length=64, unique=True, db_index=True)
+    accession = models.CharField(max_length=255, blank=True, default="", db_index=True)
     length = models.IntegerField(default=0)
 
     # Taxonomy — ltree dot-path for this contig
@@ -162,7 +142,7 @@ class DashboardContig(models.Model):
     )
 
     # Cross-reference to mgnify_bgcs.Contig (integer, NOT a Django FK)
-    source_contig_id = models.IntegerField(unique=True, db_index=True)
+    source_contig_id = models.IntegerField(null=True, blank=True, db_index=True)
 
     class Meta:
         db_table = "discovery_contig"
@@ -171,7 +151,7 @@ class DashboardContig(models.Model):
         ]
 
     def __str__(self):
-        return self.accession
+        return self.accession or self.sequence_sha256
 
 
 class ContigSequence(models.Model):
@@ -320,32 +300,26 @@ class DashboardBgc(models.Model):
         db_index=True,
     )
 
-    # Parent contig (nullable — populated by data loading)
+    # Parent contig
     contig = models.ForeignKey(
         DashboardContig,
         on_delete=models.CASCADE,
         related_name="bgcs",
-        null=True,
-        blank=True,
         db_index=True,
     )
 
     # Identity
     bgc_accession = models.CharField(max_length=50, db_index=True)
-    contig_accession = models.CharField(max_length=255, blank=True, default="")
     start_position = models.IntegerField()
     end_position = models.IntegerField()
 
-    # Classification — ltree path + individual levels
+    # Classification — ltree path
     classification_path = models.CharField(
         max_length=512,
         blank=True,
         default="",
         help_text="ltree dot-path, e.g. Polyketide.Macrolide.14_membered",
     )
-    classification_l1 = models.CharField(max_length=100, blank=True, default="", db_index=True)
-    classification_l2 = models.CharField(max_length=100, blank=True, default="")
-    classification_l3 = models.CharField(max_length=100, blank=True, default="")
 
     # Scores
     novelty_score = models.FloatField(default=0.0)
@@ -368,10 +342,6 @@ class DashboardBgc(models.Model):
     distance_to_gcf_representative = models.FloatField(null=True, blank=True)
 
     # Detector info
-    detector_names = models.CharField(
-        max_length=255, blank=True, default="",
-        help_text="DEPRECATED — use detector FK instead. Kept for backward compat.",
-    )
     detector = models.ForeignKey(
         DashboardDetector,
         on_delete=models.SET_NULL,
@@ -395,14 +365,16 @@ class DashboardBgc(models.Model):
         help_text="2-digit incremental within region + detector",
     )
 
-    # Cross-references to mgnify_bgcs (integers, NOT Django FKs)
-    source_bgc_id = models.BigIntegerField(unique=True, db_index=True)
-    source_contig_id = models.IntegerField(null=True, blank=True)
-
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "discovery_bgc"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contig", "start_position", "end_position", "detector"],
+                name="uniq_bgc_contig_pos_detector",
+            ),
+        ]
         indexes = [
             models.Index(fields=["-novelty_score"], name="idx_db_novelty_desc"),
             models.Index(fields=["-domain_novelty"], name="idx_db_domain_nov_desc"),
@@ -622,19 +594,15 @@ class DashboardNaturalProduct(models.Model):
     name = models.CharField(max_length=255)
     smiles = models.TextField(blank=True, default="")
 
-    # NP chemical class hierarchy — ltree path + individual levels
+    # NP chemical class hierarchy — ltree path
     np_class_path = models.CharField(
         max_length=512,
         blank=True,
         default="",
         help_text="ltree dot-path, e.g. Polyketide.Macrolide.Erythromycin",
     )
-    chemical_class_l1 = models.CharField(max_length=100, blank=True, default="")
-    chemical_class_l2 = models.CharField(max_length=100, blank=True, default="")
-    chemical_class_l3 = models.CharField(max_length=100, blank=True, default="")
 
     structure_svg_base64 = models.TextField(blank=True, default="")
-    producing_organism = models.CharField(max_length=255, blank=True, default="")
 
     # Precomputed Morgan fingerprint (2048-bit) for Tanimoto similarity search
     morgan_fp = models.BinaryField(null=True, blank=True)
@@ -642,7 +610,7 @@ class DashboardNaturalProduct(models.Model):
     class Meta:
         db_table = "discovery_natural_product"
         indexes = [
-            models.Index(fields=["chemical_class_l1"], name="idx_dnp_class_l1"),
+            models.Index(fields=["np_class_path"], name="idx_dnp_class_path"),
             models.Index(fields=["bgc"], name="idx_dnp_bgc"),
         ]
 

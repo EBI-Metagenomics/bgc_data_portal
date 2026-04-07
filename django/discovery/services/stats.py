@@ -150,15 +150,18 @@ def compute_bgc_stats(bgc_qs) -> dict:
     # NP chemical class sunburst
     np_class_sunburst = _build_np_class_sunburst(bgc_qs)
 
-    # BGC class distribution (from classification_l1 on DashboardBgc directly)
+    # BGC class distribution (from first segment of classification_path)
+    from django.db.models.expressions import RawSQL
+
     bgc_class_dist = list(
-        bgc_qs.exclude(classification_l1="")
-        .values("classification_l1")
+        bgc_qs.exclude(classification_path="")
+        .annotate(class_l1=RawSQL("SPLIT_PART(classification_path, '.', 1)", []))
+        .values("class_l1")
         .annotate(count=Count("id"))
         .order_by("-count")
     )
     bgc_class_distribution = [
-        {"name": row["classification_l1"], "count": row["count"]}
+        {"name": row["class_l1"], "count": row["count"]}
         for row in bgc_class_dist
     ]
 
@@ -205,19 +208,19 @@ def _compute_core_domains(bgc_qs, total_bgcs: int) -> list[dict]:
 
 def _build_np_class_sunburst(bgc_qs) -> list[dict]:
     """Build a flat sunburst list for NP chemical class hierarchy."""
-    nps = (
+    paths = (
         DashboardNaturalProduct.objects.filter(bgc__in=bgc_qs)
-        .values("chemical_class_l1", "chemical_class_l2", "chemical_class_l3")
-        .annotate(count=Count("id"))
+        .exclude(np_class_path="")
+        .values_list("np_class_path", flat=True)
     )
 
     nodes: dict[str, dict] = {}
 
-    for row in nps:
-        count = row["count"]
-        l1 = row["chemical_class_l1"]
-        l2 = row["chemical_class_l2"]
-        l3 = row["chemical_class_l3"]
+    for path in paths:
+        parts = path.split(".")
+        l1 = parts[0] if len(parts) > 0 else ""
+        l2 = parts[1] if len(parts) > 1 else ""
+        l3 = parts[2] if len(parts) > 2 else ""
 
         if not l1:
             continue
@@ -225,18 +228,18 @@ def _build_np_class_sunburst(bgc_qs) -> list[dict]:
         l1_id = f"l1:{l1}"
         if l1_id not in nodes:
             nodes[l1_id] = {"id": l1_id, "label": l1, "parent": "", "count": 0}
-        nodes[l1_id]["count"] += count
+        nodes[l1_id]["count"] += 1
 
         if l2:
             l2_id = f"l2:{l1}/{l2}"
             if l2_id not in nodes:
                 nodes[l2_id] = {"id": l2_id, "label": l2, "parent": l1_id, "count": 0}
-            nodes[l2_id]["count"] += count
+            nodes[l2_id]["count"] += 1
 
             if l3:
                 l3_id = f"l3:{l1}/{l2}/{l3}"
                 if l3_id not in nodes:
                     nodes[l3_id] = {"id": l3_id, "label": l3, "parent": l2_id, "count": 0}
-                nodes[l3_id]["count"] += count
+                nodes[l3_id]["count"] += 1
 
     return list(nodes.values())

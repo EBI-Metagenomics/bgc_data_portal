@@ -42,7 +42,7 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
     window_end = min(contig_len, bgc.end_position + FLANKING_WINDOW)
     region_seq = contig_seq[window_start:window_end]
 
-    contig_acc = bgc.contig_accession or contig.accession
+    contig_acc = contig.accession or contig.sequence_sha256
     assembly = bgc.assembly
 
     record = SeqRecord(
@@ -72,17 +72,17 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
     bgc_rel_start = bgc.start_position - window_start
     bgc_rel_end = bgc.end_position - window_start
 
-    classification = "/".join(
-        filter(None, [bgc.classification_l1, bgc.classification_l2, bgc.classification_l3])
-    )
+    parts = bgc.classification_path.split(".") if bgc.classification_path else []
+    classification = "/".join(parts)
+    bgc_class_l1 = parts[0] if parts else "Unknown"
     cluster_feat = SeqFeature(
         FeatureLocation(bgc_rel_start, bgc_rel_end),
         type="CLUSTER",
         qualifiers={
             "ID": [bgc.bgc_accession],
-            "BGC_CLASS": [bgc.classification_l1 or "Unknown"],
+            "BGC_CLASS": [bgc_class_l1],
             "classification": [classification or "Unknown"],
-            "detector": [bgc.detector_names or "Unknown"],
+            "detector": [bgc.detector.name if bgc.detector else "Unknown"],
             "contig_edge": ["True" if bgc.is_partial else "False"],
         },
     )
@@ -124,7 +124,7 @@ def _build_placeholder_record(bgc: DashboardBgc) -> SeqRecord:
     length = max(1, bgc.end_position - bgc.start_position)
     record = SeqRecord(
         Seq("N" * length),
-        id=bgc.contig_accession or "unknown",
+        id=(bgc.contig.accession if bgc.contig else None) or "unknown",
         name=bgc.bgc_accession[:16],
         description=f"BGC {bgc.bgc_accession} (sequence unavailable)",
     )

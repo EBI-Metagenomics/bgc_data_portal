@@ -13,8 +13,6 @@ export interface AssemblyRosterItem {
   id: number;
   accession: string;
   organism_name: string | null;
-  dominant_taxonomy_path: string;
-  dominant_taxonomy_label: string;
   source_name: string | null;
   assembly_type: string;
   is_type_strain: boolean;
@@ -25,7 +23,6 @@ export interface AssemblyRosterItem {
   bgc_novelty_score: number;
   bgc_density: number;
   taxonomic_novelty: number;
-  assembly_quality: number;
 }
 
 export interface PaginatedAssemblyResponse {
@@ -37,15 +34,11 @@ export interface AssemblyDetail {
   id: number;
   accession: string;
   organism_name: string | null;
-  dominant_taxonomy_path: string;
-  dominant_taxonomy_label: string;
   source_name: string | null;
   assembly_type: string;
   is_type_strain: boolean;
   type_strain_catalog_url: string | null;
   assembly_size_mb: number | null;
-  assembly_quality: number | null;
-  isolation_source: string | null;
   biome_path: string;
   url: string;
   bgc_count: number;
@@ -60,7 +53,6 @@ export interface AssemblyScatterPoint {
   id: number;
   x: number;
   y: number;
-  dominant_taxonomy_label: string | null;
   organism_name: string | null;
   is_type_strain: boolean;
 }
@@ -70,9 +62,7 @@ export interface AssemblyScatterPoint {
 export interface BgcRosterItem {
   id: number;
   accession: string;
-  classification_l1: string;
-  classification_l2: string | null;
-  classification_l3: string | null;
+  classification_path: string;
   size_kb: number;
   novelty_score: number;
   domain_novelty: number;
@@ -100,12 +90,8 @@ export interface ParentAssemblySummary {
   assembly_id: number;
   accession: string;
   organism_name: string | null;
-  dominant_taxonomy_label: string | null;
   source_name: string | null;
-  assembly_type: string;
   is_type_strain: boolean;
-  assembly_quality: number | null;
-  isolation_source: string | null;
 }
 
 export interface NaturalProductSummary {
@@ -114,17 +100,13 @@ export interface NaturalProductSummary {
   smiles: string;
   smiles_svg: string;
   structure_thumbnail: string;
-  chemical_class_l1: string;
-  chemical_class_l2: string | null;
-  chemical_class_l3: string | null;
+  np_class_path: string;
 }
 
 export interface BgcDetail {
   id: number;
   accession: string;
-  classification_l1: string;
-  classification_l2: string | null;
-  classification_l3: string | null;
+  classification_path: string;
   size_kb: number;
   novelty_score: number;
   domain_novelty: number;
@@ -204,8 +186,7 @@ export interface DomainQueryRequest {
 export interface QueryResultBgc {
   id: number;
   accession: string;
-  classification_l1: string;
-  classification_l2: string | null;
+  classification_path: string;
   size_kb: number;
   novelty_score: number;
   domain_novelty: number;
@@ -226,7 +207,6 @@ export interface QueryResultAssemblyAggregation {
   assembly_id: number;
   accession: string;
   organism_name: string | null;
-  dominant_taxonomy_label: string | null;
   is_type_strain: boolean;
   hit_count: number;
   complete_fraction: number;
@@ -367,7 +347,7 @@ export interface PercentileRank {
 export interface BgcNoveltyItem {
   bgc_id: number;
   accession: string;
-  classification_l1: string;
+  classification_path: string;
   novelty_vs_mibig: number;
   novelty_vs_db: number;
   domain_novelty: number;
@@ -377,7 +357,7 @@ export interface BgcNoveltyItem {
 export interface RedundancyCell {
   bgc_id: number;
   accession: string;
-  classification_l1: string;
+  classification_path: string;
   gcf_family_id: string | null;
   gcf_member_count: number;
   gcf_has_mibig: boolean;
@@ -390,7 +370,7 @@ export interface AssessChemicalSpacePoint {
   accession: string;
   umap_x: number;
   umap_y: number;
-  classification_l1: string;
+  classification_path: string;
   nearest_mibig_distance: number;
   is_sparse: boolean;
 }
@@ -484,8 +464,7 @@ export interface AssessNearestNeighborPoint {
 export interface BgcAssessmentResult {
   bgc_id: number;
   accession: string;
-  classification_l1: string;
-  classification_l2: string | null;
+  classification_path: string;
   gcf_context: GcfContext | null;
   distance_to_gcf_representative: number | null;
   is_novel_singleton: boolean;

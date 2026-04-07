@@ -42,16 +42,27 @@ Files are loaded in strict dependency order. Each step resolves foreign keys usi
 1.   detectors.tsv          →  DashboardDetector
 2.   assemblies.tsv         →  DashboardAssembly  (+AssemblySource auto-created)
 3.   contigs.tsv            →  DashboardContig       (needs assembly_accession from step 2)
-3.5  contig_sequences.tsv   →  ContigSequence         (needs contig_accession from step 3)
-4.   bgcs.tsv               →  DashboardBgc          (needs contig_accession from step 3,
+3.5  contig_sequences.tsv   →  ContigSequence         (needs contig_sha256 from step 3)
+4.   bgcs.tsv               →  DashboardBgc          (needs contig_sha256 from step 3,
                                 DashboardRegion          detector_name from step 1)
-5.   cds.tsv                →  DashboardCds           (needs source_bgc_id from step 4)
-5.5  cds_sequences.tsv      →  CdsSequence            (needs source_bgc_id + protein_id_str from step 5)
-6.   domains.tsv            →  BgcDomain              (needs source_bgc_id + protein_id_str from step 5)
-7.   embeddings_bgc.tsv     →  BgcEmbedding           (needs source_bgc_id from step 4)
-8.   natural_products.tsv   →  DashboardNaturalProduct (needs source_bgc_id from step 4)
-9.   mibig_references.tsv   →  DashboardMibigReference (needs source_bgc_id from step 4, optional)
-10.  gcf.tsv                →  DashboardGCF            (needs representative_source_bgc_id from step 4)
+5.   cds.tsv                →  DashboardCds           (needs contig_sha256 + bgc_start +
+                                                          bgc_end + detector_name from step 4)
+5.5  cds_sequences.tsv      →  CdsSequence            (needs contig_sha256 + bgc_start +
+                                                          bgc_end + detector_name + protein_id_str
+                                                          from step 5)
+6.   domains.tsv            →  BgcDomain              (needs contig_sha256 + bgc_start +
+                                                          bgc_end + detector_name + protein_id_str
+                                                          from step 5)
+7.   embeddings_bgc.tsv     →  BgcEmbedding           (needs contig_sha256 + bgc_start +
+                                                          bgc_end + detector_name from step 4)
+8.   natural_products.tsv   →  DashboardNaturalProduct (needs contig_sha256 + bgc_start +
+                                                          bgc_end + detector_name from step 4)
+9.   mibig_references.tsv   →  DashboardMibigReference (needs contig_sha256 + bgc_start +
+                                                          bgc_end + detector_name from step 4,
+                                                          optional)
+10.  gcf.tsv                →  DashboardGCF            (needs contig_sha256 + bgc_start +
+                                                          bgc_end + detector_name from step 4,
+                                                          optional)
 ```
 
 After loading, two post-load computations run (unless `--skip-stats`):
@@ -73,7 +84,6 @@ Hierarchical fields use **dot-delimited** paths. Dots separate hierarchy levels.
 
 | Field | Example |
 |-------|---------|
-| `dominant_taxonomy_path` | `Bacteria.Actinomycetota.Actinomycetia.Streptomycetales.Streptomycetaceae.Streptomyces` |
 | `biome_path` | `root.Environmental.Terrestrial.Soil` |
 | `taxonomy_path` | `Bacteria.Actinomycetota.Actinomycetia` |
 | `classification_path` | `Polyketide.Macrolide.14_membered` |
@@ -139,26 +149,21 @@ One row per assembly (genome, metagenome, or region).
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
 | `assembly_accession` | string | **yes** | Unique accession | `GCA_000009065.1` |
-| `source_assembly_id` | integer | **yes** | Cross-reference ID from source DB (unique) | `42` |
 | `organism_name` | string | no | Species/strain name | `Streptomyces coelicolor A3(2)` |
-| `source` | string | no | Data source name (auto-creates `AssemblySource`) | `GTDB` | <<This should be specified as parameter of workflow>>
-| `assembly_type` | integer | no | `1`=metagenome, `2`=genome (default), `3`=region | `2` | <<This should be specified as parameter of workflow>>
-| `dominant_taxonomy_path` | string | no | ltree dot-path of most common taxonomy | `Bacteria.Actinomycetota.Actinomycetia` |
-| `dominant_taxonomy_label` | string | no | Human label or `"Mixed (N taxa)"` | `Streptomyces coelicolor` |
+| `source` | string | no | Data source name (auto-creates `AssemblySource`) | `GTDB` |
+| `assembly_type` | integer | no | `1`=metagenome, `2`=genome (default), `3`=region | `2` |
 | `biome_path` | string | no | ltree dot-path for biome | `root.Environmental.Terrestrial.Soil` |
 | `is_type_strain` | boolean | no | `true`/`1` if type strain | `true` |
 | `type_strain_catalog_url` | URL | no | Link to strain catalog | `https://dsmz.de/...` |
 | `assembly_size_mb` | float | no | Assembly size in megabases | `8.67` |
-| `assembly_quality` | float | no | Quality score (0.0–1.0) | `0.95` |
-| `isolation_source` | string | no | Where isolated from | `soil` |
 | `url` | URL | no | Link to source record | `https://www.ncbi.nlm.nih.gov/...` |
 
-**Uniqueness:** `assembly_accession` (unique), `source_assembly_id` (unique).  
+**Uniqueness:** `assembly_accession` (unique).  
 **FK resolution key:** `assembly_accession` is used in `contigs.tsv`.
 
 **Auto-computed by loader (post-load):**
 - `bgc_count` — count of BGCs in this assembly
-- `l1_class_count` — count of distinct `classification_l1` values
+- `l1_class_count` — count of distinct first segments of `classification_path` values
 - `bgc_novelty_score` — average `novelty_score` of BGCs
 - `bgc_diversity_score`, `bgc_density`, `taxonomic_novelty` — not set by loader (default 0.0)
 - `pctl_diversity`, `pctl_novelty`, `pctl_density` — not set by loader (default 0.0)
@@ -172,13 +177,14 @@ One row per contig. Each contig belongs to exactly one assembly.
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
 | `assembly_accession` | string | **yes** | Parent assembly (must exist in `assemblies.tsv`) | `GCA_000009065.1` |
-| `accession` | string | **yes** | Contig accession | `MGYC000000001` |
-| `source_contig_id` | integer | **yes** | Cross-reference ID from source DB (unique) | `100` |
+| `sequence_sha256` | string | **yes** | 64-char hex SHA-256 hash of the raw nucleotide sequence (unique) | `a1b2c3d4e5f6...` |
+| `accession` | string | no | Contig accession | `MGYC000000001` |
+| `source_contig_id` | integer | no | Cross-reference ID from source DB | `100` |
 | `length` | integer | no | Contig length in bp (default 0) | `154000` |
 | `taxonomy_path` | string | no | ltree dot-path for this contig's taxonomy | `Bacteria.Actinomycetota.Actinomycetia` |
 
-**Uniqueness:** `accession` (indexed), `source_contig_id` (unique).  
-**FK resolution key:** `accession` is used in `bgcs.tsv` as `contig_accession`.
+**Uniqueness:** `sequence_sha256` (unique).  
+**FK resolution key:** `sequence_sha256` is used in `bgcs.tsv` as `contig_sha256` and in `contig_sequences.tsv` as `contig_sha256`.
 
 ---
 
@@ -188,7 +194,7 @@ Compressed nucleotide sequences for contigs. Sequences are zlib-compressed then 
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `contig_accession` | string | **yes** | Parent contig (must exist in `contigs.tsv`) | `MGYC000000001` |
+| `contig_sha256` | string | **yes** | Parent contig (must match `sequence_sha256` in `contigs.tsv`) | `a1b2c3d4e5f6...` |
 | `sequence_base64` | string | **yes** | Base64-encoded zlib-compressed nucleotide sequence | `eJxLSS0u...` |
 
 **Uniqueness:** One sequence per contig (primary key = contig FK).  
@@ -223,15 +229,11 @@ One row per BGC prediction. Each BGC belongs to a contig and was detected by a s
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `contig_accession` | string | **yes** | Parent contig (must exist in `contigs.tsv`) | `MGYC000000001` |
+| `contig_sha256` | string | **yes** | Parent contig (must match `sequence_sha256` in `contigs.tsv`) | `a1b2c3d4e5f6...` |
 | `detector_name` | string | **yes** | Detector label (must exist in `detectors.tsv`) | `antiSMASH v7.1` |
-| `source_bgc_id` | integer | **yes** | Cross-reference ID from source DB (unique) | `5001` |
 | `start_position` | integer | **yes** | Start coordinate on contig (bp) | `10000` |
 | `end_position` | integer | **yes** | End coordinate on contig (bp) | `45000` |
 | `classification_path` | string | no | ltree dot-path for BGC class hierarchy | `Polyketide.Macrolide.14_membered` |
-| `classification_l1` | string | no | Top-level class | `Polyketide` |
-| `classification_l2` | string | no | Second-level class | `Macrolide` |
-| `classification_l3` | string | no | Third-level class | `14_membered` |
 | `novelty_score` | float | no | Novelty score (default 0.0) | `0.85` |
 | `domain_novelty` | float | no | Domain-level novelty (default 0.0) | `0.72` |
 | `size_kb` | float | no | BGC size in kilobases (default 0.0) | `35.0` |
@@ -243,8 +245,8 @@ One row per BGC prediction. Each BGC belongs to a contig and was detected by a s
 | `umap_x` | float | no | UMAP x coordinate (default 0.0) | `-3.45` |
 | `umap_y` | float | no | UMAP y coordinate (default 0.0) | `7.82` |
 
-**Uniqueness:** `source_bgc_id` (unique). Conflicts are silently ignored (`ignore_conflicts=True`).  
-**FK resolution key:** `source_bgc_id` is used in all downstream files.
+**Uniqueness:** `(contig, start_position, end_position, detector)` composite. Conflicts are silently ignored (`ignore_conflicts=True`).  
+**FK resolution key:** The composite `(contig_sha256, start_position, end_position, detector_name)` is used in all downstream files to identify a BGC.
 
 **Auto-computed by loader:**
 - `bgc_accession` — structured accession: `MGYB{region_id:08}.{tool_code}.{detector_id}.{bgc_number:02}`  
@@ -261,7 +263,10 @@ Coding sequences within BGC regions.
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `source_bgc_id` | integer | **yes** | Parent BGC (must exist in `bgcs.tsv`) | `5001` |
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position (identifies parent BGC) | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position (identifies parent BGC) | `45000` |
+| `detector_name` | string | **yes** | Detector name (identifies parent BGC) | `antiSMASH v7.1` |
 | `protein_id_str` | string | **yes** | Display identifier (MGYP or protein_identifier) | `MGYP000000001` |
 | `start_position` | integer | **yes** | Start on contig (bp) | `10500` |
 | `end_position` | integer | **yes** | End on contig (bp) | `11200` |
@@ -270,7 +275,7 @@ Coding sequences within BGC regions.
 | `gene_caller` | string | no | Tool that called this CDS | `Prodigal` |
 | `cluster_representative` | string | no | Protein cluster representative ID | `MGYP000000042` |
 
-**FK resolution key:** The tuple `(source_bgc_id, protein_id_str)` is used in `domains.tsv` to resolve the CDS.
+**FK resolution key:** The tuple `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` is used in `domains.tsv` and `cds_sequences.tsv` to resolve the CDS.
 
 ---
 
@@ -280,11 +285,14 @@ Compressed amino acid sequences for CDS entries. Same encoding as contig sequenc
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `source_bgc_id` | integer | **yes** | Parent BGC (must exist in `bgcs.tsv`) | `5001` |
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position (identifies parent BGC) | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position (identifies parent BGC) | `45000` |
+| `detector_name` | string | **yes** | Detector name (identifies parent BGC) | `antiSMASH v7.1` |
 | `protein_id_str` | string | **yes** | Protein identifier (must match a CDS in `cds.tsv`) | `MGYP000000001` |
 | `sequence_base64` | string | **yes** | Base64-encoded zlib-compressed amino acid sequence | `eJxLSS0u...` |
 
-**FK resolution:** The tuple `(source_bgc_id, protein_id_str)` resolves to a `DashboardCds` via the CDS lookup built in step 5.  
+**FK resolution:** The tuple `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` resolves to a `DashboardCds` via the CDS lookup built in step 5.  
 **Uniqueness:** One sequence per CDS (primary key = CDS FK).  
 **Conflict handling:** Duplicates silently ignored (`ignore_conflicts=True`).
 
@@ -315,7 +323,10 @@ Protein domain annotations on CDS entries within BGCs.
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `source_bgc_id` | integer | **yes** | Parent BGC (must exist in `bgcs.tsv`) | `5001` |
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position (identifies parent BGC) | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position (identifies parent BGC) | `45000` |
+| `detector_name` | string | **yes** | Detector name (identifies parent BGC) | `antiSMASH v7.1` |
 | `protein_id_str` | string | no | Protein identifier (links to CDS if match found) | `MGYP000000001` |
 | `domain_acc` | string | **yes** | Domain accession | `PF00109` |
 | `domain_name` | string | no | Domain name | `Beta-ketoacyl synthase` |
@@ -337,7 +348,10 @@ BGC embedding vectors (1152-dimensional, half-precision storage).
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `source_bgc_id` | integer | **yes** | Parent BGC (must exist in `bgcs.tsv`) | `5001` |
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position (identifies parent BGC) | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position (identifies parent BGC) | `45000` |
+| `detector_name` | string | **yes** | Detector name (identifies parent BGC) | `antiSMASH v7.1` |
 | `vector_base64` | string | **yes** | Base64-encoded float32 vector (little-endian) | `AAAAAAAAAIA/...` |
 
 **Vector format:** 1152 x float32 = 4608 bytes raw → ~6144 characters base64.
@@ -357,15 +371,14 @@ Characterized natural products linked to BGCs.
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `source_bgc_id` | integer | **yes** | Parent BGC (must exist in `bgcs.tsv`) | `5001` |
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position (identifies parent BGC) | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position (identifies parent BGC) | `45000` |
+| `detector_name` | string | **yes** | Detector name (identifies parent BGC) | `antiSMASH v7.1` |
 | `name` | string | **yes** | Compound name | `erythromycin` |
 | `smiles` | string | no | SMILES string | `CC(O)C1CC(=O)...` |
 | `np_class_path` | string | no | ltree dot-path for NP class hierarchy | `Polyketide.Macrolide.Erythromycin` |
-| `chemical_class_l1` | string | no | Top-level chemical class | `Polyketide` |
-| `chemical_class_l2` | string | no | Second-level class | `Macrolide` |
-| `chemical_class_l3` | string | no | Third-level class | `Erythromycin` |
 | `structure_svg_base64` | string | no | Base64-encoded SVG of structure | `PHN2Zy...` |
-| `producing_organism` | string | no | Producing organism name | `Saccharopolyspora erythraea` |
 | `morgan_fp_base64` | string | no | Base64-encoded Morgan fingerprint (2048-bit) | `AAAB...` |
 
 **Morgan fingerprint encoding:**
@@ -394,7 +407,10 @@ Known chemistry landmarks for UMAP visualization (~200 rows typically).
 | `umap_x` | float | no | UMAP x coordinate (default 0.0) | `-2.5` |
 | `umap_y` | float | no | UMAP y coordinate (default 0.0) | `4.1` |
 | `embedding_base64` | string | no | Base64-encoded float32 vector (1152-dim) | `AAAA...` |
-| `source_bgc_id` | integer | no | Link to a discovered BGC (nullable) | `5001` |
+| `contig_sha256` | string | no | Contig SHA-256 (identifies linked BGC, nullable) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | no | BGC start position (identifies linked BGC, nullable) | `10000` |
+| `bgc_end` | integer | no | BGC end position (identifies linked BGC, nullable) | `45000` |
+| `detector_name` | string | no | Detector name (identifies linked BGC, nullable) | `antiSMASH v7.1` |
 
 **Uniqueness:** `accession` must be unique.
 
@@ -409,7 +425,10 @@ Gene Cluster Families.
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
 | `family_id` | string | **yes** | Family identifier (unique) | `GCF_000001` |
-| `representative_source_bgc_id` | integer | no | Source BGC ID of representative member | `5001` |
+| `contig_sha256` | string | no | Contig SHA-256 (identifies representative BGC, nullable) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | no | BGC start position (identifies representative BGC, nullable) | `10000` |
+| `bgc_end` | integer | no | BGC end position (identifies representative BGC, nullable) | `45000` |
+| `detector_name` | string | no | Detector name (identifies representative BGC, nullable) | `antiSMASH v7.1` |
 | `member_count` | integer | no | Number of BGCs in family (default 0) | `15` |
 | `known_chemistry_annotation` | string | no | Known chemistry label | `erythromycin-like` |
 | `mibig_accession` | string | no | Associated MIBiG accession | `BGC0000001` |
@@ -468,14 +487,14 @@ These fields are populated automatically after all TSV files are loaded. Your pi
 | Field | Computation |
 |-------|-------------|
 | `bgc_count` | `COUNT(bgcs)` for this assembly |
-| `l1_class_count` | `COUNT(DISTINCT bgcs.classification_l1)` |
+| `l1_class_count` | `COUNT(DISTINCT first_segment(bgcs.classification_path))` — extracted from the first segment of each BGC's `classification_path` |
 | `bgc_novelty_score` | `AVG(bgcs.novelty_score)` |
 
 ### Catalog Tables (rebuilt from scratch)
 
 | Table | Source |
 |-------|--------|
-| `DashboardBgcClass` | Distinct `classification_l1` values + count of BGCs per class |
+| `DashboardBgcClass` | Distinct first segments of `classification_path` + count of BGCs per class |
 | `DashboardDomain` | Distinct `(domain_acc, domain_name, ref_db)` from `BgcDomain` + count of distinct BGCs per domain |
 
 ---
@@ -487,31 +506,31 @@ These fields are populated automatically after all TSV files are loaded. Your pi
 | File | Unique Column(s) |
 |------|-------------------|
 | `detectors.tsv` | `name`; also `(tool, version)` |
-| `assemblies.tsv` | `assembly_accession`; `source_assembly_id` |
-| `contigs.tsv` | `source_contig_id` |
-| `contig_sequences.tsv` | `contig_accession` (PK = contig FK) |
-| `bgcs.tsv` | `source_bgc_id` |
-| `cds_sequences.tsv` | `(source_bgc_id, protein_id_str)` (PK = CDS FK) |
+| `assemblies.tsv` | `assembly_accession` |
+| `contigs.tsv` | `sequence_sha256` |
+| `contig_sequences.tsv` | `contig_sha256` (PK = contig FK) |
+| `bgcs.tsv` | `(contig, start_position, end_position, detector)` |
+| `cds_sequences.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` (PK = CDS FK) |
 | `domains.tsv` | `(bgc, domain_acc, cds, start_position, end_position)` |
 | `mibig_references.tsv` | `accession` |
 | `gcf.tsv` | `family_id` |
 
 ### Foreign Key Resolution
 
-| File | Column | Resolves Via | Target |
-|------|--------|--------------|--------|
+| File | Column(s) | Resolves Via | Target |
+|------|-----------|--------------|--------|
 | `contigs.tsv` | `assembly_accession` | in-memory lookup | `DashboardAssembly` |
-| `contig_sequences.tsv` | `contig_accession` | in-memory lookup | `DashboardContig` |
-| `bgcs.tsv` | `contig_accession` | in-memory lookup | `DashboardContig` |
+| `contig_sequences.tsv` | `contig_sha256` | in-memory lookup | `DashboardContig` |
+| `bgcs.tsv` | `contig_sha256` | in-memory lookup | `DashboardContig` |
 | `bgcs.tsv` | `detector_name` | in-memory lookup | `DashboardDetector` |
-| `cds.tsv` | `source_bgc_id` | in-memory lookup | `DashboardBgc` |
-| `cds_sequences.tsv` | `(source_bgc_id, protein_id_str)` | in-memory lookup | `DashboardCds` |
-| `domains.tsv` | `source_bgc_id` | in-memory lookup | `DashboardBgc` |
-| `domains.tsv` | `(source_bgc_id, protein_id_str)` | in-memory lookup | `DashboardCds` (nullable) |
-| `embeddings_bgc.tsv` | `source_bgc_id` | in-memory lookup | `DashboardBgc` |
-| `natural_products.tsv` | `source_bgc_id` | in-memory lookup | `DashboardBgc` |
-| `mibig_references.tsv` | `source_bgc_id` | in-memory lookup | `DashboardBgc` (nullable) |
-| `gcf.tsv` | `representative_source_bgc_id` | in-memory lookup | `DashboardBgc` (nullable) |
+| `cds.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
+| `cds_sequences.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` | in-memory lookup | `DashboardCds` |
+| `domains.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
+| `domains.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` | in-memory lookup | `DashboardCds` (nullable) |
+| `embeddings_bgc.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
+| `natural_products.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
+| `mibig_references.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` (nullable) |
+| `gcf.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` (nullable) |
 
 ### Conflict Handling
 

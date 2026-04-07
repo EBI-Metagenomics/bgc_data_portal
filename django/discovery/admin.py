@@ -17,7 +17,7 @@ from .models import (
 @admin.register(DashboardAssembly)
 class DashboardAssemblyAdmin(admin.ModelAdmin):
     list_display = (
-        "assembly_accession", "organism_name", "dominant_taxonomy_label",
+        "assembly_accession", "organism_name",
         "bgc_count", "bgc_novelty_score", "is_type_strain",
     )
     search_fields = ("assembly_accession", "organism_name")
@@ -27,11 +27,11 @@ class DashboardAssemblyAdmin(admin.ModelAdmin):
 @admin.register(DashboardBgc)
 class DashboardBgcAdmin(admin.ModelAdmin):
     list_display = (
-        "bgc_accession", "classification_l1", "novelty_score",
+        "bgc_accession", "classification_path", "novelty_score",
         "domain_novelty", "size_kb", "is_partial",
     )
     search_fields = ("bgc_accession",)
-    list_filter = ("classification_l1", "is_partial")
+    list_filter = ("is_partial",)
 
 
 @admin.register(DashboardGCF)
@@ -42,9 +42,8 @@ class DashboardGCFAdmin(admin.ModelAdmin):
 
 @admin.register(DashboardNaturalProduct)
 class DashboardNaturalProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "chemical_class_l1", "chemical_class_l2", "producing_organism")
+    list_display = ("name", "np_class_path")
     search_fields = ("name", "smiles")
-    list_filter = ("chemical_class_l1",)
 
 
 @admin.register(DashboardMibigReference)

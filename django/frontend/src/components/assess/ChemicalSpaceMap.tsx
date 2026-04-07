@@ -55,13 +55,13 @@ export function ChemicalSpaceMap({
         symbol: "star",
         size: 14,
         color: points.map(
-          (p) => BGC_CLASS_COLORS[p.classification_l1] || BGC_CLASS_COLORS.Other
+          (p) => BGC_CLASS_COLORS[p.classification_path?.split('.')[0]] || BGC_CLASS_COLORS.Other
         ),
         line: { color: "black", width: 1 },
       },
       text: points.map(
         (p) =>
-          `${p.accession}<br>${p.classification_l1}<br>MIBiG dist: ${p.nearest_mibig_distance.toFixed(3)}${p.is_sparse ? "<br>(sparse region)" : ""}`
+          `${p.accession}<br>${p.classification_path}<br>MIBiG dist: ${p.nearest_mibig_distance.toFixed(3)}${p.is_sparse ? "<br>(sparse region)" : ""}`
       ),
       hoverinfo: "text",
       name: "Assembly BGCs",

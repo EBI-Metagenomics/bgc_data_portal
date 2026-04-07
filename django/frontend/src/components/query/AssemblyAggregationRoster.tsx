@@ -122,7 +122,7 @@ export function AssemblyAggregationRoster() {
                     </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {assembly.dominant_taxonomy_label ?? "-"}
+                    {assembly.organism_name ?? "-"}
                   </TableCell>
                   <TableCell className="text-center font-mono text-xs">
                     {assembly.hit_count}

@@ -27,7 +27,7 @@ const SORT_OPTIONS = [
   { value: "novelty_score", label: "Novelty" },
   { value: "size_kb", label: "Size (kb)" },
   { value: "domain_novelty", label: "Domain Novelty" },
-  { value: "classification_l1", label: "BGC Class" },
+  { value: "classification_path", label: "BGC Class" },
   { value: "accession", label: "Accession" },
 ];
 
@@ -136,13 +136,7 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
                     </div>
                   </TableCell>
                   <TableCell className="text-xs">
-                    {bgc.classification_l1}
-                    {bgc.classification_l2 && (
-                      <span className="text-muted-foreground">
-                        {" / "}
-                        {bgc.classification_l2}
-                      </span>
-                    )}
+                    {bgc.classification_path || ''}
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
                     {bgc.size_kb.toFixed(1)}
