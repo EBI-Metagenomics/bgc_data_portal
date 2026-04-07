@@ -9,8 +9,16 @@ interface QueryState {
   resultBgcData: QueryResultBgc[];
   smilesQuery: string;
   similarityThreshold: number;
+  sequenceQuery: string;
+  sequenceThreshold: number;
   domainQueryTriggered: boolean;
   chemicalQueryTriggered: boolean;
+  sequenceQueryTriggered: boolean;
+
+  // Per-query result storage for intersection
+  domainResultData: QueryResultBgc[];
+  chemicalResultData: QueryResultBgc[];
+  sequenceResultData: QueryResultBgc[];
 
   addDomainCondition: (condition: DomainCondition) => void;
   removeDomainCondition: (acc: string) => void;
@@ -21,12 +29,43 @@ interface QueryState {
   setResultBgcData: (data: QueryResultBgc[]) => void;
   setSmilesQuery: (v: string) => void;
   setSimilarityThreshold: (v: number) => void;
+  setSequenceQuery: (v: string) => void;
+  setSequenceThreshold: (v: number) => void;
   setDomainQueryTriggered: (v: boolean) => void;
   setChemicalQueryTriggered: (v: boolean) => void;
+  setSequenceQueryTriggered: (v: boolean) => void;
+  setDomainResultData: (data: QueryResultBgc[]) => void;
+  setChemicalResultData: (data: QueryResultBgc[]) => void;
+  setSequenceResultData: (data: QueryResultBgc[]) => void;
+  computeIntersection: () => void;
   clearQuery: () => void;
 }
 
-export const useQueryStore = create<QueryState>((set) => ({
+function intersectResults(
+  datasets: QueryResultBgc[][],
+): { ids: number[]; data: QueryResultBgc[] } {
+  if (datasets.length === 0) return { ids: [], data: [] };
+  if (datasets.length === 1) {
+    return { ids: datasets[0].map((r) => r.id), data: datasets[0] };
+  }
+
+  // Find IDs present in ALL datasets
+  const idSets = datasets.map((d) => new Set(d.map((r) => r.id)));
+  const commonIds = [...idSets[0]].filter((id) =>
+    idSets.every((s) => s.has(id))
+  );
+
+  // Use the last dataset's entries for similarity_score (sequence > chemical > domain priority)
+  const lastDataset = datasets[datasets.length - 1];
+  const lastMap = new Map(lastDataset.map((r) => [r.id, r]));
+  const data = commonIds
+    .map((id) => lastMap.get(id))
+    .filter((r): r is QueryResultBgc => r !== undefined);
+
+  return { ids: commonIds, data };
+}
+
+export const useQueryStore = create<QueryState>((set, get) => ({
   domainConditions: [],
   logic: "and",
   similarBgcSourceId: null,
@@ -34,8 +73,14 @@ export const useQueryStore = create<QueryState>((set) => ({
   resultBgcData: [],
   smilesQuery: "",
   similarityThreshold: 0.5,
+  sequenceQuery: "",
+  sequenceThreshold: 0.7,
   domainQueryTriggered: false,
   chemicalQueryTriggered: false,
+  sequenceQueryTriggered: false,
+  domainResultData: [],
+  chemicalResultData: [],
+  sequenceResultData: [],
 
   addDomainCondition: (condition) =>
     set((s) => {
@@ -58,8 +103,28 @@ export const useQueryStore = create<QueryState>((set) => ({
   setResultBgcData: (data) => set({ resultBgcData: data }),
   setSmilesQuery: (v) => set({ smilesQuery: v }),
   setSimilarityThreshold: (v) => set({ similarityThreshold: v }),
+  setSequenceQuery: (v) => set({ sequenceQuery: v }),
+  setSequenceThreshold: (v) => set({ sequenceThreshold: v }),
   setDomainQueryTriggered: (v) => set({ domainQueryTriggered: v }),
   setChemicalQueryTriggered: (v) => set({ chemicalQueryTriggered: v }),
+  setSequenceQueryTriggered: (v) => set({ sequenceQueryTriggered: v }),
+  setDomainResultData: (data) => set({ domainResultData: data }),
+  setChemicalResultData: (data) => set({ chemicalResultData: data }),
+  setSequenceResultData: (data) => set({ sequenceResultData: data }),
+  computeIntersection: () => {
+    const s = get();
+    const activeDatasets: QueryResultBgc[][] = [];
+    // Collect datasets in priority order (domain, chemical, sequence)
+    // Sequence data comes last so its similarity_score wins in intersection
+    if (s.domainResultData.length > 0) activeDatasets.push(s.domainResultData);
+    if (s.chemicalResultData.length > 0)
+      activeDatasets.push(s.chemicalResultData);
+    if (s.sequenceResultData.length > 0)
+      activeDatasets.push(s.sequenceResultData);
+
+    const { ids, data } = intersectResults(activeDatasets);
+    set({ resultBgcIds: ids, resultBgcData: data });
+  },
   clearQuery: () =>
     set({
       domainConditions: [],
@@ -69,7 +134,13 @@ export const useQueryStore = create<QueryState>((set) => ({
       resultBgcData: [],
       smilesQuery: "",
       similarityThreshold: 0.5,
+      sequenceQuery: "",
+      sequenceThreshold: 0.7,
       domainQueryTriggered: false,
       chemicalQueryTriggered: false,
+      sequenceQueryTriggered: false,
+      domainResultData: [],
+      chemicalResultData: [],
+      sequenceResultData: [],
     }),
 }));

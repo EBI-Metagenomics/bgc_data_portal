@@ -1,36 +1,43 @@
 import { useQuery } from "@tanstack/react-query";
-import { postChemicalQuery } from "@/api/queries";
+import { postSequenceQuery } from "@/api/queries";
 import { useQueryStore } from "@/stores/query-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useState, useEffect } from "react";
 
-export function useChemicalQuery() {
+export function useSequenceQuery() {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState("similarity_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const smilesQuery = useQueryStore((s) => s.smilesQuery);
-  const similarityThreshold = useQueryStore((s) => s.similarityThreshold);
-  const setChemicalResultData = useQueryStore((s) => s.setChemicalResultData);
+  const sequenceQuery = useQueryStore((s) => s.sequenceQuery);
+  const sequenceThreshold = useQueryStore((s) => s.sequenceThreshold);
+  const setSequenceResultData = useQueryStore((s) => s.setSequenceResultData);
   const computeIntersection = useQueryStore((s) => s.computeIntersection);
-  const chemicalQueryTriggered = useQueryStore((s) => s.chemicalQueryTriggered);
-  const setChemicalQueryTriggered = useQueryStore((s) => s.setChemicalQueryTriggered);
+  const sequenceQueryTriggered = useQueryStore(
+    (s) => s.sequenceQueryTriggered
+  );
+  const setSequenceQueryTriggered = useQueryStore(
+    (s) => s.setSequenceQueryTriggered
+  );
   const filters = useFilterStore();
 
-  const hasQuery = smilesQuery.trim().length > 0;
+  const hasQuery = sequenceQuery.trim().length > 0;
 
   const query = useQuery({
     queryKey: [
-      "chemical-query",
-      smilesQuery,
-      similarityThreshold,
+      "sequence-query",
+      sequenceQuery,
+      sequenceThreshold,
       filters,
       sortBy,
       order,
       page,
     ],
     queryFn: () =>
-      postChemicalQuery(
-        { smiles: smilesQuery, similarity_threshold: similarityThreshold },
+      postSequenceQuery(
+        {
+          sequence: sequenceQuery,
+          similarity_threshold: sequenceThreshold,
+        },
         {
           page,
           page_size: 50,
@@ -46,16 +53,16 @@ export function useChemicalQuery() {
           bgc_accession: filters.bgcAccession || undefined,
         }
       ),
-    enabled: chemicalQueryTriggered && hasQuery,
+    enabled: sequenceQueryTriggered && hasQuery,
   });
 
   // Store results and compute intersection
   useEffect(() => {
     if (query.data) {
-      setChemicalResultData(query.data.items);
+      setSequenceResultData(query.data.items);
       computeIntersection();
     }
-  }, [query.data, setChemicalResultData, computeIntersection]);
+  }, [query.data, setSequenceResultData, computeIntersection]);
 
   return {
     ...query,
@@ -65,7 +72,7 @@ export function useChemicalQuery() {
     setSortBy,
     order,
     setOrder,
-    runQuery: () => setChemicalQueryTriggered(true),
+    runQuery: () => setSequenceQueryTriggered(true),
     hasQuery,
   };
 }

@@ -1,12 +1,14 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { TypeStrainToggle } from "./TypeStrainToggle";
 import { TaxonomyFilter } from "./TaxonomyFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
 import { NpClassFilter } from "./NpClassFilter";
 import { AssemblyTypeFilter } from "./AssemblyTypeFilter";
 import { DomainQueryBuilder } from "./DomainQueryBuilder";
+import { SequenceSearch } from "./SequenceSearch";
 import { ChemicalStructureSearch } from "./ChemicalStructureSearch";
 import { useFilterStore } from "@/stores/filter-store";
 import { useModeStore } from "@/stores/mode-store";
@@ -62,11 +64,8 @@ export function FilterPanel() {
             <TabsTrigger value="filters" className="flex-1 text-xs">
               Filters
             </TabsTrigger>
-            <TabsTrigger value="domains" className="flex-1 text-xs">
-              Domain Query
-            </TabsTrigger>
-            <TabsTrigger value="chemical" className="flex-1 text-xs">
-              Chemical Search
+            <TabsTrigger value="query" className="flex-1 text-xs">
+              Query
             </TabsTrigger>
           </TabsList>
           <TabsContent value="filters" className="space-y-4">
@@ -101,10 +100,11 @@ export function FilterPanel() {
               />
             </div>
           </TabsContent>
-          <TabsContent value="domains">
+          <TabsContent value="query" className="space-y-6">
             <DomainQueryBuilder />
-          </TabsContent>
-          <TabsContent value="chemical">
+            <Separator />
+            <SequenceSearch />
+            <Separator />
             <ChemicalStructureSearch />
           </TabsContent>
         </Tabs>

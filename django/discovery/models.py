@@ -467,11 +467,19 @@ class DashboardCds(models.Model):
     protein_length = models.IntegerField(default=0)
     gene_caller = models.CharField(max_length=100, blank=True, default="")
     cluster_representative = models.CharField(max_length=64, blank=True, default="")
+    protein_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="SHA-256 hash of the amino acid sequence (links to ProteinEmbedding)",
+    )
 
     class Meta:
         db_table = "discovery_cds"
         indexes = [
             models.Index(fields=["bgc", "start_position"], name="idx_dcds_bgc_start"),
+            models.Index(fields=["protein_sha256"], name="idx_dcds_prot_sha256"),
         ]
 
     def __str__(self):

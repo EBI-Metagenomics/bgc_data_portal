@@ -80,22 +80,15 @@ class Migration(migrations.Migration):
             name="DashboardMibigReference",
         ),
 
-        # ── Sync state: fields already in DB but not in migration state ─
-        # url was added to assembly and bgc_domain directly in DB
-        # (via seed_discovery_data or raw SQL) but never through a migration.
-        migrations.SeparateDatabaseAndState(
-            state_operations=[
-                migrations.AddField(
-                    model_name="dashboardassembly",
-                    name="url",
-                    field=models.URLField(blank=True, default="", max_length=512),
-                ),
-                migrations.AddField(
-                    model_name="bgcdomain",
-                    name="url",
-                    field=models.URLField(blank=True, default="", max_length=512),
-                ),
-            ],
-            database_operations=[],  # columns already exist in DB
+        # ── Add url fields to assembly and bgc_domain ─────────────────
+        migrations.AddField(
+            model_name="dashboardassembly",
+            name="url",
+            field=models.URLField(blank=True, default="", max_length=512),
+        ),
+        migrations.AddField(
+            model_name="bgcdomain",
+            name="url",
+            field=models.URLField(blank=True, default="", max_length=512),
         ),
     ]

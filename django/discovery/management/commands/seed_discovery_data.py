@@ -453,6 +453,7 @@ class Command(BaseCommand):
                     protein_length=aa_len,
                     gene_caller=random.choice(_GENE_CALLERS),
                     cluster_representative=cluster_rep,
+                    protein_sha256=_sha256(aa_seq),
                 )
                 cds._aa_seq = aa_seq  # stash for CdsSequence creation
                 all_cds.append(cds)
@@ -652,6 +653,7 @@ class Command(BaseCommand):
                     protein_length=aa_len,
                     gene_caller="Prodigal",
                     cluster_representative="",
+                    protein_sha256=_sha256(aa_seq),
                 )
                 cds._aa_seq = aa_seq
                 mibig_cds_list.append(cds)

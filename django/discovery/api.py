@@ -52,6 +52,7 @@ from discovery.api_schemas import (
     BgcScatterPoint,
     BgcStatsResponse,
     ChemicalQueryRequest,
+    SequenceQueryRequest,
     CoreDomain,
     DetectorOut,
     AssemblyStatsResponse,
@@ -971,6 +972,116 @@ def chemical_query(
     except Exception as e:
         logger.error("Chemical similarity search failed: %s", e)
         raise HttpError(500, "Chemical similarity search failed")
+
+    if not bgc_similarities:
+        return PaginatedQueryResultResponse(
+            items=[],
+            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+        )
+
+    qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
+
+    # Sidebar filters
+    if type_strain_only:
+        qs = qs.filter(assembly__is_type_strain=True)
+    if taxonomy_path:
+        from discovery.ltree import filter_contigs_by_taxonomy
+        qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
+    if search:
+        qs = qs.filter(
+            Q(assembly__organism_name__icontains=search)
+            | Q(assembly__assembly_accession__icontains=search)
+        )
+    if bgc_class:
+        qs = qs.filter(
+            Q(classification_path__istartswith=bgc_class + ".")
+            | Q(classification_path__iexact=bgc_class)
+        )
+    if biome_lineage:
+        qs = qs.filter(assembly__biome_path__icontains=biome_lineage)
+    if assembly_accession:
+        qs = qs.filter(assembly__assembly_accession__icontains=assembly_accession)
+    if bgc_accession:
+        qs = qs.filter(bgc_accession__icontains=bgc_accession.strip())
+
+    results = []
+    for bgc in qs:
+        similarity = round(bgc_similarities.get(bgc.id, 0.0), 4)
+        results.append((bgc, similarity))
+
+    # Sort
+    sort_key_map = {
+        "similarity_score": lambda x: x[1],
+        "novelty_score": lambda x: x[0].novelty_score,
+        "domain_novelty": lambda x: x[0].domain_novelty,
+        "size_kb": lambda x: x[0].size_kb,
+    }
+    key_fn = sort_key_map.get(sort_by, sort_key_map["similarity_score"])
+    results.sort(key=key_fn, reverse=(order == "desc"))
+
+    total_count = len(results)
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    page_results = results[offset: offset + ps]
+
+    items = [
+        QueryResultBgc(
+            id=bgc.id,
+            accession=bgc.bgc_accession,
+            classification_path=bgc.classification_path,
+            size_kb=bgc.size_kb,
+            novelty_score=bgc.novelty_score,
+            domain_novelty=bgc.domain_novelty,
+            is_partial=bgc.is_partial,
+            similarity_score=similarity,
+            assembly_id=bgc.assembly_id,
+            assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
+            organism_name=bgc.assembly.organism_name if bgc.assembly else None,
+            is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
+        )
+        for bgc, similarity in page_results
+    ]
+
+    return PaginatedQueryResultResponse(
+        items=items,
+        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+    )
+
+
+@discovery_router.post("/query/sequence/", response=PaginatedQueryResultResponse)
+def sequence_query(
+    request,
+    body: SequenceQueryRequest,
+    page: int = 1,
+    page_size: int = 25,
+    sort_by: str = "similarity_score",
+    order: str = "desc",
+    search: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    type_strain_only: bool = False,
+    bgc_class: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+):
+    # Strip FASTA header if present
+    lines = body.sequence.strip().splitlines()
+    cleaned = "".join(l.strip() for l in lines if not l.startswith(">"))
+    if not cleaned:
+        raise HttpError(400, "Protein sequence is required")
+    if len(cleaned) > 5000:
+        raise HttpError(400, "Sequence exceeds maximum length of 5,000 amino acids")
+
+    from discovery.tasks import sequence_similarity_search
+
+    async_result = sequence_similarity_search.delay(
+        cleaned, body.similarity_threshold
+    )
+    try:
+        raw_result = async_result.get(timeout=180)
+        bgc_similarities: dict[int, float] = {int(k): v for k, v in raw_result.items()}
+    except Exception as e:
+        logger.error("Sequence similarity search failed: %s", e)
+        raise HttpError(500, "Sequence similarity search failed")
 
     if not bgc_similarities:
         return PaginatedQueryResultResponse(

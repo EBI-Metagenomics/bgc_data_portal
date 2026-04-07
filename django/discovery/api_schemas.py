@@ -212,6 +212,11 @@ class ChemicalQueryRequest(Schema):
     similarity_threshold: float = 0.5
 
 
+class SequenceQueryRequest(Schema):
+    sequence: str
+    similarity_threshold: float = 0.7
+
+
 class DomainCondition(Schema):
     acc: str
     required: bool = True

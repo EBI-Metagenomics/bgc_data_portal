@@ -270,8 +270,11 @@ Coding sequences within BGC regions.
 | `protein_length` | integer | no | Amino acid length (default 0) | `233` |
 | `gene_caller` | string | no | Tool that called this CDS | `Prodigal` |
 | `cluster_representative` | string | no | Protein cluster representative ID | `MGYP000000042` |
+| `protein_sha256` | string | no | SHA-256 hash of the amino acid sequence (links to `ProteinEmbedding`) | `a1b2c3d4e5f6...` |
 
 **FK resolution key:** The tuple `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` is used in `domains.tsv` and `cds_sequences.tsv` to resolve the CDS.
+
+**Protein embedding join:** When `protein_sha256` is provided, it enables the join path `ProteinEmbedding.protein_sha256` → `DashboardCds.protein_sha256` → `DashboardBgc` (via bgc FK). This is used by the sequence similarity search to find BGCs containing proteins similar to a user-submitted query sequence.
 
 ---
 
@@ -552,7 +555,7 @@ The following model data is **not** part of the TSV pipeline and requires separa
 
 | Data | Model | Notes |
 |------|-------|-------|
-| Protein embeddings | `ProteinEmbedding` | Separate from BGC embeddings |
+| Protein embeddings | `ProteinEmbedding` | Separate from BGC embeddings. Linked to CDS via `protein_sha256`. ESM-C 600M, layer 29, mean-pooled, 1152-dim, halfvec (float16) storage. HNSW index with `halfvec_cosine_ops` for sequence similarity search. |
 | Precomputed stats | `PrecomputedStats` | Populated by query-time aggregation service |
 | GCF table | `DashboardGCF` | Materialized by `recompute_all_scores` from `gene_cluster_family` field |
 | Assembly percentile ranks | `DashboardAssembly.pctl_*` | Computed by `recompute_all_scores` |

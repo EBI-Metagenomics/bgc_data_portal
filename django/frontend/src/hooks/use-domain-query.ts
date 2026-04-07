@@ -10,8 +10,8 @@ export function useDomainQuery() {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const conditions = useQueryStore((s) => s.domainConditions);
   const logic = useQueryStore((s) => s.logic);
-  const setResultBgcIds = useQueryStore((s) => s.setResultBgcIds);
-  const setResultBgcData = useQueryStore((s) => s.setResultBgcData);
+  const setDomainResultData = useQueryStore((s) => s.setDomainResultData);
+  const computeIntersection = useQueryStore((s) => s.computeIntersection);
   const domainQueryTriggered = useQueryStore((s) => s.domainQueryTriggered);
   const setDomainQueryTriggered = useQueryStore((s) => s.setDomainQueryTriggered);
   const filters = useFilterStore();
@@ -41,13 +41,13 @@ export function useDomainQuery() {
     enabled: domainQueryTriggered,
   });
 
-  // Store result IDs and data for scatter/assembly aggregation
+  // Store results and compute intersection
   useEffect(() => {
     if (query.data) {
-      setResultBgcIds(query.data.items.map((r) => r.id));
-      setResultBgcData(query.data.items);
+      setDomainResultData(query.data.items);
+      computeIntersection();
     }
-  }, [query.data, setResultBgcIds, setResultBgcData]);
+  }, [query.data, setDomainResultData, computeIntersection]);
 
   return {
     ...query,

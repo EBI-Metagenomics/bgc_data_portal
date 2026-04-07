@@ -447,6 +447,7 @@ def load_cds(
                     protein_length=int(row.get("protein_length", 0)),
                     gene_caller=row.get("gene_caller", ""),
                     cluster_representative=row.get("cluster_representative", ""),
+                    protein_sha256=row.get("protein_sha256", ""),
                 )
             )
 
