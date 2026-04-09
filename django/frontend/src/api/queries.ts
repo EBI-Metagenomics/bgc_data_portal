@@ -76,6 +76,7 @@ export interface ChemicalQueryParams {
   biome_lineage?: string;
   assembly_accession?: string;
   bgc_accession?: string;
+  chemont_ids?: string;
 }
 
 export function postChemicalQuery(

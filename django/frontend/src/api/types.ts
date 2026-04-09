@@ -94,6 +94,12 @@ export interface ParentAssemblySummary {
   is_type_strain: boolean;
 }
 
+export interface ChemOntClassSummary {
+  chemont_id: string;
+  name: string;
+  probability: number;
+}
+
 export interface NaturalProductSummary {
   id: number;
   name: string;
@@ -101,6 +107,7 @@ export interface NaturalProductSummary {
   smiles_svg: string;
   structure_thumbnail: string;
   np_class_path: string;
+  chemont_classes: ChemOntClassSummary[];
 }
 
 export interface BgcDetail {
@@ -157,6 +164,13 @@ export interface NpClassLevel {
   name: string;
   count: number;
   children: NpClassLevel[];
+}
+
+export interface ChemOntClassNode {
+  chemont_id: string;
+  name: string;
+  count: number;
+  children: ChemOntClassNode[];
 }
 
 export interface DomainOption {

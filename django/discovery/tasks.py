@@ -148,50 +148,59 @@ def recompute_scores_task(self) -> bool:
 
 @shared_task(name="discovery.tasks.chemical_similarity_search", bind=True, acks_late=True)
 def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -> dict[int, float]:
-    """Compute Tanimoto similarity of a SMILES query against all DashboardNaturalProduct records.
+    """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
+
+    Classifies the query SMILES into ChemOnt terms, then computes
+    IC-based (Resnik / Best Match Average) similarity against each BGC's
+    natural product ChemOnt annotations.
 
     Returns a dict mapping BGC id → max similarity score.
     Runs in the Celery worker where RDKit is available.
     """
-    from rdkit import Chem
-    from rdkit.Chem import DataStructs, rdFingerprintGenerator
+    from collections import defaultdict
 
-    from discovery.models import DashboardNaturalProduct
+    from common_core.chemont.classifier import classify_smiles
+    from common_core.chemont.ontology import get_ontology
+    from common_core.chemont.similarity import best_match_average, normalize_similarity
 
-    query_mol = Chem.MolFromSmiles(smiles.strip())
-    if query_mol is None:
-        log.warning("Invalid SMILES passed to chemical_similarity_search: %s", smiles[:50])
+    from discovery.models import NaturalProductChemOntClass, PrecomputedStats
+
+    ont = get_ontology()
+
+    # Step 1: Classify query SMILES into ChemOnt terms.
+    query_classes = classify_smiles(smiles.strip(), ontology=ont)
+    if not query_classes:
+        log.warning("No ChemOnt matches for SMILES: %s", smiles[:50])
         return {}
+    query_term_ids = [c.chemont_id for c in query_classes]
 
-    mfpgen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
-    query_fp = mfpgen.GetFingerprint(query_mol)
+    # Step 2: Load precomputed IC values.
+    ic_row = PrecomputedStats.objects.filter(key="chemont_ic").first()
+    if not ic_row or not ic_row.data:
+        log.warning("No precomputed ChemOnt IC values — run recompute_all_scores first")
+        return {}
+    ic_values: dict[str, float] = ic_row.data
 
+    # Step 3: Load all NP ChemOnt annotations grouped by BGC.
+    np_chemont = (
+        NaturalProductChemOntClass.objects
+        .filter(natural_product__bgc__isnull=False)
+        .values_list("natural_product__bgc_id", "chemont_id")
+    )
+    bgc_terms: dict[int, set[str]] = defaultdict(set)
+    for bgc_id, cid in np_chemont:
+        bgc_terms[bgc_id].add(cid)
+
+    # Step 4: Compute similarity per BGC.
     bgc_similarities: dict[int, float] = {}
-    for np_obj in DashboardNaturalProduct.objects.filter(bgc__isnull=False).only(
-        "bgc_id", "smiles", "morgan_fp"
-    ):
-        if not np_obj.smiles:
-            continue
-        try:
-            fp = None
-            if np_obj.morgan_fp:
-                raw = bytes(np_obj.morgan_fp) if isinstance(np_obj.morgan_fp, memoryview) else np_obj.morgan_fp
-                fp = DataStructs.CreateFromBitString(raw.decode("ascii"))
-            else:
-                mol = Chem.MolFromSmiles(np_obj.smiles)
-                if mol is None:
-                    continue
-                fp = mfpgen.GetFingerprint(mol)
-            similarity = DataStructs.TanimotoSimilarity(query_fp, fp)
-            if similarity >= similarity_threshold:
-                existing = bgc_similarities.get(np_obj.bgc_id, 0.0)
-                bgc_similarities[np_obj.bgc_id] = max(existing, similarity)
-        except Exception as e:
-            log.warning("Error processing NP id=%s: %s", np_obj.pk, e)
-            continue
+    for bgc_id, np_terms in bgc_terms.items():
+        raw = best_match_average(query_term_ids, list(np_terms), ic_values, ont)
+        score = normalize_similarity(raw, ic_values)
+        if score >= similarity_threshold:
+            bgc_similarities[bgc_id] = round(score, 4)
 
     log.info(
-        "Chemical query: SMILES=%s threshold=%.2f matches=%d",
+        "Chemical query (ChemOnt): SMILES=%s threshold=%.2f matches=%d",
         smiles[:50], similarity_threshold, len(bgc_similarities),
     )
     return bgc_similarities

@@ -15,6 +15,7 @@ from discovery.models import (
     DashboardBgc,
     DashboardAssembly,
     DashboardNaturalProduct,
+    NaturalProductChemOntClass,
     PrecomputedStats,
 )
 
@@ -147,8 +148,11 @@ def compute_bgc_stats(bgc_qs) -> dict:
         partial=Count("id", filter=Q(is_partial=True)),
     )
 
-    # NP chemical class sunburst
+    # NP chemical class sunburst (legacy)
     np_class_sunburst = _build_np_class_sunburst(bgc_qs)
+
+    # ChemOnt class sunburst
+    chemont_sunburst = _build_chemont_sunburst(bgc_qs)
 
     # BGC class distribution (from first segment of classification_path)
     from django.db.models.expressions import RawSQL
@@ -171,6 +175,7 @@ def compute_bgc_stats(bgc_qs) -> dict:
         "complete_count": completeness_agg["complete"],
         "partial_count": completeness_agg["partial"],
         "np_class_sunburst": np_class_sunburst,
+        "chemont_sunburst": chemont_sunburst,
         "bgc_class_distribution": bgc_class_distribution,
         "total_bgcs": total_bgcs,
     }
@@ -241,5 +246,60 @@ def _build_np_class_sunburst(bgc_qs) -> list[dict]:
                 if l3_id not in nodes:
                     nodes[l3_id] = {"id": l3_id, "label": l3, "parent": l2_id, "count": 0}
                 nodes[l3_id]["count"] += 1
+
+    return list(nodes.values())
+
+
+def _build_chemont_sunburst(bgc_qs) -> list[dict]:
+    """Build a flat sunburst list for ChemOnt chemical class hierarchy."""
+    rows = (
+        NaturalProductChemOntClass.objects.filter(
+            natural_product__bgc__in=bgc_qs
+        )
+        .values("chemont_id", "chemont_name")
+        .annotate(cnt=Count("natural_product", distinct=True))
+    )
+
+    if not rows:
+        return []
+
+    try:
+        from common_core.chemont.ontology import get_ontology
+
+        ont = get_ontology()
+    except (FileNotFoundError, ImportError):
+        return [
+            {"id": r["chemont_id"], "label": r["chemont_name"], "parent": "", "count": r["cnt"]}
+            for r in rows
+        ]
+
+    direct_counts: dict[str, int] = {}
+    name_map: dict[str, str] = {}
+    for r in rows:
+        direct_counts[r["chemont_id"]] = r["cnt"]
+        name_map[r["chemont_id"]] = r["chemont_name"]
+
+    relevant_ids: set[str] = set(direct_counts.keys())
+    for cid in list(direct_counts.keys()):
+        for ancestor in ont.get_ancestors(cid):
+            relevant_ids.add(ancestor.id)
+            if ancestor.id not in name_map:
+                name_map[ancestor.id] = ancestor.name
+
+    nodes: dict[str, dict] = {}
+    for tid in relevant_ids:
+        term = ont.get_term(tid)
+        parent = ""
+        if term and term.parent_ids:
+            for pid in term.parent_ids:
+                if pid in relevant_ids:
+                    parent = pid
+                    break
+        nodes[tid] = {
+            "id": tid,
+            "label": name_map.get(tid, tid),
+            "parent": parent,
+            "count": direct_counts.get(tid, 0),
+        }
 
     return list(nodes.values())

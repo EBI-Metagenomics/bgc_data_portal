@@ -209,11 +209,27 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                   )}
                   <div className="text-xs">
                     <div className="font-medium">{np.name}</div>
-                    <div className="text-muted-foreground">
-                      {np.np_class_path
-                        ? np.np_class_path.replace(/\./g, " > ")
-                        : ""}
-                    </div>
+                    {np.chemont_classes && np.chemont_classes.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {np.chemont_classes.map((cc) => (
+                          <span
+                            key={cc.chemont_id}
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px]"
+                            title={cc.chemont_id}
+                          >
+                            {cc.name}
+                            <span className="text-muted-foreground">
+                              {(cc.probability * 100).toFixed(0)}%
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {np.np_class_path && !np.chemont_classes?.length && (
+                      <div className="text-muted-foreground">
+                        {np.np_class_path.replace(/\./g, " > ")}
+                      </div>
+                    )}
                     <div className="mt-1 font-mono text-[10px] text-muted-foreground break-all">
                       {np.smiles}
                     </div>

@@ -125,6 +125,12 @@ class ParentAssemblySummary(Schema):
     is_type_strain: bool = False
 
 
+class ChemOntClassSummary(Schema):
+    chemont_id: str
+    name: str
+    probability: float
+
+
 class NaturalProductSummary(Schema):
     id: int
     name: str
@@ -132,6 +138,7 @@ class NaturalProductSummary(Schema):
     smiles_svg: str = ""
     structure_thumbnail: str = ""
     np_class_path: str = ""
+    chemont_classes: list[ChemOntClassSummary] = []
 
 
 class BgcDetail(Schema):
@@ -190,6 +197,13 @@ class NpClassLevel(Schema):
     name: str
     count: int
     children: list["NpClassLevel"] = []
+
+
+class ChemOntClassNode(Schema):
+    chemont_id: str
+    name: str
+    count: int
+    children: list["ChemOntClassNode"] = []
 
 
 class DomainOption(Schema):
@@ -305,6 +319,7 @@ class BgcStatsResponse(Schema):
     complete_count: int = 0
     partial_count: int = 0
     np_class_sunburst: list[SunburstNode] = []
+    chemont_sunburst: list[SunburstNode] = []
     bgc_class_distribution: list[BgcClassCount] = []
     total_bgcs: int = 0
 

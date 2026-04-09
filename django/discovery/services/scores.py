@@ -27,6 +27,9 @@ from discovery.models import (
     DashboardBgcClass,
     DashboardDomain,
     DashboardGCF,
+    DashboardNaturalProduct,
+    NaturalProductChemOntClass,
+    PrecomputedStats,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,7 @@ def recompute_all_scores() -> None:
     _compute_percentile_ranks()
     _rebuild_gcf_table()
     _rebuild_catalog_tables()
+    _compute_chemont_ic()
     _recompute_umap()
     logger.info("Score recomputation complete.")
 
@@ -476,3 +480,49 @@ def _recompute_umap() -> None:
         DashboardBgc.objects.bulk_update(batch, ["umap_x", "umap_y"], batch_size=BATCH_SIZE)
 
     logger.info("UMAP coordinates recomputed for %d BGCs", len(bgc_ids))
+
+
+def _compute_chemont_ic() -> None:
+    """Precompute Information Content values for all ChemOnt terms.
+
+    Stores the result in PrecomputedStats(key="chemont_ic") so the
+    chemical similarity search task can use it without recomputing.
+    """
+    from common_core.chemont.ontology import get_ontology
+    from common_core.chemont.similarity import compute_ic_values
+
+    total_nps = DashboardNaturalProduct.objects.count()
+    if total_nps == 0:
+        logger.info("No natural products — skipping ChemOnt IC computation")
+        return
+
+    # Direct annotation counts: how many distinct NPs have each ChemOnt term.
+    rows = (
+        NaturalProductChemOntClass.objects
+        .values("chemont_id")
+        .annotate(cnt=Count("natural_product", distinct=True))
+    )
+    term_counts = {r["chemont_id"]: r["cnt"] for r in rows}
+
+    if not term_counts:
+        logger.info("No ChemOnt annotations — skipping IC computation")
+        return
+
+    try:
+        ont = get_ontology()
+    except FileNotFoundError:
+        logger.warning(
+            "ChemOnt OBO file not found — skipping IC computation. "
+            "Set CHEMONT_OBO_PATH to enable."
+        )
+        return
+
+    ic_values = compute_ic_values(term_counts, total_nps, ont)
+
+    PrecomputedStats.objects.update_or_create(
+        key="chemont_ic",
+        defaults={"data": ic_values},
+    )
+    logger.info(
+        "ChemOnt IC computed for %d terms (%d NPs)", len(ic_values), total_nps
+    )

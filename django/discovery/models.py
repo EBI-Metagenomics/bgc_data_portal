@@ -630,6 +630,38 @@ class DashboardNaturalProduct(models.Model):
         return self.name
 
 
+class NaturalProductChemOntClass(models.Model):
+    """ChemOnt ontology classification for a natural product.
+
+    Each natural product can have multiple ChemOnt nodes, each with a
+    probability score assigned by the ETL pipeline.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    natural_product = models.ForeignKey(
+        DashboardNaturalProduct,
+        on_delete=models.CASCADE,
+        related_name="chemont_classes",
+    )
+    chemont_id = models.CharField(
+        max_length=30,
+        help_text="ChemOnt ontology term ID, e.g. CHEMONTID:0000147",
+    )
+    chemont_name = models.CharField(max_length=255)
+    probability = models.FloatField(default=1.0)
+
+    class Meta:
+        db_table = "discovery_np_chemont_class"
+        unique_together = [("natural_product", "chemont_id")]
+        indexes = [
+            models.Index(fields=["chemont_id"], name="idx_npchemont_cid"),
+            models.Index(fields=["natural_product"], name="idx_npchemont_np"),
+        ]
+
+    def __str__(self):
+        return f"{self.chemont_id} ({self.chemont_name})"
+
+
 # ── Catalog tables with precomputed counts ───────────────────────────────────────
 
 
@@ -681,6 +713,8 @@ class PrecomputedStats(models.Model):
         ``taxonomy_sunburst`` — flat sunburst node list for unfiltered view.
         ``np_class_sunburst`` — NP chemical class sunburst.
         ``bgc_class_distribution`` — BGC class counts.
+        ``chemont_ic``            — {chemont_id: IC_value} for semantic similarity.
+        ``chemont_sunburst``      — ChemOnt class sunburst node list.
     """
 
     key = models.CharField(max_length=100, primary_key=True)

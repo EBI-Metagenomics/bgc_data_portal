@@ -38,6 +38,7 @@ from discovery.models import (
     DashboardGCF,
     DashboardAssembly,
     DashboardNaturalProduct,
+    NaturalProductChemOntClass,
     PrecomputedStats,
 )
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
@@ -64,6 +65,8 @@ from discovery.api_schemas import (
     AssemblyRosterItem,
     AssemblyScatterPoint,
     ValidatedReferencePoint,
+    ChemOntClassNode,
+    ChemOntClassSummary,
     NaturalProductSummary,
     NpClassLevel,
     PaginatedDomainResponse,
@@ -497,7 +500,18 @@ def bgc_detail(request, bgc_id: int):
 
     # Natural products
     np_items = []
-    for np_obj in DashboardNaturalProduct.objects.filter(bgc=bgc):
+    np_qs = DashboardNaturalProduct.objects.filter(bgc=bgc).prefetch_related(
+        "chemont_classes"
+    )
+    for np_obj in np_qs:
+        chemont_list = [
+            ChemOntClassSummary(
+                chemont_id=cc.chemont_id,
+                name=cc.chemont_name,
+                probability=cc.probability,
+            )
+            for cc in np_obj.chemont_classes.all()
+        ]
         np_items.append(
             NaturalProductSummary(
                 id=np_obj.id,
@@ -506,6 +520,7 @@ def bgc_detail(request, bgc_id: int):
                 smiles_svg="",
                 structure_thumbnail=np_obj.structure_svg_base64,
                 np_class_path=np_obj.np_class_path,
+                chemont_classes=chemont_list,
             )
         )
 
@@ -955,13 +970,14 @@ def chemical_query(
     biome_lineage: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
 ):
     if not body.smiles or not body.smiles.strip():
         raise HttpError(400, "SMILES string is required")
 
     from discovery.tasks import chemical_similarity_search
 
-    # Dispatch fingerprint computation to Celery worker (where RDKit is available)
+    # Dispatch ChemOnt similarity computation to Celery worker
     async_result = chemical_similarity_search.delay(
         body.smiles.strip(), body.similarity_threshold
     )
@@ -1003,6 +1019,12 @@ def chemical_query(
         qs = qs.filter(assembly__assembly_accession__icontains=assembly_accession)
     if bgc_accession:
         qs = qs.filter(bgc_accession__icontains=bgc_accession.strip())
+    if chemont_ids:
+        cid_list = [c.strip() for c in chemont_ids.split(",") if c.strip()]
+        if cid_list:
+            qs = qs.filter(
+                natural_products__chemont_classes__chemont_id__in=cid_list
+            ).distinct()
 
     results = []
     for bgc in qs:
@@ -1319,6 +1341,86 @@ def np_classes(request):
         ]
 
     return _build(tree)
+
+
+@discovery_router.get("/filters/chemont-classes/", response=list[ChemOntClassNode])
+def chemont_classes(request):
+    """Return a hierarchical tree of ChemOnt classes with BGC counts."""
+    # Direct annotation counts grouped by chemont_id.
+    rows = (
+        NaturalProductChemOntClass.objects
+        .values("chemont_id", "chemont_name")
+        .annotate(cnt=Count("natural_product__bgc", distinct=True))
+    )
+
+    # Build tree from ontology hierarchy.
+    try:
+        from common_core.chemont.ontology import get_ontology
+
+        ont = get_ontology()
+    except (FileNotFoundError, ImportError):
+        # Fallback: flat list without hierarchy.
+        return [
+            ChemOntClassNode(
+                chemont_id=r["chemont_id"],
+                name=r["chemont_name"],
+                count=r["cnt"],
+            )
+            for r in rows
+        ]
+
+    # Collect direct counts.
+    direct_counts: dict[str, int] = {}
+    name_map: dict[str, str] = {}
+    for r in rows:
+        direct_counts[r["chemont_id"]] = r["cnt"]
+        name_map[r["chemont_id"]] = r["chemont_name"]
+
+    # Find all terms that are either directly annotated or ancestors of annotated terms.
+    relevant_ids: set[str] = set(direct_counts.keys())
+    for cid in list(direct_counts.keys()):
+        for ancestor in ont.get_ancestors(cid):
+            relevant_ids.add(ancestor.id)
+            if ancestor.id not in name_map:
+                name_map[ancestor.id] = ancestor.name
+
+    # Build children sets for relevant terms.
+    children_map: dict[str, list[str]] = {}
+    root_ids: list[str] = []
+    for tid in relevant_ids:
+        term = ont.get_term(tid)
+        if term is None:
+            continue
+        has_relevant_parent = False
+        for pid in term.parent_ids:
+            if pid in relevant_ids:
+                children_map.setdefault(pid, []).append(tid)
+                has_relevant_parent = True
+        if not has_relevant_parent:
+            root_ids.append(tid)
+
+    # Propagate counts upward.
+    def _count(tid: str) -> int:
+        c = direct_counts.get(tid, 0)
+        for child_id in children_map.get(tid, []):
+            c += _count(child_id)
+        return c
+
+    def _build_tree(tid: str) -> ChemOntClassNode:
+        return ChemOntClassNode(
+            chemont_id=tid,
+            name=name_map.get(tid, tid),
+            count=_count(tid),
+            children=sorted(
+                [_build_tree(c) for c in children_map.get(tid, [])],
+                key=lambda n: n.name,
+            ),
+        )
+
+    return sorted(
+        [_build_tree(r) for r in root_ids],
+        key=lambda n: n.name,
+    )
 
 
 @discovery_router.get("/filters/domains/", response=PaginatedDomainResponse)

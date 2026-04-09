@@ -35,6 +35,7 @@ from discovery.models import (
     DashboardGCF,
     DashboardNaturalProduct,
     DashboardRegion,
+    NaturalProductChemOntClass,
     PrecomputedStats,
     ProteinEmbedding,
     RegionAccessionAlias,
@@ -73,6 +74,44 @@ _NP_CLASSES = {
     "RiPP": {"Lanthipeptide": ["Class I", "Class II"], "Thiopeptide": ["Series d"]},
     "Terpene": {"Diterpene": ["Labdane"], "Sesquiterpene": ["Eudesmane"]},
     "Alkaloid": {"Indole": ["Ergoline"], "Isoquinoline": ["Benzylisoquinoline"]},
+}
+
+# Real ChemOnt ontology IDs, names, and base probabilities per BGC class.
+# Hierarchy: Chemical entities (9999999) → Organic compounds (0000000) → ...
+_CHEMONT_POOL = {
+    "Polyketide": [
+        ("CHEMONTID:0000147", "Macrolides and analogues", 0.92),
+        ("CHEMONTID:0000261", "Phenylpropanoids and polyketides", 0.88),
+        ("CHEMONTID:0000161", "Epothilones and analogues", 0.75),
+        ("CHEMONTID:0000050", "Lactones", 0.80),
+        ("CHEMONTID:0000145", "Coumarins and derivatives", 0.70),
+    ],
+    "NRP": [
+        ("CHEMONTID:0001995", "Cyclic peptides", 0.93),
+        ("CHEMONTID:0001994", "Cyclic depsipeptides", 0.88),
+        ("CHEMONTID:0000348", "Peptides", 0.85),
+        ("CHEMONTID:0001961", "Depsipeptides", 0.82),
+        ("CHEMONTID:0002356", "Diketopiperazines", 0.78),
+    ],
+    "RiPP": [
+        ("CHEMONTID:0001995", "Cyclic peptides", 0.90),
+        ("CHEMONTID:0000348", "Peptides", 0.87),
+        ("CHEMONTID:0000013", "Amino acids, peptides, and analogues", 0.80),
+        ("CHEMONTID:0000095", "Thiazoles", 0.72),
+    ],
+    "Terpene": [
+        ("CHEMONTID:0001550", "Sesquiterpenoids", 0.91),
+        ("CHEMONTID:0001551", "Diterpenoids", 0.88),
+        ("CHEMONTID:0001549", "Monoterpenoids", 0.85),
+        ("CHEMONTID:0000259", "Prenol lipids", 0.80),
+        ("CHEMONTID:0001283", "Terpene lactones", 0.75),
+    ],
+    "Alkaloid": [
+        ("CHEMONTID:0000279", "Alkaloids and derivatives", 0.93),
+        ("CHEMONTID:0000211", "Indoles and derivatives", 0.85),
+        ("CHEMONTID:0000058", "Morphinans", 0.78),
+        ("CHEMONTID:0000492", "Tropane alkaloids", 0.75),
+    ],
 }
 
 _SMILES_POOL = [
@@ -191,6 +230,7 @@ class Command(BaseCommand):
                 RegionAccessionAlias,
                 CdsSequence, BgcDomain, DashboardCds,
                 BgcEmbedding, ProteinEmbedding,
+                NaturalProductChemOntClass,
                 DashboardNaturalProduct,
                 DashboardBgc,
                 DashboardRegion,
@@ -557,6 +597,23 @@ class Command(BaseCommand):
         DashboardNaturalProduct.objects.bulk_create(nps)
         self.stdout.write(f"  {len(nps)} DashboardNaturalProduct rows.")
 
+        # ── 7b. NaturalProductChemOntClass ────────────────────────────
+        self.stdout.write("Creating ChemOnt classifications...")
+        chemont_rows = []
+        for np_obj in nps:
+            bgc_class = np_obj.bgc.classification_path.split(".")[0] if np_obj.bgc.classification_path else ""
+            pool = _CHEMONT_POOL.get(bgc_class, _CHEMONT_POOL["Polyketide"])
+            n_classes = random.randint(1, min(3, len(pool)))
+            for chemont_id, chemont_name, base_prob in random.sample(pool, n_classes):
+                chemont_rows.append(NaturalProductChemOntClass(
+                    natural_product=np_obj,
+                    chemont_id=chemont_id,
+                    chemont_name=chemont_name,
+                    probability=round(max(0.1, min(1.0, base_prob + random.uniform(-0.1, 0.05))), 3),
+                ))
+        NaturalProductChemOntClass.objects.bulk_create(chemont_rows, ignore_conflicts=True)
+        self.stdout.write(f"  {len(chemont_rows)} NaturalProductChemOntClass rows.")
+
         # ── 8. Validated (MIBiG) BGCs ─────────────────────────────────
         self.stdout.write("Creating validated (MIBiG) BGCs...")
         # Create MIBiG contigs first (one per compound for simplicity)
@@ -791,6 +848,7 @@ class Command(BaseCommand):
             f"  ProteinEmbedding:         {len(prot_embeddings)}\n"
             f"  DashboardGCF:             {gcf_count}\n"
             f"  DashboardNaturalProduct:  {len(nps)}\n"
+            f"  NaturalProductChemOntClass: {len(chemont_rows)}\n"
             f"  DashboardBgcClass:        {len(bgc_class_objs)}\n"
             f"  DashboardDomain:          {len(domain_objs)}\n"
             f"  PrecomputedStats:         2"

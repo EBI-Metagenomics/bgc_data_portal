@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchTaxonomyTree, fetchBgcClasses, fetchNpClasses } from "@/api/filters";
+import { fetchTaxonomyTree, fetchBgcClasses, fetchNpClasses, fetchChemOntClasses } from "@/api/filters";
 
 export function useTaxonomyTree() {
   return useQuery({
@@ -21,6 +21,14 @@ export function useNpClasses() {
   return useQuery({
     queryKey: ["filters", "np-classes"],
     queryFn: fetchNpClasses,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useChemOntClasses() {
+  return useQuery({
+    queryKey: ["filters", "chemont-classes"],
+    queryFn: fetchChemOntClasses,
     staleTime: 5 * 60 * 1000,
   });
 }

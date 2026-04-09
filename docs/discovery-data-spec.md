@@ -394,6 +394,32 @@ encoded = base64.b64encode(raw_bytes).decode("ascii")
 
 ---
 
+### 9. `np_chemont_classes.tsv` (optional)
+
+ChemOnt ontology classifications for natural products. Each natural product
+can have multiple ChemOnt nodes, each with a probability score from the
+classification pipeline.
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position (identifies parent BGC) | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position (identifies parent BGC) | `45000` |
+| `detector_name` | string | **yes** | Detector name (identifies parent BGC) | `antiSMASH v7.1` |
+| `natural_product_name` | string | **yes** | Matches `name` in `natural_products.tsv` | `erythromycin` |
+| `chemont_id` | string | **yes** | ChemOnt ontology term ID | `CHEMONTID:0000147` |
+| `chemont_name` | string | **yes** | Human-readable class name | `Macrolides and analogues` |
+| `probability` | float | no | Classification confidence (default 1.0) | `0.92` |
+
+**Notes:**
+
+- A natural product is resolved by matching the BGC key (contig_sha256 + bgc_start + bgc_end + detector_name) plus the `natural_product_name`.
+- Multiple rows per natural product are expected (one per ChemOnt class).
+- ChemOnt IDs use the format `CHEMONTID:XXXXXXX` (7-digit zero-padded).
+- The ChemOnt ontology (version 2.1) hierarchy has ~4,825 terms rooted at `CHEMONTID:9999999` (Chemical entities).
+
+---
+
 ---
 
 ## Region Assignment (Auto-Computed)
@@ -561,3 +587,159 @@ The following model data is **not** part of the TSV pipeline and requires separa
 | Assembly percentile ranks | `DashboardAssembly.pctl_*` | Computed by `recompute_all_scores` |
 | Assembly diversity/density | `DashboardAssembly.bgc_diversity_score`, etc. | Computed by `recompute_all_scores` |
 | Domain URLs | `BgcDomain.url` | Not set by loader |
+
+---
+
+## User-Submitted Asset Evaluation (Upload)
+
+This section documents the input format for the **Asset Evaluation** upload feature in the Discovery Platform sidebar. Unlike the ingestion pipeline above, uploaded data is **not persisted to the database** — it is parsed, cached in Redis (4-hour TTL), and used for ephemeral assessment only.
+
+Implementation: `django/discovery/services/upload_parser.py`
+
+### API Endpoint
+
+```
+POST /api/dashboard/assess/upload/
+Content-Type: multipart/form-data
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | **yes** | `"bgc"` (single BGC) or `"assembly"` (assembly bundle) |
+| `file` | file | **yes** | A `.tar.gz` archive containing TSV files (max **10 MB**) |
+
+**Response** (HTTP 202):
+
+```json
+{
+  "task_id": "uuid-string",
+  "asset_type": "bgc"
+}
+```
+
+Poll `GET /api/dashboard/assess/status/{task_id}/` for results.
+
+---
+
+### Archive Structure
+
+The uploaded `.tar.gz` must contain **tab-separated** TSV files with a header row (UTF-8). Directory prefixes inside the archive are stripped — only basenames matter.
+
+#### Single-BGC Upload (`type="bgc"`)
+
+```
+archive.tar.gz
+  bgcs.tsv               # required  (exactly 1 row)
+  domains.tsv             # required
+  embeddings_bgc.tsv      # required
+```
+
+#### Assembly Upload (`type="assembly"`)
+
+```
+archive.tar.gz
+  assemblies.tsv          # required  (exactly 1 row)
+  contigs.tsv             # required  (≥ 1 row)
+  bgcs.tsv                # required  (≥ 1 row)
+  domains.tsv             # required
+  embeddings_bgc.tsv      # required  (1 row per BGC)
+```
+
+> **Key differences from the ingestion pipeline:**
+> - `embeddings_bgc.tsv` is **required** (optional in ingestion).
+> - `detectors.tsv` is not needed — `detector_name` is a free-text label in `bgcs.tsv`.
+> - `contig_sequences.tsv`, `cds_sequences.tsv`, and `cds.tsv` are not used.
+> - No data is written to the database.
+
+---
+
+### Upload TSV Specifications
+
+Column conventions (booleans, ltree dot-paths, base64 vectors, nullable numerics) follow the same rules as the ingestion pipeline — see [Encoding Conventions](#encoding-conventions).
+
+#### `bgcs.tsv`
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `contig_sha256` | string | **yes** | SHA-256 hash of the parent contig sequence | `a1b2c3d4e5f6...` |
+| `detector_name` | string | **yes** | Detection tool label (free text) | `antiSMASH v7.1` |
+| `start_position` | integer | **yes** | Start coordinate on contig (bp) | `10000` |
+| `end_position` | integer | **yes** | End coordinate on contig (bp) | `45000` |
+| `classification_path` | string | no | ltree dot-path for BGC class hierarchy | `Polyketide.Macrolide.14_membered` |
+| `gene_cluster_family` | string | no | ltree dot-path for GCF hierarchy | `GCF_001.SubFamily_A` |
+| `size_kb` | float | no | BGC size in kilobases (default 0.0) | `35.0` |
+| `is_partial` | boolean | no | `true`/`1` if on contig edge | `false` |
+| `is_validated` | boolean | no | `true`/`1` if experimentally validated | `false` |
+
+**Single-BGC upload:** exactly 1 row.  
+**Assembly upload:** ≥ 1 row. Every `contig_sha256` must match a row in `contigs.tsv`.
+
+#### `domains.tsv`
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position | `45000` |
+| `detector_name` | string | **yes** | Detector name (must match `bgcs.tsv`) | `antiSMASH v7.1` |
+| `domain_acc` | string | **yes** | Domain accession | `PF00109` |
+| `domain_name` | string | no | Domain name | `Beta-ketoacyl synthase` |
+| `domain_description` | string | no | Longer description | `Beta-ketoacyl synthase, N-terminal` |
+| `ref_db` | string | no | Reference database | `Pfam` |
+| `start_position` | integer | no | Start on protein (aa, default 0) | `15` |
+| `end_position` | integer | no | End on protein (aa, default 0) | `260` |
+| `score` | float | no | Hit score (nullable) | `125.3` |
+
+Rows without a `domain_acc` value are silently skipped. Rows referencing an unknown BGC key `(contig_sha256, bgc_start, bgc_end, detector_name)` are silently skipped.
+
+#### `embeddings_bgc.tsv`
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position | `45000` |
+| `detector_name` | string | **yes** | Detector name (must match `bgcs.tsv`) | `antiSMASH v7.1` |
+| `vector_base64` | string | **yes** | Base64-encoded float32 vector (little-endian) | `AAAAAAAAAIA/...` |
+
+**Vector format:** exactly **1152** x float32 = 4608 bytes raw → ~6144 characters base64.  
+**Every BGC must have a matching embedding row.** Missing embeddings cause a validation error.
+
+#### `assemblies.tsv` (assembly upload only)
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `assembly_accession` | string | **yes** | Unique accession | `GCA_000009065.1` |
+| `organism_name` | string | no | Species/strain name | `Streptomyces coelicolor A3(2)` |
+| `assembly_size_mb` | float | no | Assembly size in megabases (nullable) | `8.67` |
+| `biome_path` | string | no | ltree dot-path for biome | `root.Environmental.Terrestrial.Soil` |
+| `is_type_strain` | boolean | no | `true`/`1` if type strain | `true` |
+
+Exactly 1 row.
+
+#### `contigs.tsv` (assembly upload only)
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `sequence_sha256` | string | **yes** | 64-char hex SHA-256 hash of the nucleotide sequence | `a1b2c3d4e5f6...` |
+| `accession` | string | no | Contig accession | `MGYC000000001` |
+| `length` | integer | no | Contig length in bp (default 0) | `154000` |
+| `taxonomy_path` | string | no | ltree dot-path for taxonomy | `Bacteria.Actinomycetota.Actinomycetia` |
+
+At least 1 row. Every `contig_sha256` in `bgcs.tsv` must reference a `sequence_sha256` here.
+
+---
+
+### Validation Rules
+
+| Rule | Error condition |
+|------|-----------------|
+| Archive size | > 10 MB |
+| Archive format | Not a valid gzip (magic bytes `\x1f\x8b`) |
+| Missing required files | Any required TSV absent from the archive |
+| `bgcs.tsv` row count | Single-BGC: not exactly 1; Assembly: 0 rows |
+| `assemblies.tsv` row count | Not exactly 1 (assembly upload) |
+| `contigs.tsv` row count | 0 rows (assembly upload) |
+| Contig referential integrity | BGC references a `contig_sha256` not in `contigs.tsv` (assembly upload) |
+| Embedding dimension | Not exactly 1152 floats |
+| Missing embeddings | Any BGC without a matching row in `embeddings_bgc.tsv` |

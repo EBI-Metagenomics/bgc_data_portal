@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { TypeStrainToggle } from "./TypeStrainToggle";
 import { TaxonomyFilter } from "./TaxonomyFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
-import { NpClassFilter } from "./NpClassFilter";
+import { ChemOntClassFilter } from "./ChemOntClassFilter";
 import { AssemblyTypeFilter } from "./AssemblyTypeFilter";
 import { DomainQueryBuilder } from "./DomainQueryBuilder";
 import { SequenceSearch } from "./SequenceSearch";
@@ -80,7 +80,7 @@ export function FilterPanel() {
               />
             </div>
             <BgcClassFilter />
-            <NpClassFilter />
+            <ChemOntClassFilter />
             <div className="space-y-1.5">
               <Label className="text-xs">Assembly Accession</Label>
               <Input
@@ -121,7 +121,7 @@ export function FilterPanel() {
             />
           </div>
           <BgcClassFilter />
-          <NpClassFilter />
+          <ChemOntClassFilter />
         </div>
       )}
     </div>

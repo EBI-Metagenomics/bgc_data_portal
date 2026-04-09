@@ -44,6 +44,7 @@ export function useChemicalQuery() {
           biome_lineage: filters.biomeLineage || undefined,
           assembly_accession: filters.assemblyAccession || undefined,
           bgc_accession: filters.bgcAccession || undefined,
+          chemont_ids: filters.chemontIds.length > 0 ? filters.chemontIds.join(",") : undefined,
         }
       ),
     enabled: chemicalQueryTriggered && hasQuery,
