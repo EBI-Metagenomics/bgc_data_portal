@@ -13,7 +13,8 @@ export function ExploreActions() {
     !!filters.bgcAccession ||
     !!filters.search ||
     !!filters.assemblyType ||
-    filters.typeStrainOnly;
+    filters.typeStrainOnly ||
+    filters.chemontIds.length > 0;
 
   return (
     <div

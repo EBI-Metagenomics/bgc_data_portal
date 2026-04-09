@@ -45,7 +45,8 @@ export function QueryActions() {
     !!filters.assemblyAccession ||
     !!filters.bgcAccession ||
     !!filters.search ||
-    filters.typeStrainOnly;
+    filters.typeStrainOnly ||
+    filters.chemontIds.length > 0;
 
   const handleRunQuery = () => {
     if (hasSequenceQuery) runSequenceQuery();

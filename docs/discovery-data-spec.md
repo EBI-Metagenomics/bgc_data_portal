@@ -24,7 +24,8 @@ data_dir/
   cds_sequences.tsv        # optional
   domains.tsv              # optional
   embeddings_bgc.tsv       # optional
-  natural_products.tsv     # optional
+  natural_products.tsv       # optional
+  np_chemont_classes.tsv     # optional (needs natural_products.tsv)
 ```
 
 All files are **tab-separated** with a header row. Encoding: UTF-8.  
@@ -55,12 +56,15 @@ Files are loaded in strict dependency order. Each step resolves foreign keys usi
                                                           bgc_end + detector_name from step 4)
 8.   natural_products.tsv   →  DashboardNaturalProduct (needs contig_sha256 + bgc_start +
                                                           bgc_end + detector_name from step 4)
+8.5  np_chemont_classes.tsv →  NaturalProductChemOntClass (needs BGC key from step 4 +
+                                                          natural_product_name from step 8)
 ```
 
-After loading, two post-load computations run (unless `--skip-stats`):
+After loading, three post-load computations run (unless `--skip-stats`):
 
 - **Assembly scores** — `bgc_count`, `l1_class_count`, `bgc_novelty_score` aggregated from loaded BGCs.
 - **Catalog counts** — `DashboardBgcClass` and `DashboardDomain` tables rebuilt from BGC/domain data.
+- **ChemOnt IC values** — Information Content for every ChemOnt term, stored in `PrecomputedStats(key="chemont_ic")`. Used by the SMILES similarity search (Resnik/BMA semantic similarity). Requires the ChemOnt OBO file at `CHEMONT_OBO_PATH` (default `/data/chemont/ChemOnt_2_1.obo`); skipped gracefully if the file is absent.
 
 > **Note:** GCF membership is derived from the `gene_cluster_family` ltree field on BGCs.
 > The `DashboardGCF` table is materialized by the `recompute_all_scores` command, not loaded from TSV.
@@ -442,12 +446,25 @@ vancomycin	CHEMONTID:0001995	Cyclic peptides	0.83
 vancomycin	CHEMONTID:0001994	Cyclic depsipeptides	0.75
 ```
 
+**How the portal uses this data:**
+
+The portal builds hierarchical trees from the flat TSV rows in two places:
+
+1. **Sidebar filter** (`/filters/chemont-classes/`) — aggregates all annotations into a browsable tree with BGC counts at each node.
+2. **BGC detail** — displays each NP's annotations as lineage breadcrumbs (e.g. `Organic compounds > Phenylpropanoids > Macrolides 85%`).
+
+When the ChemOnt OBO file is available (`CHEMONT_OBO_PATH`), the portal uses the real ontology `parent_ids` to build the tree. When it is **not** available, the portal infers hierarchy from the data itself:
+- **Filters**: parent-child relationships are inferred from NP co-occurrence (if term A appears on a strict superset of NPs compared to term B, A is an ancestor of B).
+- **NP detail**: annotations are nested by decreasing probability (higher probability = more general ancestor).
+
+This means **including full lineage paths is important** — without them, the inference heuristics cannot reconstruct the tree.
+
 **Notes:**
 
 - A natural product is resolved by matching the BGC key (contig_sha256 + bgc_start + bgc_end + detector_name) plus the `natural_product_name`.
 - ChemOnt IDs use the format `CHEMONTID:XXXXXXX` (7-digit zero-padded).
-- The portal uses the ontology hierarchy (from `ChemOnt_2_1.obo`) to reconstruct the tree from flat rows. Intermediate ancestors that are present in the ontology but missing from the TSV will be inserted with `probability = null` in the API response.
-- The root of the ChemOnt ontology is `CHEMONTID:9999999` (Chemical entities). You do not need to include it — annotating from the first meaningful class level is sufficient.
+- The root of the ChemOnt ontology is `CHEMONTID:9999999` (Chemical entities). You do not need to include it — annotating from the first meaningful class level (e.g. `Organic compounds`) is sufficient.
+- When the OBO file is available, any intermediate ancestors missing from the TSV will be inserted with `probability = null` in the API response.
 
 ---
 

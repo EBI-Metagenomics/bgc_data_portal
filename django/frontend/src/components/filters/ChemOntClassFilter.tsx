@@ -23,14 +23,14 @@ function ChemOntNode({
   const isChecked = selected.includes(node.chemont_id);
 
   return (
-    <div>
+    <div className="min-w-0">
       <div
-        className="flex items-center gap-1 py-0.5"
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
+        className="flex items-center gap-1 py-0.5 min-w-0"
+        style={{ paddingLeft: `${depth * 10 + 4}px` }}
       >
-        {hasChildren && (
+        {hasChildren ? (
           <button
-            className="p-0.5"
+            className="p-0.5 shrink-0"
             onClick={() => setExpanded(!expanded)}
           >
             {expanded ? (
@@ -39,22 +39,23 @@ function ChemOntNode({
               <ChevronRight className="h-3 w-3" />
             )}
           </button>
+        ) : (
+          <span className="w-4 shrink-0" />
         )}
-        {!hasChildren && <span className="w-4" />}
         <Checkbox
           id={`chemont-${node.chemont_id}`}
           checked={isChecked}
           onCheckedChange={() => onToggle(node.chemont_id)}
-          className="h-3.5 w-3.5"
+          className="h-3.5 w-3.5 shrink-0"
         />
         <label
           htmlFor={`chemont-${node.chemont_id}`}
-          className="flex-1 cursor-pointer truncate text-xs"
-          title={node.chemont_id}
+          className="min-w-0 flex-1 cursor-pointer truncate text-xs"
+          title={`${node.name} (${node.chemont_id})`}
         >
           {node.name}
         </label>
-        <Badge variant="secondary" className="text-[10px] px-1">
+        <Badge variant="secondary" className="shrink-0 text-[10px] px-1">
           {node.count}
         </Badge>
       </div>
@@ -89,9 +90,9 @@ export function ChemOntClassFilter() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 min-w-0 overflow-hidden">
       <span className="text-sm font-medium">ChemOnt Chemical Class</span>
-      <div className="max-h-48 overflow-auto">
+      <div className="max-h-48 overflow-auto min-w-0">
         {(chemontClasses ?? []).map((node) => (
           <ChemOntNode
             key={node.chemont_id}
