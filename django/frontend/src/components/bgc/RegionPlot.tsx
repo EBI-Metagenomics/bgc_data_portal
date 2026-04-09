@@ -8,8 +8,6 @@ import {
 import type {
   BgcRegionData,
   RegionCds,
-  RegionCluster,
-  RegionDomain,
 } from "@/api/types";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -63,7 +61,7 @@ function makeDistinctColorMap(keys: string[]): Record<string, string> {
     const l = i % 2 === 0 ? L0 : L1;
     const s = Math.floor(i / 2) % 2 === 0 ? S0 : S1;
     const [r, g, b] = hlsToRgb(h, l, s);
-    out[unique[i]] = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+    out[unique[i]!] = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
   }
   return out;
 }
@@ -78,7 +76,7 @@ function assignNonoverlapLanes(intervals: [number, number][]): number[] {
   for (const { i, start, end } of indexed) {
     let placed = false;
     for (let ln = 0; ln < lanesEnd.length; ln++) {
-      if (start >= lanesEnd[ln]) {
+      if (start >= lanesEnd[ln]!) {
         lanesEnd[ln] = end;
         result.push({ idx: i, lane: ln });
         placed = true;
@@ -240,7 +238,7 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
 
           {/* Cluster rectangles */}
           {data.cluster_list.map((cluster, i) => {
-            const lane = clusterLanes[i];
+            const lane = clusterLanes[i]!;
             const cx1 = scaleX(cluster.start);
             const cx2 = scaleX(cluster.end);
             const cy = CLUSTER_TRACK_Y + lane * CLUSTER_LANE_GAP;

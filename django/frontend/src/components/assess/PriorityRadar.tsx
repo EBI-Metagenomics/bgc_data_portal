@@ -16,10 +16,10 @@ export function PriorityRadar({
   const dbP90s = radarReferences.map((r) => r.db_p90);
 
   // Close the polygon
-  const closedLabels = [...labels, labels[0]];
-  const closedValues = [...values, values[0]];
-  const closedMeans = [...dbMeans, dbMeans[0]];
-  const closedP90s = [...dbP90s, dbP90s[0]];
+  const closedLabels = [...labels, labels[0]!];
+  const closedValues = [...values, values[0]!];
+  const closedMeans = [...dbMeans, dbMeans[0]!];
+  const closedP90s = [...dbP90s, dbP90s[0]!];
 
   return (
     <Plot

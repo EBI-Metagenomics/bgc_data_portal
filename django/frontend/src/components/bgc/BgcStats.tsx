@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import Plot from "react-plotly.js";
 import { useBgcStats } from "@/hooks/use-bgc-stats";
 import { useSelectionStore } from "@/stores/selection-store";

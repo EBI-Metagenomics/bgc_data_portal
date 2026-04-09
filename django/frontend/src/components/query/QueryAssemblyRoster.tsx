@@ -36,7 +36,6 @@ export function QueryAssemblyRoster() {
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
-  const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
 
   // Resolve BGC IDs -> parent assembly IDs
   const bgcIds =

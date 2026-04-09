@@ -11,12 +11,6 @@ const STATUS_LABELS: Record<string, string> = {
   known_gcf_type_strain: "Known GCF\n(type strain available)",
 };
 
-const STATUS_COLORS: Record<string, number> = {
-  novel_gcf: 0,
-  known_gcf_no_type_strain: 0.5,
-  known_gcf_type_strain: 1,
-};
-
 export function RedundancyMatrix({ matrix }: RedundancyMatrixProps) {
   if (matrix.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">No BGCs found.</p>;
@@ -45,7 +39,7 @@ export function RedundancyMatrix({ matrix }: RedundancyMatrixProps) {
         {
           type: "heatmap",
           z,
-          x: categories.map((c) => STATUS_LABELS[c]),
+          x: categories.map((c) => STATUS_LABELS[c]!),
           y: bgcLabels,
           colorscale: [
             [0, "rgb(240,240,240)"],
@@ -53,7 +47,7 @@ export function RedundancyMatrix({ matrix }: RedundancyMatrixProps) {
             [1, "rgb(34,197,94)"],
           ],
           showscale: false,
-          hovertext: hoverText,
+          hovertext: hoverText as unknown as string,
           hoverinfo: "text",
         },
       ]}

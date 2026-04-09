@@ -8,17 +8,6 @@ import type {
   ValidatedReferencePoint,
 } from "@/api/types";
 
-// Match BgcScatter.tsx color scheme exactly
-const BGC_CLASS_COLORS: Record<string, string> = {
-  Polyketide: "#3b82f6",
-  NRP: "#ef4444",
-  RiPP: "#22c55e",
-  Terpene: "#f97316",
-  Saccharide: "#a855f7",
-  Alkaloid: "#14b8a6",
-  Other: "#6b7280",
-};
-
 interface BgcChemicalSpaceMapProps {
   submittedPoint: AssessChemicalSpacePoint | null;
   neighbors: AssessNearestNeighborPoint[];
@@ -73,7 +62,7 @@ export function BgcChemicalSpaceMap({
   if (validatedNeighbors.length > 0) {
     traces.push({
       type: "scatter",
-      mode: "markers+text",
+      mode: "markers+text" as Plotly.PlotData["mode"],
       x: validatedNeighbors.map((n) => n.umap_x),
       y: validatedNeighbors.map((n) => n.umap_y),
       marker: { symbol: "triangle-up", size: 10, color: "#f97316" },
@@ -122,8 +111,8 @@ export function BgcChemicalSpaceMap({
       <Plot
         data={traces}
         layout={{
-          xaxis: { title: "UMAP 1", zeroline: false },
-          yaxis: { title: "UMAP 2", zeroline: false },
+          xaxis: { title: { text: "UMAP 1" }, zeroline: false },
+          yaxis: { title: { text: "UMAP 2" }, zeroline: false },
           showlegend: true,
           legend: { orientation: "h", y: -0.15 },
           margin: { t: 10, b: 60, l: 60, r: 20 },

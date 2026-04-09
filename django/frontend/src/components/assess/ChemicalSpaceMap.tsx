@@ -55,7 +55,7 @@ export function ChemicalSpaceMap({
         symbol: "star",
         size: 14,
         color: points.map(
-          (p) => BGC_CLASS_COLORS[p.classification_path?.split('.')[0]] || BGC_CLASS_COLORS.Other
+          (p) => BGC_CLASS_COLORS[p.classification_path?.split('.')[0] ?? "Other"] || BGC_CLASS_COLORS.Other
         ),
         line: { color: "black", width: 1 },
       },
@@ -81,8 +81,8 @@ export function ChemicalSpaceMap({
       <Plot
         data={traces}
         layout={{
-          xaxis: { title: "UMAP 1", zeroline: false },
-          yaxis: { title: "UMAP 2", zeroline: false },
+          xaxis: { title: { text: "UMAP 1" }, zeroline: false },
+          yaxis: { title: { text: "UMAP 2" }, zeroline: false },
           showlegend: true,
           legend: { orientation: "h", y: -0.15 },
           margin: { t: 10, b: 60, l: 60, r: 20 },

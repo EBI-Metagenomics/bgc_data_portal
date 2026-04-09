@@ -32,7 +32,7 @@ export function BgcNoveltyStrip({ bgcNovelty }: BgcNoveltyStripProps) {
           x: sorted.map((b) => b.novelty_vs_db),
           marker: {
             color: sorted.map(
-              (b) => BGC_CLASS_COLORS[b.classification_path?.split('.')[0]] || BGC_CLASS_COLORS.Other
+              (b) => BGC_CLASS_COLORS[b.classification_path?.split('.')[0] ?? "Other"] || BGC_CLASS_COLORS.Other
             ),
           },
           text: sorted.map(
@@ -43,7 +43,7 @@ export function BgcNoveltyStrip({ bgcNovelty }: BgcNoveltyStripProps) {
         },
       ]}
       layout={{
-        xaxis: { title: "Novelty Score (vs DB)", range: [0, 1] },
+        xaxis: { title: { text: "Novelty Score (vs DB)" }, range: [0, 1] },
         yaxis: {
           automargin: true,
           categoryorder: "array",

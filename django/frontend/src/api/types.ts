@@ -421,6 +421,7 @@ export interface GcfMemberPoint {
   umap_y: number;
   is_type_strain: boolean;
   accession: string;
+  distance_to_representative: number;
 }
 
 export interface GcfContext {

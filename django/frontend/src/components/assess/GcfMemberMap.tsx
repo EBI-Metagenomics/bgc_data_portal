@@ -62,8 +62,8 @@ export function GcfMemberMap({ members, submittedPoint }: GcfMemberMapProps) {
     <Plot
       data={traces}
       layout={{
-        xaxis: { title: "UMAP 1", zeroline: false },
-        yaxis: { title: "UMAP 2", zeroline: false },
+        xaxis: { title: { text: "UMAP 1" }, zeroline: false },
+        yaxis: { title: { text: "UMAP 2" }, zeroline: false },
         showlegend: true,
         legend: { orientation: "h", y: -0.15 },
         margin: { t: 10, b: 60, l: 60, r: 20 },

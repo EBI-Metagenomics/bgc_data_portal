@@ -8,18 +8,6 @@ import { exportAssemblyStats } from "@/api/exports";
 
 export function AssemblyStats({ assemblyIds, enabled = true }: { assemblyIds?: string; enabled?: boolean }) {
   const { data, isLoading } = useAssemblyStats(assemblyIds, enabled);
-  const filters = useFilterStore();
-
-  const exportParams = useMemo(
-    () => ({
-      search: filters.search || undefined,
-      type_strain_only: filters.typeStrainOnly || undefined,
-      bgc_class: filters.bgcClass || undefined,
-      biome_lineage: filters.biomeLineage || undefined,
-      assembly_ids: assemblyIds,
-    }),
-    [filters, assemblyIds]
-  );
 
   if (isLoading) {
     return <Skeleton className="h-[280px] w-full" />;

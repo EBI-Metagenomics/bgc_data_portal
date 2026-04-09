@@ -18,8 +18,6 @@ export function DomainDifferentialChart({
   const variable = domains.filter((d) => d.category === "variable");
   const absent = domains.filter((d) => d.category === "absent");
 
-  const totalCount = domains.length || 1;
-
   return (
     <div className="space-y-4">
       {/* Summary bar */}
@@ -32,7 +30,7 @@ export function DomainDifferentialChart({
             x: [core.length],
             name: `Core (${core.length})`,
             marker: { color: CATEGORY_COLORS.core },
-            hoverinfo: "name+x",
+            hoverinfo: "name+x" as Plotly.PlotData["hoverinfo"],
           },
           {
             type: "bar",
@@ -41,7 +39,7 @@ export function DomainDifferentialChart({
             x: [variable.length],
             name: `Variable (${variable.length})`,
             marker: { color: CATEGORY_COLORS.variable },
-            hoverinfo: "name+x",
+            hoverinfo: "name+x" as Plotly.PlotData["hoverinfo"],
           },
           {
             type: "bar",
@@ -50,7 +48,7 @@ export function DomainDifferentialChart({
             x: [absent.length],
             name: `Absent (${absent.length})`,
             marker: { color: CATEGORY_COLORS.absent },
-            hoverinfo: "name+x",
+            hoverinfo: "name+x" as Plotly.PlotData["hoverinfo"],
           },
         ]}
         layout={{
@@ -59,7 +57,7 @@ export function DomainDifferentialChart({
           margin: { t: 10, b: 20, l: 120, r: 20 },
           showlegend: true,
           legend: { orientation: "h", y: -0.5 },
-          xaxis: { title: "Number of domains" },
+          xaxis: { title: { text: "Number of domains" } },
           autosize: true,
         }}
         config={{ responsive: true, displayModeBar: false }}
