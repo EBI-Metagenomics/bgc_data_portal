@@ -1,4 +1,4 @@
-"""Celery tasks for the Asset Evaluation mode.
+"""Celery tasks for the Evaluate Asset mode.
 
 Each task dispatches to the assessment service, caches the result
 in Redis with a 24-hour TTL, and follows the existing set_job_cache

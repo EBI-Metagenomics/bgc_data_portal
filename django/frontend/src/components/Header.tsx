@@ -56,7 +56,7 @@ export function Header() {
                     setMode("assess");
                   }}
                 >
-                  Asset Evaluation
+                  Evaluate Asset
                 </a>
               </li>
             </ul>

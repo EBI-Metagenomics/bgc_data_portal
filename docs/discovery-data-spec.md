@@ -638,9 +638,9 @@ The following model data is **not** part of the TSV pipeline and requires separa
 
 ---
 
-## User-Submitted Asset Evaluation (Upload)
+## User-Submitted Evaluate Asset (Upload)
 
-This section documents the input format for the **Asset Evaluation** upload feature in the Discovery Platform sidebar. Unlike the ingestion pipeline above, uploaded data is **not persisted to the database** — it is parsed, cached in Redis (4-hour TTL), and used for ephemeral assessment only.
+This section documents the input format for the **Evaluate Asset** upload feature in the Discovery Platform sidebar. Unlike the ingestion pipeline above, uploaded data is **not persisted to the database** — it is parsed, cached in Redis (4-hour TTL), and used for ephemeral assessment only.
 
 Implementation: `django/discovery/services/upload_parser.py`
 
