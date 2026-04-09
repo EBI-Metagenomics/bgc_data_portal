@@ -46,17 +46,17 @@ function intersectResults(
 ): { ids: number[]; data: QueryResultBgc[] } {
   if (datasets.length === 0) return { ids: [], data: [] };
   if (datasets.length === 1) {
-    return { ids: datasets[0].map((r) => r.id), data: datasets[0] };
+    return { ids: datasets[0]!.map((r) => r.id), data: datasets[0]! };
   }
 
   // Find IDs present in ALL datasets
   const idSets = datasets.map((d) => new Set(d.map((r) => r.id)));
-  const commonIds = [...idSets[0]].filter((id) =>
+  const commonIds = [...idSets[0]!].filter((id) =>
     idSets.every((s) => s.has(id))
   );
 
   // Use the last dataset's entries for similarity_score (sequence > chemical > domain priority)
-  const lastDataset = datasets[datasets.length - 1];
+  const lastDataset = datasets[datasets.length - 1]!;
   const lastMap = new Map(lastDataset.map((r) => [r.id, r]));
   const data = commonIds
     .map((id) => lastMap.get(id))

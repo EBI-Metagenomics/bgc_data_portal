@@ -53,6 +53,7 @@ export interface AssemblyStatsParams {
   search?: string;
   type_strain_only?: boolean;
   taxonomy_path?: string;
+  assembly_type?: string;
   bgc_class?: string;
   biome_lineage?: string;
   bgc_accession?: string;
