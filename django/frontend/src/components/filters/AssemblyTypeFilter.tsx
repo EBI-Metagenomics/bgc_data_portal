@@ -13,7 +13,7 @@ export function AssemblyTypeFilter() {
   const setAssemblyType = useFilterStore((s) => s.setAssemblyType);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" data-tour="assembly-type-filter">
       <label className="text-xs font-medium text-muted-foreground">Assembly Type</label>
       <select
         value={assemblyType}

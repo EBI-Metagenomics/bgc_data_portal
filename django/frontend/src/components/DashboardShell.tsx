@@ -11,12 +11,16 @@ import { SidebarShortlists } from "@/components/trays/SidebarShortlists";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SlidersHorizontal } from "lucide-react";
+import { WelcomeModal } from "@/components/onboarding/WelcomeModal";
+import { GuidedTour } from "@/components/onboarding/GuidedTour";
 
 export function DashboardShell() {
   const mode = useModeStore((s) => s.mode);
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - var(--vf-chrome-height, 90px))" }}>
+      <WelcomeModal />
+      <GuidedTour />
       <Header />
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}

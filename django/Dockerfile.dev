@@ -22,7 +22,7 @@ COPY . .
 
 # Build the React frontend (outputs to /app/static/dashboard/)
 WORKDIR /app/frontend
-RUN npm ci && npx vite build
+RUN npm install && npx vite build
 WORKDIR /app
 
 EXPOSE 8000

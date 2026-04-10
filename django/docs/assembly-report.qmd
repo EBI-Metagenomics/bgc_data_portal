@@ -1,0 +1,121 @@
+---
+title: "Reading the Assembly Assessment Report"
+subtitle: "A section-by-section guide to every part of the assembly evaluation"
+---
+
+## Goal
+
+To understand every section of the Assembly Assessment Report so you can make informed decisions about which assemblies to pursue in the laboratory. This page walks through each panel, explains what the numbers mean, and suggests how to interpret them in the context of a bioprospecting workflow.
+
+## When you will see this report
+
+The Assembly Assessment Report appears whenever you evaluate a single assembly, whether from the database or uploaded. It fills the main area of the dashboard in Evaluate mode. You reach it by:
+
+- Right-clicking an assembly in any roster and selecting "Evaluate Assembly"
+- Entering an accession in the Evaluate sidebar
+- Uploading an assembly archive
+
+See [Evaluate Overview](evaluate-overview.qmd) for full entry-point details.
+
+## Section 1: Priority Ranking
+
+The first element at the top of the report is the **Priority Ranking** --- a single number showing where this assembly falls in the ranked list of all assemblies in the database. The ranking is based on a weighted composite of novelty, diversity, and density scores, designed to surface assemblies with the broadest and most novel biosynthetic potential.
+
+**How to read it:**
+
+- A ranking of 1 means this assembly has the highest composite score in the entire database.
+- A ranking in the top 100 (out of tens of thousands of assemblies) indicates an exceptionally promising candidate.
+- The ranking updates each time the database grows, so the same assembly may shift position over time.
+
+**What to look for:**
+
+If the ranking is high (numerically low), this assembly is a strong candidate. If the ranking is surprisingly low for an assembly you expected to be interesting, drill into the individual score sections below to see which metric is pulling the composite down.
+
+## Section 2: Priority Score Radar
+
+Below the ranking you will find a **spider chart** (also called a radar chart) with three axes:
+
+| Axis | What it measures |
+|------|------------------|
+| **Diversity** | How many different BGC classes are represented among this assembly's gene clusters. A highly diverse assembly produces multiple types of natural products. |
+| **Novelty** | The average novelty of this assembly's BGCs --- how distant they are from known, experimentally characterised BGCs in the MIBiG database. |
+| **Density** | The number of BGCs per megabase of assembled sequence. A dense assembly packs more biosynthetic potential into its genome. |
+
+The chart overlays three shapes:
+
+1. **This assembly** (solid coloured polygon) --- the evaluated assembly's scores.
+2. **Database mean** (dashed grey polygon) --- the average scores across all assemblies in the database.
+3. **90th percentile** (dotted green polygon) --- the scores at the 90th percentile, representing the threshold for the top 10% of assemblies.
+
+**How to read it:**
+
+- If the solid polygon extends beyond the dashed grey polygon on all three axes, this assembly is above average in every dimension.
+- If the solid polygon reaches or exceeds the dotted green polygon, the assembly is in the top 10% for that metric.
+- An assembly that excels on one axis but falls short on others may still be a good candidate depending on your priorities. For example, if you are specifically hunting for novel chemistry, a high-novelty assembly with moderate diversity and density may be exactly what you need.
+
+## Section 3: Score Percentile Distributions
+
+This section shows a row of **gauge charts**, one for each metric:
+
+- **Novelty Percentile** --- what fraction of all assemblies have a lower novelty score than this one.
+- **Diversity Percentile** --- what fraction of all assemblies have fewer distinct BGC classes.
+- **Density Percentile** --- what fraction of all assemblies have fewer BGCs per megabase.
+
+Each gauge is a semicircular dial with the needle pointing to the percentile value (0--100). The dial is colour-coded: green for the top quartile (75--100), yellow for the middle two quartiles (25--75), and red for the bottom quartile (0--25).
+
+**How to read it:**
+
+A percentile of 85 means that 85% of all assemblies in the database score lower than this one on that metric. The higher the percentile, the more exceptional the assembly is on that dimension.
+
+## Section 4: BGC Triad (scoped)
+
+Below the score panels you will find the familiar **BGC Triad** --- the same three-panel layout used in Explore mode (BGC Roster, BGC Space Map, BGC Detail) --- but scoped to show only the BGCs that belong to the evaluated assembly.
+
+**How to use it:**
+
+- **BGC Roster** --- scan the table to see how many BGCs the assembly carries, their classes, and their individual novelty scores. Sort by novelty to find the most unusual clusters.
+- **BGC Space Map** --- the UMAP projection shows where this assembly's BGCs sit relative to each other. Tight clusters suggest redundant chemistry; scattered points suggest diverse potential.
+- **BGC Detail** --- click any BGC in the roster or on the map to see its domain architecture, predicted products, and related information. Right-click a BGC and select "Evaluate BGC" to generate the full [BGC Assessment Report](bgc-report.qmd) for that cluster.
+
+## Section 5: Redundancy Matrix
+
+The Redundancy Matrix is a table that categorises every BGC in this assembly according to how well characterised its Gene Cluster Family (GCF) is:
+
+| Category | Meaning | Implication |
+|----------|---------|-------------|
+| **Novel GCF** | This BGC belongs to a GCF that contains no experimentally validated members from MIBiG. | Highest novelty. The chemistry produced by this family is unknown. |
+| **Known GCF, no type strain** | The GCF has validated members, but none of them come from a type strain (a publicly deposited, purchasable culture). | Moderate novelty. The chemistry is partly known, but you cannot easily obtain the reference organism. |
+| **Known GCF, type strain available** | The GCF has validated members from at least one type strain. | Low novelty for this specific chemistry. You could obtain the type strain and study the same pathway more conveniently. |
+
+**How to read it:**
+
+- If most BGCs fall into the "Novel GCF" column, this assembly is a strong candidate for discovering new natural products.
+- If most BGCs fall into the "Known GCF, type strain available" column, this assembly offers limited discovery potential --- similar chemistry is already accessible in culturable organisms.
+- A mix of categories is common. Focus your attention on the Novel GCF entries.
+
+## Section 6: BGC Embeddings Map
+
+The final section is a **UMAP projection** of the full BGC embedding space. Every BGC in the database appears as a small dot, coloured by BGC class. The evaluated assembly's BGCs are highlighted as large, labelled points. MIBiG reference BGCs (experimentally validated clusters with known products) appear as diamond-shaped landmarks.
+
+**How to read it:**
+
+- BGCs from the evaluated assembly that sit far from any MIBiG landmark are the most novel --- they occupy regions of chemical space where no characterised compound exists.
+- BGCs that cluster near MIBiG landmarks are likely to produce similar chemistry to the known compound.
+- The relative positions of the assembly's BGCs tell you about internal diversity. If they are spread across the map, the assembly produces chemically diverse products. If they cluster together, the products are likely related.
+
+## Tips
+
+- **Start with the radar chart for a quick overview**, then drill into individual sections for detail.
+- **The Redundancy Matrix is the most actionable section** for making a go/no-go decision. It directly answers: "Can I find similar chemistry elsewhere in a more convenient organism?"
+- **Use the scoped BGC Triad** to identify specific BGCs worth evaluating individually. The assembly report tells you whether the organism is interesting; the [BGC report](bgc-report.qmd) tells you which specific gene cluster to target.
+- **Cross-reference with the Assembly Space Map** from Explore mode. An assembly in a densely populated region of the map may score well individually but offer little that its neighbours do not.
+
+## Related pages
+
+- [Evaluate Overview](evaluate-overview.qmd) --- all entry points and the general Evaluate workflow
+- [Evaluate a Database Assembly](evaluate-db-assembly.qmd) --- how to trigger this report for a database assembly
+- [Upload an Assembly](upload-assembly.qmd) --- how to trigger this report for an uploaded assembly
+- [BGC Assessment Report](bgc-report.qmd) --- the equivalent report for a single BGC
+- [Scores and Metrics Reference](scores-metrics.qmd) --- formal definitions of every score
+- [GCF Explained](gcf-explained.qmd) --- background on Gene Cluster Families
+- [Glossary](glossary.qmd) --- quick definitions of all terms

@@ -46,10 +46,10 @@ export function ExploreLayout() {
 
       {/* Top section: Assembly panels — Roster full height left, Map + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="Assembly Roster" className="xl:row-span-2" constrained>
+        <PanelContainer title="Assembly Roster" className="xl:row-span-2" constrained dataTour="assembly-roster">
           <AssemblyRoster />
         </PanelContainer>
-        <PanelContainer title="Assembly Space Map" className="h-full" constrained>
+        <PanelContainer title="Assembly Space Map" className="h-full" constrained dataTour="assembly-space-map">
           <AssemblyScatter />
         </PanelContainer>
         <PanelContainer title="Assembly Stats" className="h-full" constrained actions={<AssemblyStatsActions />}>
@@ -66,7 +66,7 @@ export function ExploreLayout() {
 
       {/* Bottom section: BGC panels — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained actions={<BgcSourceBadge />}>
+        <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained actions={<BgcSourceBadge />} dataTour="bgc-roster">
           <BgcRoster />
         </PanelContainer>
         <PanelContainer title="BGC Space Map" className="h-full" constrained actions={<BgcSourceBadge />}>

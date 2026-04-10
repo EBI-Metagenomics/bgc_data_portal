@@ -1,0 +1,96 @@
+---
+title: "Evaluate Asset"
+subtitle: "Generate a comprehensive assessment for a single assembly or BGC"
+---
+
+## Goal
+
+Evaluate mode produces a detailed assessment report for one assembly or one biosynthetic gene cluster (BGC). The report answers a practical question: *is this candidate worth investing bench time and reagents in?* It does so by computing percentile ranks, novelty breakdowns, redundancy analyses, and chemical-space context that go well beyond the summary scores visible in Explore or Search mode.
+
+You can evaluate assets that already exist in the database or upload your own files for ephemeral analysis. Uploaded files are never added to the database --- the platform processes them in memory, generates the report, and discards the data when you close the tab.
+
+## When to use Evaluate
+
+Use Evaluate mode when you can answer "yes" to any of these questions:
+
+- **Have you narrowed your candidates to a handful of assemblies or BGCs** and need to make a final selection?
+- **Do you want to understand *why* a particular BGC scores high or low** on novelty, and which aspects of its biology drive that score?
+- **Have you sequenced or assembled your own organism** and want to see how its BGCs compare with everything in the database before committing to wet-lab work?
+- **Did a collaborator send you a GenBank file** and you want a quick assessment without running a full bioinformatics pipeline?
+
+If you are still browsing broadly, start with [Explore mode](explore-overview.qmd). If you are searching for specific enzyme architectures or chemical scaffolds, use [Search mode](search-overview.qmd) first and come back here once you have candidates.
+
+## Three entry points
+
+There are three ways to enter Evaluate mode, each suited to a different moment in your workflow.
+
+### 1. Right-click from any roster
+
+While browsing assemblies in Explore mode or reviewing BGC hits in Search mode, right-click any row in the roster table. The context menu offers **Evaluate Assembly** or **Evaluate BGC**. Selecting either option switches the dashboard to Evaluate mode and immediately begins generating the assessment report for that item.
+
+This is the fastest path when you spot an interesting candidate while exploring or searching.
+
+### 2. Switch to Evaluate mode and enter an accession
+
+Click the **Evaluate** tab in the mode selector at the top of the dashboard. The sidebar presents a text field where you can type or paste a database accession (for example, `GCA_003150795.1` for an assembly or `BGC0000001` for a BGC). Press Enter or click **Evaluate** to generate the report.
+
+Use this path when you already know the accession --- perhaps from a publication, a collaborator's email, or your own notes.
+
+### 3. Upload a file
+
+In Evaluate mode the sidebar also contains a drag-and-drop upload area. You can upload a `.tar.gz` archive containing an assembly or a single GenBank file containing a BGC. The platform processes the upload ephemerally: it annotates the file, computes scores, and generates the same assessment report you would see for a database entry, but it never stores your data.
+
+See [Upload an Assembly](upload-assembly.qmd) and [Upload a BGC](upload-bgc.qmd) for format requirements and step-by-step instructions.
+
+## What happens when you evaluate
+
+Regardless of which entry point you use, the platform performs the same analysis pipeline:
+
+1. **Retrieves or computes metadata.** For database entries it pulls pre-computed scores. For uploads it runs annotation on the fly.
+2. **Computes percentile ranks.** Every score is compared against the full database distribution to produce a percentile rank, telling you where this asset stands relative to all others.
+3. **Generates the assessment report.** The report layout depends on whether you are evaluating an assembly or a BGC:
+   - **Assembly Assessment Report** --- priority ranking, radar chart, score distributions, BGC Triad, redundancy matrix, and embedding map. See [Reading the Assembly Report](assembly-report.qmd).
+   - **BGC Assessment Report** --- GCF placement, novelty decomposition, domain architecture analysis, comparison with the nearest validated BGC, and embedding maps. See [Reading the BGC Report](bgc-report.qmd).
+
+## Step-by-step: evaluating a database assembly
+
+1. **Switch to Evaluate mode** using the tab selector at the top of the dashboard.
+2. **Enter the assembly accession** in the text field in the sidebar (for example, `GCA_003150795.1`).
+3. **Press Enter** or click **Evaluate**.
+4. **Wait for the report.** A progress indicator appears while the platform computes percentile ranks and contextual analyses. This typically takes a few seconds for database entries.
+5. **Read the report.** The main area now displays the [Assembly Assessment Report](assembly-report.qmd). Scroll through the sections or use the section navigation on the right.
+
+## Step-by-step: evaluating an uploaded file
+
+1. **Switch to Evaluate mode.**
+2. **Drag your file** onto the upload area in the sidebar, or click the area to open a file picker.
+3. **Wait for processing.** Uploaded files require annotation, so processing takes longer than database entries --- typically 30 seconds to a few minutes depending on assembly size.
+4. **Read the report.** The same assessment report appears, with an **Uploaded** badge in the header to indicate that this asset is ephemeral.
+
+## What you will see
+
+The report fills the entire main area of the dashboard. A navigation bar along the right edge lists the report sections so you can jump directly to any part. The sidebar remains visible with the accession field and upload area, allowing you to evaluate another asset without leaving the mode.
+
+Key visual elements common to both report types include:
+
+- **Percentile gauges** --- semicircular gauges showing where each score falls in the database distribution.
+- **Embedding maps** --- UMAP projections that place the evaluated asset in the context of the full catalogue and MIBiG reference landmarks.
+- **Score tables** --- structured tables listing every metric with its raw value, percentile, and a brief interpretation.
+
+## Tips
+
+- **Evaluate before and after filtering.** Percentile ranks are computed against the entire database. If you filtered heavily in Explore mode before right-clicking "Evaluate", the report will still show the global percentile, which may differ from the asset's rank within your filtered subset.
+- **Compare two candidates side by side.** Open a second browser tab, navigate to Evaluate mode, and enter a different accession. Place the tabs side by side to compare reports visually.
+- **Use the cross-mode links.** Every assessment report includes links to pivot into Explore or Search mode scoped to the evaluated asset's neighbourhood. See [Cross-Mode Transitions from Evaluate](cross-mode-evaluate.qmd).
+- **Ephemeral uploads are private.** Uploaded files are processed in your browser session and are never persisted to the server or shared with other users.
+
+## Related pages
+
+- [Evaluate a Database Assembly](evaluate-db-assembly.qmd) --- detailed instructions for database assemblies
+- [Evaluate a Database BGC](evaluate-db-bgc.qmd) --- detailed instructions for database BGCs
+- [Upload an Assembly](upload-assembly.qmd) --- format requirements and upload walkthrough
+- [Upload a BGC](upload-bgc.qmd) --- format requirements and upload walkthrough
+- [Assembly Assessment Report](assembly-report.qmd) --- how to read every section of the assembly report
+- [BGC Assessment Report](bgc-report.qmd) --- how to read every section of the BGC report
+- [Cross-Mode Transitions from Evaluate](cross-mode-evaluate.qmd) --- pivot to Explore or Search from Evaluate
+- [Scores and Metrics Reference](scores-metrics.qmd) --- full definitions of every score

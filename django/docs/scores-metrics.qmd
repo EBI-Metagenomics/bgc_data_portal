@@ -1,0 +1,163 @@
+---
+title: "Scores and Metrics Reference"
+subtitle: "Formal definitions of every score used in the platform"
+---
+
+## Goal
+
+To provide a single reference page where you can look up the definition, range, and interpretation of every quantitative score displayed in the BGC Discovery Platform. This page covers scores at the BGC level, the assembly level, and the percentile and decomposition scores available only in Evaluate mode.
+
+## BGC-level scores
+
+These scores are computed for every individual biosynthetic gene cluster (BGC) in the database and are visible in the BGC Roster, BGC Detail panel, and BGC Assessment Report.
+
+### Novelty Score
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The cosine distance between this BGC's protein embedding vector and the embedding of the nearest experimentally validated BGC in MIBiG. |
+| **Interpretation** | A score of 0 means the BGC is identical (in embedding space) to a known, characterised BGC. A score of 1 means it is maximally distant from every characterised BGC. Higher values indicate greater novelty. |
+| **How it is calculated** | The platform computes a 1152-dimensional embedding vector for each BGC by passing its protein sequences through a pre-trained protein language model (ESM). It then calculates the cosine distance between this vector and every MIBiG BGC's vector, and reports the minimum distance as the Novelty Score. |
+
+The Novelty Score is the single most important metric for bioprospecting. A BGC with a Novelty Score above 0.7 has no close relative among characterised natural products and is a strong candidate for novel chemistry.
+
+### Domain Novelty
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The fraction of Pfam protein domains in this BGC that are not found in any MIBiG-validated BGC. |
+| **Interpretation** | A score of 0 means every domain in this BGC also appears in at least one validated BGC. A score of 1 means none of its domains have been seen in any validated BGC. |
+| **How it is calculated** | The platform identifies all Pfam domains in the BGC, counts how many are absent from the full MIBiG domain catalogue, and divides by the total number of domains. |
+
+Domain Novelty complements the Novelty Score. A BGC can have a moderate Novelty Score (its overall embedding is not far from known BGCs) but high Domain Novelty (it contains specific enzyme domains never seen in validated clusters). This combination suggests a BGC that uses a familiar biosynthetic framework but incorporates unusual enzymatic steps.
+
+### Nearest Validated Distance
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The Euclidean distance in embedding space between this BGC and the nearest MIBiG-validated BGC, normalised to the maximum observed distance in the database. |
+| **Interpretation** | Functionally similar to the Novelty Score but uses Euclidean rather than cosine distance. Provided for users who prefer a distance metric that accounts for vector magnitude as well as direction. |
+
+In practice, the Novelty Score (cosine distance) and Nearest Validated Distance (Euclidean distance) are highly correlated. Most users can rely on the Novelty Score alone.
+
+## Assembly-level scores
+
+These scores are computed for every assembly in the database and are visible in the Assembly Roster, Assembly Detail panel, and Assembly Assessment Report.
+
+### Assembly Novelty
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The mean Novelty Score across all BGCs belonging to this assembly. |
+| **Interpretation** | An assembly with high novelty carries BGCs that are, on average, distant from all characterised gene clusters. |
+
+### Diversity
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The normalised richness of BGC classes represented in this assembly. Calculated as the number of distinct BGC broad classes (Polyketide, NRP, RiPP, Terpene, etc.) divided by the total number of broad classes observed across the entire database. |
+| **Interpretation** | A score of 1 means this assembly carries every BGC class present in the database. A score near 0 means it carries only one class. Higher diversity suggests a broader biosynthetic repertoire. |
+
+An assembly with high novelty but low diversity may carry many novel BGCs that all belong to the same chemical class. Conversely, an assembly with moderate novelty and high diversity produces many types of natural products, even if none is individually groundbreaking.
+
+### Density
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to theoretical maximum (unbounded, but typically 0--50) |
+| **Definition** | The number of BGCs per megabase (Mb) of assembled sequence. |
+| **Interpretation** | A higher density means the organism devotes a larger fraction of its genome to secondary metabolism. Organisms like *Streptomyces* species commonly have densities above 10 BGCs/Mb, while typical *E. coli* strains carry fewer than 2 BGCs/Mb. |
+| **Units** | BGCs per megabase |
+
+Density is useful for identifying organisms that are "biosynthetic specialists" --- they invest heavily in natural product production relative to their genome size.
+
+### Taxonomic Novelty
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | A measure of how under-represented this assembly's taxonomic lineage is in the database. Calculated as the inverse frequency of the assembly's genus (or the nearest resolved taxonomic rank) among all assemblies. |
+| **Interpretation** | A score near 1 means very few assemblies in the database belong to this taxonomic group. A score near 0 means the group is well-represented. High Taxonomic Novelty suggests that the organism comes from an under-explored lineage, which often correlates with novel chemistry. |
+
+## Percentile scores (Evaluate mode only)
+
+When you evaluate a single assembly or BGC, the platform computes percentile ranks for every score. Percentile ranks are not stored in the database; they are calculated on demand against the current distribution of all assets.
+
+### How percentiles work
+
+A percentile of 85 means that 85% of all assemblies (or BGCs) in the database have a lower value for that metric. The platform bins the full distribution into 100 equal-width buckets and reports the bucket in which the evaluated asset falls.
+
+Percentile ranks are useful for comparing assets across metrics that have different scales. A Novelty Score of 0.6 and a Density of 15 BGCs/Mb are not directly comparable, but if both correspond to the 90th percentile, you know the asset is in the top 10% on both dimensions.
+
+### Available percentiles
+
+In the Assembly Assessment Report:
+
+- Novelty Percentile
+- Diversity Percentile
+- Density Percentile
+- Taxonomic Novelty Percentile
+
+In the BGC Assessment Report:
+
+- Novelty Score Percentile
+- Domain Novelty Percentile
+
+## Novelty decomposition (BGC Evaluate only)
+
+When you evaluate a single BGC, the platform decomposes its overall novelty into three independent axes. These are displayed only in the [BGC Assessment Report](bgc-report.qmd) and are not pre-computed for every BGC in the database.
+
+### Sequence Novelty
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The average pairwise sequence identity between this BGC's proteins and the best-matching proteins in the nearest MIBiG BGC, inverted (1 minus identity). |
+| **Interpretation** | High values mean the enzymes encoded by this BGC are sequence-divergent from their nearest characterised homologues. |
+
+### Chemistry Novelty
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The Tanimoto distance between the predicted molecular fingerprint of this BGC's product and the fingerprints of all known MIBiG compounds. |
+| **Interpretation** | High values mean the predicted product is chemically dissimilar to all known natural products in MIBiG. |
+
+### Architecture Novelty
+
+| Property | Value |
+|----------|-------|
+| **Range** | 0 to 1 |
+| **Definition** | The Jaccard distance between the ordered set of Pfam domains in this BGC and the ordered domain sets of all MIBiG BGCs. |
+| **Interpretation** | High values mean the arrangement of biosynthetic domains is unlike any known BGC. |
+
+These three axes are independent. A BGC can score high on one axis and low on the others. See the [BGC Assessment Report](bgc-report.qmd) page for guidance on interpreting combinations of these scores.
+
+## Summary table
+
+| Score | Level | Range | Higher means | Available in |
+|-------|-------|-------|-------------|-------------|
+| Novelty Score | BGC | 0--1 | More distant from validated BGCs | Roster, Detail, Report |
+| Domain Novelty | BGC | 0--1 | More unique domains | Roster, Detail, Report |
+| Nearest Validated Distance | BGC | 0--1 | Further from nearest MIBiG BGC | Detail, Report |
+| Assembly Novelty | Assembly | 0--1 | Higher average BGC novelty | Roster, Detail, Report |
+| Diversity | Assembly | 0--1 | More BGC class variety | Roster, Detail, Report |
+| Density | Assembly | 0--50+ | More BGCs per Mb | Roster, Detail, Report |
+| Taxonomic Novelty | Assembly | 0--1 | More under-explored lineage | Roster, Detail, Report |
+| Percentile ranks | Both | 0--100 | Higher rank in database | Report only |
+| Sequence Novelty | BGC | 0--1 | More divergent enzymes | BGC Report only |
+| Chemistry Novelty | BGC | 0--1 | More dissimilar product | BGC Report only |
+| Architecture Novelty | BGC | 0--1 | More unusual domain arrangement | BGC Report only |
+
+## Related pages
+
+- [Assembly Assessment Report](assembly-report.qmd) --- where assembly scores appear in context
+- [BGC Assessment Report](bgc-report.qmd) --- where BGC scores appear in context
+- [GCF Explained](gcf-explained.qmd) --- the clustering that underpins family-level metrics
+- [MIBiG and Validated BGCs](mibig-validated.qmd) --- the reference set used for novelty calculations
+- [Glossary](glossary.qmd) --- short definitions of all terms

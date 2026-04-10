@@ -1,0 +1,137 @@
+---
+title: "Quickstart: Find an Assembly in 5 Minutes"
+subtitle: "A step-by-step walkthrough from zero to shortlisting"
+---
+
+This guide walks you through a single, end-to-end session: starting from the landing page, finding a promising assembly, inspecting its BGCs, and exporting a shortlist. No prior experience with the platform is required.
+
+## Goal
+
+By the end of this page you will have:
+
+1. Opened the Discovery Platform.
+2. Filtered the assembly catalogue to a manageable set.
+3. Sorted assemblies by novelty to surface the most promising candidates.
+4. Inspected the BGCs of a single assembly.
+5. Added a BGC to your shortlist.
+6. Exported the shortlist.
+
+## Before you begin
+
+You need a modern web browser (Chrome, Firefox, Safari, or Edge) and an internet connection. The platform does not require login or installation.
+
+## Step 1: Open the platform
+
+Navigate to the Discovery Platform. You will land on the **Explore Assemblies** mode. The screen is divided into two halves:
+
+- **Top half (Assembly Triad):** a sortable roster of assemblies on the left, a scatter plot (Assembly Space Map) in the centre, and summary statistics on the right.
+- **Bottom half (BGC Triad):** currently empty --- it will populate when you select an assembly.
+
+A filter sidebar sits on the left edge of the screen. It is collapsed by default.
+
+## Step 2: Enable the Type Strain toggle
+
+Open the filter sidebar by clicking the funnel icon. At the top of the sidebar you will see a **Type Strain** toggle. Turn it on.
+
+This restricts results to assemblies that correspond to organisms deposited in public culture collections. Type strains are organisms you can actually order and grow in the lab, which makes them the most actionable candidates for bioprospecting.
+
+::: {.callout-tip}
+If you are open to working with uncultured organisms (metagenome-assembled genomes, for example), leave this toggle off. You will see a much larger catalogue, but some candidates may be difficult to obtain.
+:::
+
+## Step 3: (Optional) Apply additional filters
+
+While the sidebar is open, you can narrow the results further:
+
+- **Taxonomy tree:** Expand the tree to restrict results to a particular phylum, class, or genus. For example, if you are interested in actinobacterial natural products, expand `Bacteria > Actinomycetota` and click the checkbox.
+- **BGC Class toggles:** Enable one or more BGC classes to focus on a particular type of biosynthetic machinery. For a first pass, leave all classes enabled.
+- **Biome lineage:** If you are studying a specific environment (e.g. marine sediment), type the first few letters and select from the autocomplete list.
+
+For this quickstart, applying the Type Strain toggle alone is sufficient.
+
+## Step 4: Click Run Query
+
+Press the **Run Query** button at the bottom of the filter sidebar (or at the top of the Assembly Roster). The platform sends your filters to the server and returns matching assemblies. Depending on your filters, this may take one to three seconds.
+
+The Assembly Roster now shows a table of assemblies. Each row displays:
+
+| Column | What it means |
+|---|---|
+| Accession | The unique identifier for the assembly (e.g. GCA_000203835.1) |
+| Organism | The species or strain name |
+| BGC count | How many BGCs were detected in this assembly |
+| Novelty | Average distance of this assembly's BGCs from known, validated gene clusters (0--1 scale; higher is more novel) |
+| Diversity | Fraction of known BGC classes represented in this assembly (0--1 scale) |
+| Density | Number of BGCs per megabase of assembled sequence |
+
+## Step 5: Sort by Novelty
+
+Click the **Novelty** column header to sort assemblies in descending order. The assemblies at the top of the list have BGCs that are, on average, most distant from any experimentally characterised gene cluster. These are your highest-priority candidates for discovering new chemistry.
+
+::: {.callout-note}
+High novelty does not guarantee a useful compound. It means the BGCs are *unlike* anything already in the MIBiG database of validated clusters. Some of these may be genuinely new; others may be partial or poorly annotated. The next steps help you distinguish between the two.
+:::
+
+## Step 6: Click an assembly
+
+Click any row in the Assembly Roster. Two things happen:
+
+1. The assembly is highlighted in the Assembly Space Map (the scatter plot). You can see where it sits relative to the rest of the catalogue.
+2. The **BGC Triad** in the bottom half of the screen populates with the BGCs belonging to that assembly.
+
+The BGC Triad has three panels:
+
+- **BGC Roster** (left): A table listing every BGC in the selected assembly, with columns for accession, classification, size, novelty score, and domain novelty.
+- **BGC Space Map** (centre): A UMAP scatter plot showing all BGCs, with MIBiG validated BGCs as labelled landmarks. The selected assembly's BGCs are highlighted.
+- **BGC Stats** (right): Summary charts showing the distribution of BGC classes and ChemOnt classifications for the selected assembly's BGCs.
+
+## Step 7: Inspect individual BGCs
+
+In the BGC Roster, click a row to open the **BGC Detail Panel**. This panel shows:
+
+- **Classification path:** The BGC class hierarchy (e.g. `Polyketide.Macrolide`).
+- **Completeness badge:** Whether the BGC is complete or partial.
+- **Scores:** Novelty, Domain Novelty, and Nearest Validated Distance with the MIBiG accession of the closest match.
+- **Region plot:** A graphical representation of the gene positions along the contig, with Pfam domains colour-coded on each coding sequence.
+- **Chemical compounds:** If the BGC has predicted natural products, their ChemOnt classification hierarchy and SMILES structure appear here.
+
+Spend a moment evaluating the BGC:
+
+- Is it complete (not partial)?
+- Is the novelty score high?
+- Does the domain architecture look reasonable (multiple biosynthetic domains in a coherent arrangement)?
+- Is the nearest validated BGC distant (high nearest-validated distance)?
+
+If the answer to most of these is yes, the BGC is a strong candidate. For a detailed guide to reading this panel, see [BGC Detail Panel](bgc-detail.qmd).
+
+## Step 8: Add to your shortlist
+
+If the BGC looks promising, click the **Add to BGC Shortlist** button in the Detail Panel. A small counter in the header bar increments, confirming the addition. You can add up to 20 BGCs.
+
+To shortlist the entire assembly instead, return to the Assembly Roster and click the pin icon next to the assembly row, or use the **Add to Assembly Shortlist** button in the assembly detail view. You can shortlist up to 20 assemblies.
+
+## Step 9: Repeat
+
+Return to the Assembly Roster and click the next assembly in the list. Repeat steps 6--8 for as many candidates as you like. You can also adjust your filters and re-run the query at any time --- your shortlists are preserved.
+
+## Step 10: Export your shortlist
+
+When you are satisfied with your selections, open the shortlist panel by clicking the shortlist icon in the header bar.
+
+- **Assembly shortlist:** Click **Export CSV**. You will receive a comma-separated file containing each assembly's accession, organism name, scores, BGC count, and type strain catalogue URL. This file is ready to share with collaborators or import into a spreadsheet.
+- **BGC shortlist:** Click **Export GenBank**. You will receive a multi-record GenBank file containing the nucleotide sequence, gene annotations, and Pfam domain annotations for each shortlisted BGC. This file can be opened in tools such as antiSMASH, Artemis, or SnapGene.
+
+## What to do next
+
+- **Understand the scores in depth:** Read [Assembly Scores](assembly-scores.qmd) and the [BGC Detail Panel](bgc-detail.qmd) guide.
+- **Learn about all available filters:** See the [Filtering](filtering.qmd) page.
+- **Search for specific chemistry:** Switch to Search BGCs mode and try a domain query, a sequence search, or a chemical structure search.
+- **Evaluate a candidate in depth:** Select an assembly or BGC and switch to Evaluate Asset mode for a comprehensive assessment report.
+- **Review the terminology:** The [Key Concepts](key-concepts.qmd) page defines every term used in the platform.
+
+## Tips
+
+- You can right-click any assembly or BGC row to access shortlist actions without opening the detail panel.
+- The Assembly Space Map axes are configurable. Try switching from the default axes to Novelty vs. Density to spot assemblies that are both novel and BGC-rich.
+- Shortlists persist in your browser's local storage. They survive page reloads and are still there when you come back tomorrow.
+- Filters are preserved when you switch between Explore, Search, and Evaluate modes. Set your taxonomy filter once and it applies everywhere.

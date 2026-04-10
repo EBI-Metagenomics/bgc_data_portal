@@ -1,6 +1,7 @@
 import { useQueryStore } from "@/stores/query-store";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 const MAX_AA_LENGTH = 5000;
 
@@ -48,7 +49,7 @@ export function SequenceSearch() {
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-xs">Similarity Threshold</Label>
+          <Label className="flex items-center gap-1 text-xs">Similarity Threshold <HelpTooltip tooltipKey="cosine_similarity" side="right" /></Label>
           <span className="font-mono text-xs text-muted-foreground">
             {sequenceThreshold.toFixed(2)}
           </span>

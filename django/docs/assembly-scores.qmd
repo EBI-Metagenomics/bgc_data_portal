@@ -1,0 +1,157 @@
+---
+title: "Understanding Assembly Scores"
+subtitle: "Novelty, Diversity, Density, and Taxonomic Novelty"
+---
+
+## Goal
+
+This page explains the four scores that the platform computes for every assembly. After reading it, you will know what each score measures, how it is calculated, what its range means, and how to use it when deciding which assemblies to pursue.
+
+## When to use this page
+
+Refer to this page when:
+
+- You are sorting the Assembly Roster and want to understand what the numbers mean.
+- You are comparing two assemblies and need to know which score dimension matters most for your question.
+- You are reading an Evaluate Asset report and want to interpret the percentile ranks.
+
+## Overview
+
+| Score | Range | Measures | High value means |
+|---|---|---|---|
+| **Novelty** | 0 -- 1 | Average distance from validated BGCs | BGCs are unlike anything characterised |
+| **Diversity** | 0 -- 1 | Fraction of known BGC classes present | Assembly covers many types of chemistry |
+| **Density** | 0 -- open | BGCs per megabase of assembled sequence | Genome is packed with biosynthetic clusters |
+| **Taxonomic Novelty** | 0 -- 1 | Underrepresentation of the taxon in the database | Organism's lineage is rare or unstudied |
+
+All four scores are precomputed during data ingestion and updated when new assemblies are loaded. Percentile ranks (0--100) are also available, so you can see how a given assembly compares to the full catalogue.
+
+## Novelty
+
+### What it measures
+
+The assembly novelty score reflects how different its BGCs are, on average, from experimentally validated gene clusters in the MIBiG database. It answers the question: "If I work on this organism, how likely am I to find chemistry that has not already been described?"
+
+### How it is computed
+
+1. Each BGC in the database has an embedding --- a 1,152-dimensional numerical vector computed from its protein sequences using the ESM protein language model. Think of this vector as a fingerprint that captures the overall biosynthetic character of the BGC.
+2. For each BGC, the platform finds the closest validated (MIBiG) BGC in embedding space using cosine distance. Cosine distance ranges from 0 (identical) to 1 (maximally different). This per-BGC value is stored as the BGC's **novelty score**.
+3. The assembly novelty score is the **average** of the novelty scores across all BGCs in that assembly.
+
+### Interpreting the values
+
+| Value range | Interpretation | Example |
+|---|---|---|
+| 0.0 -- 0.2 | Most BGCs closely resemble validated clusters | A *Streptomyces coelicolor* genome whose BGCs are well-known references |
+| 0.2 -- 0.5 | A mix of known and moderately novel BGCs | A *Streptomyces* species with several characterised BGCs and a few divergent ones |
+| 0.5 -- 0.7 | BGCs are substantially different from validated references | An actinobacterium from an undersampled environment with unusual domain architectures |
+| 0.7 -- 1.0 | BGCs are far from any validated cluster | A MAG from a deep-sea vent with no close MIBiG matches |
+
+### Practical advice
+
+High novelty is attractive but comes with caveats. A score above 0.7 for a complete genome assembly from a culturable type strain is a strong signal. The same score for a partial metagenome fragment may simply reflect incompleteness or misassembly. Always check the assembly type and the completeness of individual BGCs before committing to a high-novelty candidate.
+
+## Diversity
+
+### What it measures
+
+The assembly diversity score reflects the breadth of biosynthetic potential. It answers the question: "Does this organism make many different types of natural products, or does it specialise in one class?"
+
+### How it is computed
+
+1. Each BGC's classification path is parsed to extract its top-level (L1) class: Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, or Other.
+2. The number of distinct L1 classes present in the assembly is counted. This is the assembly's **L1 class count**.
+3. The platform divides the L1 class count by the total number of known L1 classes across the entire database to produce the diversity score.
+
+### Interpreting the values
+
+| Value range | Interpretation | Example |
+|---|---|---|
+| 0.0 -- 0.15 | Assembly has BGCs from only one class | A cyanobacterium with three terpene BGCs and nothing else |
+| 0.15 -- 0.4 | Two or three BGC classes represented | A *Bacillus* species with NRP and polyketide BGCs |
+| 0.4 -- 0.7 | Four or five BGC classes represented | A *Streptomyces* species with PKS, NRPS, RiPP, terpene, and siderophore BGCs |
+| 0.7 -- 1.0 | Nearly all known BGC classes present | Exceptionally versatile biosynthetic genomes |
+
+### Practical advice
+
+Diversity is most useful when you want a single organism that can serve as a broad platform for natural product discovery. A high-diversity assembly gives you more chances of finding something interesting, even if no single BGC is extremely novel. Conversely, a low-diversity, high-novelty assembly may have just one or two extraordinary BGCs worth investigating.
+
+## Density
+
+### What it measures
+
+The assembly density score reflects how much of the organism's genome is devoted to secondary metabolism. It answers the question: "Is this organism a prolific natural product producer relative to its genome size?"
+
+### How it is computed
+
+1. The total number of BGCs detected in the assembly is divided by the assembly size in megabases.
+2. The result is expressed as **BGCs per megabase**.
+
+Unlike novelty and diversity, density is not normalised to a 0--1 range. Typical values range from near zero (an organism with few or no BGCs) to 5 or more (an organism with dozens of BGCs in a compact genome).
+
+### Interpreting the values
+
+| Value range | Interpretation | Example |
+|---|---|---|
+| 0.0 -- 0.5 | Few BGCs relative to genome size | *Escherichia coli* with 1--2 BGCs in a 5 Mb genome |
+| 0.5 -- 2.0 | Moderate biosynthetic investment | A typical *Bacillus* or *Pseudomonas* species |
+| 2.0 -- 4.0 | Substantial biosynthetic genome fraction | *Streptomyces* species often fall in this range |
+| 4.0+ | Exceptionally dense | *Streptomyces* strains with 30+ BGCs in a 7--8 Mb genome |
+
+### Practical advice
+
+Density is particularly useful when comparing organisms of similar genome size. Among actinomycetes, a density above 3 suggests an organism that has evolved to invest heavily in chemical warfare. Note that density depends on assembly size, which is unknown for some metagenome fragments. In those cases, density is set to zero and should not be used for ranking.
+
+::: {.callout-warning}
+Density is undefined for assemblies without a known genome size. These assemblies will show a density of 0.0, which does not mean they lack BGCs --- it means the score cannot be computed. Filter by assembly type (genome) if density is important to your analysis.
+:::
+
+## Taxonomic Novelty
+
+### What it measures
+
+The taxonomic novelty score reflects how underrepresented an assembly's lineage is in the database. It answers the question: "Is this organism from a well-studied clade, or from a lineage where few genomes have been sequenced?"
+
+### How it is computed
+
+1. Each assembly is assigned a taxonomy path based on the GTDB lineage of its contigs (e.g. `Bacteria.Actinomycetota.Actinomycetia.Streptomycetales.Streptomycetaceae.Streptomyces`).
+2. The platform counts how many assemblies in the database share the same genus (or the most specific rank available).
+3. Assemblies from rare genera receive a high taxonomic novelty score; assemblies from well-represented genera receive a low score. The score is normalised to the 0--1 range using the inverse of the genus count relative to the maximum genus count in the database.
+
+### Interpreting the values
+
+| Value range | Interpretation | Example |
+|---|---|---|
+| 0.0 -- 0.2 | Genus is very well represented in the database | *Streptomyces*, with hundreds of genome assemblies |
+| 0.2 -- 0.5 | Genus has moderate representation | A less-studied actinobacterial genus with 10--50 assemblies |
+| 0.5 -- 0.8 | Genus is poorly represented | A genus with fewer than 10 assemblies in the database |
+| 0.8 -- 1.0 | Genus is nearly unique in the database | A single representative of an obscure lineage |
+
+### Practical advice
+
+Taxonomic novelty is a proxy for unexplored biosynthetic space. Organisms from well-studied genera (*Streptomyces*, *Bacillus*) have low taxonomic novelty because their relatives have been extensively screened. Organisms from rare lineages may harbour fundamentally different enzymology. Combining high taxonomic novelty with high BGC novelty produces the strongest candidates for discovering truly new chemistry.
+
+## Using scores together
+
+No single score tells the whole story. Here are common combinations and what they suggest:
+
+| Novelty | Diversity | Density | Tax. Novelty | Interpretation |
+|---|---|---|---|---|
+| High | High | High | High | Dream candidate: a rare organism packed with diverse, novel BGCs. Prioritise this. |
+| High | Low | Low | High | A rare organism with few BGCs, but those few are highly novel. Worth a look if individual BGCs pass quality checks. |
+| Low | High | High | Low | A well-known prolific producer. Useful for discovering new derivatives of known compounds, less useful for entirely new scaffolds. |
+| High | Low | High | Low | A common genus with many BGCs, but unusually novel ones. May indicate recent horizontal gene transfer. |
+
+## Percentile ranks
+
+Each assembly's scores are also expressed as percentile ranks (0--100). A percentile rank of 85 for novelty means that 85% of all assemblies in the database have a lower novelty score. Percentile ranks make it easy to compare assemblies without memorising absolute score ranges.
+
+Percentile ranks are computed using SQL window functions across the full assembly catalogue and are updated whenever new data is ingested.
+
+## Related pages
+
+- [Explore Assemblies](explore-overview.qmd) --- how to use scores in the Assembly Roster and Space Map
+- [The Assembly Space Map](assembly-space-map.qmd) --- plotting assemblies by pairs of scores
+- [Key Concepts](key-concepts.qmd) --- definitions of BGC, assembly, and related terms
+- [BGC Detail Panel](bgc-detail.qmd) --- per-BGC novelty and domain novelty scores
+- [Building and Exporting Your Shortlists](shortlists.qmd) --- exported CSV files include all four scores

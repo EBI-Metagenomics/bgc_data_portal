@@ -1,93 +1,95 @@
 ---
-title: "Introduction"
-# author: "Santiago Sanchez"
-date: "2025-07-08"
-number-sections: false
-format:
-  html:
-    embed-resources: true
-# output: html_document
+title: "BGC Discovery Platform"
+subtitle: "Find promising organisms for your bioprospecting effort, faster"
 ---
 
+## What is the Discovery Platform?
 
-Biosynthetic gene clusters (BGCs) encode the pathways for many natural products (for example antibiotics, siderophores, pigments and toxins). The **MGnify Biosynthetic Gene Clusters** portal gives natural product researchers rapid access to BGC predictions made uniformly across thousands of publicly available metagenomic assemblies processed by MGnify.
+The BGC Discovery Platform is a web application that helps experimental biochemists identify organisms and gene clusters worth pursuing in the laboratory. It indexes thousands of assemblies --- genomes, metagenomes, and genomic regions --- together with the biosynthetic gene clusters (BGCs) they carry. Each BGC encodes the enzymatic machinery that an organism uses to produce a natural product: an antibiotic, a siderophore, a pigment, or any of the thousands of small molecules that microbes synthesise to survive.
 
-The site lets you search, filter, compare and download BGC‑related information, then (if you wish) move to programmatic access later. Multiple independent detection tools are combined so you can focus quickly on the strongest candidates.
+Rather than reading through spreadsheets of accession numbers and BLAST reports, the platform lets you browse, filter, score, and compare assemblies and their BGCs in an interactive dashboard. You start with the full catalogue and narrow it down until you have a shortlist of candidates ready for wet-lab follow-up.
 
-## Quick start (3 minutes)
+## Who is it for?
 
-1. Go to “Explore BGCs”.
-2. Type a biome keyword (e.g. sediment) OR paste a BGC accession (MGYB...) OR select one or two BGC classes. Press Apply.
-3. Sort a column (e.g. Classes) and switch to the UMAP tab to see class clusters. Click any point or table row to open full details.
-4. Use the “Download results TSV” button if you want a local list to integrate with other tools.
+The platform is designed for researchers who:
 
-![](/img/landing_page_quicks.png)
+- Work at the bench and need to choose which organisms to culture, extract, or engineer.
+- Have chemistry or biology training but do not routinely run bioinformatics pipelines.
+- Want to prioritise novelty --- assemblies whose BGCs are unlike anything already characterised.
+- Need to evaluate whether a particular assembly or BGC is worth the investment of time and reagents.
 
-Want to search by a Pfam domain combination or a chemical scaffold? Open the appropriate tab in the same form (Sequence or Chemical Structure) and submit—no need to leave the page.
+If you already have a target organism, the platform can tell you how its biosynthetic potential compares with the rest of the database. If you are starting from scratch, it can help you find the most promising candidates.
 
-## When to use each search mode
+## Two entity levels
 
-- Keyword (top bar): a quick way to jump to something you already know (accessions, simple terms).
-- Advanced Search: for combining biological, functional and structural criteria (class + Pfam + biome + completeness).
-- Sequence Search: when you have a nucleotide or amino‑acid sequence fragment and want to find similar predicted regions.
-- Chemical Structure Search: early exploratory link between a molecule (draw or SMILES) and clusters that may produce related chemotypes.
-- Sequence Analysis page: experimental embedding; paste a sequence to see nearest clusters as JSON output you can save for downstream work.
+Everything in the platform revolves around two levels of biological organisation:
 
+**Assemblies** are the organisms (or communities) you might choose to work with. Each assembly is a sequenced genome, a metagenome-assembled genome (MAG), or a genomic region from an environmental sample. An assembly carries one or more BGCs, and the platform scores each assembly on how novel, diverse, and dense its BGC repertoire is.
 
-## Basic navigation
+**Biosynthetic Gene Clusters (BGCs)** are the stretches of DNA that encode the enzymes, regulators, and transport proteins needed to produce a natural product. Each BGC belongs to one assembly and is classified by the type of enzymatic machinery it uses (its BGC class) and by the chemical structure of the product it is predicted to make (its ChemOnt classification). The platform scores each BGC on how different it is from known, validated gene clusters.
 
-The **MGnify Biosynthetic Gene Clusters Portal** is designed with three primary components that help users navigate and utilise its features effectively. Below is an overview of these components:
+## Three modes of operation
 
-### 1. [Home page](landing-page-features.qmd)
+The dashboard is organised into three modes, accessible via tabs in the header. Filters you set in one mode carry over when you switch to another.
 
-The Home Page is your entry point to the **MGnify Biosynthetic Gene Clusters** portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:
+### Explore Assemblies
 
-- **Keyword search**: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the `GET /api/v1/keyword_search/` endpoint of the API.
-- **Access and explore options**:
-  - **Search BGCs**: Directs you to the Explore BGCs page for more detailed queries.
-  - **API Access**: Provides documentation on how to use the API for programmatic access to BGC data.
-  - **User Documentation**: Guides and examples to help you navigate and utilise the portal effectively.
-  - **Downloads**: Access the FTP site to download the latest data.
-  - **About Us**: Information about the project, including details on the EUREMAP initiative supporting marine bioprospecting research.
+Browse the full assembly catalogue without a specific hypothesis. Apply filters --- taxonomy, BGC class, biome, type strain status --- and sort the results by novelty, diversity, or density. The Assembly Space Map lets you see where each assembly sits relative to the rest of the catalogue. Select an assembly to inspect its BGCs in the BGC Triad below.
 
-### 2. [Explore BGCs page](explore-bgcs.qmd)
+Use this mode when you want to screen broadly and discover candidates you might not have considered. See [Explore Assemblies](explore-overview.qmd) for a full walkthrough.
 
-The Explore BGCs page is where users can perform detailed searches and view the results. It includes:
+### Search BGCs
 
-- **Tabbed search interface**: Three tabs (Advanced Search, Sequence Search, Chemical Structure Search) allow switching between search modalities without leaving the page.
-- **Advanced Search panel**: Build complex queries using BGC class names, accessions, biome lineage, Pfams, detector selection, and completeness. Equivalent to the `GET /api/v1/advanced_search/` endpoint.
-- **Sequence Search panel**: Paste nucleotide or amino acid sequence data (FASTA / raw) to search for similar BGC regions using configurable similarity strategies.
-- **Chemical Structure Search panel**: Draw a compound using the embedded JSME editor or paste a SMILES string and search for BGCs associated with biosynthetic potential for structurally similar metabolites.
-- **Results summary**: High‑level counts (regions, studies, assemblies, class distribution) for the current query.
-- **Results visualisation tabs**: Table (sortable, paginated), Cards (compound‑oriented view including optional rendered structures), and UMAP (2‑D embedding with class colouring and MiBIG highlighting). Clicking a table row or UMAP point opens the BGC Details page in a new tab.
-- **TSV export**: Download current (optionally sorted) results for offline analysis.
+Query the database with a specific molecular target in mind. You can search by Pfam domain combination (to find BGCs with a particular enzymatic architecture), by protein sequence (to find BGCs encoding similar enzymes), or by chemical structure (to find BGCs whose predicted products resemble a compound of interest). Results are ranked by similarity, and you can pivot from a hit BGC to its parent assembly with one click.
 
-### 3. [BGC Details page](bgc-details.qmd)
+Use this mode when you already know what kind of chemistry or enzyme you are looking for.
 
-The BGC Details Page provides an in-depth view of a specific biosynthetic gene cluster. Key features include:
+### Evaluate Asset
 
-- **Aggregated region overview**: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.
-- **BGC Plot**: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors. Hovering and clicking elements display further information.
-- **CDS Data**: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.
-- **Download options**: Allows you to download data related to the BGC in formats GeneBank, JSON, and FASTA. This is equivalent to calling the `GET /api/v1/contig_region/` endpoint of the API using the MGYC and start/end positions of the *aggregated region*.
+Perform a deep assessment of a single assembly or BGC. The platform computes percentile ranks, novelty breakdowns, redundancy analyses, and chemical-space context to help you decide whether a candidate is worth pursuing. You can evaluate assets already in the database or upload your own GenBank or FASTA files.
 
+Use this mode when you have narrowed your search to a handful of candidates and need to make a final decision.
 
-## [Use case examples](index.qmd)
+## Shortlists
 
-To help users better understand the practical applications of the platform, a series of **use case notebooks** have been provided. These notebooks demonstrate how to utilise the platform’s data and tools, including:
+As you work, you can pin assemblies and BGCs to your shortlists. Each shortlist holds up to 20 items. Assembly shortlists export as CSV files with scores and metadata. BGC shortlists export as multi-record GenBank files suitable for downstream annotation tools.
 
-You can explore these use cases in detail through the [Use Cases](index.qmd) section of the portal.
+Shortlists persist in your browser between sessions and remain available across all three modes. See [Building and Exporting Your Shortlists](shortlists.qmd) for details.
 
-## Glossary
+## What the platform indexes
 
-- **BGC (Biosynthetic Gene Cluster)**: A stretch of DNA containing the genes that together can make a natural product.
-- **MGYB**: The stable identifier we assign to an (aggregated) predicted region (the “BGC accession”). Use it to find or cite that region.
-- **MGYC**: A contig accession—the sequence fragment (assembly piece) on which the BGC sits.
-- **Completeness (Full / Single / Double)**: Whether the cluster appears fully internal to the contig (Full) or cut off by one (Single) or both (Double) contig ends (likely partial).
-- **Pfam**: A protein domain family; filtering by Pfam helps target clusters encoding specific enzymatic components.
-- **UMAP**: A method to project high‑dimensional similarity between clusters into 2D so you can visually see grouping by class or novelty.
-- **Asynchronous search**: You submit a query; the server works in the background; the page auto‑updates when ready.
-- **SMILES**: A compact text way to describe a chemical structure (can be pasted or generated by the drawing tool).
-- **MiBIG**: A reference collection of experimentally characterised biosynthetic gene clusters; used for the highlighted points in some plots.
+The database behind the platform is built from public genomic repositories and in-house annotation pipelines. At a high level, the data flow works like this:
 
-For more detailed instructions, please refer to the specific sections of the documentation.
+1. **Genome assemblies** are collected from GTDB (the Genome Taxonomy Database), MIBiG (the curated repository of validated BGCs), and MGnify (EBI's metagenomics analysis service).
+2. **BGC detection tools** (such as antiSMASH) scan each assembly for biosynthetic gene clusters. Every detected BGC is recorded with its coordinates, classification, and detection metadata.
+3. **Protein language models** (ESM) compute embedding vectors for each BGC's proteins. These 1,152-dimensional vectors capture the overall biosynthetic character of the cluster and enable similarity searches that go beyond simple sequence alignment.
+4. **Chemical annotation pipelines** predict the natural products each BGC is likely to produce and classify them using the ChemOnt ontology.
+5. **Scoring algorithms** compute novelty, diversity, density, and taxonomic novelty for every assembly and BGC. Gene cluster families (GCFs) are built by clustering BGC embeddings.
+6. **UMAP projections** reduce the high-dimensional embedding space to two dimensions for the scatter plots you see in the dashboard.
+
+All of this preprocessing happens before you open the platform. When you interact with the dashboard, you are querying precomputed scores and indexes, which is why the interface responds in seconds even across thousands of assemblies.
+
+## A typical workflow
+
+Most users follow a funnel-shaped workflow:
+
+1. **Set broad filters** in Explore Assemblies mode. Start with a taxonomic restriction (e.g. Actinomycetota) and optionally enable the Type Strain toggle.
+2. **Sort by novelty** in the Assembly Roster to surface the most promising organisms.
+3. **Scan the Assembly Space Map** to spot outliers and clusters.
+4. **Select an assembly** to inspect its BGCs in the BGC Triad.
+5. **Evaluate individual BGCs** using the BGC Detail Panel --- check domain architecture, novelty scores, completeness, and chemical predictions.
+6. **Shortlist** the best assemblies and BGCs as you go.
+7. **Switch to Evaluate mode** for your top candidates to get a comprehensive assessment report with percentile ranks, redundancy analysis, and chemical-space context.
+8. **Export** your shortlists as CSV (assemblies) or GenBank (BGCs) for wet-lab follow-up.
+
+This workflow is not mandatory. You can jump into Search mode with a specific query, skip Explore entirely, or start in Evaluate mode with a known accession. The three modes are designed to complement each other, and your filters and shortlists carry over between them.
+
+## Where to go next
+
+- **First time?** Start with the [Quickstart](quickstart.qmd) --- it walks you through finding an assembly in five minutes.
+- **Unfamiliar with BGC terminology?** Read the [Key Concepts](key-concepts.qmd) page first.
+- **Ready to explore?** Jump to the [Explore Assemblies](explore-overview.qmd) overview.
+- **Have a target in mind?** See the Search BGCs overview for domain, sequence, and chemical queries.
+- **Evaluating a candidate?** See the Evaluate Asset overview for deep assessment.
+- **Want to understand the scores?** Read [Assembly Scores](assembly-scores.qmd) and the [BGC Detail Panel](bgc-detail.qmd) guide.
+- **Managing your selections?** See [Building and Exporting Your Shortlists](shortlists.qmd).

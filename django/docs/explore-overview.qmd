@@ -1,0 +1,152 @@
+---
+title: "Explore Assemblies"
+subtitle: "Browse the full assembly catalogue to identify promising candidates"
+---
+
+## Goal
+
+Use Explore Assemblies mode to screen the full catalogue of indexed assemblies without a specific molecular hypothesis. You apply filters, sort by score, and progressively narrow the field until you find assemblies whose biosynthetic gene clusters (BGCs) are worth pursuing in the laboratory.
+
+## When to use this mode
+
+Choose Explore Assemblies when:
+
+- You are beginning a bioprospecting campaign and want to survey what is available.
+- You have a taxonomic, ecological, or biosynthetic class preference but no specific sequence or structure target.
+- You want to compare assemblies side by side on standardised scores (novelty, diversity, density).
+- You want to visually scan the landscape of assemblies using the Assembly Space Map.
+
+If you already know the domain architecture, protein sequence, or chemical structure you want, use Search BGCs mode instead. If you have a single candidate you want to evaluate in depth, use Evaluate Asset mode.
+
+## Layout
+
+The Explore Assemblies screen is divided into two triads:
+
+### Assembly Triad (top half)
+
+| Panel | Position | Purpose |
+|---|---|---|
+| **Assembly Roster** | Left | Paginated, sortable table of assemblies matching your filters |
+| **Assembly Space Map** | Centre | Scatter plot with configurable axes, one point per assembly |
+| **Assembly Stats** | Right | Summary statistics: taxonomy sunburst, score distributions, type strain counts |
+
+### BGC Triad (bottom half)
+
+| Panel | Position | Purpose |
+|---|---|---|
+| **BGC Roster** | Left | Table of BGCs belonging to the selected or shortlisted assemblies |
+| **BGC Space Map** | Centre | UMAP scatter plot of BGCs with MIBiG landmarks |
+| **BGC Stats** | Right | BGC class distribution, ChemOnt sunburst, completeness counts |
+
+The BGC Triad is empty until you select an assembly (click a row) or activate your assembly shortlist. A badge at the top of the BGC Triad indicates the source of the currently displayed BGCs: "Selected assembly," "Shortlisted assemblies," or "All assemblies."
+
+For a detailed guide to the BGC Triad, see [The BGC Triad](bgc-triad.qmd).
+
+## Step-by-step workflow
+
+### 1. Open the filter sidebar
+
+Click the funnel icon on the left edge of the screen. The sidebar slides in, showing all available filters. See the [Filtering](filtering.qmd) page for a detailed reference of every filter.
+
+### 2. Set your high-level strategy
+
+Before adjusting individual filters, decide on your screening strategy:
+
+- **Culturability-first:** Enable the Type Strain toggle to restrict results to organisms you can order from a culture collection.
+- **Novelty-first:** Leave Type Strain off, and plan to sort by Novelty later. This casts the widest net.
+- **Ecology-focused:** Set a biome lineage filter (e.g. `root.Environmental.Aquatic.Marine`) to focus on a particular habitat.
+- **Chemistry-focused:** Enable specific BGC class toggles or select ChemOnt classes to focus on a particular type of natural product.
+
+### 3. Apply taxonomy and biome filters
+
+Expand the **Taxonomy Tree** to drill into a lineage. Each node shows the count of matching assemblies. Click a checkbox to include or exclude that lineage. You can select at any rank --- phylum, class, order, family, genus, or species.
+
+If you have an ecological focus, set the **Biome Lineage** filter. Type the first few characters and select from the autocomplete dropdown. Biome paths follow the GOLD classification scheme (e.g. `root.Environmental.Terrestrial.Soil`).
+
+### 4. Apply BGC class and ChemOnt filters
+
+Use the **BGC Class toggles** to enable or disable specific classes of biosynthetic machinery (Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, Other). Only assemblies containing at least one BGC of the selected class(es) will appear.
+
+For finer chemical control, open the **ChemOnt tree** and select chemical ontology classes. This filters assemblies whose BGCs have predicted products matching the selected ChemOnt nodes.
+
+### 5. Run the query
+
+Click **Run Query**. The server returns matching assemblies and populates the Assembly Triad. The roster shows the first page of results; use the pagination controls at the bottom to navigate.
+
+### 6. Sort the Assembly Roster
+
+Click any column header to sort. The most common sorting strategies:
+
+- **Novelty (descending):** surfaces assemblies whose BGCs are furthest from validated references. Best for discovering new chemistry.
+- **Diversity (descending):** surfaces assemblies with the broadest range of BGC classes. Best for finding versatile producers.
+- **Density (descending):** surfaces assemblies where BGCs are tightly packed. These organisms have devoted a large fraction of their genome to secondary metabolism.
+- **BGC Count (descending):** surfaces assemblies with the most BGCs. Useful when you want the richest genomes.
+
+### 7. Scan the Assembly Space Map
+
+Look at the scatter plot in the centre panel. Each point represents an assembly. The axes default to Diversity (x) and Novelty (y), but you can change them using the axis selectors. Points are coloured by top-level taxonomy.
+
+Outliers in the upper-right quadrant (high novelty, high diversity) are often the most interesting candidates. Click a point to select the corresponding assembly. For a detailed guide, see [The Assembly Space Map](assembly-space-map.qmd).
+
+### 8. Select an assembly
+
+Click a row in the Assembly Roster or a point in the Assembly Space Map. The BGC Triad populates with the BGCs belonging to that assembly. You can now:
+
+- Browse the BGC Roster to see each individual BGC.
+- Inspect the BGC Space Map to see where the assembly's BGCs sit relative to validated landmarks.
+- Review the BGC Stats for class and ChemOnt distributions.
+
+### 9. Inspect and shortlist BGCs
+
+Click a BGC in the BGC Roster to open the [BGC Detail Panel](bgc-detail.qmd). Evaluate the domain architecture, chemical compound predictions, novelty scores, and completeness status. If the BGC looks promising, click **Add to BGC Shortlist**.
+
+To shortlist the entire assembly, click the pin icon in the Assembly Roster or use the **Add to Assembly Shortlist** button.
+
+### 10. Iterate or switch modes
+
+You can refine your filters and re-run the query at any time. Your shortlists are preserved across filter changes.
+
+When you are ready for a deeper analysis of a single candidate, right-click an assembly or BGC row and select **Evaluate** to switch to Evaluate Asset mode with that item pre-loaded. To search for BGCs similar to one you have found, right-click and select **Find Similar** to switch to Search BGCs mode.
+
+## Detail panels
+
+### Assembly detail
+
+Clicking the expand icon on an Assembly Roster row opens a flyout with full metadata:
+
+- Assembly accession and organism name
+- Source database (GTDB, MGnify, etc.)
+- Assembly type (genome, metagenome, or region) and size in megabases
+- Biome lineage
+- Type strain status with a link to the culture collection catalogue
+- All four scores (Novelty, Diversity, Density, Taxonomic Novelty) with percentile ranks
+- External links to the source database entry
+
+### BGC detail
+
+See the dedicated [BGC Detail Panel](bgc-detail.qmd) page.
+
+## Cross-mode actions
+
+From Explore Assemblies, you can transition to other modes:
+
+- **Evaluate an assembly:** Right-click an assembly row and select **Evaluate**, or click the Evaluate button in the assembly detail flyout. The platform switches to Evaluate Asset mode and runs a full assessment.
+- **Evaluate a BGC:** Right-click a BGC row and select **Evaluate**. The platform switches to Evaluate Asset mode with that BGC's assessment report.
+- **Find similar BGCs:** Right-click a BGC row and select **Find Similar**. The platform switches to Search BGCs mode and runs a sequence-similarity search using that BGC's embedding.
+- **View parent assembly:** In the BGC Detail Panel, click the parent assembly link to scroll to and select that assembly in the Assembly Roster.
+
+## Tips
+
+- Use the Assembly Space Map's configurable axes to explore different score dimensions. Novelty vs. Density often reveals organisms that are both novel and biosynthetically prolific.
+- After shortlisting several assemblies, click the shortlist badge in the BGC Triad header to view the merged BGC set from all shortlisted assemblies at once.
+- The Assembly Stats panel updates dynamically as you change filters. Use the taxonomy sunburst to verify that your filters are selecting the lineages you intended.
+- If the roster shows too many results, add more filters rather than scrolling through hundreds of pages.
+
+## Related pages
+
+- [Assembly Scores](assembly-scores.qmd) --- how each score is computed and what high vs. low values mean
+- [Filtering](filtering.qmd) --- full reference for every available filter
+- [The Assembly Space Map](assembly-space-map.qmd) --- how to read and configure the scatter plot
+- [The BGC Triad](bgc-triad.qmd) --- detailed guide to the BGC panels
+- [BGC Detail Panel](bgc-detail.qmd) --- interpreting domain architecture, compounds, and scores
+- [Building and Exporting Your Shortlists](shortlists.qmd) --- managing and exporting your selections

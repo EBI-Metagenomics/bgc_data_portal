@@ -1,0 +1,199 @@
+---
+title: "Building and Exporting Your Shortlists"
+subtitle: "Pin assemblies and BGCs as you explore --- export when ready"
+---
+
+## Goal
+
+Shortlists let you collect promising assemblies and BGCs as you work, without losing track of them. When you are ready, you export the shortlist as a file suitable for sharing with collaborators or importing into downstream tools. This page explains how to add items, manage your shortlists, export them, and how shortlists interact with the rest of the platform.
+
+## When to use this page
+
+Refer to this page when:
+
+- You want to save an assembly or BGC for later review.
+- You need to understand the export file formats (CSV for assemblies, GenBank for BGCs).
+- You want to know how shortlisted assemblies affect the BGC Triad in Explore mode.
+- You want to clear or manage your shortlists.
+
+## Two independent shortlists
+
+The platform maintains two separate shortlists:
+
+| Shortlist | Max items | Export format | Contains |
+|---|---|---|---|
+| **Assembly Shortlist** | 20 | CSV | Assemblies (organisms) with their scores and metadata |
+| **BGC Shortlist** | 20 | GenBank | Individual biosynthetic gene clusters with sequences and annotations |
+
+The two shortlists are independent. Adding an assembly does not automatically add its BGCs, and adding a BGC does not automatically add its parent assembly. You choose what to save at each level.
+
+## Adding items to shortlists
+
+### Adding an assembly
+
+You can add an assembly to the Assembly Shortlist in three ways:
+
+1. **Pin icon in the Assembly Roster:** Each row in the Assembly Roster has a small pin icon on the right side. Click it to add the assembly. The icon fills in to indicate the assembly is shortlisted.
+2. **Assembly detail flyout:** When you expand an assembly's detail view, an **Add to Assembly Shortlist** button appears near the top.
+3. **Right-click context menu:** Right-click any assembly row in the Assembly Roster and select **Add to Assembly Shortlist** from the context menu.
+
+### Adding a BGC
+
+You can add a BGC to the BGC Shortlist in three ways:
+
+1. **Pin icon in the BGC Roster:** Each row in the BGC Roster has a pin icon. Click it to add the BGC.
+2. **BGC Detail Panel:** The [BGC Detail Panel](bgc-detail.qmd) has an **Add to Shortlist** button at the bottom.
+3. **Right-click context menu:** Right-click any BGC row in the BGC Roster and select **Add to BGC Shortlist**.
+
+### Confirming the addition
+
+When you add an item, two things happen:
+
+1. A counter in the header bar increments. There are separate counters for assemblies and BGCs (e.g. "Assemblies: 3" and "BGCs: 5").
+2. The pin icon in the corresponding roster row fills in, providing a visual reminder that the item is already shortlisted.
+
+If the shortlist is already at its maximum of 20 items, the add action is disabled and a tooltip explains the limit. You must remove an existing item before adding a new one.
+
+## Viewing your shortlists
+
+Click the shortlist icon in the header bar to open the **Shortlist Panel**. This is a slide-out drawer that shows both shortlists as two tabs:
+
+### Assembly Shortlist tab
+
+A table listing every shortlisted assembly with the following columns:
+
+| Column | Content |
+|---|---|
+| **Accession** | The assembly accession (e.g. `GCA_000203835.1`) |
+| **Organism** | Species or strain name |
+| **Type Strain** | Whether the assembly is a type strain, with a link to the culture collection catalogue if available |
+| **BGC Count** | Number of BGCs detected |
+| **Novelty** | Assembly novelty score (0--1) |
+| **Diversity** | Assembly diversity score (0--1) |
+| **Density** | BGCs per megabase |
+| **Tax. Novelty** | Taxonomic novelty score (0--1) |
+
+Each row has a **Remove** button (X icon) to remove the assembly from the shortlist.
+
+### BGC Shortlist tab
+
+A table listing every shortlisted BGC with the following columns:
+
+| Column | Content |
+|---|---|
+| **Accession** | The BGC accession (e.g. `MGYB00000123.ANT.01`) |
+| **Classification** | BGC class hierarchy (e.g. `Polyketide.Macrolide`) |
+| **Size (kb)** | Length in kilobases |
+| **Novelty** | BGC novelty score (0--1) |
+| **Domain Novelty** | Fraction of unique domains (0--1) |
+| **Completeness** | Complete or Partial badge |
+| **Parent Assembly** | The accession of the assembly this BGC belongs to |
+
+Each row has a **Remove** button.
+
+## Exporting shortlists
+
+### Assembly CSV export
+
+Click the **Export CSV** button in the Assembly Shortlist tab. The browser downloads a comma-separated file named `assembly_shortlist.csv` with one row per assembly. The columns are:
+
+```
+accession, organism_name, source, assembly_type, is_type_strain,
+type_strain_catalog_url, bgc_count, l1_class_count,
+bgc_novelty_score, bgc_diversity_score, bgc_density,
+taxonomic_novelty, assembly_size_mb, biome_path, url
+```
+
+This file is ready to open in Excel, Google Sheets, or any spreadsheet application. It is also suitable for sharing with collaborators who do not have access to the platform.
+
+**Typical uses for the CSV:**
+
+- Prioritise organisms for culturing by sorting on novelty and type strain status.
+- Attach to a grant application as evidence of bioprospecting targets.
+- Import into a laboratory information management system (LIMS) to track which organisms are in progress.
+
+### BGC GenBank export
+
+Click the **Export GenBank** button in the BGC Shortlist tab. The browser downloads a multi-record GenBank file named `bgc_shortlist.gbk`. Each record contains:
+
+- The nucleotide sequence of the BGC region.
+- Gene annotations (CDS features) with protein translations.
+- Pfam domain annotations as `/note` qualifiers on the corresponding CDS features.
+- BGC boundary annotations as `cluster` or `region` features.
+- Metadata: BGC accession, classification path, detection tool, and parent assembly accession.
+
+**Typical uses for the GenBank file:**
+
+- Open in antiSMASH to re-annotate or compare with its own predictions.
+- Open in Artemis or SnapGene to inspect gene arrangements manually.
+- Feed into a cloning design tool to plan heterologous expression constructs.
+- Share with collaborators as a self-contained record of each BGC.
+
+::: {.callout-tip}
+The GenBank file includes the full nucleotide sequence plus a small flanking window on each side of the BGC. This flanking context can be helpful for designing PCR primers or identifying regulatory elements upstream of the cluster.
+:::
+
+## Removing items
+
+### Remove one item
+
+Click the **X** icon next to any row in the Shortlist Panel. The item is immediately removed, and the header counter decrements.
+
+### Clear the entire shortlist
+
+At the bottom of each shortlist tab, a **Clear All** button removes every item from that shortlist. A confirmation dialog appears to prevent accidental clearing.
+
+## Persistence
+
+Shortlists are stored in your browser's **localStorage**. This means:
+
+- They survive page reloads and browser restarts.
+- They persist between sessions. If you close the browser and return tomorrow, your shortlists are still there.
+- They are specific to the browser and device. If you switch to a different browser or computer, you will start with empty shortlists.
+- They are not tied to a user account (the platform does not require login).
+
+::: {.callout-warning}
+Clearing your browser's site data or using private/incognito mode will erase your shortlists. If you have important selections, export them before clearing browser data.
+:::
+
+## How shortlists affect views
+
+### In Explore Assemblies mode
+
+When you have assemblies in your Assembly Shortlist, you can click the shortlist badge in the BGC Triad header to switch the BGC Triad from showing a single selected assembly's BGCs to showing the **merged BGC set** from all shortlisted assemblies. This lets you:
+
+- Compare the BGC repertoires of multiple assemblies side by side.
+- Find the single best BGC across all shortlisted assemblies by sorting the merged roster by novelty.
+- Spot redundancy --- if two assemblies contribute BGCs that cluster together in the BGC Space Map, they may produce the same compound.
+
+The merged BGC Roster includes an additional **Parent Assembly** column so you can trace each BGC back to its source organism.
+
+### In Search BGCs mode
+
+When you run a search (domain, sequence, or chemical), the results may include BGCs from assemblies that are in your Assembly Shortlist. These results are not treated differently from other results --- there is no automatic boosting or filtering --- but you can sort or scan for parent assemblies you recognise.
+
+If you find a promising BGC in Search mode and add it to your BGC Shortlist, that shortlist remains available when you switch back to Explore mode.
+
+### In Evaluate Asset mode
+
+When you evaluate an assembly, the assessment report does not reference your shortlists. However, after reviewing the report, you can add the assembly to your shortlist from the report view using the **Add to Shortlist** button.
+
+### Cross-mode persistence
+
+Both shortlists are global and persist across all three modes. Adding a BGC in Explore mode and then switching to Search mode does not remove it. The header counters are visible in all modes so you always know how many items you have saved.
+
+## Tips
+
+- Use the Assembly Shortlist to build a prioritised list of organisms for culturing. Export the CSV and use it as a procurement checklist.
+- Use the BGC Shortlist to collect the specific gene clusters you want to clone or re-annotate. The GenBank export gives you everything you need to start designing experiments.
+- If you reach the 20-item limit, review your shortlist and remove lower-priority candidates rather than stopping your exploration. The limit exists to keep exports focused and actionable.
+- Remember that shortlists are browser-local. If you work across multiple devices, export your shortlists at the end of each session.
+- Right-click shortcuts are the fastest way to add items without opening detail panels. Use them when scanning through a long roster.
+
+## Related pages
+
+- [BGC Detail Panel](bgc-detail.qmd) --- the Add to Shortlist button lives here
+- [Explore Assemblies](explore-overview.qmd) --- how the Assembly Shortlist feeds the BGC Triad
+- [The BGC Triad](bgc-triad.qmd) --- merged BGC view from shortlisted assemblies
+- [Quickstart](quickstart.qmd) --- end-to-end walkthrough including shortlisting and export
+- [Key Concepts](key-concepts.qmd) --- definitions of assembly, BGC, and related terms

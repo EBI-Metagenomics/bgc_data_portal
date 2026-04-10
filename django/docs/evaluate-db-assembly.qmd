@@ -1,0 +1,81 @@
+---
+title: "Evaluate a Database Assembly"
+subtitle: "Generate a deep assessment report for any assembly already in the catalogue"
+---
+
+## Goal
+
+To produce a comprehensive assessment report for a single assembly that exists in the BGC Discovery Platform database. The report tells you how this assembly's biosynthetic potential compares with every other assembly in the catalogue, helping you decide whether it deserves wet-lab follow-up.
+
+## When to use this workflow
+
+Use this workflow when:
+
+- You are browsing assemblies in Explore mode and one catches your eye --- you want more detail than the summary scores provide.
+- A collaborator shared an accession number and you want to understand its biosynthetic profile before ordering a strain.
+- You have a shortlist of two or three assemblies and need to make a final selection based on quantitative evidence.
+
+If you want to evaluate your own unpublished assembly, see [Upload an Assembly](upload-assembly.qmd) instead.
+
+## Entry point 1: right-click from the Assembly Roster
+
+This is the fastest route when you are already browsing in Explore or Search mode.
+
+1. **Locate the assembly** in the Assembly Roster table. You can sort by any column or use the search box at the top of the roster.
+2. **Right-click the row.** A context menu appears with several options.
+3. **Select "Evaluate Assembly".** The dashboard switches to Evaluate mode and immediately begins generating the assessment report.
+4. **Wait for the report.** A progress spinner appears briefly while the platform retrieves pre-computed data and calculates percentile ranks. This usually takes two to five seconds.
+5. **Read the report.** The main area now displays the [Assembly Assessment Report](assembly-report.qmd).
+
+The right-click menu also offers other actions (pin to shortlist, view in Assembly Detail). You can always return to Explore mode using the mode selector --- your filters and shortlist are preserved.
+
+## Entry point 2: the Evaluate tab with an accession
+
+Use this route when you already know the accession.
+
+1. **Switch to Evaluate mode** by clicking the Evaluate tab in the mode selector at the top of the dashboard.
+2. **Select the Assembly tab** in the sidebar input area. The sidebar presents two sub-tabs: Assembly and BGC. Make sure Assembly is selected.
+3. **Type or paste the accession.** Enter the assembly accession in the text field (for example, `GCA_003150795.1` or `ERZ1234567`). The platform accepts INSDC accessions and internal identifiers.
+4. **Press Enter or click Evaluate.** The platform validates the accession against the database. If the accession is not found, an error message appears with suggestions for similar accessions.
+5. **Wait for the report.**
+6. **Read the report.**
+
+## What happens behind the scenes
+
+When you trigger evaluation of a database assembly, the platform:
+
+1. **Retrieves pre-computed BGC annotations** for every BGC belonging to that assembly, including domain architectures, predicted products, BGC class, and ChemOnt (Chemical Ontology) annotations.
+2. **Retrieves pre-computed scores** --- novelty, diversity, and density --- stored during the last database ingestion cycle.
+3. **Computes percentile ranks** by comparing each score against the full distribution of all assemblies in the database. This step runs on demand because the database grows over time and percentiles need to reflect the current catalogue.
+4. **Builds the assessment report** by combining raw scores, percentiles, contextual analyses (redundancy matrix, embedding maps), and the scoped BGC Triad.
+
+Because most of the heavy computation was done during ingestion, database evaluations are fast --- typically under five seconds.
+
+## What you will see
+
+The main area fills with the Assembly Assessment Report. A section-navigation bar on the right edge lists every report section so you can jump directly to any part:
+
+- **Priority Ranking** --- the assembly's absolute rank among all assemblies in the database, based on a weighted combination of novelty, diversity, and density.
+- **Priority Score Radar** --- a spider chart comparing this assembly's novelty, diversity, and density against the database mean and the 90th percentile.
+- **Score Percentile Distributions** --- gauge charts showing where each score falls in the overall distribution.
+- **BGC Triad** --- the familiar three-panel BGC view (roster, space map, detail), scoped to show only the BGCs belonging to this assembly.
+- **Redundancy Matrix** --- a breakdown of this assembly's BGCs into three categories: those belonging to novel Gene Cluster Families (GCFs), those in known GCFs without a type strain representative, and those in known GCFs where a type strain is already available.
+- **BGC Embeddings Map** --- a UMAP projection showing where this assembly's BGCs sit in the global embedding space, with MIBiG reference landmarks highlighted.
+
+For a detailed guide to each section, see [Reading the Assembly Assessment Report](assembly-report.qmd).
+
+## Tips
+
+- **Check the Redundancy Matrix first.** If most of this assembly's BGCs fall into the "Known GCF, type strain available" column, the assembly offers limited novelty --- someone else has already characterised similar gene clusters in a culturable organism.
+- **Use the BGC Triad to drill into specific clusters.** Click any BGC in the scoped roster to see its domain architecture and predicted products. If one BGC looks particularly novel, right-click it and select "Evaluate BGC" to get the [BGC Assessment Report](bgc-report.qmd).
+- **Compare with the Assembly Space Map.** Before evaluating, note where the assembly sits on the Assembly Space Map in Explore mode. Assemblies in sparse regions of the map tend to produce higher novelty scores.
+- **Switch assemblies without leaving Evaluate mode.** After reading one report, type a new accession in the sidebar and press Enter to generate a fresh report. The previous report is replaced.
+
+## Related pages
+
+- [Evaluate Overview](evaluate-overview.qmd) --- all entry points and the general Evaluate workflow
+- [Evaluate a Database BGC](evaluate-db-bgc.qmd) --- the equivalent workflow for a single BGC
+- [Upload an Assembly](upload-assembly.qmd) --- evaluate an assembly not in the database
+- [Assembly Assessment Report](assembly-report.qmd) --- section-by-section guide to the report
+- [Scores and Metrics Reference](scores-metrics.qmd) --- definitions of every score used in the report
+- [Cross-Mode Transitions from Evaluate](cross-mode-evaluate.qmd) --- pivot to Explore or Search from the report

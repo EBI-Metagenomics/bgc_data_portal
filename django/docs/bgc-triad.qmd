@@ -1,0 +1,157 @@
+---
+title: "The BGC Triad"
+subtitle: "Explore BGCs from selected or shortlisted assemblies"
+---
+
+## Goal
+
+The BGC Triad occupies the bottom half of the Explore Assemblies screen. It shows the biosynthetic gene clusters (BGCs) associated with the assembly (or assemblies) you have selected or shortlisted. This page explains how the triad populates, what each of its three panels shows, and how to navigate from a BGC back to its parent assembly.
+
+## When to use this page
+
+Refer to this page when:
+
+- You have selected an assembly in the Assembly Roster or Assembly Space Map and want to understand the BGC panels that appeared.
+- You want to know the difference between viewing BGCs for a single selected assembly versus your entire assembly shortlist.
+- You need to interpret the BGC Space Map's UMAP coordinates and MIBiG landmarks.
+- You want to understand the BGC Stats charts.
+
+## How the BGC Triad populates
+
+The BGC Triad is empty when you first open the Explore Assemblies screen. It fills with data in three ways:
+
+| Trigger | What appears | Badge label |
+|---|---|---|
+| Click a single assembly row or point | All BGCs belonging to that assembly | "Selected assembly" |
+| Activate the assembly shortlist | All BGCs from all shortlisted assemblies, merged into one set | "Shortlisted assemblies (N)" |
+| Click the "All BGCs" toggle (when available) | The full BGC catalogue for the current filter set | "All assemblies" |
+
+A small badge at the top of the BGC Triad always indicates which source is active. When you switch between sources, the badge updates and all three panels refresh.
+
+## Panel 1: BGC Roster
+
+The BGC Roster is a paginated, sortable table on the left side of the BGC Triad. Each row represents one BGC.
+
+### Columns
+
+| Column | What it shows |
+|---|---|
+| **Accession** | The structured BGC accession (e.g. `MGYB00000123.ANT.01`). The format is `{region_accession}.{detector_code}.{bgc_number}`. |
+| **Classification** | The BGC class hierarchy as a dot-delimited path (e.g. `Polyketide.Macrolide`). The first segment is the top-level class. |
+| **Size (kb)** | The length of the BGC in kilobases. Larger BGCs often encode more complex products. |
+| **Novelty** | Cosine distance to the nearest validated (MIBiG) BGC embedding. Ranges from 0 (identical to a known cluster) to 1 (maximally different). |
+| **Domain Novelty** | Fraction of this BGC's Pfam domains that are unique to this BGC across the entire database. A value of 1.0 means every domain hit is exclusive. |
+| **Completeness** | A badge indicating whether the BGC is complete or partial. Partial BGCs sit at the edge of a contig and may be truncated. |
+| **Nearest Validated** | The MIBiG accession of the closest validated BGC by embedding distance, along with the raw distance value. |
+| **Detector** | The tool and version that detected the BGC (e.g. antiSMASH v7.1). |
+
+### Sorting
+
+Click any column header to sort. The most useful sorts:
+
+- **Novelty (descending):** puts the most unusual BGCs at the top. Best for finding new chemistry.
+- **Domain Novelty (descending):** surfaces BGCs with the most unique domain compositions.
+- **Size (descending):** surfaces the largest BGCs, which often encode the most complex biosynthetic pathways.
+
+### Row actions
+
+- **Click a row:** Opens the [BGC Detail Panel](bgc-detail.qmd) as a flyout on the right side of the screen.
+- **Right-click a row:** Opens a context menu with actions: Add to Shortlist, Find Similar (switches to Search mode), Evaluate (switches to Evaluate mode).
+
+## Panel 2: BGC Space Map
+
+The BGC Space Map is a UMAP scatter plot in the centre of the BGC Triad. UMAP (Uniform Manifold Approximation and Projection) is a dimensionality reduction technique that places each BGC as a point on a two-dimensional canvas so that BGCs with similar protein-level embeddings appear near each other.
+
+### How to read the map
+
+- **Each point** represents one BGC. Points that are close together encode similar enzymatic machinery and are likely to produce related natural products.
+- **Colour** indicates the top-level BGC class (Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, Other). The colour legend appears below the plot.
+- **MIBiG landmark points** are validated BGCs from the MIBiG database. They appear as labelled markers (often diamond-shaped or larger) so you can see where characterised chemistry sits in the landscape. Landmark labels show the compound name or MIBiG accession.
+- **Highlighted points** belong to the currently selected or shortlisted assemblies. Unrelated BGCs appear as faded background points.
+
+### Axes
+
+The x- and y-axes represent the two UMAP dimensions. These do not have direct biochemical meaning --- they are computed to preserve neighbourhood relationships from the original 1,152-dimensional embedding space. Do not over-interpret absolute positions; focus on *relative* proximity.
+
+### Interpreting patterns
+
+- **A highlighted point near a MIBiG landmark:** The BGC is similar to a known, characterised cluster. The nearby MIBiG label tells you what compound the reference produces. This BGC is likely making a structural variant.
+- **A highlighted point in a dense cloud far from any landmark:** The BGC belongs to a gene cluster family (GCF) that has many members but no validated representative. The chemistry is uncharacterised.
+- **A highlighted point in empty space:** The BGC is a novel singleton with no close neighbours. It may encode fundamentally new enzymology --- or it may be a partial, misassembled cluster. Check the BGC Detail Panel for completeness and domain architecture.
+
+### Interactions
+
+- **Click a point** to open its BGC Detail Panel.
+- **Hover** to see a tooltip with accession, BGC class, and novelty score.
+- **Pan and zoom** work the same as in the Assembly Space Map.
+
+## Panel 3: BGC Stats
+
+The BGC Stats panel on the right side of the BGC Triad provides summary visualisations of the currently displayed BGC set.
+
+### BGC Class Distribution
+
+A horizontal bar chart showing the count of BGCs in each top-level class (Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, Other). This gives you an immediate sense of the biosynthetic repertoire.
+
+- **A single dominant bar** means the assembly (or shortlisted assemblies) specialise in one type of chemistry.
+- **Multiple bars of similar height** indicate diverse biosynthetic capacity.
+
+### ChemOnt Sunburst
+
+A sunburst chart showing the Chemical Ontology (ChemOnt) classification of predicted natural products from the displayed BGCs. The inner ring shows the broadest chemical categories; outer rings show progressively finer classifications.
+
+- **Click a segment** to zoom into that branch of the ChemOnt tree.
+- **Click the centre** to zoom back out.
+- **Hover** to see the class name and count.
+
+This chart is particularly useful for spotting the dominant chemical scaffolds produced by an assembly. If a large segment corresponds to a compound class you are not interested in, you can use ChemOnt filters to exclude it.
+
+### Completeness Summary
+
+A simple count showing how many of the displayed BGCs are complete versus partial. A high ratio of partial BGCs may indicate that the assembly is fragmented (common with metagenomes) and that some BGCs may be truncated.
+
+### Total BGC Count
+
+The total number of BGCs currently displayed in the triad, shown as a prominent number at the top of the panel.
+
+## How shortlists affect the BGC Triad
+
+When you activate your assembly shortlist, the BGC Triad merges all BGCs from all shortlisted assemblies into a single view. This is useful for:
+
+- **Comparing BGC repertoires across assemblies.** The BGC Space Map shows where each assembly's BGCs sit relative to each other and to MIBiG landmarks.
+- **Finding the single best BGC across multiple candidates.** Sort the merged BGC Roster by novelty to surface the most novel BGC regardless of which assembly it belongs to.
+- **Checking for redundancy.** If two shortlisted assemblies contribute BGCs that cluster together in the BGC Space Map, they may be producing the same compound. You might choose to keep only one.
+
+Each BGC in the merged roster shows its parent assembly accession in an additional column, so you can always trace a BGC back to its organism.
+
+## Navigating between levels
+
+### From BGC to parent assembly
+
+In the [BGC Detail Panel](bgc-detail.qmd), the parent assembly is shown as a clickable link. Clicking it scrolls the Assembly Roster to the corresponding row and selects it.
+
+### From Assembly Roster to BGC Triad
+
+Clicking any row in the Assembly Roster populates the BGC Triad automatically. You do not need to do anything extra.
+
+### From BGC to Evaluate or Search
+
+Right-click a BGC row in the BGC Roster to access cross-mode actions:
+
+- **Evaluate:** Switches to Evaluate Asset mode and runs a BGC assessment, producing a detailed report with GCF context, domain differential, novelty decomposition, and chemical space analysis.
+- **Find Similar:** Switches to Search BGCs mode and runs a sequence similarity search using the BGC's embedding vector, returning ranked matches from the entire database.
+
+## Tips
+
+- When viewing BGCs from a single assembly, the BGC Stats panel gives you that assembly's biosynthetic profile at a glance. Use it to quickly assess whether the assembly's chemistry matches your interests before drilling into individual BGCs.
+- The BGC Space Map is most informative when viewed with MIBiG landmarks visible. If the map looks cluttered, zoom into the region around your highlighted points.
+- If you have multiple assemblies shortlisted, look for overlap in the BGC Space Map. If BGCs from different assemblies cluster together, they probably belong to the same GCF and produce similar compounds.
+- Use the completeness badge in the BGC Roster as a quick filter. Partial BGCs may be truncated and can give misleading novelty scores. Prioritise complete BGCs for shortlisting.
+
+## Related pages
+
+- [BGC Detail Panel](bgc-detail.qmd) --- what you see when you click a BGC row
+- [Explore Assemblies](explore-overview.qmd) --- the full Explore workflow, of which the BGC Triad is one component
+- [Assembly Scores](assembly-scores.qmd) --- understanding the assembly-level scores in the Assembly Triad above
+- [Building and Exporting Your Shortlists](shortlists.qmd) --- how shortlists interact with the BGC Triad
+- [Key Concepts](key-concepts.qmd) --- definitions of BGC class, ChemOnt, GCF, and other terms

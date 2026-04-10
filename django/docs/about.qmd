@@ -1,31 +1,98 @@
 ---
 title: "About"
+subtitle: "The team, funding, and how to get in touch"
 ---
 
-## Introduction
+## The BGC Discovery Platform
 
-**MGnify Biosynthetic Gene Clusters** is a portal for exploring predicted biosynthetic gene clusters (BGCs) across MGnify metagenomic datasets. It standardises the output of several widely used detection tools (antiSMASH, GECCO, SanntiS) so you can quickly compare and prioritise candidate regions without setting up complex software. Non‑technical users can work entirely through the web interface; programmatic users can extend their analysis via the API.
+The BGC Discovery Platform is developed by the **Microbiome Informatics** team at the [European Bioinformatics Institute (EMBL-EBI)](https://www.ebi.ac.uk/), part of the [European Molecular Biology Laboratory (EMBL)](https://www.embl.org/). The platform is a component of [MGnify](https://www.ebi.ac.uk/metagenomics/), EMBL-EBI's resource for the analysis and archival of metagenomic and metatranscriptomic data.
 
-MGnify Biosynthetic Gene Clusters aims to make this valuable dataset widely accessible, promoting advances in natural product science across research, industry, and the broader community. The portal is part of [MGnify](https://www.ebi.ac.uk/metagenomics), which offers automated pipelines for the analysis and archiving of microbiome data. MGnify helps determine the taxonomic diversity and functional and metabolic potential of environmental samples. Users can submit their data for analysis or browse the publicly available datasets within the repository. Additionally, MGnify can analyse datasets from the European Nucleotide Archive (ENA) upon request.
+The platform was designed to help experimental biochemists identify organisms and biosynthetic gene clusters (BGCs) worth pursuing in the laboratory. It combines large-scale computational annotation of public genomic data with interactive visualisation and scoring tools, making bioinformatics-derived insights accessible to researchers who work primarily at the bench.
 
-## Dataset overview
+## Team
 
-The underlying dataset collects BGC predictions from MGnify metagenomic assemblies using antiSMASH [1], GECCO [2] and SanntiS [3]. Outputs are harmonised and stored with links to contigs, assemblies and protein annotations. The open [pipeline](https://github.com/Finn-Lab/BGCdetection_pipeline) describes the processing steps.
+The platform is built and maintained by the Microbiome Informatics team at EMBL-EBI. The team develops computational infrastructure for analysing microbial communities, with a focus on making complex genomic data useful for researchers across disciplines.
 
-## Funding and support
+Core contributors include researchers and software engineers specialising in natural product genomics, metagenomics, machine learning, and web application development.
 
-This portal has been developed at EMBL-EBI by the MGnify team as part of the [EUREMAP](https://euremap.eu) project. EUREMAP is a European initiative designed to create an integrated pipeline of marine bioprospecting services to discover novel bioactive natural products from marine organisms. This project connects research infrastructures, industry, and academia strengthening the blue economy.
+## Funding
 
-EUREMAP project is funded by the European Union under grant agreement No. 101131663 (HORIZON-INFRA-2023-DEV-01-04). Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or the Agency. Neither the European Union nor the granting authority can be held responsible for them.
+Development of the BGC Discovery Platform is supported by:
 
-## Contact
+- **EMBL** --- core funding for the European Bioinformatics Institute and the Microbiome Informatics team.
+- **Wellcome Trust** --- grant funding supporting the development of MGnify and related bioinformatics infrastructure.
 
-MGnify Biosynthetic Gene Clusters is currently in beta and under active development. We value feedback and encourage users to share any issues or suggestions via our [contact form](https://www.ebi.ac.uk/about/contact/support/metagenomics).
+The platform builds on data and tools produced by the broader natural products research community, including [antiSMASH](https://antismash.secondarymetabolites.org/), [MIBiG](https://mibig.secondarymetabolites.org/), [Pfam](https://www.ebi.ac.uk/interpro/entry/pfam/), and [ClassyFire/ChemOnt](http://classyfire.wishartlab.com/).
 
-## References
+## Citation
 
-[1] Blin, Kai, Simon Shaw, Hannah E. Augustijn, Zachary L. Reitz, Friederike Biermann, Mohammad Alanjary, Artem Fetter et al. "antiSMASH 7.0: new and improved predictions for detection, regulation, chemical structures and visualisation." Nucleic acids research 51, no. W1 (2023): W46-W50.
+If you use the BGC Discovery Platform in your research, please cite:
 
-[2] Carroll, Laura M., Martin Larralde, Jonas Simon Fleck, Ruby Ponnudurai, Alessio Milanese, Elisa Cappio, and Georg Zeller. "Accurate de novo identification of biosynthetic gene clusters with GECCO." BioRxiv (2021): 2021-05.
+> Citation details will be added upon publication. In the meantime, please reference the platform URL and the MGnify resource.
 
-[3] Sanchez, Santiago, Joel D. Rogers, Alexander B. Rogers, Maaly Nassar, Johanna McEntyre, Martin Welch, Florian Hollfelder, and Robert D. Finn. "Expansion of novel biosynthetic gene clusters from diverse environments using SanntiS." bioRxiv (2023): 2023-05.
+If your work relies on specific components, please also cite the relevant upstream tools:
+
+- **antiSMASH** for BGC prediction
+- **MIBiG** for the validated BGC reference set
+- **ESM** (Evolutionary Scale Modeling) for protein embeddings
+- **MGnify** for metagenomic assembly data
+
+## Data sources
+
+The platform integrates data from several public resources:
+
+| Source | What it provides |
+|--------|-----------------|
+| [MGnify](https://www.ebi.ac.uk/metagenomics/) | Metagenomic assemblies and associated metadata |
+| [GTDB](https://gtdb.ecogenomic.org/) | Standardised taxonomic classifications |
+| [MIBiG](https://mibig.secondarymetabolites.org/) | Experimentally validated BGCs and known compounds |
+| [INSDC](https://www.insdc.org/) (ENA, NCBI, DDBJ) | Genome assemblies and nucleotide sequences |
+| [GOLD](https://gold.jgi.doe.gov/) | Ecosystem and biome classifications |
+| [Pfam / InterPro](https://www.ebi.ac.uk/interpro/) | Protein domain definitions |
+
+## Technology
+
+The platform is built with open-source technologies:
+
+- **Django** and **Django Ninja** for the web application and REST API
+- **PostgreSQL** with **pgvector** for vector similarity search
+- **Celery** with **RabbitMQ** for asynchronous task processing
+- **Redis** for caching
+- **Nextflow** for the data ingestion and annotation pipeline
+
+The full source code is available on GitHub.
+
+## Source code
+
+The platform's source code is hosted on GitHub:
+
+- **Main repository:** [github.com/EBI-Metagenomics/mgnify-bgcs-v2](https://github.com/EBI-Metagenomics/mgnify-bgcs-v2)
+- **Data portal (Django application):** [github.com/Finn-Lab/bgc_data_portal](https://github.com/Finn-Lab/bgc_data_portal)
+- **ETL pipeline (Nextflow):** [github.com/Finn-Lab/mgnify-bgcs-etl](https://github.com/Finn-Lab/mgnify-bgcs-etl)
+
+Contributions, bug reports, and feature requests are welcome via GitHub Issues on the appropriate repository.
+
+## Contact and feedback
+
+We welcome feedback from users at all levels of experience. If you have questions, encounter problems, or want to suggest improvements:
+
+- **Bug reports and feature requests:** Open an issue on the [GitHub repository](https://github.com/EBI-Metagenomics/mgnify-bgcs-v2/issues).
+- **General questions:** Contact the MGnify helpdesk at [metagenomics-help@ebi.ac.uk](mailto:metagenomics-help@ebi.ac.uk).
+- **Collaboration inquiries:** Contact the Microbiome Informatics team through the [EMBL-EBI website](https://www.ebi.ac.uk/about/contact).
+
+## Privacy and data handling
+
+- **Database entries** are derived from publicly available genomic data and are freely accessible.
+- **Uploaded files** (in Evaluate mode) are processed ephemerally in your browser session. They are never stored on the server, added to the database, or shared with other users.
+- **Shortlists** are stored locally in your browser using browser storage. They are not transmitted to the server unless you explicitly trigger an export.
+- The platform does not require user accounts or authentication for read-only access to public data.
+
+## Version
+
+The current platform version and the versions of key data dependencies (MIBiG release, GTDB release, antiSMASH version) are displayed in the footer of the platform dashboard. This documentation corresponds to the platform version shown at the time of writing.
+
+## Related pages
+
+- [Platform Overview](index.qmd) --- introduction to what the platform does
+- [Tutorials](tutorials-index.qmd) --- guided walkthroughs for common tasks
+- [Glossary](glossary.qmd) --- definitions of all terms used in the platform

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBgcClasses } from "@/hooks/use-filter-data";
 import { useFilterStore } from "@/stores/filter-store";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 export function BgcClassFilter() {
   const { data: classes, isLoading } = useBgcClasses();
@@ -21,8 +22,8 @@ export function BgcClassFilter() {
   }
 
   return (
-    <div className="space-y-2">
-      <span className="text-sm font-medium">BGC Class</span>
+    <div className="space-y-2" data-tour="bgc-class-filter">
+      <span className="flex items-center gap-1 text-sm font-medium">BGC Class <HelpTooltip tooltipKey="bgc_class_toggle" side="right" /></span>
       <ToggleGroup
         type="single"
         value={bgcClass}

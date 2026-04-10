@@ -1,0 +1,169 @@
+---
+title: "Filtering Assemblies and BGCs"
+subtitle: "Narrow results using taxonomy, BGC class, ChemOnt, biome, and more"
+---
+
+## Goal
+
+This page is a complete reference for every filter available in the Discovery Platform. After reading it, you will know what each filter does, when to use it, and how it interacts with other filters.
+
+## When to use this page
+
+Refer to this page when:
+
+- You want to narrow a large result set to something manageable.
+- You are unsure what a particular filter controls.
+- You want to understand how filters combine (AND vs. OR logic).
+- You need to know which filters carry over when you switch modes.
+
+## How filters combine
+
+All filters apply simultaneously using AND logic. This means that enabling the Type Strain toggle *and* selecting a Polyketide BGC class *and* choosing the phylum Actinomycetota returns only assemblies that satisfy all three conditions: they must be type strains, they must contain at least one polyketide BGC, and they must belong to Actinomycetota.
+
+Within a single multi-select filter (e.g. the BGC Class toggles), options combine with OR logic. If you enable both Polyketide and NRP, the platform returns assemblies containing at least one polyketide BGC *or* at least one NRP BGC (or both).
+
+## Filter reference
+
+### Organism Search
+
+**What it does:** A text search box that matches against organism names in the assembly catalogue. Typing "Streptomyces" returns all assemblies whose organism name contains that string. The search is case-insensitive and matches partial words.
+
+**When to use it:** When you already know the genus or species you want and need to jump straight to it.
+
+**Tips:**
+
+- You can type a strain designation (e.g. "ATCC 29253") to find a specific culture.
+- The search matches anywhere in the organism name, so "coelicolor" will find *Streptomyces coelicolor* even if you omit the genus.
+- Clear the search box to return to the unfiltered view.
+
+### Type Strain Toggle
+
+**What it does:** When enabled, only assemblies flagged as type strains appear in the results. A type strain is the designated reference culture for a species, deposited in a public culture collection (DSMZ, ATCC, JCM, NCTC, etc.).
+
+**When to use it:** When culturability is essential to your workflow. Type strains can be ordered from culture collections, which means you can go from a database hit to a growing culture within weeks.
+
+**Tips:**
+
+- Type strains represent a small fraction of the total catalogue. Enabling this toggle dramatically reduces the number of results, which makes manual review feasible.
+- Each type strain assembly includes a link to its culture collection catalogue entry. You can find this link in the assembly detail panel.
+- If you are willing to work with environmental DNA or uncultured organisms, leave this toggle off to access the full catalogue.
+
+### Assembly Type
+
+**What it does:** Restricts results to one or more assembly types: Genome, Metagenome, or Region.
+
+| Type | Description | Typical use |
+|---|---|---|
+| **Genome** | Complete or draft genome from an isolated organism | Highest confidence; full organism-level scores available |
+| **Metagenome** | Metagenome-assembled genome (MAG) from an environmental sample | Access to uncultured diversity; may be incomplete |
+| **Region** | Short genomic fragment (one or a few contigs) from a targeted study | May contain high-value BGCs; organism-level scores unreliable |
+
+**When to use it:** When you want to control the quality and completeness of the assemblies you review. For the most reliable scoring, filter to Genomes only. To explore uncultured diversity, include Metagenomes.
+
+**Tips:**
+
+- Region assemblies often have zero or near-zero Density scores because their genome size is unknown. Do not sort by Density when including Regions.
+- You can combine Assembly Type with the Type Strain toggle. Only Genome assemblies can be type strains, so enabling both is redundant but harmless.
+
+### Taxonomy Tree
+
+**What it does:** A hierarchical tree of taxonomic ranks (Domain, Phylum, Class, Order, Family, Genus, Species) derived from the GTDB taxonomy. Each node shows the number of matching assemblies in parentheses. Clicking a checkbox selects that entire clade.
+
+**When to use it:** When you have a taxonomic hypothesis --- for example, you believe actinobacteria are the most promising source of a particular compound class, or you want to exclude a clade you have already screened.
+
+**How to use it:**
+
+1. Expand the tree by clicking the arrow icons next to each node.
+2. Click the checkbox next to a node to include all assemblies in that clade.
+3. You can select multiple nodes at any rank. The selections combine with OR logic: selecting both Actinomycetota and Bacillota returns assemblies from either phylum.
+4. To deselect, uncheck the box. To clear all taxonomy filters, click the **Reset** link.
+
+**Tips:**
+
+- The assembly count next to each node reflects the *current* filter state. If you have the Type Strain toggle on, the counts show only type strain assemblies in each clade.
+- You can select at mixed ranks. For example, selecting the phylum Actinomycetota and the genus *Pseudomonas* (within Pseudomonadota) returns assemblies from the entire Actinomycetota phylum plus all *Pseudomonas* assemblies.
+- The taxonomy follows GTDB naming conventions, which may differ from NCBI taxonomy for some clades.
+
+### Biome Lineage
+
+**What it does:** Filters assemblies by the environment from which they were sampled. Biome paths use the GOLD (Genomes OnLine Database) classification scheme and follow a dot-delimited hierarchy.
+
+**Format:** `root.Environmental.Terrestrial.Soil` or `root.Host_associated.Human.Digestive_system`
+
+**When to use it:** When your research focuses on a specific habitat. Marine microbiologists can filter for `root.Environmental.Aquatic.Marine`; soil ecologists can filter for `root.Environmental.Terrestrial.Soil`.
+
+**How to use it:**
+
+1. Begin typing in the biome search box. An autocomplete dropdown appears with matching biome paths.
+2. Select the desired biome. The filter matches the selected path as a prefix, so selecting `root.Environmental.Aquatic` includes all sub-biomes (Marine, Freshwater, Thermal springs, etc.).
+3. To clear, remove the text from the box or click the X icon.
+
+**Tips:**
+
+- Not every assembly has a biome annotation. Assemblies without biome data are excluded when a biome filter is active.
+- The prefix-matching behaviour means you can be as broad or as specific as you like. Selecting `root` matches everything (equivalent to no filter).
+- Biome paths use underscores instead of spaces (e.g. `Digestive_system`, not `Digestive system`).
+
+### BGC Class Toggles
+
+**What it does:** A set of toggle buttons, one for each top-level BGC class: Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, and Other. Enabling a toggle restricts results to assemblies containing at least one BGC of that class.
+
+**When to use it:** When you want to focus on a particular type of biosynthetic machinery. If you are looking for new nonribosomal peptides, enable only the NRP toggle.
+
+**How they combine:** Multiple enabled toggles combine with OR logic. Enabling Polyketide and NRP returns assemblies with at least one polyketide BGC *or* at least one NRP BGC.
+
+**Tips:**
+
+- BGC class describes the enzymatic machinery, not the product chemistry. Two polyketide BGCs may produce structurally unrelated molecules. For product-level filtering, use the ChemOnt tree.
+- The "Other" class is a catch-all that includes siderophores, bacteriocins, melanins, butyrolactones, and other biosynthetic systems that do not fit the six named categories.
+- Disabling all toggles is equivalent to enabling all of them: no BGC class filter is applied.
+
+### ChemOnt Tree
+
+**What it does:** A hierarchical tree of Chemical Ontology (ChemOnt) classes. ChemOnt classifies molecules by their chemical structure --- functional groups, ring systems, and substituent patterns --- independently of how they are biosynthesised. The tree contains approximately 4,825 classes.
+
+**When to use it:** When you want to filter by the predicted chemical structure of the natural products rather than by the biosynthetic machinery. This is the right filter when you need a compound with a specific pharmacophore or structural scaffold.
+
+**How to use it:**
+
+1. Expand the tree by clicking arrow icons. Top-level nodes include broad categories like "Organic compounds," "Lipids and lipid-like molecules," and "Organoheterocyclic compounds."
+2. Click a checkbox to select a node and all its descendants.
+3. The platform filters to assemblies containing at least one BGC with a predicted natural product matching the selected ChemOnt class(es).
+
+**Tips:**
+
+- ChemOnt annotations come with probability scores. The platform includes all annotations above a minimum confidence threshold.
+- ChemOnt and BGC class are independent classification systems. A polyketide BGC may produce a molecule classified as a "Macrolide" in ChemOnt, but another polyketide BGC may produce a "Phenol" --- completely different ChemOnt branches.
+- Not every BGC has ChemOnt annotations. BGCs without predicted natural products are excluded when a ChemOnt filter is active.
+
+### Assembly / BGC Accession (Search mode)
+
+**What it does:** In Search BGCs mode, you can enter a specific assembly accession (e.g. `GCA_000203835.1`) or BGC accession (e.g. `MGYB00000123.ANT.01`) to jump directly to that entity. This is not a filter in the traditional sense --- it is a direct lookup.
+
+**When to use it:** When you have an accession from a publication, a collaborator, or a previous session and want to go directly to it.
+
+**Tips:**
+
+- Assembly accessions follow the pattern `GCA_XXXXXXXXX.X` (GenBank) or `GCF_XXXXXXXXX.X` (RefSeq).
+- BGC accessions in the platform follow the structured format `MGYB{region_id}.{detector_code}.{bgc_number}` (e.g. `MGYB00000123.ANT.01`).
+- If the accession is not found, the platform displays a "no results" message.
+
+## Filter persistence across modes
+
+When you switch between Explore Assemblies, Search BGCs, and Evaluate Asset modes using the header tabs, your filter settings are preserved. This means:
+
+- If you set a taxonomy filter in Explore mode and then switch to Search mode, the search results will still be restricted to that taxon.
+- If you clear all filters in Search mode, they are also cleared when you return to Explore mode.
+
+The only exception is mode-specific query parameters (e.g. the domain list in a domain search, or the SMILES string in a chemical search). These belong to the Search mode and do not carry over to Explore.
+
+## Resetting filters
+
+To clear all filters at once, click the **Reset All** button at the bottom of the filter sidebar. This returns the platform to its default state: all assembly types, all BGC classes, no taxonomy restriction, no biome restriction, type strain toggle off.
+
+## Related pages
+
+- [Key Concepts](key-concepts.qmd) --- definitions of BGC class, ChemOnt, biome lineage, and other terms
+- [Explore Assemblies](explore-overview.qmd) --- how filters fit into the Explore workflow
+- [Assembly Scores](assembly-scores.qmd) --- understanding the score columns you see after filtering
+- [The BGC Triad](bgc-triad.qmd) --- how filters affect the BGC panels

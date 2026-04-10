@@ -1,0 +1,179 @@
+---
+title: "Reading the BGC Detail Panel"
+subtitle: "Domain architecture, chemical compounds, and novelty scores"
+---
+
+## Goal
+
+The BGC Detail Panel is a flyout that appears when you click a BGC row in the BGC Roster. It provides everything you need to evaluate whether a single BGC is worth pursuing: identification, scores, domain architecture, predicted chemical compounds, and actions. This page walks you through every section of the panel.
+
+## When to use this page
+
+Refer to this page when:
+
+- You have clicked a BGC in the roster and want to understand all the information displayed.
+- You want to know what the novelty and domain novelty scores mean at the individual BGC level.
+- You need to interpret the region plot (gene map with domain annotations).
+- You want to understand the chemical compound predictions and their ChemOnt classifications.
+- You want to decide whether a BGC merits shortlisting, evaluation, or further search.
+
+## Panel header
+
+The top of the panel shows:
+
+### BGC accession
+
+The structured identifier for the BGC. The format is `MGYB{region_id}.{detector_code}.{bgc_number}`:
+
+- **Region ID** (`MGYB00000123`): identifies the aggregated genomic region on the contig where one or more overlapping BGC predictions were merged.
+- **Detector code** (e.g. `ANT` for antiSMASH): a three-letter code identifying which detection tool found this BGC.
+- **BGC number** (e.g. `01`): a two-digit serial within the region and detector combination.
+
+### Classification path
+
+The BGC class hierarchy displayed as a dot-delimited breadcrumb (e.g. `Polyketide.Type_I.Modular`). The first segment is the top-level class, which corresponds to the type of enzymatic assembly line. Subsequent segments provide finer classification where available.
+
+### Completeness badge
+
+A coloured badge indicating whether the BGC is **Complete** or **Partial**.
+
+- **Complete** means the BGC detection tool identified both boundaries of the cluster. The full biosynthetic logic is likely captured.
+- **Partial** means the BGC sits at the edge of a contig and may be truncated. One or more essential genes could be missing, and scores derived from the BGC's domain content should be interpreted with caution.
+
+### Validated badge
+
+If the BGC corresponds to an entry in the MIBiG database (a curated repository of experimentally verified gene clusters), a **Validated** badge appears. This means the natural product encoded by this BGC has been isolated, structurally characterised, and published.
+
+### Size
+
+The length of the BGC in kilobases (kb). Larger BGCs tend to encode more biosynthetic steps and produce more complex products. Typical sizes range from 5 kb (small terpene clusters) to over 100 kb (large modular polyketide or nonribosomal peptide assembly lines).
+
+## Scores section
+
+The scores section presents three metrics that summarise how novel this BGC is relative to the rest of the database.
+
+### Novelty score (0 -- 1)
+
+The cosine distance between this BGC's protein embedding and the nearest validated (MIBiG) BGC embedding. The embedding is a 1,152-dimensional vector computed by the ESM protein language model from the BGC's protein sequences. Think of it as a numerical fingerprint of the BGC's overall enzymatic character.
+
+| Range | Interpretation |
+|---|---|
+| 0.0 -- 0.2 | Very similar to a known, characterised BGC |
+| 0.2 -- 0.5 | Moderate similarity; may be a variant of a known compound |
+| 0.5 -- 0.7 | Substantially different from any validated cluster |
+| 0.7 -- 1.0 | Far from all validated references; potentially new chemistry |
+
+### Domain novelty (0 -- 1)
+
+The fraction of this BGC's Pfam domain annotations that are not found in any other BGC in the entire database. A Pfam domain is a conserved protein functional unit (e.g. a ketosynthase domain, an adenylation domain).
+
+| Range | Interpretation |
+|---|---|
+| 0.0 | Every domain in this BGC also appears in at least one other BGC. The domain architecture is not unique. |
+| 0.0 -- 0.3 | A few domains are unique, but most are shared. The BGC has a mostly familiar architecture with some variations. |
+| 0.3 -- 0.7 | A significant fraction of domains are exclusive to this BGC. The enzymatic logic is unusual. |
+| 0.7 -- 1.0 | Most or all domains are unique. This is highly unusual and could indicate genuinely novel enzymology or a detection artefact. |
+
+### Nearest validated distance
+
+This line shows two values:
+
+- **Distance:** The raw cosine distance to the closest MIBiG BGC embedding. This is the same value as the novelty score when the nearest BGC is validated.
+- **MIBiG accession:** The accession of the validated BGC that is closest in embedding space (e.g. `BGC0000194`). You can look up this accession in the [MIBiG database](https://mibig.secondarymetabolites.org/) to see what compound the reference produces.
+
+This pairing lets you answer two questions: "How different is this BGC from anything known?" (the distance) and "What known compound is it most similar to?" (the accession).
+
+## Region plot
+
+The region plot is a graphical representation of the BGC's genomic context. It shows the stretch of the contig that the BGC occupies, with coding sequences (CDSs) drawn as directional arrows and Pfam domain annotations drawn as coloured blocks within each CDS.
+
+### Reading the plot
+
+- **Horizontal axis:** Nucleotide position along the contig. The window extends slightly beyond the BGC boundaries to show flanking genes.
+- **Arrows:** Each arrow represents a predicted coding sequence (gene). The direction indicates the strand: right-pointing arrows are on the forward strand, left-pointing arrows on the reverse strand.
+- **Coloured blocks within arrows:** Each coloured block is a Pfam domain hit. Hovering over a block shows the Pfam accession, name, description, and e-value.
+- **Cluster boundary markers:** Vertical dashed lines indicate the start and end of the BGC as called by the detection tool. Genes outside these boundaries are shown in grey as genomic context.
+
+### What to look for
+
+- **Core biosynthetic domains:** Look for the characteristic domains of the BGC's class. A polyketide BGC should have ketosynthase (KS), acyltransferase (AT), and acyl carrier protein (ACP) domains arranged in a modular pattern. An NRP BGC should have condensation (C), adenylation (A), and thiolation (T) domains.
+- **Unusual domains:** Domains not typically associated with the BGC class may indicate tailoring reactions that produce structural novelty. A halogenase domain in a polyketide BGC, for example, suggests a halogenated product.
+- **Gene density and arrangement:** A well-organised cluster with many large multi-domain genes is more likely to be a genuine, functional BGC than a sparse region with few small genes.
+- **Partial indicators:** If the cluster boundary coincides with the contig edge (indicated by a ragged line), the BGC is partial and may be missing essential genes.
+
+### CDS details
+
+Click any arrow (CDS) in the region plot to see its details:
+
+- Protein identifier
+- Amino acid length
+- Start and end positions on the contig
+- Strand
+- Gene caller (the tool that predicted the CDS)
+- Cluster representative (if the protein belongs to a protein cluster, the representative's identifier)
+- Full list of Pfam domain annotations with accessions, descriptions, and scores
+
+## Chemical compounds section
+
+If the BGC has predicted natural products, they appear in the Chemical Compounds section below the region plot. Each compound entry shows:
+
+### Compound name
+
+The name of the predicted or characterised natural product (e.g. "Erythromycin A"). For validated BGCs, this is the experimentally confirmed product. For predicted products, the name comes from computational annotation.
+
+### SMILES structure
+
+The SMILES (Simplified Molecular-Input Line-Entry System) string encoding the compound's 2D structure. Where available, a rendered structure image is also shown.
+
+### ChemOnt classification
+
+The Chemical Ontology (ChemOnt) hierarchy for the compound. ChemOnt classifies molecules by structural features --- functional groups, ring systems, substituent patterns --- independently of how they are biosynthesised. The classification is displayed as a nested tree showing progressively finer categories.
+
+Each ChemOnt node includes:
+
+- **ChemOnt ID** (e.g. `CHEMONTID:0000147`): the identifier in the ClassyFire ontology.
+- **Class name** (e.g. "Macrolides and analogues"): a human-readable label.
+- **Probability** (0 -- 1): the confidence that the predicted product belongs to this chemical class. Higher values indicate stronger computational evidence.
+
+Multiple ChemOnt nodes may be annotated on the same compound, reflecting different levels of the classification hierarchy or alternative structural interpretations.
+
+### NP class path
+
+In addition to ChemOnt, each compound may have a natural product class path (e.g. `Polyketide.Macrolide.Erythromycin`). This is a simpler, biosynthesis-oriented classification that aligns more closely with the BGC class.
+
+## Actions
+
+The bottom of the BGC Detail Panel provides three action buttons:
+
+### Add to Shortlist
+
+Adds this BGC to your BGC Shortlist (up to 20 items). A counter in the header bar increments to confirm. If the shortlist is already full, the button is disabled and a tooltip explains the limit.
+
+### Find Similar
+
+Switches to Search BGCs mode and runs a sequence-similarity search using this BGC's protein embedding as the query. The results are other BGCs in the database ranked by cosine similarity. This is useful when you find an interesting BGC and want to see whether related clusters exist in other organisms.
+
+### Evaluate
+
+Switches to Evaluate Asset mode and runs a full BGC assessment. The resulting report includes:
+
+- **GCF context:** Which gene cluster family (GCF) the BGC belongs to, with member count, validated count, and mean novelty.
+- **Domain differential:** A comparison of this BGC's Pfam domains against the GCF's core, variable, and rare domain sets.
+- **Novelty decomposition:** A breakdown of the overall novelty into sequence, chemistry, and architecture components.
+- **Chemical space map:** A UMAP view showing this BGC, its nearest neighbours, and validated reference points.
+
+## Tips
+
+- Compare the novelty score with the domain novelty score. A BGC with high novelty but low domain novelty has familiar enzymatic domains arranged in a way that still produces something distant from validated references --- possibly a known scaffold with unusual tailoring. A BGC with high domain novelty has genuinely unusual enzymology.
+- Check the completeness badge before shortlisting. Partial BGCs can produce misleadingly high novelty scores because missing domains make the embedding atypical.
+- Use the nearest validated accession to look up the closest known compound in MIBiG. This tells you what chemical space the BGC is likely operating in.
+- If the Chemical Compounds section is empty, the BGC does not have predicted natural product annotations. This does not mean it lacks products --- it means the computational pipeline could not assign a product prediction with sufficient confidence.
+- The region plot is the most information-dense part of the panel. Zoom in to examine individual domain annotations when the cluster is large.
+
+## Related pages
+
+- [The BGC Triad](bgc-triad.qmd) --- the panels that contain the BGC Roster where you click to open this detail panel
+- [Key Concepts](key-concepts.qmd) --- definitions of Pfam domain, ChemOnt, GCF, MIBiG, and other terms
+- [Assembly Scores](assembly-scores.qmd) --- assembly-level scores (the BGC Detail Panel shows BGC-level scores)
+- [Building and Exporting Your Shortlists](shortlists.qmd) --- what happens after you click Add to Shortlist
+- [Filtering](filtering.qmd) --- how ChemOnt and BGC class filters relate to the classifications shown here

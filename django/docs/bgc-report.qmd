@@ -1,0 +1,138 @@
+---
+title: "Reading the BGC Assessment Report"
+subtitle: "A section-by-section guide to every part of the BGC evaluation"
+---
+
+## Goal
+
+To understand every section of the BGC Assessment Report so you can determine whether a specific biosynthetic gene cluster (BGC) warrants laboratory follow-up. This page explains what each panel shows, how the numbers are calculated, and what patterns to look for when making decisions.
+
+## When you will see this report
+
+The BGC Assessment Report appears whenever you evaluate a single BGC, whether from the database or uploaded. You reach it by:
+
+- Right-clicking a BGC in any roster and selecting "Evaluate BGC"
+- Entering a BGC accession in the Evaluate sidebar
+- Uploading a GenBank file containing a single BGC
+
+See [Evaluate Overview](evaluate-overview.qmd) for full entry-point details.
+
+## Section 1: GCF Placement
+
+The top section identifies which **Gene Cluster Family (GCF)** this BGC belongs to. A GCF is a group of BGCs across the database that share similar domain architecture and sequence content --- think of it as a "family" of gene clusters that likely produce related natural products.
+
+The GCF Placement panel displays:
+
+| Field | What it means |
+|-------|---------------|
+| **Family ID** | The internal identifier for this GCF. |
+| **Member count** | How many BGCs in the database belong to this family. A large family indicates a widespread biosynthetic strategy. |
+| **Validated count** | How many family members are experimentally validated (present in MIBiG with a known product). Zero validated members means the entire family's chemistry is uncharacterised. |
+| **Mean novelty** | The average novelty score across all family members. |
+| **Distance to representative** | How far this specific BGC sits from the GCF's representative member (the medoid of the family). A small distance means this BGC is typical of its family; a large distance means it is an outlier within the family. |
+| **Novel Singleton** | A yes/no indicator. If "yes", this BGC is the sole member of its family --- no other BGC in the database resembles it closely enough to be grouped together. This is the strongest possible novelty signal. |
+
+**How to read it:**
+
+- **Large family, zero validated members** = a widespread, completely uncharacterised biosynthetic strategy. This is high-value territory for discovery.
+- **Novel Singleton** = no relatives at all. Maximum novelty, but also maximum uncertainty --- you have no close reference to guide experimental work.
+- **Small distance to representative** = this BGC is a typical member of its family. The family's average properties (novelty, class, products) describe this BGC well.
+- **Large distance to representative** = this BGC is an outlier in its family. It may carry unique modifications or domain rearrangements not seen in other members.
+
+## Section 2: Novelty Decomposition
+
+Below GCF Placement, three horizontal bar charts break the overall novelty score into three independent axes:
+
+### Sequence Novelty (0--1)
+
+Measures how different this BGC's protein sequences are from the nearest validated BGC in MIBiG. A score of 1.0 means the proteins share essentially no sequence similarity with any characterised BGC. A score near 0 means close homologues exist in the validated reference set.
+
+This axis captures **enzyme-level divergence** --- whether the catalytic machinery is new or well-known.
+
+### Chemistry Novelty (0--1)
+
+Measures how different this BGC's predicted chemical product is from known compounds. The platform compares ChemOnt (Chemical Ontology) predictions and predicted molecular fingerprints against the MIBiG compound catalogue. A high score means the predicted product does not resemble any known natural product.
+
+This axis captures **product-level divergence** --- whether the molecule itself is likely to be new.
+
+### Architecture Novelty (0--1)
+
+Measures how different the arrangement of protein domains in this BGC is from known BGCs. Even if individual enzymes are well-characterised, a novel arrangement of domains can produce a novel product through combinatorial biochemistry.
+
+This axis captures **pathway-level divergence** --- whether the biosynthetic logic (the order and combination of enzymatic steps) is new.
+
+**How to read the three axes together:**
+
+- **High on all three** = a genuinely novel BGC in every respect. Rare and exciting, but also the hardest to characterise because you have no reference.
+- **High Sequence, low Architecture** = new enzymes arranged in a familiar pattern. The product may resemble known compounds but is made by divergent machinery.
+- **Low Sequence, high Architecture** = well-known enzymes arranged in an unusual way. The biosynthetic logic is new, potentially producing an unprecedented product from familiar parts.
+- **High Chemistry, low Sequence** = the predicted product is unlike known compounds, but the enzymes have recognisable homologues. This can happen when small changes in substrate specificity or tailoring reactions dramatically alter the final product.
+
+## Section 3: Domain Architecture Differential
+
+This section lists every Pfam protein domain detected in the BGC and categorises each one relative to the assigned GCF:
+
+| Category | Symbol | Meaning |
+|----------|--------|---------|
+| **Core** | Solid circle | Present in more than 80% of family members. These domains define the conserved enzymatic backbone of the family. |
+| **Variable** | Half circle | Present in 20--80% of family members. These domains represent optional pathway branches or tailoring steps. |
+| **Rare** | Open circle | Present in fewer than 20% of family members, or unique to this BGC. These domains are the most distinctive features of this particular cluster. |
+
+The domains are listed in their order along the BGC (5' to 3'), so you can read the table as a left-to-right map of the biosynthetic pathway.
+
+**How to read it:**
+
+- **Rare domains are the most interesting** from a discovery standpoint. They suggest enzymatic steps that most family members lack, which may produce structural modifications not seen in the family's typical products.
+- **A BGC with many Variable and Rare domains** relative to Core domains is an atypical family member and may produce a distinct product variant.
+- **A BGC composed almost entirely of Core domains** is a canonical representative of its family and is likely to produce a product similar to other family members.
+
+## Section 4: Domain Architecture Comparison
+
+This section displays a **side-by-side visual alignment** of the evaluated BGC's domain architecture with that of the **nearest MIBiG-validated BGC** --- the experimentally characterised BGC that is most similar in sequence space.
+
+The two architectures are drawn as horizontal arrow diagrams, with each arrow representing a gene and coloured blocks within each arrow representing Pfam domains. Shared domains are connected by lines between the two diagrams. Domains present in the evaluated BGC but absent in the MIBiG reference are highlighted in a distinct colour, and vice versa.
+
+**How to read it:**
+
+- **Aligned blocks with connecting lines** = conserved biosynthetic steps shared with the validated reference. The chemistry performed by these steps is likely similar.
+- **Highlighted blocks without connections** = unique domains. In the evaluated BGC, these represent biosynthetic steps not present in the reference, suggesting novel modifications. In the MIBiG reference, these represent steps that the evaluated BGC lacks, suggesting a simplified or alternative pathway.
+- **The MIBiG accession and compound name** are shown above the reference architecture. You can look up this entry on the [MIBiG website](https://mibig.secondarymetabolites.org/) to see the known product structure, bioactivity data, and literature references.
+
+## Section 5: BGC Space Map
+
+A **UMAP projection** (a two-dimensional map generated by reducing high-dimensional data) centred on the evaluated BGC. Nearby BGCs from the database are shown as small dots coloured by BGC class (Polyketide, NRP, RiPP, and so on). MIBiG-validated BGCs appear as diamond-shaped landmarks with compound-name labels.
+
+**How to read it:**
+
+- The evaluated BGC appears as a large, labelled point at or near the centre of the view.
+- Nearby dots represent BGCs with similar overall biochemical profiles. If the nearest neighbours are mostly from a single class, the evaluated BGC likely belongs to that chemical space.
+- Distance from MIBiG diamonds indicates how far the evaluated BGC is from known chemistry. BGCs in "empty" regions of the map --- far from any landmark --- are the most novel.
+
+## Section 6: Embeddings Map
+
+A second UMAP projection, this time based on the **protein embedding vectors** rather than the domain-level features used in the BGC Space Map. This provides a complementary view: while the BGC Space Map reflects domain architecture and predicted products, the Embeddings Map reflects raw protein sequence similarity.
+
+**How to read it:**
+
+The interpretation is similar to the BGC Space Map, but discrepancies between the two maps are informative:
+
+- **Same neighbourhood in both maps** = the BGC is consistently similar to the same set of neighbours regardless of whether you compare domains or full sequences. Strong signal.
+- **Different neighbourhood** = the BGC shares domain architecture with one group but has divergent protein sequences, or vice versa. This can indicate convergent evolution (unrelated enzymes producing similar domain architectures) or recent horizontal gene transfer.
+
+## Tips
+
+- **Start with GCF Placement and Novel Singleton status** to gauge the overall discovery potential.
+- **Use the Novelty Decomposition to plan your experimental approach.** High Architecture Novelty suggests you should focus on understanding the pathway logic. High Chemistry Novelty suggests the product itself is the main prize. High Sequence Novelty suggests the enzymes deserve biochemical characterisation in their own right.
+- **The Domain Architecture Comparison is your bridge to the literature.** The nearest MIBiG BGC gives you a starting point for understanding what this BGC might produce and how to detect its product.
+- **Cross-check the two maps** (BGC Space Map and Embeddings Map). Consistent placement across both views increases confidence in the novelty assessment.
+
+## Related pages
+
+- [Evaluate Overview](evaluate-overview.qmd) --- all entry points and the general Evaluate workflow
+- [Evaluate a Database BGC](evaluate-db-bgc.qmd) --- how to trigger this report from the database
+- [Upload a BGC](upload-bgc.qmd) --- how to trigger this report for an uploaded BGC
+- [Assembly Assessment Report](assembly-report.qmd) --- the equivalent report for an assembly
+- [GCF Explained](gcf-explained.qmd) --- background on Gene Cluster Families
+- [MIBiG and Validated BGCs](mibig-validated.qmd) --- the reference database used for comparisons
+- [Scores and Metrics Reference](scores-metrics.qmd) --- formal definitions of every score
+- [Glossary](glossary.qmd) --- quick definitions of all terms

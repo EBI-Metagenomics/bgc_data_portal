@@ -1,0 +1,125 @@
+---
+title: "Reading Search Results"
+subtitle: "From ranked BGC hits to purchasable assemblies"
+---
+
+## Goal
+
+After running a search query, you need to interpret the results and decide which BGCs --- and which assemblies --- warrant further investigation. This page walks you through the results layout, explains each column, and describes the path from a list of matching BGCs to actionable assemblies you can obtain from culture collections.
+
+## When to use this page
+
+Refer to this page when you have run a search and want to understand what the results are telling you, or when you want to refine your result set into a shortlist of candidates for laboratory follow-up.
+
+## The results layout
+
+Search results are displayed in two horizontal bands, each containing a triad of panels.
+
+### Upper band: BGC Triad
+
+The BGC Triad is your primary results view. It contains three panels:
+
+**BGC Roster (left)**
+: A ranked table of BGCs that matched your query. In Search mode, the roster includes a **Similarity** column that does not appear in Explore mode. Rows are sorted by similarity score (highest first) by default, though you can re-sort by any column.
+
+**BGC Space Map (centre)**
+: A two-dimensional UMAP projection of the matching BGCs. Each point represents one BGC, and proximity on the map indicates structural relatedness. Points are coloured by the attribute you select (BGC class, biome, novelty score, or similarity score). This view helps you spot clusters of related hits and outliers.
+
+**BGC Detail (right)**
+: A deep-dive panel that activates when you select a single BGC from the roster or the map. It shows domain architecture, predicted products, genomic context, and links to external resources.
+
+### Lower band: Assembly Triad
+
+The Assembly Triad answers the question: *"Now that I have found interesting BGCs, where do they come from, and can I get my hands on them?"*
+
+**Assembly Roster (left)**
+: Lists the parent assemblies of BGCs currently selected or shortlisted in the upper band. Columns include assembly accession, quality score, biome, taxonomic lineage, number of BGCs, and culture-collection availability.
+
+**Assembly Space Map (centre)**
+: A UMAP projection of the parent assemblies. This view reveals whether your BGC hits come from a tight taxonomic cluster or are spread across diverse lineages.
+
+**Assembly Detail (right)**
+: Full report on a single assembly. Shows all BGCs it carries (not just the ones that matched your search), assembly quality metrics, taxonomic classification, and links to strain databases.
+
+## BGC Roster columns in detail
+
+| Column | Description | How to use it |
+|--------|-------------|---------------|
+| **Similarity** | The score from your search method (Sorensen-Dice, cosine, or Tanimoto). When multiple methods are combined, this shows the minimum score across methods. | Primary ranking criterion. Higher is better. See [Understanding Similarity Scores](similarity-scores.qmd) for interpretation. |
+| **Accession** | A unique identifier for the BGC (e.g. `BGC_000123`). | Click to open the BGC Detail panel. Use for cross-referencing with other databases or publications. |
+| **Classification** | The predicted BGC class: NRPS, Type I PKS, Terpene, RiPP, and so on. | Verify that the BGC class matches your expectations. An unexpected class may indicate a false positive or an interesting chimeric cluster. |
+| **Novelty** | A score from 0 to 1 indicating how different the BGC is from any characterised reference in the MIBiG database. 0 means a near-identical match to a known BGC; 1 means completely novel. | High novelty (> 0.7) suggests the BGC may produce an uncharacterised compound. Low novelty (< 0.3) suggests it is closely related to a known product. |
+| **Domain Novelty** | A score from 0 to 1 reflecting how unusual the BGC's Pfam domain composition is compared to other BGCs of the same class. | High domain novelty suggests unusual enzymatic machinery, which may indicate a non-canonical biosynthetic pathway. |
+| **Size (bp)** | The length of the BGC region in base pairs. | Unusually large or small BGCs may warrant closer inspection. Very small BGCs might be fragments; very large ones might encode complex multi-step pathways. |
+
+## Assembly Roster columns in detail
+
+| Column | Description | How to use it |
+|--------|-------------|---------------|
+| **Accession** | The unique assembly identifier. | Click to open the Assembly Detail panel. |
+| **Quality** | An overall assembly quality score reflecting completeness and contamination metrics. | Prefer high-quality assemblies for downstream work. Low-quality assemblies may have fragmented or incomplete BGCs. |
+| **Biome** | The environment the assembly was sampled from (e.g. "Marine", "Soil", "Human gut"). | Useful for contextualising your findings ecologically. |
+| **Taxonomy** | The predicted taxonomic lineage of the organism. | Helps you identify which organisms produce the BGCs you found. |
+| **BGC count** | How many BGCs the assembly contains in total. | Assemblies with many BGCs may be prolific natural-product producers worth investigating broadly. |
+| **Type Strain** | Whether the assembly corresponds to a strain available from a culture collection. | Critical for practical follow-up. Type strains can be purchased and grown in the lab. |
+
+## Step-by-step: from search hits to actionable assemblies
+
+### 1. Scan the BGC Roster
+
+Review the top-ranked hits. Look for a natural break in similarity scores --- a cluster of high-scoring hits followed by a gap often separates genuine matches from noise.
+
+### 2. Inspect promising BGCs
+
+Click individual BGCs to open the BGC Detail panel. Check:
+
+- Does the domain architecture make biological sense for your target pathway?
+- Is the predicted product (if available) consistent with what you expected?
+- What is the novelty score? High-novelty BGCs may be more interesting but also carry more risk of misprediction.
+
+### 3. Star BGCs to build a shortlist
+
+Click the star icon next to any BGC in the roster to add it to your shortlist. The shortlist persists across mode switches, so you can return to it later. Shortlisted BGCs automatically populate the Assembly Triad below.
+
+### 4. Review the Assembly Triad
+
+The Assembly Roster now shows the parent assemblies of your shortlisted BGCs. Examine:
+
+- **Quality**: prioritise assemblies with high quality scores.
+- **Taxonomy**: note which organisms carry your BGCs of interest.
+- **BGC count**: an assembly with many BGCs may be a prolific producer worth broader investigation.
+
+### 5. Apply the Type Strain filter
+
+To find assemblies you can actually purchase and grow, activate the **Type Strain** filter in the Assembly Roster toolbar. This filters the list to only those assemblies with corresponding entries in culture collections (e.g. DSMZ, ATCC, NCTC). Each entry includes a link to the culture collection catalogue where you can place an order.
+
+### 6. Evaluate candidates
+
+For your most promising assembly--BGC combinations, switch to [Evaluate mode](evaluate-overview.qmd) to get a comprehensive report. You can do this directly from the Assembly or BGC Detail panel using the "Evaluate" action button.
+
+## What the BGC Space Map tells you
+
+The BGC Space Map uses UMAP (Uniform Manifold Approximation and Projection) to reduce the high-dimensional BGC data into a two-dimensional scatter plot. Points that are close together represent BGCs with similar properties (domain composition, sequence features, or both).
+
+In the context of search results, the map reveals:
+
+- **Tight clusters**: your query found a coherent group of related BGCs. This is typical when searching for a well-defined BGC type.
+- **Scattered points**: your query matched diverse, unrelated BGCs. This may happen with broad queries (e.g. a single common domain) and suggests you should tighten your search.
+- **Outliers**: individual BGCs far from any cluster. These may be chimeric, fragmented, or genuinely unusual --- worth a closer look.
+
+Colour the map by **Similarity score** to see how the score correlates with structural grouping. High-scoring hits that also cluster together are strong candidates.
+
+## Tips
+
+- **Sort by different columns.** While similarity is the default sort, try sorting by novelty to find the most unusual hits, or by size to spot unusually large clusters.
+- **Use the map and the roster together.** Select a cluster of points on the map to see the corresponding rows highlighted in the roster, and vice versa.
+- **Export your results.** Use the export button in the roster toolbar to download the results as a CSV file for offline analysis or sharing with collaborators.
+- **Do not over-rely on a single score.** A BGC with a high similarity score but low assembly quality may not be a reliable hit. Consider all available metadata before selecting candidates.
+
+## Related pages
+
+- [Search BGCs Overview](search-overview.qmd) --- the Search interface layout
+- [Understanding Similarity Scores](similarity-scores.qmd) --- what the numbers mean
+- [Cross-Mode Transitions](cross-mode.qmd) --- move from Search results to Explore or Evaluate
+- [Shortlists](shortlists.qmd) --- managing your saved BGCs and assemblies
+- [Domain Query Builder](domain-query.qmd) --- refine your query if results are not what you expected

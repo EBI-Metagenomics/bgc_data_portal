@@ -14,6 +14,7 @@ import { useShortlistStore } from "@/stores/shortlist-store";
 import { useAssessStore } from "@/stores/assess-store";
 import { ChevronRight, ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
 import type { ChemOntAnnotationNode } from "@/api/types";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 
 /**
@@ -181,16 +182,16 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
       {/* Scores */}
       <div className="vf-grid vf-grid__col-4" style={{ gap: "1rem", fontSize: "0.75rem" }}>
         <article className="vf-summary">
-          <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Novelty</h3>
+          <h3 className="vf-summary__title flex items-center gap-1" style={{ fontSize: "0.75rem" }}>Novelty <HelpTooltip tooltipKey="novelty_score_bgc" side="bottom" /></h3>
           <p className="vf-summary__text font-mono font-medium">{bgc.novelty_score.toFixed(3)}</p>
         </article>
         <article className="vf-summary">
-          <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Domain Novelty</h3>
+          <h3 className="vf-summary__title flex items-center gap-1" style={{ fontSize: "0.75rem" }}>Domain Novelty <HelpTooltip tooltipKey="domain_novelty" side="bottom" /></h3>
           <p className="vf-summary__text font-mono font-medium">{bgc.domain_novelty.toFixed(3)}</p>
         </article>
         {bgc.nearest_validated_accession && (
           <article className="vf-summary">
-            <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Nearest Validated</h3>
+            <h3 className="vf-summary__title flex items-center gap-1" style={{ fontSize: "0.75rem" }}>Nearest Validated <HelpTooltip tooltipKey="nearest_validated_distance" side="bottom" /></h3>
             <p className="vf-summary__text font-mono font-medium">
               {bgc.nearest_validated_accession}
             </p>

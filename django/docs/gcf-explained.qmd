@@ -1,0 +1,107 @@
+---
+title: "Gene Cluster Families (GCF)"
+subtitle: "How BGCs are grouped into families and why it matters for discovery"
+---
+
+## Goal
+
+To explain what Gene Cluster Families (GCFs) are, how the platform builds them, and why they are one of the most important concepts for prioritising biosynthetic gene clusters (BGCs) in a bioprospecting workflow.
+
+## When to use this reference
+
+Consult this page when:
+
+- You see a GCF identifier or member count in the BGC Roster or BGC Assessment Report and want to understand what it means.
+- You want to know how the platform decides that two BGCs are "related" and groups them into the same family.
+- You are trying to interpret the Redundancy Matrix in the Assembly Assessment Report.
+- You encounter the term "Novel Singleton" and want to understand its significance.
+
+## What is a Gene Cluster Family?
+
+A Gene Cluster Family (GCF) is a group of BGCs from across the database that share similar biochemical characteristics --- similar domain architectures, similar protein sequences, or both. Think of a GCF as a "natural product family": all members likely produce related (though not necessarily identical) chemical compounds.
+
+GCFs are analogous to protein families in sequence analysis. Just as proteins with similar sequences are grouped into families (like Pfam families), BGCs with similar biosynthetic machinery are grouped into Gene Cluster Families.
+
+## How clustering works
+
+The platform builds GCFs using a two-step process:
+
+### Step 1: Compute embeddings
+
+Each BGC is represented as a **1152-dimensional embedding vector** --- a numerical fingerprint that captures the BGC's overall biochemical character. This vector is computed by passing the BGC's protein sequences through a pre-trained protein language model (ESM, Evolutionary Scale Modeling). The embedding captures both the sequence content and the functional properties of the encoded enzymes.
+
+### Step 2: Cluster by similarity
+
+The platform clusters BGCs by measuring the **cosine similarity** between their embedding vectors. BGCs whose embeddings are sufficiently similar (above a defined threshold) are grouped into the same family. The clustering algorithm identifies a **representative member** (the medoid --- the BGC closest to the centre of the cluster) for each family.
+
+This approach has a key advantage over traditional sequence-based clustering: it can group BGCs that share functional similarity even when their raw DNA or protein sequences have diverged beyond the detection limit of BLAST or other alignment-based tools. Two BGCs with different gene orders, different numbers of genes, or divergent sequences can still end up in the same GCF if their overall biochemical logic is similar.
+
+## Key GCF properties
+
+### Member count
+
+The number of BGCs in the database that belong to this family. Member counts range from 1 (a Novel Singleton) to several thousand (for ubiquitous biosynthetic strategies like siderophore production in Enterobacteriaceae).
+
+A large member count means the biosynthetic strategy is widespread across many organisms in the database.
+
+### Validated members
+
+The number of family members that have been experimentally characterised --- meaning they appear in the [MIBiG database](mibig-validated.qmd) with a known product structure and literature reference. Validated members serve as reference points: if a GCF has validated members, you know (approximately) what kind of molecule the family produces.
+
+### Mean novelty
+
+The average Novelty Score across all members of the family. A GCF with high mean novelty contains BGCs that are, on average, distant from characterised reference BGCs.
+
+### Distance to representative
+
+For any given BGC, its distance to the family representative indicates how typical it is within its family. A BGC very close to the representative is a canonical family member. A BGC far from the representative may be an outlier that produces a variant product.
+
+## Why GCFs matter for discovery
+
+GCFs are the concept that connects individual BGC scores to actionable research decisions. Here is why:
+
+### Pattern 1: Large family, zero validated members
+
+This is the highest-value pattern for natural product discovery. A GCF with many members but no experimentally validated BGCs represents a **widespread, completely uncharacterised biosynthetic strategy**. Multiple organisms across diverse environments have evolved and maintained this gene cluster family, suggesting it produces something biologically important --- but no one has yet isolated and characterised the product.
+
+If you find a BGC in such a family, you are not just discovering a single new compound; you are opening up an entire family of related natural products.
+
+### Pattern 2: Novel Singleton
+
+A Novel Singleton is a GCF with exactly one member --- the BGC you are looking at. No other BGC in the database is similar enough to be grouped with it. This is the **strongest possible novelty signal**: not only is the BGC distant from all characterised references, it is also unlike everything else in the uncharacterised catalogue.
+
+Novel Singletons carry both the highest potential reward and the highest risk. The reward: you may have found a truly unique biosynthetic pathway. The risk: with no relatives to guide you, experimental characterisation will be harder --- you cannot borrow knowledge from related family members.
+
+### Pattern 3: Large family, some validated members
+
+A GCF with validated members tells you approximately what kind of chemistry the family produces. Unvalidated members of the same family may produce variants of the known product --- perhaps with different stereochemistry, additional functional groups, or modified sugar moieties. These variants can have dramatically different bioactivity.
+
+If you are interested in a specific compound class (say, macrolide antibiotics) and you find a GCF whose validated members produce macrolides, the unvalidated members become targeted candidates for finding new macrolide variants.
+
+### Pattern 4: Small family, validated members, type strain available
+
+This pattern has the lowest discovery potential. The chemistry is known, few organisms carry it, and a culturable reference strain already exists. Unless you have a specific reason to study this family (for example, you are interested in the regulation of the pathway rather than the product itself), other candidates offer better return on investment.
+
+## GCFs in the platform interface
+
+GCF information appears in several places:
+
+- **BGC Roster** --- the GCF column shows the family identifier and member count for each BGC.
+- **BGC Detail panel** --- the GCF section shows the family identifier, member count, validated count, and distance to representative.
+- **BGC Assessment Report** --- the GCF Placement section provides the most detailed view, including Novel Singleton status and mean family novelty.
+- **Assembly Assessment Report** --- the Redundancy Matrix uses GCF membership to categorise each assembly's BGCs.
+
+## Tips
+
+- **Sort the BGC Roster by GCF member count** to find BGCs in the largest families. Then filter for families with zero validated members to find widespread uncharacterised strategies.
+- **Use "Browse Family" in the BGC Assessment Report** to switch to Explore mode and see all family members. This lets you check whether family members come from diverse environments (a sign that the pathway is broadly important) or from a single niche.
+- **Do not dismiss small families.** A GCF with 5 members and zero validated members may represent a rare but genuine biosynthetic strategy found only in a specific ecological niche.
+- **Combine GCF information with the Redundancy Matrix** when evaluating assemblies. An assembly whose BGCs all belong to large, validated GCFs offers less discovery potential than one with even a single BGC in a novel or unvalidated family.
+
+## Related pages
+
+- [MIBiG and Validated BGCs](mibig-validated.qmd) --- the reference database that determines "validated" status
+- [Scores and Metrics Reference](scores-metrics.qmd) --- how GCF membership relates to novelty scores
+- [BGC Assessment Report](bgc-report.qmd) --- where GCF Placement appears in full detail
+- [Assembly Assessment Report](assembly-report.qmd) --- the Redundancy Matrix, built on GCF data
+- [Glossary](glossary.qmd) --- quick definitions of all terms

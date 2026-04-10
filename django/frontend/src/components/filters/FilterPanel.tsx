@@ -14,6 +14,7 @@ import { useFilterStore } from "@/stores/filter-store";
 import { useModeStore } from "@/stores/mode-store";
 import { Label } from "@/components/ui/label";
 import { Search, RotateCcw } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 export function FilterPanel() {
   const mode = useModeStore((s) => s.mode);
@@ -70,8 +71,8 @@ export function FilterPanel() {
           </TabsList>
           <TabsContent value="filters" className="space-y-4">
             <TaxonomyFilter />
-            <div className="space-y-1.5">
-              <Label className="text-xs">Biome Lineage</Label>
+            <div className="space-y-1.5" data-tour="biome-lineage">
+              <Label className="flex items-center gap-1 text-xs">Biome Lineage <HelpTooltip tooltipKey="biome_lineage" side="right" /></Label>
               <Input
                 placeholder="e.g. root:Environmental:Soil"
                 value={biomeLineage}

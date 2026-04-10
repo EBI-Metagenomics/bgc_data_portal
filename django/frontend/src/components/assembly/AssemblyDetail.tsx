@@ -8,15 +8,19 @@ import { useAssessStore } from "@/stores/assess-store";
 import { useModeStore } from "@/stores/mode-store";
 import { Star, ExternalLink, ListPlus, Microscope } from "lucide-react";
 import { toast } from "sonner";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 interface AssemblyDetailProps {
   assemblyId: number;
 }
 
-function ScoreBar({ label, value }: { label: string; value: number }) {
+function ScoreBar({ label, value, tooltipKey }: { label: string; value: number; tooltipKey?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-32 text-xs text-muted-foreground">{label}</span>
+      <span className="w-32 flex items-center gap-1 text-xs text-muted-foreground">
+        {label}
+        {tooltipKey && <HelpTooltip tooltipKey={tooltipKey} side="right" />}
+      </span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-primary"
@@ -96,6 +100,7 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
               <Badge variant="outline" className="gap-1 border-amber-300 text-amber-600">
                 <Star className="h-3 w-3 fill-amber-400" />
                 Type Strain
+                <HelpTooltip tooltipKey="type_strain" side="right" />
               </Badge>
             )}
           </div>
@@ -149,10 +154,10 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
       <div className="vf-stack vf-stack--200">
         <h4 className="vf-section-header__heading" style={{ fontSize: "0.875rem" }}>Scores</h4>
         <Separator />
-        <ScoreBar label="BGC Novelty" value={assembly.bgc_novelty_score} />
-        <ScoreBar label="BGC Diversity" value={assembly.bgc_diversity_score} />
-        <ScoreBar label="BGC Density" value={assembly.bgc_density} />
-        <ScoreBar label="Taxonomic Novelty" value={assembly.taxonomic_novelty} />
+        <ScoreBar label="BGC Novelty" value={assembly.bgc_novelty_score} tooltipKey="novelty_score_assembly" />
+        <ScoreBar label="BGC Diversity" value={assembly.bgc_diversity_score} tooltipKey="diversity_score" />
+        <ScoreBar label="BGC Density" value={assembly.bgc_density} tooltipKey="density" />
+        <ScoreBar label="Taxonomic Novelty" value={assembly.taxonomic_novelty} tooltipKey="taxonomic_novelty" />
         <div className="flex gap-4 pt-2 text-xs">
           <span>
             <strong>{assembly.bgc_count}</strong> BGCs

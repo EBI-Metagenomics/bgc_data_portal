@@ -32,7 +32,7 @@ COPY . .
 
 # Build the React frontend (outputs to /app/static/dashboard/)
 WORKDIR /app/frontend
-RUN npm ci && npm run build
+RUN npm install && npm run build
 WORKDIR /app
 
 EXPOSE 8000

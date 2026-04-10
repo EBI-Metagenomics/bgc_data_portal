@@ -63,7 +63,7 @@ export function QueryLayout() {
 
       {/* BGC results — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
-        <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained>
+        <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained dataTour="bgc-roster">
           <QueryResultsRoster />
         </PanelContainer>
         <PanelContainer title="BGC Space Map" className="h-full" constrained>

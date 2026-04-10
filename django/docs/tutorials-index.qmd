@@ -1,0 +1,86 @@
+---
+title: "Tutorials"
+subtitle: "Step-by-step walkthroughs for common bioprospecting tasks"
+---
+
+## Goal
+
+This section contains guided tutorials that walk you through complete workflows from start to finish. Each tutorial begins with a specific research question, shows you every click and decision along the way, and ends with a concrete result you can take to the bench.
+
+Unlike the reference pages (which explain individual features) or the mode overviews (which describe the interface layout), tutorials follow a narrative arc: you start with a question, work through the platform, and arrive at an answer.
+
+## Before you start
+
+All tutorials assume you have read the [Platform Overview](index.qmd) and the [Quickstart](quickstart.qmd) guide. If you have not used the platform before, start with the Quickstart --- it takes about five minutes and introduces the basic interface.
+
+You do not need any bioinformatics software installed on your computer. Everything happens in the browser. You may want to have a spreadsheet application (Excel, Google Sheets, or similar) available for reviewing exported CSV files.
+
+## Available tutorials
+
+The tutorials below are planned for this section. Each one addresses a practical question that experimental biochemists commonly face when using computational tools to guide their research.
+
+### Finding a purchasable strain for a target compound
+
+**Research question:** You are interested in a specific class of natural product (for example, lanthipeptide antibiotics) and want to find a microorganism that (a) carries promising BGCs for that compound class and (b) is available as a type strain from a public culture collection so you can order it and begin experiments immediately.
+
+**What you will learn:**
+
+- How to use the BGC class filter in Explore mode to narrow the catalogue to a specific compound type.
+- How to apply the Type Strain filter to restrict results to purchasable organisms.
+- How to sort and compare assemblies by novelty, diversity, and density.
+- How to read the Assembly Detail panel to confirm culture collection availability.
+- How to export your shortlist as a CSV for sharing with collaborators or for ordering strains.
+
+**Estimated time:** 15--20 minutes.
+
+### Evaluating your own assembly
+
+**Research question:** You have sequenced a promising microorganism and assembled its genome. Before investing weeks of effort in extraction, purification, and structural elucidation, you want to know: how does this organism's biosynthetic potential compare with everything in the public catalogue? Are its BGCs novel, or do similar gene clusters already exist in well-studied organisms?
+
+**What you will learn:**
+
+- How to prepare your assembly files for upload (FASTA format, optional antiSMASH annotations).
+- How to use Evaluate mode to upload and analyse your assembly.
+- How to read the Assembly Assessment Report --- priority ranking, radar chart, percentile distributions, and redundancy matrix.
+- How to drill into individual BGCs from the scoped BGC Triad.
+- How to interpret the BGC Embeddings Map to understand where your organism sits in the global chemical landscape.
+- How to use cross-mode transitions to compare your assembly with similar database entries.
+
+**Estimated time:** 20--30 minutes (depending on assembly size and processing time).
+
+### Exploring RiPPs in marine metagenomes
+
+**Research question:** You are interested in ribosomally synthesised and post-translationally modified peptides (RiPPs) from marine environments. This compound class has attracted increasing attention because RiPPs are genetically encoded (making them easier to engineer) and marine environments are a rich source of novel chemistry. You want to find the most promising marine metagenome assemblies carrying novel RiPP gene clusters.
+
+**What you will learn:**
+
+- How to combine the BGC class filter (RiPP) with the biome filter (marine environments) in Explore mode.
+- How to use the Assembly Space Map to identify clusters of related marine assemblies.
+- How to sort assemblies by novelty to find those carrying the most unusual RiPP gene clusters.
+- How to use the BGC Triad to inspect individual RiPP clusters, including their subclass (lanthipeptide, thiopeptide, sactipeptide, etc.).
+- How to evaluate top candidates and interpret the Novelty Decomposition to understand what makes each RiPP novel.
+- How to search for similar RiPP architectures using the Domain Query in Search mode.
+
+**Estimated time:** 25--35 minutes.
+
+## How tutorials are structured
+
+Each tutorial follows a consistent format:
+
+1. **The question** --- what you want to find out, stated in plain language.
+2. **Prerequisites** --- any data or preparation needed before you begin.
+3. **Walkthrough** --- numbered steps with descriptions of what you will see at each stage. Screenshots and annotations highlight key interface elements.
+4. **Interpreting the results** --- what the outputs mean and how to decide on next steps.
+5. **Going further** --- suggestions for extending the workflow, such as evaluating additional candidates or combining with other search strategies.
+
+## Requesting new tutorials
+
+If you have a workflow that you would like documented as a tutorial, please open an issue on the [GitHub repository](https://github.com/EBI-Metagenomics/mgnify-bgcs-v2) or contact the team using the details on the [About](about.qmd) page. We prioritise tutorials based on community demand.
+
+## Related pages
+
+- [Platform Overview](index.qmd) --- introduction to the platform and its three modes
+- [Quickstart](quickstart.qmd) --- a five-minute first walkthrough
+- [Explore Assemblies](explore-overview.qmd) --- Explore mode reference
+- [Search BGCs](search-overview.qmd) --- Search mode reference
+- [Evaluate Overview](evaluate-overview.qmd) --- Evaluate mode reference

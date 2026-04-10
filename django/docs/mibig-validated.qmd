@@ -1,0 +1,98 @@
+---
+title: "MIBiG and Validated BGCs"
+subtitle: "The experimentally characterised reference set that anchors novelty scoring"
+---
+
+## Goal
+
+To explain what the MIBiG database is, what "validated" means in the context of the BGC Discovery Platform, and how validated BGCs serve as the reference set against which every novelty score is calculated.
+
+## When to use this reference
+
+Consult this page when:
+
+- You see the label "validated" next to a BGC and want to know what it means.
+- You want to understand how the platform calculates Novelty Scores and Nearest Validated Distance.
+- You encounter MIBiG accessions (such as `BGC0000001`) in the platform and want to know their significance.
+- You want to understand why MIBiG BGCs appear as diamond-shaped landmarks on the embedding maps.
+
+## What is MIBiG?
+
+MIBiG (Minimum Information about a Biosynthetic Gene cluster) is a curated, public database of biosynthetic gene clusters that have been **experimentally characterised**. For each entry, a researcher has:
+
+1. Identified the gene cluster in a sequenced genome.
+2. Linked the gene cluster to a specific natural product through experimental evidence (gene knockout, heterologous expression, chemical isolation, or a combination of these).
+3. Deposited the annotation, including the compound structure, bioactivity data, and literature references, in the MIBiG repository.
+
+MIBiG is maintained by the natural products research community and is the most widely used reference database for biosynthetic gene clusters. As of the current version used by the platform, MIBiG contains approximately 2,500 entries covering a broad range of compound classes.
+
+## What "validated" means in the platform
+
+In the BGC Discovery Platform, the label **validated** is applied exclusively to BGCs that have a corresponding entry in the MIBiG database. A validated BGC is one where:
+
+- The gene cluster has been experimentally linked to a known compound.
+- The compound structure, or at least its compound class, has been determined.
+- The evidence has been peer-reviewed and deposited in MIBiG.
+
+Validated BGCs represent the "known universe" of biosynthetic gene clusters. Everything else in the platform's database is **unvalidated** --- computationally predicted but not yet experimentally confirmed to produce a specific product.
+
+The distinction is binary: a BGC is either validated (present in MIBiG) or not. There are no intermediate states. This simplicity is intentional --- it provides a clear reference line for novelty calculations.
+
+## How validated BGCs anchor novelty scoring
+
+Every novelty score in the platform is fundamentally a **distance measurement from the nearest validated BGC**. The logic is straightforward:
+
+1. The platform computes an embedding vector for every BGC in the database, including all MIBiG entries.
+2. For each unvalidated BGC, the platform measures the cosine distance between its embedding vector and the embedding of every MIBiG BGC.
+3. The minimum distance --- the distance to the single closest MIBiG BGC --- becomes the **Novelty Score**.
+
+A Novelty Score of 0 means the BGC is identical (in embedding space) to a known, characterised BGC. A Novelty Score approaching 1 means it is maximally distant from everything in MIBiG. The further a BGC sits from the "known universe", the more likely it is to represent genuinely new chemistry.
+
+This design means that novelty scores are always relative to the current state of MIBiG. As the research community characterises new BGCs and adds them to MIBiG, some previously "novel" BGCs will see their scores decrease. This is expected and desirable --- it reflects genuine progress in the field.
+
+## Validated BGCs on embedding maps
+
+On the UMAP embedding maps (visible in Explore mode, Search mode, and the Assessment Reports), validated BGCs appear as **diamond-shaped landmarks** rather than the circular dots used for unvalidated BGCs. Each diamond is labelled with the MIBiG accession or compound name.
+
+These landmarks serve as orientation points. When you see an unvalidated BGC sitting near a MIBiG diamond, you can infer that it likely produces something related to the labelled compound. When you see an unvalidated BGC far from any diamond, you are looking at uncharted chemical territory.
+
+### Reading the landmarks
+
+- **Dense clusters of diamonds** indicate well-characterised regions of chemical space. Many BGCs in these regions have been experimentally studied, and new BGCs found here are less likely to produce truly novel compounds.
+- **Isolated diamonds** represent MIBiG entries that are themselves unusual --- characterised BGCs with few close relatives. Unvalidated BGCs near these isolated landmarks may produce interesting variants.
+- **Empty regions** (no diamonds nearby) represent the most promising territory for novel discovery. BGCs in these regions have no close experimentally characterised reference.
+
+## Validated members in Gene Cluster Families
+
+The concept of validated BGCs extends to [Gene Cluster Families (GCFs)](gcf-explained.qmd). Each GCF reports how many of its members are validated. This number determines the family's characterisation status:
+
+| Validated members | Interpretation |
+|-------------------|---------------|
+| **Zero** | The entire family is uncharacterised. No member has been experimentally linked to a product. This is the highest-value target for discovery. |
+| **One or few** | The family is partially characterised. You know approximately what the family produces, but most members (and their potential product variants) remain unexplored. |
+| **Many** | The family is well characterised. Multiple members have been studied, and the family's chemistry is well understood. Lower discovery potential for the compound itself, though individual members may have unique modifications. |
+
+## Limitations of the MIBiG reference
+
+While MIBiG is the best available reference for BGC novelty, it has known limitations:
+
+- **Sampling bias.** MIBiG overrepresents BGCs from well-studied organisms (especially *Streptomyces* species) and underrepresents BGCs from uncultured environmental organisms. A BGC from a soil *Streptomyces* may appear less novel than it truly is because its relatives are overrepresented in MIBiG.
+- **Compound class bias.** Some compound classes (polyketides, NRPs) are far better represented in MIBiG than others (RiPPs, terpenes). Novelty scores for underrepresented classes may be inflated simply because MIBiG contains fewer reference points in those regions of chemical space.
+- **Temporal lag.** There is typically a delay between a natural product being published in the literature and the corresponding BGC being deposited in MIBiG. Recently characterised BGCs may not yet appear as validated references.
+
+These limitations do not invalidate the novelty scoring system --- they simply mean that novelty scores should be interpreted as relative measures rather than absolute truths. The platform mitigates these biases by using embedding-based distances, which are more robust to sampling gaps than simple sequence identity thresholds.
+
+## Tips
+
+- **Use MIBiG accessions to find literature.** When the platform identifies a nearest validated BGC (for example, in the Domain Architecture Comparison section of the BGC report), note the MIBiG accession and look it up on [mibig.secondarymetabolites.org](https://mibig.secondarymetabolites.org/) for compound structures, bioactivities, and publication references.
+- **Validated BGCs make good positive controls.** If you are testing the platform for the first time, try evaluating a MIBiG BGC. It should receive a low Novelty Score and be placed near its own landmark on the embedding map.
+- **Watch for MIBiG updates.** The platform periodically updates its MIBiG reference set. After an update, novelty scores may shift. Check the platform's changelog or About page for the current MIBiG version.
+- **Do not equate "validated" with "important."** Many validated BGCs produce compounds with no known bioactivity. Conversely, some unvalidated BGCs may produce critically important molecules that simply have not been characterised yet.
+
+## Related pages
+
+- [Scores and Metrics Reference](scores-metrics.qmd) --- detailed definitions of Novelty Score and Nearest Validated Distance
+- [GCF Explained](gcf-explained.qmd) --- how validated member counts define family characterisation status
+- [BGC Assessment Report](bgc-report.qmd) --- where nearest validated BGC comparisons appear
+- [BGC Classes](bgc-classes.qmd) --- the classification system for the enzymatic machinery
+- [Glossary](glossary.qmd) --- quick definitions of all terms

@@ -1,0 +1,104 @@
+---
+title: "Upload an Assembly for Evaluation"
+subtitle: "Evaluate your own assembly without adding it to the database"
+---
+
+## Goal
+
+To upload a genome assembly from your own sequencing project and receive the same comprehensive assessment report that the platform generates for database entries. The uploaded assembly is processed ephemerally --- the platform annotates it, scores it, and generates the report, but never stores your data. When you close the tab or evaluate a different asset, the uploaded data is discarded.
+
+## When to use this workflow
+
+Use this workflow when:
+
+- You have assembled a genome or metagenome-assembled genome (MAG) and want to assess its biosynthetic potential before committing to downstream experiments.
+- A collaborator sent you an assembly and you want a quick comparison against the public catalogue without installing bioinformatics tools locally.
+- You are deciding between several candidate organisms for heterologous expression and want quantitative novelty and diversity scores for each.
+
+If the assembly you want to evaluate is already in the platform's database, use the faster [Evaluate a Database Assembly](evaluate-db-assembly.qmd) workflow instead --- it skips the annotation step.
+
+## Format requirements
+
+The platform accepts a compressed archive in `.tar.gz` format. The archive must contain one of the following directory structures:
+
+### Minimal format: FASTA only
+
+```
+my_assembly/
+  contigs.fasta          # Nucleotide FASTA of assembled contigs or scaffolds
+```
+
+The platform will run BGC prediction and annotation on the FASTA sequences. This is the simplest format but requires the most processing time.
+
+### Recommended format: pre-annotated
+
+```
+my_assembly/
+  contigs.fasta          # Nucleotide FASTA
+  contigs.gbk            # GenBank-format annotations (Prokka, DFAST, or similar)
+  antismash/             # antiSMASH output directory (optional)
+    contigs.region001.gbk
+    contigs.region002.gbk
+    ...
+```
+
+If you include GenBank annotations and antiSMASH output, the platform can skip the prediction step and go straight to scoring, reducing processing time from minutes to seconds.
+
+### File size limits
+
+- Maximum archive size: **500 MB**
+- Maximum number of contigs: **10,000**
+- Minimum contig length for BGC prediction: **5,000 bp** (shorter contigs are silently skipped)
+
+## Step-by-step
+
+1. **Switch to Evaluate mode** by clicking the Evaluate tab in the mode selector at the top of the dashboard.
+
+2. **Locate the upload area.** In the sidebar, below the accession text field, you will see a dashed rectangle labelled "Drop archive here or click to browse". This is the upload widget.
+
+3. **Upload your archive.** Either drag your `.tar.gz` file from your file manager onto the upload area, or click the area to open a file picker and select the file. The widget shows the file name and size once the file is selected.
+
+4. **Click Upload.** The platform begins uploading the file. A progress bar shows the transfer status.
+
+5. **Wait for processing.** After upload completes, the platform extracts the archive, validates its contents, and runs the annotation pipeline. A status indicator shows the current step:
+   - *Extracting archive* --- unpacking the `.tar.gz` contents.
+   - *Predicting BGCs* --- running biosynthetic gene cluster prediction on the nucleotide sequences (skipped if antiSMASH output is included).
+   - *Computing embeddings* --- generating protein-level embedding vectors for each predicted BGC.
+   - *Scoring* --- computing novelty, diversity, and density scores and comparing them against the database.
+   - *Generating report* --- assembling the assessment report.
+
+   Processing time depends on assembly size and whether annotations were pre-computed:
+   - Pre-annotated assembly with antiSMASH output: **10--30 seconds**
+   - FASTA only, small assembly (<50 contigs): **1--3 minutes**
+   - FASTA only, large assembly (500+ contigs): **3--10 minutes**
+
+6. **Read the report.** The main area displays the [Assembly Assessment Report](assembly-report.qmd) with an **Uploaded** badge in the header. The report is identical in structure to a database assembly report.
+
+## What you will see
+
+The report contains all the same sections as a database assembly evaluation:
+
+- **Priority Ranking** --- where your assembly would rank if it were added to the database.
+- **Priority Score Radar** --- spider chart comparing your assembly's novelty, diversity, and density against the database mean and 90th percentile.
+- **Score Percentile Distributions** --- gauge charts for each metric.
+- **BGC Triad** --- roster, space map, and detail panel for the BGCs predicted in your assembly.
+- **Redundancy Matrix** --- how many of your assembly's BGCs fall into novel versus known Gene Cluster Families.
+- **BGC Embeddings Map** --- UMAP projection placing your assembly's BGCs in the global embedding space.
+
+The only difference is the **Uploaded** badge and a notice that the data is ephemeral.
+
+## Tips
+
+- **Include antiSMASH output if you have it.** This dramatically reduces processing time and ensures the platform uses the same annotations you have already reviewed.
+- **Check your FASTA headers.** The platform uses the first whitespace-delimited token in each FASTA header as the contig identifier. Avoid special characters (semicolons, pipes) in contig names.
+- **Compress efficiently.** Use `tar -czf my_assembly.tar.gz my_assembly/` from the directory containing your assembly folder. The archive should unpack into a single top-level directory.
+- **Large assemblies may time out.** If your assembly has more than 5,000 contigs, consider filtering to only the longest contigs (those most likely to contain complete BGCs) before uploading.
+- **Your data stays private.** The platform processes your upload in an isolated session. No data is written to the database or shared with other users. When you close the tab or evaluate another asset, the uploaded data is purged.
+
+## Related pages
+
+- [Evaluate Overview](evaluate-overview.qmd) --- all entry points and the general Evaluate workflow
+- [Upload a BGC](upload-bgc.qmd) --- upload a single BGC instead of a full assembly
+- [Assembly Assessment Report](assembly-report.qmd) --- section-by-section guide to the report
+- [Evaluate a Database Assembly](evaluate-db-assembly.qmd) --- evaluate an assembly already in the database
+- [Scores and Metrics Reference](scores-metrics.qmd) --- definitions of every score

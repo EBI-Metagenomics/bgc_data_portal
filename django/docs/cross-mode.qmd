@@ -1,0 +1,90 @@
+---
+title: "Cross-Mode Transitions"
+subtitle: "Move seamlessly between Search, Explore, and Evaluate"
+---
+
+## Goal
+
+The platform's three modes --- Explore, Search, and Evaluate --- are not isolated silos. At many points in a Search workflow you will want to pivot: evaluate a promising BGC in detail, explore the neighbourhood of a hit in the full catalogue, or track down purchasable strains. This page catalogues every cross-mode action available from Search, explains what each one does, and describes what data carries over.
+
+## When to use this page
+
+Refer to this page when you see an action button in a Search results panel and want to know what it will do, or when you are planning a multi-step analysis that spans modes.
+
+## Cross-mode actions reference
+
+The table below lists all cross-mode transitions available from within Search mode. Each action appears as a button or menu item in the BGC Detail, Assembly Detail, or roster toolbar.
+
+| Action | Where it appears | Target mode | What it does |
+|--------|-----------------|-------------|--------------|
+| **Find Similar BGCs** | BGC Detail panel, BGC roster context menu | Search | Takes the selected BGC's protein embedding and launches a new Sequence Search using it as the query. Useful for pivoting from one hit to find its relatives. |
+| **Evaluate BGC** | BGC Detail panel | Evaluate | Opens the selected BGC in Evaluate mode, generating a comprehensive BGC Report with domain architecture, predicted products, novelty analysis, and MIBiG comparisons. |
+| **Evaluate Assembly** | Assembly Detail panel, Assembly roster context menu | Evaluate | Opens the selected assembly in Evaluate mode, generating an Assembly Report with quality metrics, full BGC inventory, taxonomic placement, and culture-collection links. |
+| **Browse Similar Assemblies** | Assembly Detail panel | Explore | Switches to Explore mode centred on the selected assembly's neighbourhood in the Assembly Space Map. Assemblies with similar BGC profiles cluster together, letting you discover related organisms. |
+| **Find in Purchasable Strains** | Assembly Detail panel, Assembly roster toolbar (batch) | Explore (filtered) | Switches to Explore mode with the Type Strain filter pre-applied and the Assembly Space Map zoomed to the region around the selected assembly. This surfaces culturable organisms that are genomically similar. |
+| **Add to Shortlist** | BGC roster star icon, Assembly roster star icon | Stays in current mode | Adds the BGC or assembly to your shortlist. The shortlist persists across all mode switches and can be reviewed from any mode. |
+
+## Step-by-step: common cross-mode workflows
+
+### From a search hit to a full BGC evaluation
+
+1. Run a search (domain, sequence, or chemical) and review the results in the BGC Roster.
+2. Click a high-scoring BGC to open its BGC Detail panel.
+3. Click **Evaluate BGC** in the detail panel.
+4. The platform switches to Evaluate mode and generates a [BGC Report](bgc-report.qmd). The report includes:
+   - Complete domain architecture, gene by gene.
+   - Predicted natural product structure (if available).
+   - Novelty analysis against the MIBiG reference database.
+   - Links to homologous BGCs and related literature.
+5. From the BGC Report, you can navigate to the parent assembly's evaluation or return to Search.
+
+### From a search hit to exploring its neighbourhood
+
+1. In the BGC Roster, identify a BGC that scored well but belongs to an unfamiliar class or biome.
+2. Open the Assembly Detail for its parent assembly (click the assembly accession in the BGC Detail panel).
+3. Click **Browse Similar Assemblies**.
+4. The platform switches to Explore mode, centred on that assembly in the Assembly Space Map. Nearby points represent assemblies with similar BGC profiles.
+5. Pan and zoom the map to discover organisms in the same ecological or taxonomic neighbourhood. This is useful for understanding the broader distribution of your BGC type.
+
+### From a search hit to purchasable strains
+
+1. Star several promising BGCs in the BGC Roster to add them to your shortlist.
+2. The Assembly Triad below populates with the parent assemblies of your shortlisted BGCs.
+3. In the Assembly Roster, click **Find in Purchasable Strains** (available as a batch action in the toolbar).
+4. The platform switches to Explore mode with the **Type Strain** filter active. The Assembly Space Map zooms to the region containing your shortlisted assemblies.
+5. The roster now shows only assemblies that correspond to strains available from culture collections, sorted by proximity to your original hits. Each entry includes a direct link to the culture collection catalogue.
+6. Select an assembly and click **Evaluate Assembly** to review its full [Assembly Report](assembly-report.qmd) before placing an order.
+
+### Pivoting to find more relatives of a hit
+
+1. In the BGC Detail panel for a search hit, click **Find Similar BGCs**.
+2. The platform stays in Search mode but opens a new Sequence Search pre-loaded with the selected BGC's protein sequence as the query.
+3. Adjust the similarity threshold if desired and click **Run Query**.
+4. The new results show all BGCs in the database that are similar to your original hit --- potentially including BGCs that did not match your first query because they lack the required domains or chemical similarity, but are nonetheless close relatives at the sequence level.
+
+## What data carries over
+
+Understanding what persists across mode transitions helps you work efficiently:
+
+| Data | Persists? | Notes |
+|------|-----------|-------|
+| **Shortlist** | Yes | Your shortlisted BGCs and assemblies are available in every mode. |
+| **Active filters** | Partially | When a transition pre-applies a filter (e.g. Type Strain for "Find in Purchasable Strains"), it replaces your current filter set. Other transitions preserve filters where they apply to both modes. |
+| **Search query** | No | Your query is specific to Search mode. When you return to Search, the query form retains your last inputs, but navigating to Explore or Evaluate does not carry the query. |
+| **Selected BGC/Assembly** | Yes | The item you clicked to trigger the transition becomes the focal item in the target mode. |
+| **Sort order** | No | Each mode has its own default sort. The target mode's default applies. |
+
+## Tips
+
+- **Use the shortlist as your bridge.** Star items in Search, then switch to Explore or Evaluate. The shortlist is the most reliable way to carry a set of candidates between modes.
+- **Use "Find Similar BGCs" iteratively.** Start with one search, find a strong hit, then pivot with "Find Similar BGCs" to explore its neighbourhood in sequence space. Each iteration can uncover a different slice of diversity.
+- **Combine "Browse Similar Assemblies" with biome filters.** After switching to Explore mode, apply a biome filter to see whether your hit's relatives appear in specific environments (e.g. only in marine assemblies, or distributed across soil and freshwater).
+- **Return to Search easily.** The mode selector at the top of the dashboard always lets you switch back. Your last query inputs are preserved in the Query tab.
+
+## Related pages
+
+- [Search BGCs Overview](search-overview.qmd) --- the Search interface layout
+- [Reading Search Results](search-results.qmd) --- understanding the results before transitioning
+- [Explore Assemblies Overview](explore-overview.qmd) --- the Explore mode you may transition into
+- [Evaluate Overview](evaluate-overview.qmd) --- the Evaluate mode for deep-dive reports
+- [Shortlists](shortlists.qmd) --- managing your saved BGCs and assemblies across modes

@@ -1,0 +1,192 @@
+---
+title: "Export Formats"
+subtitle: "What you get when you download data from the platform"
+---
+
+## Goal
+
+To describe every export format available in the BGC Discovery Platform, what each file contains, and where in the interface you can trigger each export. This page serves as a quick reference when you need to know what format to expect or how to use the exported files in downstream tools.
+
+## When to use this reference
+
+Consult this page when:
+
+- You are about to export a shortlist and want to know what format the file will be in.
+- You received an export file and want to understand its columns or structure.
+- You need to choose between export formats for a particular downstream workflow (for example, importing into a spreadsheet versus loading into a sequence analysis tool).
+
+## Export summary table
+
+| Export | Format | Triggered from | Contains |
+|--------|--------|---------------|----------|
+| Assembly Shortlist | CSV | Shortlist panel, "Export Assemblies" button | Accessions, organism names, scores, type strain flag |
+| BGC Shortlist | GenBank `.gbk` | Shortlist panel, "Export BGCs" button | One annotated SeqRecord per BGC |
+| Assembly Stats | JSON or TSV | Assembly Detail panel, "Download Stats" button | Full score breakdown for one assembly |
+| BGC Stats | JSON or TSV | BGC Detail panel, "Download Stats" button | Full score breakdown for one BGC |
+| Assessment Report | JSON | Assessment Report header, "Export Report" button | Complete assessment report data |
+
+## Assembly Shortlist (CSV)
+
+### What it contains
+
+A comma-separated values (CSV) file with one row per assembly in your shortlist. The file includes a header row and the following columns:
+
+| Column | Description |
+|--------|-------------|
+| `accession` | The assembly accession (for example, `GCA_003150795.1`). |
+| `organism_name` | The organism or sample name associated with the assembly. |
+| `taxonomy` | The full taxonomic lineage (domain; phylum; class; order; family; genus; species). |
+| `biome` | The biome lineage path, if available (for example, `root:Environmental:Terrestrial:Soil`). Empty for isolate genomes. |
+| `bgc_count` | The number of BGCs detected in this assembly. |
+| `novelty` | The assembly Novelty Score (0--1). |
+| `diversity` | The assembly Diversity Score (0--1). |
+| `density` | The assembly Density (BGCs per megabase). |
+| `taxonomic_novelty` | The Taxonomic Novelty Score (0--1). |
+| `type_strain` | `TRUE` or `FALSE`, indicating whether this assembly corresponds to a type strain deposited in a public culture collection. |
+
+### How to trigger
+
+1. Open the **Shortlist panel** by clicking the star icon in the toolbar.
+2. Switch to the **Assemblies** tab in the shortlist.
+3. Click **Export Assemblies**.
+4. The CSV file downloads to your browser's default download location.
+
+### Downstream use
+
+The CSV can be opened directly in Microsoft Excel, Google Sheets, or any spreadsheet application. It can also be loaded into R (`read.csv()`) or Python (`pandas.read_csv()`) for further analysis. The accession column can be used to retrieve sequences from INSDC databases (ENA, NCBI GenBank, DDBJ).
+
+## BGC Shortlist (GenBank)
+
+### What it contains
+
+A multi-record GenBank file (`.gbk`) with one sequence record per BGC in your shortlist. Each record includes:
+
+- The full nucleotide sequence of the BGC region.
+- CDS features with protein translations, gene names, and functional annotations.
+- Pfam domain annotations as `/sec_met_domain=` qualifiers.
+- BGC class and predicted product annotations.
+- The organism name and assembly accession in the source feature.
+
+### How to trigger
+
+1. Open the **Shortlist panel** by clicking the star icon in the toolbar.
+2. Switch to the **BGCs** tab in the shortlist.
+3. Click **Export BGCs**.
+4. The GenBank file downloads to your browser's default download location.
+
+### Downstream use
+
+The GenBank file is compatible with standard bioinformatics tools:
+
+- **antiSMASH** --- upload the file for additional analysis or comparison with other BGC databases.
+- **Artemis or SnapGene** --- open the file to view the gene cluster annotation graphically.
+- **BiG-SCAPE or BiG-SLiCE** --- use the file as input for BGC networking and classification.
+- **Biopython** --- parse the file with `Bio.SeqIO.parse("shortlist.gbk", "genbank")` for programmatic analysis.
+
+Each record in the file is self-contained. You can split the multi-record file into individual files using standard tools if a downstream application requires single-record input.
+
+## Assembly Stats (JSON or TSV)
+
+### What it contains
+
+A complete score breakdown for a single assembly, including all metrics visible in the Assembly Detail panel plus additional metadata.
+
+**JSON format:**
+
+```json
+{
+  "accession": "GCA_003150795.1",
+  "organism_name": "Streptomyces sp. ABC123",
+  "scores": {
+    "novelty": 0.72,
+    "diversity": 0.85,
+    "density": 14.3,
+    "taxonomic_novelty": 0.61
+  },
+  "bgc_count": 28,
+  "genome_size_mb": 8.2,
+  "type_strain": false,
+  "biome": "root:Environmental:Terrestrial:Soil"
+}
+```
+
+**TSV format:** The same fields arranged as a tab-separated header row and a single data row.
+
+### How to trigger
+
+1. Select an assembly in the **Assembly Roster** to open the **Assembly Detail** panel.
+2. Click the **Download Stats** button in the panel header.
+3. Choose **JSON** or **TSV** from the format selector.
+
+## BGC Stats (JSON or TSV)
+
+### What it contains
+
+A complete score breakdown for a single BGC, including novelty scores, domain list, GCF membership, and predicted products.
+
+**JSON format:**
+
+```json
+{
+  "bgc_id": "BGC_XXXX_region001",
+  "assembly_accession": "GCA_003150795.1",
+  "bgc_class": "Polyketide.Macrolide",
+  "scores": {
+    "novelty_score": 0.81,
+    "domain_novelty": 0.45,
+    "nearest_validated_distance": 0.78
+  },
+  "gcf": {
+    "family_id": "GCF_00234",
+    "member_count": 47,
+    "validated_count": 0
+  },
+  "domains": ["PF00109", "PF00698", "PF02801"],
+  "chemont_predictions": [
+    {"term": "Macrolides and analogues", "probability": 0.82}
+  ]
+}
+```
+
+**TSV format:** The same fields flattened into a tab-separated header row and a single data row. Nested fields (like domain lists) are represented as semicolon-delimited strings.
+
+### How to trigger
+
+1. Select a BGC in the **BGC Roster** to open the **BGC Detail** panel.
+2. Click the **Download Stats** button in the panel header.
+3. Choose **JSON** or **TSV** from the format selector.
+
+## Assessment Report (JSON)
+
+### What it contains
+
+The complete data underlying an Assembly or BGC Assessment Report, including all scores, percentile ranks, novelty decomposition values, GCF placement data, and redundancy matrix entries. This is the most comprehensive export and contains everything needed to reconstruct the visual report programmatically.
+
+### How to trigger
+
+1. Generate an assessment report by evaluating an assembly or BGC (see [Evaluate Overview](evaluate-overview.qmd)).
+2. In the report header, click **Export Report**.
+3. The JSON file downloads immediately.
+
+### Downstream use
+
+The assessment report JSON is designed for programmatic consumption. Use it to:
+
+- Build custom comparison tables across multiple evaluated assets.
+- Feed assessment data into institutional databases or LIMS (Laboratory Information Management Systems).
+- Generate publication-quality figures from the raw score data using R, Python, or any plotting tool.
+
+## Tips
+
+- **Export early, export often.** Shortlists persist in your browser, but exporting a CSV or GenBank file gives you a permanent, portable record of your candidates.
+- **Use JSON for programmatic workflows, TSV for spreadsheets.** The JSON format preserves nested structures (like domain lists and ChemOnt predictions) more faithfully, while TSV is easier to open in Excel.
+- **The GenBank export is your bridge to wet-lab follow-up.** The exported BGC sequences contain enough annotation to design primers, plan cloning strategies, or set up heterologous expression experiments.
+- **Assessment report JSON is the most complete export.** If you are unsure which format you need, export the assessment report --- it contains a superset of the information in all other export types.
+
+## Related pages
+
+- [Building and Exporting Your Shortlists](shortlists.qmd) --- how to build shortlists and manage their contents
+- [Assembly Assessment Report](assembly-report.qmd) --- the visual report whose data is exported as JSON
+- [BGC Assessment Report](bgc-report.qmd) --- the visual report whose data is exported as JSON
+- [Scores and Metrics Reference](scores-metrics.qmd) --- definitions of every score that appears in exports
+- [Glossary](glossary.qmd) --- quick definitions of all terms

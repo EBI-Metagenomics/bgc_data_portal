@@ -1,0 +1,79 @@
+---
+title: "Evaluate a Database BGC"
+subtitle: "Generate a deep assessment report for any biosynthetic gene cluster in the catalogue"
+---
+
+## Goal
+
+To produce a comprehensive assessment report for a single biosynthetic gene cluster (BGC) that exists in the BGC Discovery Platform database. The report reveals why this BGC scores the way it does, breaks its novelty into independent axes, compares its domain architecture against the nearest experimentally validated BGC, and places it in the context of the full chemical and sequence space.
+
+## When to use this workflow
+
+Use this workflow when:
+
+- You spotted a high-novelty BGC in the BGC Roster (in Explore or Search mode) and want to understand what makes it novel.
+- You are comparing two BGCs from different assemblies and need quantitative detail beyond the summary novelty score.
+- You want to see the domain-level differences between a candidate BGC and the closest characterised BGC in the MIBiG database.
+- You need to determine whether a BGC belongs to a large, uncharacterised Gene Cluster Family (GCF) --- a signal of widespread but unstudied biosynthetic potential.
+
+If you want to evaluate your own unpublished BGC, see [Upload a BGC](upload-bgc.qmd) instead.
+
+## Entry point 1: right-click from the BGC Roster
+
+This is the most common route.
+
+1. **Locate the BGC** in the BGC Roster table. In Explore mode the BGC Roster appears in the BGC Triad after you select an assembly. In Search mode it shows your query hits.
+2. **Right-click the row.** A context menu appears.
+3. **Select "Evaluate BGC".** The dashboard switches to Evaluate mode and begins generating the BGC assessment report.
+4. **Wait for the report.** Pre-computed data makes this fast --- typically two to five seconds.
+5. **Read the report.** The main area now displays the [BGC Assessment Report](bgc-report.qmd).
+
+## Entry point 2: the Evaluate tab with an accession
+
+1. **Switch to Evaluate mode** by clicking the Evaluate tab in the mode selector.
+2. **Select the BGC tab** in the sidebar input area. Make sure the BGC sub-tab is active, not the Assembly sub-tab.
+3. **Type or paste the BGC accession.** Enter the identifier in the text field (for example, `BGC0002345` for a MIBiG entry, or the platform's internal BGC identifier visible in any roster row).
+4. **Press Enter or click Evaluate.**
+5. **Wait for the report.**
+6. **Read the report.**
+
+## What happens behind the scenes
+
+When you trigger evaluation of a database BGC, the platform:
+
+1. **Retrieves the BGC's full annotation** --- domain architecture, predicted product classes, ChemOnt predictions, and the protein-level embedding vector (a 1152-dimensional numerical fingerprint that captures the BGC's overall biochemical character).
+2. **Identifies the BGC's Gene Cluster Family (GCF)** --- the group of BGCs that share similar domain architecture and sequence content. The platform reports the family identifier, member count, and how many members have been experimentally validated.
+3. **Computes the novelty decomposition** --- three independent axes (Sequence Novelty, Chemistry Novelty, Architecture Novelty) that explain *why* the overall novelty score is high or low.
+4. **Compares domain architecture** against the nearest MIBiG-validated BGC, highlighting core, variable, and rare domains.
+5. **Computes percentile ranks** against the full BGC distribution in the database.
+6. **Generates the embedding maps** --- UMAP projections that show where this BGC sits in the global sequence space and in the chemical prediction space.
+
+## What you will see
+
+The main area fills with the BGC Assessment Report. The section-navigation bar on the right edge lists every section:
+
+- **GCF Placement** --- which family this BGC belongs to, how many members the family has, and how far this BGC sits from the family representative.
+- **Novelty Decomposition** --- three bar charts breaking overall novelty into Sequence, Chemistry, and Architecture components.
+- **Domain Architecture Differential** --- a categorised list of this BGC's protein domains, tagged as Core (present in most family members), Variable (present in some), or Rare (present in very few or unique to this BGC).
+- **Domain Architecture Comparison** --- a side-by-side visual alignment of this BGC's domains with those of the nearest MIBiG-validated BGC.
+- **BGC Space Map** --- a UMAP projection of nearby BGCs coloured by class or novelty, with MIBiG landmarks shown as reference points.
+- **Embeddings Map** --- a second UMAP projection based on the protein embedding vectors, providing a complementary view of the BGC's position in sequence space.
+
+For a detailed guide to each section, see [Reading the BGC Assessment Report](bgc-report.qmd).
+
+## Tips
+
+- **Pay attention to GCF size and validation count.** A BGC that belongs to a large GCF (many members) with zero validated members represents a widespread but completely uncharacterised biosynthetic strategy --- this is often the highest-value target for discovery.
+- **Look for "Novel Singleton" status.** If the GCF Placement section labels this BGC as a Novel Singleton (a family of one), it means no other BGC in the database shares similar architecture. This is the strongest novelty signal possible but also means you have no close relatives to guide experimental design.
+- **Use the Domain Architecture Comparison to plan experiments.** The side-by-side view with the nearest MIBiG BGC shows which domains are shared and which are unique. Shared domains suggest conserved chemistry; unique domains suggest the novel parts of the pathway.
+- **Check all three novelty axes.** A BGC can score high on Sequence Novelty (its proteins are distant from known sequences) but low on Architecture Novelty (it uses the same domain arrangement as a known BGC). Understanding which axis drives the score helps you assess the type of novelty --- is it a new enzyme doing familiar chemistry, or a familiar enzyme in an unfamiliar arrangement?
+
+## Related pages
+
+- [Evaluate Overview](evaluate-overview.qmd) --- all entry points and the general Evaluate workflow
+- [Evaluate a Database Assembly](evaluate-db-assembly.qmd) --- the equivalent workflow for an assembly
+- [Upload a BGC](upload-bgc.qmd) --- evaluate a BGC not in the database
+- [BGC Assessment Report](bgc-report.qmd) --- section-by-section guide to the report
+- [GCF Explained](gcf-explained.qmd) --- how Gene Cluster Families are built and what they mean
+- [MIBiG and Validated BGCs](mibig-validated.qmd) --- the reference database used for novelty comparisons
+- [Scores and Metrics Reference](scores-metrics.qmd) --- definitions of every score

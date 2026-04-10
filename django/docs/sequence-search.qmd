@@ -1,0 +1,134 @@
+---
+title: "Sequence Search"
+subtitle: "Find BGCs by protein sequence similarity"
+---
+
+## Goal
+
+Sequence Search lets you paste an amino acid sequence and find all BGCs in the database that encode a similar protein. The platform converts your query sequence into a numerical representation (an embedding) and compares it against pre-computed embeddings for every BGC, returning hits ranked by cosine similarity. This approach is fast --- typically completing in a few seconds --- and effective at finding close and moderately distant relatives.
+
+## When to use
+
+- You have cloned or identified a **biosynthetic gene** and want to find BGCs in environmental assemblies that encode a similar protein.
+- You have a **protein sequence from a published BGC** (e.g. from MIBiG) and want to see what environmental homologs exist.
+- You want to identify **novel enzymes** by finding BGCs whose proteins are related to, but distinct from, a known reference.
+
+If you do not have a sequence but know the Pfam domain architecture you are looking for, use the [Domain Query Builder](domain-query.qmd) instead. If you have a chemical structure rather than a protein sequence, use [Chemical Structure Search](chemical-search.qmd).
+
+## Key concepts
+
+**Protein embedding**
+: A numerical vector (a list of 1,152 numbers) that captures the biochemical properties and evolutionary relationships of a protein sequence. The platform generates embeddings using a protein language model (ESM). Two proteins with similar sequences, structures, or functions will have embeddings that point in similar directions in this high-dimensional space.
+
+**Cosine similarity**
+: The metric used to compare embeddings. It measures the angle between two vectors, ignoring their magnitude. A cosine similarity of 1.0 means two embeddings point in exactly the same direction (identical or near-identical proteins); 0.0 means they are unrelated. In practice, biologically meaningful similarity typically starts around 0.5. See [Understanding Similarity Scores](similarity-scores.qmd) for more detail.
+
+**Asynchronous execution**
+: Because computing the embedding for your query sequence and comparing it against hundreds of thousands of pre-computed BGC embeddings takes a moment, the search runs as a background task. You will see a progress indicator, and results appear when the computation finishes. You can continue interacting with the platform while the search runs.
+
+## Step-by-step: running a sequence search
+
+### 1. Open the Query tab
+
+In Search mode, click the **Query** tab in the sidebar. Scroll to the **Sequence Search** section.
+
+### 2. Paste your sequence
+
+Enter your query in one of two formats:
+
+- **FASTA format** --- a header line starting with `>` followed by the amino acid sequence on subsequent lines:
+
+  ```
+  >my_query_protein
+  MKTLLLTGAGQGIGRSILEELISAGATHVTAADVSDSQASL
+  EALQRAQAEAGPIDILVNNAGITRDNLLLRMKPEDFDK
+  ```
+
+- **Raw sequence** --- just the amino acid letters, no header:
+
+  ```
+  MKTLLLTGAGQGIGRSILEELISAGATHVTAADVSDSQASL
+  EALQRAQAEAGPIDILVNNAGITRDNLLLRMKPEDFDK
+  ```
+
+Both formats are accepted. Whitespace and line breaks within the sequence are ignored.
+
+### 3. Adjust the similarity threshold
+
+The **threshold slider** controls the minimum cosine similarity a BGC must achieve to appear in your results. The slider ranges from **0.5 to 1.0**:
+
+| Threshold | Effect |
+|-----------|--------|
+| 0.5 | Very permissive --- returns distant relatives and some false positives. Good for exploratory searches. |
+| 0.7 | Moderate --- a reasonable starting point for most searches. |
+| 0.85 | Stringent --- returns only close homologs. |
+| 0.95+ | Very stringent --- essentially identical proteins only. |
+
+The default threshold is set to balance sensitivity and specificity. You can adjust it before or after running the search.
+
+### 4. Run the query
+
+Click **Run Query**. A progress indicator appears while the platform:
+
+1. Computes the embedding for your query sequence.
+2. Compares it against all BGC embeddings in the database using cosine similarity.
+3. Filters results by your threshold and any active sidebar filters.
+4. Returns ranked hits to the BGC Roster.
+
+### 5. Review results
+
+Matching BGCs appear in the BGC Roster, sorted by cosine similarity (highest first). The **Similarity** column shows the score for each hit.
+
+## What you will see
+
+The BGC Roster in search mode includes these columns:
+
+| Column | Description |
+|--------|-------------|
+| Similarity | Cosine similarity between your query embedding and the BGC embedding. |
+| Accession | The unique BGC identifier. |
+| Classification | The predicted BGC class (e.g. "NRPS", "Type I PKS"). |
+| Novelty | How different the BGC is from characterised references (0 = well-known, 1 = highly novel). |
+| Domain Novelty | How unusual the BGC's domain composition is relative to its class. |
+| Size (bp) | The length of the BGC region in base pairs. |
+
+Click a row to open the **BGC Detail** panel, where you can see the full gene arrangement, domain architecture, and which protein in the BGC produced the best match to your query.
+
+## Sequence length limits
+
+The platform accepts query sequences up to **5,000 amino acids** in length. Most biosynthetic proteins (e.g. individual NRPS modules, PKS domains, terpene synthases) are well within this limit. If your sequence exceeds 5,000 amino acids, consider submitting individual domains or modules separately.
+
+## Worked example: finding relatives of a known lantibiotic synthetase
+
+You have the amino acid sequence of LanM, a lanthipeptide synthetase from a published *Streptomyces* BGC, and want to find environmental assemblies that encode similar enzymes.
+
+1. Copy the LanM amino acid sequence from UniProt or the MIBiG entry.
+2. Paste it into the Sequence Search box in FASTA or raw format.
+3. Set the threshold to **0.7** for a moderately broad search.
+4. Click **Run Query**.
+5. Review the hits. BGCs scoring above 0.85 are likely to encode LanM orthologs --- proteins performing the same function in a related pathway. BGCs scoring 0.7--0.85 may encode paralogs or functionally divergent homologs worth investigating.
+6. Switch to the Assembly Triad below to see which assemblies carry these BGCs. Apply the **Type Strain** filter to find hits in culturable organisms that you could obtain for laboratory validation.
+
+## Worked example: exploring homologs of a novel enzyme
+
+You have identified an unusual oxidase in a metagenome-assembled genome and want to know whether similar enzymes appear in BGCs elsewhere.
+
+1. Paste the oxidase sequence.
+2. Set the threshold to **0.5** to capture distant relatives.
+3. Run the query.
+4. Sort results by similarity. Examine the top hits to see whether the oxidase appears consistently in a particular BGC class, which would suggest a conserved biosynthetic role.
+
+## Tips
+
+- **Embedding similarity is not the same as percent sequence identity.** Two proteins can share 40% identity but have a cosine similarity of 0.8, or vice versa. Embeddings capture functional and structural features beyond raw alignment. See [Understanding Similarity Scores](similarity-scores.qmd) for guidance.
+- **One protein at a time.** The sequence search accepts a single protein sequence per query. If you want to search with multiple proteins, run separate searches or use the [Domain Query Builder](domain-query.qmd) to describe the domain combination.
+- **Combine with domain queries for precision.** Run a domain query to find BGCs with the right enzymatic machinery, then add a sequence search to rank those BGCs by how similar their proteins are to your reference. The platform intersects the results automatically.
+- **Lower the threshold if you get few results.** Embedding space can be sparse for unusual protein families. If your initial search returns only a handful of hits, try lowering the threshold by 0.1 increments.
+
+## Related pages
+
+- [Search BGCs Overview](search-overview.qmd) --- how the Search interface is organised
+- [Domain Query Builder](domain-query.qmd) --- search by Pfam domains instead of raw sequence
+- [Chemical Structure Search](chemical-search.qmd) --- search by compound structure
+- [Understanding Similarity Scores](similarity-scores.qmd) --- cosine similarity explained
+- [Reading Search Results](search-results.qmd) --- interpreting the results table

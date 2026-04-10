@@ -11,6 +11,7 @@ interface PanelContainerProps {
   defaultCollapsed?: boolean;
   actions?: ReactNode;
   constrained?: boolean;
+  dataTour?: string;
 }
 
 export function PanelContainer({
@@ -21,6 +22,7 @@ export function PanelContainer({
   defaultCollapsed = false,
   actions,
   constrained = false,
+  dataTour,
 }: PanelContainerProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
@@ -31,6 +33,7 @@ export function PanelContainer({
         constrained && "overflow-hidden min-h-0",
         className
       )}
+      {...(dataTour ? { "data-tour": dataTour } : {})}
     >
       <div className={cn(
         "vf-card__content | vf-stack vf-stack--200 flex flex-col",

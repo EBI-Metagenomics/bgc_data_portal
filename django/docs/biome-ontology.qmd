@@ -1,0 +1,99 @@
+---
+title: "Biome Ontology"
+subtitle: "Filtering assemblies by their environmental origin using GOLD Ecosystem Classification"
+---
+
+## Goal
+
+To explain how the BGC Discovery Platform uses biome annotations to describe the environmental origin of each assembly, and how to use biome filters to focus your exploration on organisms from specific habitats.
+
+## When to use this reference
+
+Consult this page when:
+
+- You see a biome lineage path (such as `root:Environmental:Terrestrial:Soil`) in the platform and want to understand its structure.
+- You want to filter assemblies by the environment they were sampled from --- for example, marine sediments, human gut, or hot springs.
+- You are designing a bioprospecting campaign focused on a particular ecological niche and want to know how the platform represents that niche.
+
+## What biome annotations represent
+
+Every metagenomic assembly in the database carries a biome annotation describing the environment from which the original sample was collected. These annotations come from the **GOLD Ecosystem Classification**, a standardised vocabulary maintained by the Joint Genome Institute (JGI). GOLD stands for Genomes OnLine Database.
+
+Biome annotations are available only for metagenome-derived assemblies (metagenome-assembled genomes, or MAGs, and metagenomic contigs). Isolate genomes --- assemblies derived from pure cultures of a single organism --- do not carry biome annotations because they are not tied to a specific environmental sample.
+
+## Lineage path format
+
+Biome annotations are stored as **colon-delimited hierarchical paths** that read from broad to specific:
+
+```
+root : top-level domain : habitat : sub-habitat : specific environment
+```
+
+Each level narrows the ecological context. Here are several examples:
+
+| Lineage path | Meaning |
+|-------------|---------|
+| `root:Environmental:Terrestrial:Soil` | An environmental sample from terrestrial soil. |
+| `root:Environmental:Aquatic:Marine:Sediment` | An environmental sample from marine sediment. |
+| `root:Environmental:Aquatic:Freshwater:Lake` | A sample from a freshwater lake. |
+| `root:Host-associated:Human:Digestive system` | A sample from the human digestive tract. |
+| `root:Host-associated:Human:Skin` | A sample from human skin. |
+| `root:Host-associated:Plants:Rhizosphere` | A sample from the root zone of a plant. |
+| `root:Engineered:Wastewater` | A sample from an engineered wastewater treatment system. |
+
+### Top-level domains
+
+The GOLD classification uses three top-level domains:
+
+| Domain | Description |
+|--------|-------------|
+| **Environmental** | Samples taken directly from natural environments (soil, water, air, sediment). |
+| **Host-associated** | Samples taken from or within a living host organism (human, animal, plant, insect). |
+| **Engineered** | Samples from human-made environments (bioreactors, wastewater treatment plants, fermentation systems). |
+
+## How to filter by biome
+
+The platform provides a biome filter in the sidebar filter panel, available in both Explore and Search modes.
+
+### Using the biome filter
+
+1. **Open the Filters panel** in the sidebar.
+2. **Locate the Biome filter.** It appears as a searchable, hierarchical dropdown.
+3. **Browse or search.** You can expand the hierarchy by clicking the arrow icons next to each level, or type a keyword (for example, "marine" or "gut") to search across all levels.
+4. **Select one or more biome nodes.** Selecting a parent node includes all its children. For example, selecting `root:Environmental:Aquatic:Marine` will include assemblies from marine water, marine sediment, hydrothermal vents, and all other marine sub-environments.
+5. **Apply the filter.** The Assembly Roster and Assembly Space Map immediately update to show only assemblies matching the selected biomes.
+
+### Combining biome with other filters
+
+Biome filters work alongside all other filters in the platform:
+
+- **Biome + BGC class:** Find polyketide-producing organisms specifically from marine environments.
+- **Biome + Novelty threshold:** Find the most novel assemblies from a particular habitat.
+- **Biome + Type Strain:** This combination will typically return few or no results, because type strains are isolate genomes and do not carry biome annotations. If you want culturable organisms from a specific environment, filter by biome first, then look for assemblies with taxonomic relatives that have type strains.
+
+## Why biome matters for bioprospecting
+
+Different environments impose different selective pressures on microbial communities. Organisms from competitive, nutrient-limited environments (such as soil or coral reefs) tend to invest more heavily in secondary metabolism --- they produce more natural products because they need them to compete, defend territory, or acquire scarce resources.
+
+Some general patterns observed in the database:
+
+- **Soil** environments tend to harbour assemblies with high BGC density and diversity, particularly in genera like *Streptomyces* and *Bacillus*.
+- **Marine sediment** environments are a rich source of novel chemistry. Marine organisms face unique chemical challenges (high salinity, high pressure) that drive the evolution of unusual natural products.
+- **Host-associated** environments (especially the human gut) contain assemblies with moderate BGC density but often high novelty, because gut microbiota produce specialised molecules for interacting with the host and with competing microbes.
+- **Engineered** environments tend to have lower BGC diversity, as the microbial communities are often selected for metabolic efficiency rather than secondary metabolism.
+
+These are trends, not rules. Novel chemistry can come from any environment.
+
+## Tips
+
+- **Start broad, then narrow.** Select a top-level domain first (for example, `Environmental:Aquatic`) and examine the Assembly Space Map to see the landscape. Then narrow to a specific sub-environment if a region of the map looks interesting.
+- **Use biome to contextualise novelty.** An assembly with moderate novelty from a well-studied environment (like soil) may be less interesting than an assembly with the same novelty score from an under-explored environment (like deep-sea hydrothermal vents).
+- **Check biome coverage in the database.** Some environments are more densely sampled than others. The platform's database reflects the biases of public sequencing projects --- soil and human gut are heavily represented, while extreme environments may have fewer assemblies.
+- **Combine biome with taxonomic filters** to find specific organisms in specific environments. For example, filter by `root:Environmental:Aquatic:Marine` and the genus *Salinispora* to find marine actinobacteria known for producing novel natural products.
+
+## Related pages
+
+- [BGC Classes](bgc-classes.qmd) --- enzyme-based BGC classification
+- [Chemical Ontology (ChemOnt)](chemont.qmd) --- product-based chemical classification
+- [Scores and Metrics Reference](scores-metrics.qmd) --- how biome relates to Taxonomic Novelty
+- [Glossary](glossary.qmd) --- quick definitions of all terms

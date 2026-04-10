@@ -1,0 +1,109 @@
+---
+title: "Upload a BGC for Evaluation"
+subtitle: "Evaluate your own biosynthetic gene cluster without adding it to the database"
+---
+
+## Goal
+
+To upload a single biosynthetic gene cluster (BGC) from your own sequencing or annotation project and receive the same comprehensive BGC assessment report that the platform generates for database entries. Like assembly uploads, the analysis is ephemeral --- the platform processes your file, generates the report, and discards the data when you are done.
+
+## When to use this workflow
+
+Use this workflow when:
+
+- You ran antiSMASH (or another BGC prediction tool) on your own genome and want to assess one specific predicted region against the public catalogue.
+- You received a GenBank file from a collaborator and want a quick novelty and architecture analysis without setting up a local pipeline.
+- You are curating BGC annotations for a publication and want to verify how each cluster compares with known, validated BGCs.
+
+If you want to evaluate an entire assembly (all its BGCs at once), see [Upload an Assembly](upload-assembly.qmd). If the BGC is already in the platform's database, use [Evaluate a Database BGC](evaluate-db-bgc.qmd) instead.
+
+## Format requirements
+
+The platform accepts a single GenBank-format file (`.gbk` or `.gb`). The file must contain:
+
+- **One sequence record** representing the BGC region. Multi-record GenBank files are not supported for single-BGC evaluation --- the platform will read only the first record.
+- **Coding sequence (CDS) features** with `/translation=` qualifiers providing the amino acid sequences. These translations are used to compute the protein embedding and to identify Pfam domains.
+- **A nucleotide sequence.** The `ORIGIN` section must contain the full nucleotide sequence for the region.
+
+### Recommended annotations
+
+The following annotations are optional but improve report quality:
+
+- **antiSMASH cluster annotations** (`/note="Type: ..."` or `/product=` qualifiers on `cluster` or `region` features). If present, the platform uses these to assign BGC class.
+- **Pfam domain annotations** (`/sec_met_domain=` or `PFAM` qualifiers). If absent, the platform predicts domains from the translated CDS features, which adds a few seconds of processing time.
+
+### File size limits
+
+- Maximum file size: **50 MB**
+- Maximum number of CDS features: **500**
+
+### Example file structure
+
+A minimal valid GenBank file looks like this:
+
+```
+LOCUS       my_bgc_region001       45230 bp    DNA     linear   BCT
+DEFINITION  Biosynthetic gene cluster from Streptomyces sp. ABC123
+FEATURES             Location/Qualifiers
+     source          1..45230
+                     /organism="Streptomyces sp. ABC123"
+     CDS             1200..3500
+                     /product="polyketide synthase"
+                     /translation="MKTLI..."
+     CDS             3510..5800
+                     /product="acyltransferase"
+                     /translation="MSAEV..."
+ORIGIN
+        1 atgcgtaa...
+//
+```
+
+## Step-by-step
+
+1. **Switch to Evaluate mode** by clicking the Evaluate tab in the mode selector at the top of the dashboard.
+
+2. **Locate the upload area** in the sidebar. Below the accession text field, you will see the drag-and-drop upload widget.
+
+3. **Select the BGC tab** in the upload widget. The widget has two sub-tabs: Assembly and BGC. Click the BGC tab. The accepted file type changes from `.tar.gz` to `.gbk` / `.gb`.
+
+4. **Upload your GenBank file.** Drag the file onto the upload area, or click to open a file picker.
+
+5. **Click Upload.** The platform begins uploading and processing the file. A status indicator shows the current step:
+   - *Parsing GenBank* --- reading the sequence record and extracting CDS features.
+   - *Computing domains* --- identifying Pfam protein domains from translated CDS sequences (skipped if domain annotations are already present in the file).
+   - *Computing embedding* --- generating the 1152-dimensional protein embedding vector that captures the BGC's overall biochemical character.
+   - *Scoring* --- computing novelty scores and finding the nearest Gene Cluster Family and nearest validated BGC.
+   - *Generating report* --- assembling the assessment report.
+
+   Processing time is typically **10--30 seconds**.
+
+6. **Read the report.** The main area displays the [BGC Assessment Report](bgc-report.qmd) with an **Uploaded** badge in the header.
+
+## What you will see
+
+The report contains all the same sections as a database BGC evaluation:
+
+- **GCF Placement** --- which Gene Cluster Family your BGC is most similar to, the distance to the family representative, and whether your BGC qualifies as a Novel Singleton.
+- **Novelty Decomposition** --- Sequence Novelty, Chemistry Novelty, and Architecture Novelty broken out as independent axes.
+- **Domain Architecture Differential** --- your BGC's domains categorised as Core, Variable, or Rare relative to the assigned GCF.
+- **Domain Architecture Comparison** --- side-by-side alignment with the nearest MIBiG-validated BGC.
+- **BGC Space Map and Embeddings Map** --- UMAP projections placing your BGC in the context of the full database.
+
+The only difference from a database evaluation is the **Uploaded** badge and a note that the data is ephemeral.
+
+## Tips
+
+- **Include CDS translations.** If your GenBank file lacks `/translation=` qualifiers, the platform must translate the CDS features from the nucleotide sequence, which can fail if the file uses non-standard genetic codes. Always include pre-computed translations.
+- **One BGC per file.** If you have multiple BGC regions to evaluate, upload them one at a time. Each upload replaces the previous report. To evaluate all BGCs from an assembly simultaneously, use the [Upload an Assembly](upload-assembly.qmd) workflow instead.
+- **Use antiSMASH output directly.** The `.region0XX.gbk` files that antiSMASH produces are already in the correct format. You can upload them directly without modification.
+- **Compare with MIBiG manually.** After reading the report, note the nearest MIBiG BGC identifier from the Domain Architecture Comparison section. You can look up that entry on the [MIBiG website](https://mibig.secondarymetabolites.org/) for compound structures and literature references.
+- **Your data stays private.** The upload is processed in your browser session and is never persisted to the server or visible to other users.
+
+## Related pages
+
+- [Evaluate Overview](evaluate-overview.qmd) --- all entry points and the general Evaluate workflow
+- [Upload an Assembly](upload-assembly.qmd) --- upload a full assembly instead of a single BGC
+- [BGC Assessment Report](bgc-report.qmd) --- section-by-section guide to the report
+- [Evaluate a Database BGC](evaluate-db-bgc.qmd) --- evaluate a BGC already in the database
+- [GCF Explained](gcf-explained.qmd) --- how Gene Cluster Families work
+- [MIBiG and Validated BGCs](mibig-validated.qmd) --- the reference database used for comparisons

@@ -1,0 +1,116 @@
+---
+title: "Domain Query Builder"
+subtitle: "Find BGCs by the Pfam protein domains they contain"
+---
+
+## Goal
+
+The Domain Query Builder lets you search for biosynthetic gene clusters (BGCs) based on the protein domains encoded in their genes. Every protein in the platform has been annotated against the Pfam database --- a curated collection of protein family models. By specifying which Pfam domains must be present (or absent), you describe the enzymatic machinery of the BGC you are looking for, and the platform returns all BGCs whose domain composition matches.
+
+## When to use
+
+- You know the **enzyme families** involved in your pathway of interest (e.g. ketosynthase, acyltransferase, thioesterase for a type I polyketide synthase).
+- You want to find BGCs that encode an **unusual combination of tailoring enzymes** --- for example, a halogenase alongside a glycosyltransferase.
+- You want a **fast, broad search** that catches distant relatives. Domain-based searches are tolerant of sequence divergence because they operate on domain annotations rather than raw sequence.
+
+## Key concepts
+
+**Pfam domain**
+: A Pfam domain (e.g. PF00109, "Beta-ketoacyl synthase") is a conserved protein region with a defined function. A single protein can contain multiple Pfam domains. The platform stores the complete set of Pfam domains found across all genes in each BGC.
+
+**Domain set**
+: The collection of distinct Pfam domains present in a BGC. For scoring purposes, duplicates are collapsed --- if a BGC encodes three copies of PF00109, the domain set still contains PF00109 once.
+
+**Sorensen-Dice coefficient**
+: The similarity metric used to rank results. It measures the overlap between the domain set you requested and the domain set of each BGC in the database. The formula is:
+
+$$
+\text{Dice} = \frac{2 \times |A \cap B|}{|A| + |B|}
+$$
+
+where *A* is your query domain set and *B* is the BGC's domain set. A score of 1.0 means perfect overlap; 0.0 means no shared domains. See [Understanding Similarity Scores](similarity-scores.qmd) for a deeper explanation.
+
+## Step-by-step: building a domain query
+
+### 1. Open the Query tab
+
+In Search mode, click the **Query** tab in the sidebar. The Domain Query section is the first input area.
+
+### 2. Add domains
+
+Type a Pfam accession (e.g. `PF00109`) or a domain name (e.g. "Beta-ketoacyl synthase") into the search box. The platform auto-completes as you type. Click a suggestion to add it to your query.
+
+Repeat for each domain you want to include. Added domains appear as chips (small labelled tags) below the search box.
+
+### 3. Choose the logic: AND or OR
+
+The logic toggle controls how the platform combines your requested domains:
+
+| Mode | Meaning | When to use |
+|------|---------|-------------|
+| **AND** (default) | The BGC must contain *all* listed domains. | You know the exact domain architecture you want. |
+| **OR** | The BGC must contain *at least one* of the listed domains. | You are exploring and want to cast a wide net. |
+
+### 4. Mark domains as required or excluded
+
+Each domain chip has a toggle that lets you mark it as:
+
+- **Required** (green, default) --- the domain *must* be present.
+- **Excluded** (red) --- the domain *must not* be present. Excluded domains act as negative filters: any BGC containing an excluded domain is removed from results regardless of its score.
+
+Excluding domains is useful when you want to eliminate common but uninteresting hits. For example, if you search for PF00109 (ketosynthase) but exclude PF00698 (acyl transferase), you will skip standard modular PKS clusters and surface unusual architectures.
+
+### 5. Run the query
+
+Click **Run Query** at the bottom of the sidebar. Results appear in the BGC Roster, ranked by Sorensen-Dice similarity score.
+
+## What you will see
+
+The BGC Roster displays one row per matching BGC. In Search mode, the **Similarity** column shows the Sorensen-Dice score for each hit. Additional columns include:
+
+| Column | Description |
+|--------|-------------|
+| Accession | The unique identifier for the BGC. |
+| Classification | The predicted BGC class (e.g. "Type I PKS", "NRPS", "Terpene"). |
+| Novelty | A score (0--1) indicating how different this BGC is from any characterised BGC in the MIBiG reference database. Higher means more novel. |
+| Domain Novelty | A score (0--1) reflecting how unusual the BGC's domain composition is relative to all other BGCs of the same class. |
+| Size (bp) | The length of the BGC region in base pairs. |
+
+Click any row to open the BGC Detail panel, where you can inspect the full domain architecture gene by gene and see which of your query domains matched.
+
+## Worked example: finding type I PKS clusters with a methyltransferase
+
+Suppose you are studying polyketide natural products and want to find type I PKS clusters that include a methyltransferase domain, suggesting the product undergoes methylation.
+
+1. Add **PF00109** (Beta-ketoacyl synthase) --- the core catalytic domain of PKS.
+2. Add **PF08242** (Methyltransferase domain) --- the tailoring domain you are interested in.
+3. Set logic to **AND** --- the BGC must contain both.
+4. Click **Run Query**.
+
+The results will show PKS clusters ranked by how well their full domain set overlaps with your two-domain query. Clusters that contain many other domains alongside PF00109 and PF08242 will score slightly lower than a hypothetical minimal cluster containing only those two, because the Sorensen-Dice coefficient penalises unmatched domains on either side. In practice, the top hits will be the BGCs whose domain sets are most enriched for your query domains relative to their total domain count.
+
+## Worked example: excluding common domains to surface novelty
+
+You want to find BGCs that encode a halogenase (PF04820) but are *not* standard NRPS clusters.
+
+1. Add **PF04820** (Tryptophan halogenase) as required.
+2. Add **PF00501** (AMP-binding domain, the hallmark of NRPS adenylation) as excluded.
+3. Set logic to **AND**.
+4. Click **Run Query**.
+
+The results now exclude any BGC containing an AMP-binding domain, filtering out typical NRPS clusters and surfacing unusual BGC architectures that employ halogenation.
+
+## Tips
+
+- **Use Pfam accessions for precision.** Domain names can be ambiguous ("methyltransferase" matches dozens of families), but accessions like PF08242 are unambiguous.
+- **Start with one or two domains.** Adding too many required domains at once can return zero results if no BGC in the database contains all of them. Start small and add domains iteratively.
+- **Combine with filters.** If you only want results from marine biomes or from a specific BGC class, set those filters in the Filters tab before running your domain query.
+- **Combine with other query types.** You can run a domain query alongside a [Sequence Search](sequence-search.qmd) or [Chemical Structure Search](chemical-search.qmd). The platform intersects the results, returning only BGCs that satisfy all active queries.
+
+## Related pages
+
+- [Search BGCs Overview](search-overview.qmd) --- how the Search interface is organised
+- [Sequence Search](sequence-search.qmd) --- search by amino acid sequence
+- [Chemical Structure Search](chemical-search.qmd) --- search by compound structure
+- [Understanding Similarity Scores](similarity-scores.qmd) --- details on Sorensen-Dice and other metrics
+- [Reading Search Results](search-results.qmd) --- interpreting the results table

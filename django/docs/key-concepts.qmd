@@ -1,0 +1,128 @@
+---
+title: "Key Concepts"
+subtitle: "Essential terminology for navigating the platform"
+---
+
+This page defines every technical term you will encounter in the Discovery Platform. Each entry explains what the concept is, why it matters for bioprospecting, and gives a practical example. Terms are listed in the order you are most likely to encounter them.
+
+## Biosynthetic Gene Cluster (BGC)
+
+A **biosynthetic gene cluster** is a contiguous stretch of DNA that contains all the genes an organism needs to produce a specific natural product. A single BGC typically encodes biosynthetic enzymes (which build the molecule), tailoring enzymes (which modify it), regulatory proteins (which control when production is switched on), and transport proteins (which export the product from the cell).
+
+**Why it matters:** BGCs are the fundamental unit of natural product discovery. If you want to find a new antibiotic, you look for BGCs whose enzymatic machinery and predicted products differ from those already characterised.
+
+**Example:** The erythromycin BGC in *Saccharopolyspora erythraea* spans roughly 55 kilobases and encodes three large polyketide synthase proteins, several tailoring enzymes, and a resistance gene. In the platform, this cluster appears as a single row with a classification path of `Polyketide.Macrolide`.
+
+## Assembly
+
+An **assembly** is a reconstructed genome or genome fragment derived from DNA sequencing. The platform uses "assembly" as the primary unit of organism-level analysis because it is the most general term that covers all three types of input data:
+
+### Genome
+
+A **genome** assembly represents a single organism whose DNA was sequenced in isolation (e.g. a pure culture). Genome assemblies are typically the most complete and contiguous. They are the gold standard for bioprospecting because you can culture the organism and extract its natural products directly.
+
+### Metagenome
+
+A **metagenome** assembly (sometimes called a metagenome-assembled genome or MAG) is reconstructed computationally from a mixed environmental sample. Metagenomes are valuable because they capture organisms that may not grow in standard laboratory conditions. However, a MAG may be incomplete or may contain chimeric contigs from multiple organisms. The platform flags metagenome assemblies so you can factor completeness into your decisions.
+
+### Region
+
+A **region** assembly represents a short genomic fragment --- often just one or two contigs --- that was submitted to a public database as part of a targeted study. Regions are less informative at the organism level (you cannot compute meaningful diversity or density scores from a single contig), but they may contain high-value BGCs not found elsewhere.
+
+**Why it matters:** The assembly type tells you how much you can trust the organism-level scores. A genome assembly with high novelty is a stronger lead than a metagenome fragment with the same score.
+
+## BGC Class
+
+A **BGC class** describes the type of enzymatic machinery a BGC uses to assemble its product. It is defined by the core biosynthetic logic, not by the chemical structure of the finished molecule. The platform uses the following top-level classes:
+
+| Class | Biosynthetic logic | Typical products |
+|---|---|---|
+| **Polyketide** | Polyketide synthases (PKS) extend a chain using malonyl-CoA units | Erythromycin, tetracycline, lovastatin |
+| **NRP** (nonribosomal peptide) | Nonribosomal peptide synthetases (NRPS) assemble peptides without ribosomes | Vancomycin, cyclosporine, daptomycin |
+| **RiPP** (ribosomally synthesised and post-translationally modified peptide) | Ribosomes make a precursor peptide; enzymes modify it | Nisin, thiopeptides, lanthipeptides |
+| **Terpene** | Terpene cyclases fold linear isoprenoid precursors | Geosmin, albaflavenone, hopanoids |
+| **Saccharide** | Glycosyltransferases build or modify sugar chains | Aminoglycosides, glycopeptide sugars |
+| **Alkaloid** | Diverse enzymatic routes producing nitrogen-containing heterocycles | Rebeccamycin, staurosporine |
+| **Other** | Does not fit neatly into the above categories | Siderophores, melanins, butyrolactones |
+
+**Why it matters:** BGC class is the first level of filtering. If you are looking for new antibiotics in the macrolide family, you would filter for Polyketide BGCs. If you want novel lanthipeptides, you would filter for RiPP.
+
+**Important distinction:** BGC class describes the *enzymatic machinery*, not the *product chemistry*. Two BGCs with the same class may produce structurally different molecules, and conversely a single molecule may require hybrid machinery (e.g. PKS-NRPS hybrids). For product-level chemical classification, see ChemOnt below.
+
+## ChemOnt (Chemical Ontology)
+
+**ChemOnt** is a hierarchical classification of chemical structures maintained by the ClassyFire project. It organises roughly 4,825 chemical classes into a tree based on structural features --- functional groups, ring systems, substituent patterns --- rather than biosynthetic origin.
+
+In the platform, each BGC's predicted natural products are annotated with one or more ChemOnt classes and a probability score indicating confidence. Because ChemOnt describes the *product* rather than the *enzyme*, it provides complementary information to the BGC class.
+
+**Why it matters:** ChemOnt lets you search by chemical structure type. If you need a compound with a specific pharmacophore or scaffold, ChemOnt filters will narrow the results far more precisely than BGC class alone.
+
+**Example:** A macrolide antibiotic would be classified under `Organic compounds > Lipids and lipid-like molecules > Prenol lipids > Terpene lactones > Macrolides and analogues`. A polyketide BGC that produces a non-macrolide product would have a completely different ChemOnt path, even though both share the Polyketide BGC class.
+
+## Gene Cluster Family (GCF)
+
+A **gene cluster family** is a group of BGCs from different organisms that share significant sequence and domain similarity. GCFs are computed by clustering all BGCs in the database based on their protein-level embeddings. Each family has a representative BGC (the member closest to the cluster centroid) and summary statistics: member count, mean novelty, and whether any members are validated.
+
+**Why it matters:** GCF membership tells you how common a BGC's biosynthetic strategy is across the microbial world. A BGC that belongs to a large GCF with validated members is likely producing a known compound. A BGC that sits alone as a singleton may represent genuinely new chemistry --- or it may be a fragment.
+
+**Example:** The erythromycin-family BGCs from *S. erythraea*, *Aeromicrobium erythreum*, and several environmental strains all belong to the same GCF. If you find a new BGC assigned to this family, it probably makes an erythromycin-like macrolide. If your BGC is a singleton with no GCF assignment, it may produce something unprecedented.
+
+## MIBiG / Validated BGC
+
+**MIBiG** (Minimum Information about a Biosynthetic Gene cluster) is a curated repository of BGCs whose products have been experimentally verified. A **validated BGC** in the platform is one that has a corresponding MIBiG entry, meaning its natural product has been isolated, structurally characterised, and published.
+
+**Why it matters:** Validated BGCs serve as reference points. The platform computes novelty scores by measuring how far each BGC's embedding is from the nearest validated BGC. A BGC that is distant from all validated references is more likely to produce something new.
+
+**Example:** The actinorhodin BGC (MIBiG accession BGC0000194) from *Streptomyces coelicolor* is a validated type II polyketide BGC. In the BGC Space Map, validated BGCs appear as labelled landmark points so you can see where your candidates sit relative to known chemistry.
+
+## Novel Singleton
+
+A **novel singleton** is a BGC that could not be assigned to any gene cluster family during the clustering process. It has no close relatives in the database.
+
+**Why it matters:** Novel singletons are high-risk, high-reward candidates. They may encode entirely new biosynthetic pathways, but they may also be partial or misannotated clusters. The BGC Detail Panel provides additional context (completeness, domain architecture, nearest validated distance) to help you distinguish genuine novelty from artefact.
+
+## Type Strain
+
+A **type strain** is the designated reference culture for a bacterial or archaeal species. Type strains are deposited in public culture collections (DSMZ, ATCC, JCM, etc.) and are available for anyone to order.
+
+**Why it matters:** If an assembly is flagged as a type strain, you can obtain the organism from a culture collection and begin wet-lab work immediately. Non-type-strain assemblies may come from environmental samples that are difficult or impossible to re-culture. The platform provides a direct link to the culture collection catalogue when a type strain URL is available.
+
+## Biome Lineage
+
+A **biome lineage** describes the environment from which an assembly was sampled. The platform uses the GOLD (Genomes OnLine Database) classification scheme, which organises biomes into a hierarchical path separated by dots.
+
+**Why it matters:** Biome information helps you focus on ecologically relevant organisms. If you are interested in soil-dwelling antibiotic producers, filtering by `root.Environmental.Terrestrial.Soil` eliminates marine and host-associated assemblies.
+
+**Example:** An assembly from a hot spring in Yellowstone might have the biome path `root.Environmental.Terrestrial.Volcanic`. A human gut isolate might have `root.Host_associated.Human.Digestive_system`.
+
+## Pfam Domain
+
+A **Pfam domain** is a conserved protein domain defined in the Pfam database. Each domain represents a functional or structural unit --- for example, a ketosynthase domain (PF00109) or an acyltransferase domain (PF00698) --- that can be identified by its amino acid sequence profile.
+
+**Why it matters:** Pfam domains are the building blocks of BGC architecture. The platform annotates every coding sequence within a BGC with its Pfam domain hits, and these domain annotations power two features: the domain architecture view in the [BGC Detail Panel](bgc-detail.qmd) and the domain-based search in Search BGCs mode.
+
+**Example:** A type I polyketide synthase gene typically contains a repeating series of ketosynthase (KS), acyltransferase (AT), and acyl carrier protein (ACP) domains. Seeing an unusual domain inserted into this pattern --- say, a halogenase --- would suggest the BGC makes a halogenated product, which could be pharmacologically interesting.
+
+## Assembly Scores
+
+Each assembly carries four numerical scores that summarise its biosynthetic potential. These scores are described in detail on the [Assembly Scores](assembly-scores.qmd) page:
+
+- **Novelty** (0--1): how different the assembly's BGCs are from validated references, on average.
+- **Diversity** (0--1): what fraction of known BGC classes the assembly covers.
+- **Density** (BGCs per megabase): how tightly packed the BGCs are within the assembly.
+- **Taxonomic Novelty** (0--1): how underrepresented the assembly's taxonomic lineage is in the database.
+
+## BGC Scores
+
+Each BGC carries its own scores:
+
+- **Novelty** (0--1): the cosine distance between this BGC's protein embedding and the nearest validated BGC embedding. Higher values mean less similarity to any known, characterised gene cluster.
+- **Domain Novelty** (0--1): the fraction of this BGC's Pfam domains that are not found in any other BGC in the database. A value of 1.0 means every domain is unique to this BGC.
+- **Nearest Validated Distance**: the raw cosine distance to the closest MIBiG reference, along with that reference's accession number.
+
+## Related pages
+
+- [Quickstart](quickstart.qmd) --- find your first assembly in five minutes
+- [Assembly Scores](assembly-scores.qmd) --- detailed explanation of how each score is computed
+- [Filtering](filtering.qmd) --- how to use BGC class, ChemOnt, taxonomy, and biome filters
+- [BGC Detail Panel](bgc-detail.qmd) --- interpreting domain architecture, chemical compounds, and novelty scores

@@ -7,6 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Plus, Minus, X } from "lucide-react";
 import { fetchDomains } from "@/api/filters";
 import { useQueryStore } from "@/stores/query-store";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 export function DomainQueryBuilder() {
   const [search, setSearch] = useState("");
@@ -25,9 +26,9 @@ export function DomainQueryBuilder() {
   });
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-tour="domain-query">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Domain Query</span>
+        <span className="flex items-center gap-1 text-sm font-medium">Domain Query <HelpTooltip tooltipKey="sorensen_dice" side="right" /></span>
         <ToggleGroup
           type="single"
           value={logic}

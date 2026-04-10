@@ -1,0 +1,85 @@
+---
+title: "Search BGCs"
+subtitle: "Find specific BGCs using domain architecture, sequence similarity, or chemical structure"
+---
+
+## Goal
+
+Search mode helps you find specific biosynthetic gene clusters (BGCs) when you already have a target in mind --- a protein domain combination, a known amino acid sequence, or a chemical structure. Rather than browsing the full catalogue, you pose a precise query and the platform returns ranked hits scored by similarity to your input.
+
+## When to use Search
+
+Use Search when you can answer "yes" to any of these questions:
+
+- **Do you have a protein sequence** from a published BGC or a novel enzyme you want to find relatives of?
+- **Do you know the Pfam domains** that define the biosynthetic machinery you are interested in (e.g. a ketosynthase plus an acyltransferase)?
+- **Do you have a chemical structure** (as a SMILES string) and want to find BGCs whose predicted products resemble it?
+
+If you do not yet have a specific target and want to browse what is available, start with [Explore mode](explore-overview.qmd) instead.
+
+## The Search interface at a glance
+
+When you switch to Search mode the dashboard rearranges into two horizontal bands and a sidebar.
+
+### Sidebar: Filters and Query tabs
+
+The sidebar on the left has two tabs:
+
+1. **Filters** --- the same filtering controls available in Explore mode (biome, BGC class, assembly quality, and so on). Filters narrow the dataset *before* your query runs.
+2. **Query** --- where you build your search. The Query tab contains three independent input sections, one per query type:
+   - [Domain Query](domain-query.qmd) --- search by Pfam protein domain composition.
+   - [Sequence Search](sequence-search.qmd) --- search by amino acid sequence similarity.
+   - [Chemical Structure Search](chemical-search.qmd) --- search by predicted product structure.
+
+You can fill in one, two, or all three sections. When you combine multiple query types the platform **intersects** the results --- only BGCs that pass *every* active query appear in the results. Each hit carries the similarity score from the method that produced the lowest score for that BGC, so you can see at a glance which criterion was hardest to satisfy.
+
+At the bottom of the sidebar, the **Run Query** button launches the search. Because some searches (especially sequence searches) can take a few seconds, the platform runs them asynchronously and shows a progress indicator.
+
+### Upper band: the BGC Triad
+
+The top half of the main area shows the **BGC Triad** --- the same three-panel view used in Explore mode, but now populated exclusively with your search hits. The triad comprises:
+
+| Panel | What it shows |
+|-------|---------------|
+| **BGC Roster** | A ranked table of matching BGCs, sorted by similarity score. Columns include accession, BGC class, novelty score, domain novelty, size, and the similarity score from your query. |
+| **BGC Space Map** | A two-dimensional projection (UMAP) of the matching BGCs, coloured by the attribute you choose (class, biome, novelty). Clusters in this map indicate groups of structurally related hits. |
+| **BGC Detail** | A deep-dive panel that appears when you select a single BGC from the roster or the map. Shows domain architecture, predicted products, neighbouring genes, and links to external databases. |
+
+### Lower band: the Assembly Triad
+
+The bottom half shows the **Assembly Triad**. Once you have identified interesting BGCs in the upper band, the assembly triad answers the practical question: *which assemblies carry these BGCs, and can I obtain them?*
+
+The assembly triad derives its contents from the BGCs currently selected or shortlisted above. It mirrors the three-panel layout:
+
+| Panel | What it shows |
+|-------|---------------|
+| **Assembly Roster** | Parent assemblies of the matching BGCs, with quality scores, biome, taxonomic lineage, and culture-collection availability. |
+| **Assembly Space Map** | UMAP projection of those assemblies, useful for spotting whether your hits come from a single clade or are spread across diverse lineages. |
+| **Assembly Detail** | Full report on a single assembly: all its BGCs, quality metrics, and links to strain databases. |
+
+## Step-by-step: running your first search
+
+1. **Switch to Search mode** using the mode selector at the top of the dashboard.
+2. **Open the Query tab** in the sidebar.
+3. **Enter at least one query.** For example, paste an amino acid sequence into the Sequence Search section.
+4. *(Optional)* **Add filters.** Switch to the Filters tab to restrict results to a particular biome or BGC class, then switch back to the Query tab.
+5. **Click Run Query.** A progress spinner appears while the search executes.
+6. **Review the BGC Roster.** Hits are ranked by similarity score --- the highest-scoring BGC appears first.
+7. **Select a BGC** to inspect its domain architecture and predicted products in the BGC Detail panel.
+8. **Look at the Assembly Triad** below to see which assemblies carry your top hits. Apply the **Type Strain** filter if you need culturable organisms.
+
+## Tips
+
+- **Start broad, then narrow.** Run your query without filters first to see the full landscape of hits. Add filters in a second pass if the result set is too large.
+- **Combine query types strategically.** Domain queries are fast and tolerant of distant homology; sequence searches are precise but slower. A domain query can serve as a coarse pre-filter, with a sequence search refining the hits.
+- **Check similarity scores carefully.** A score of 0.95 in one method does not mean the same thing as 0.95 in another. See [Understanding Similarity Scores](similarity-scores.qmd) for guidance on interpreting each metric.
+- **Use the shortlist.** Star individual BGCs in the roster to build a shortlist that persists across mode switches. You can then evaluate shortlisted BGCs in [Evaluate mode](evaluate-overview.qmd).
+
+## Related pages
+
+- [Domain Query Builder](domain-query.qmd) --- build queries from Pfam protein domains
+- [Sequence Search](sequence-search.qmd) --- search by amino acid sequence
+- [Chemical Structure Search](chemical-search.qmd) --- search by SMILES structure
+- [Understanding Similarity Scores](similarity-scores.qmd) --- how scores are calculated and what they mean
+- [Reading Search Results](search-results.qmd) --- detailed guide to the results layout
+- [Cross-Mode Transitions](cross-mode.qmd) --- move between Search, Explore, and Evaluate

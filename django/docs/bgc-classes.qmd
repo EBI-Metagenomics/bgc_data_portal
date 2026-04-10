@@ -1,0 +1,143 @@
+---
+title: "BGC Classes"
+subtitle: "The enzymatic classification system used to categorise biosynthetic gene clusters"
+---
+
+## Goal
+
+To explain how the BGC Discovery Platform classifies biosynthetic gene clusters (BGCs) by the type of enzymatic machinery they encode, and to provide a reference for every class and subclass in the system. Understanding BGC classes helps you filter the database, interpret scores, and connect computational predictions to the kind of chemistry you might observe at the bench.
+
+## When to use this reference
+
+Consult this page when:
+
+- You see a BGC class label (such as "Polyketide" or "RiPP") in the platform and want to know what it means.
+- You are building a filter in Explore or Search mode and want to choose the right class or subclass.
+- You want to understand why a BGC is classified the way it is, especially when the classification seems to conflict with the predicted chemical product.
+
+## What BGC classes represent
+
+A BGC class describes the **type of enzymatic logic** that a gene cluster uses to assemble its product. It does not describe the final chemical structure of the product itself --- that is the domain of the [Chemical Ontology (ChemOnt)](chemont.qmd) system.
+
+The distinction matters. A Polyketide BGC uses polyketide synthase (PKS) enzymes to build its product from small acyl-CoA building blocks. The final product might be a macrolide, a linear polyene, an aromatic compound, or something else entirely. The BGC class tells you about the assembly line; the ChemOnt annotation tells you about the molecule that comes off the line.
+
+BGC classes are assigned based on the protein domains detected in the gene cluster. The platform identifies Pfam domains in each gene's protein product and matches domain signatures against known biosynthetic rules. This means classification is based on the genetics of the organism, not on any chemical analysis of its products.
+
+## Hierarchical classification
+
+BGC classes are organised in a two-level hierarchy stored as **dot-delimited paths** (for example, `Polyketide.Macrolide`). The first level is the broad class; the second is the subclass. Some BGCs are classified only at the broad level if the domain signature does not allow a confident subclass assignment.
+
+## Class reference
+
+### Polyketide
+
+**Broad class:** Polyketide
+
+**Enzymatic logic:** Polyketide synthases (PKS) --- large, modular enzyme complexes that extend a carbon chain by iteratively adding two-carbon units derived from malonyl-CoA or methylmalonyl-CoA. Each module in the PKS performs one round of chain extension and may include optional reduction, dehydration, or methylation steps.
+
+**Subclasses:**
+
+| Subclass | Description | Example products |
+|----------|-------------|-----------------|
+| **Macrolide** | Products contain a macrolactone ring (a large lactone of 12 or more atoms). The PKS typically terminates with a thioesterase domain that cyclises the chain. | Erythromycin, pikromycin |
+| **Aromatic** | Products contain one or more aromatic rings built by iterative (type II) PKS systems that fold and cyclise the polyketide chain. | Tetracycline, doxorubicin |
+| **Linear** | Products remain as linear or minimally cyclised polyketide chains. | Mupirocin, amphotericin B (linear precursor) |
+
+### NRP (Non-Ribosomal Peptide)
+
+**Broad class:** NRP
+
+**Enzymatic logic:** Non-ribosomal peptide synthetases (NRPS) --- modular enzymes that select, activate, and join amino acid monomers (including non-proteinogenic amino acids) into peptide chains without using the ribosome. Each module typically contains an adenylation domain (selects the amino acid), a thiolation domain (tethers it), and a condensation domain (forms the peptide bond).
+
+**Subclasses:**
+
+| Subclass | Description | Example products |
+|----------|-------------|-----------------|
+| **Cyclic** | Products are cyclised peptides, often with unusual cross-links, D-amino acids, or N-methylations. | Vancomycin, daptomycin, cyclosporin |
+| **Linear** | Products are linear peptides or lipopeptides that do not undergo macrocyclisation. | Gramicidin, surfactin (lipopeptide) |
+
+### RiPP (Ribosomally synthesised and Post-translationally modified Peptide)
+
+**Broad class:** RiPP
+
+**Enzymatic logic:** Unlike NRPs, RiPPs start as ribosomally synthesised precursor peptides that are then extensively modified by tailoring enzymes encoded in the same gene cluster. Modifications include cyclisation, dehydration, thioether bridge formation, and many others.
+
+**Subclasses:**
+
+| Subclass | Description | Example products |
+|----------|-------------|-----------------|
+| **Lanthipeptide** | Modified by lanthionine bridges (thioether cross-links between serine/threonine and cysteine residues). | Nisin, mersacidin |
+| **Thiopeptide** | Contain a characteristic six-membered nitrogen-containing heterocycle and multiple thiazole or oxazole rings. | Thiostrepton, nosiheptide |
+| **Sactipeptide** | Contain sulfur-to-alpha-carbon thioether bonds (sactionine bridges) formed by radical SAM enzymes. | Subtilosin A, thuricin CD |
+
+### Terpene
+
+**Broad class:** Terpene
+
+**Enzymatic logic:** Terpene synthases (also called cyclases) convert linear prenyl diphosphate precursors into cyclic or polycyclic terpene scaffolds through carbocation-mediated cyclisation cascades. The precursors are built from five-carbon isoprene units by the mevalonate or MEP pathway.
+
+**Subclasses:**
+
+| Subclass | Description | Example products |
+|----------|-------------|-----------------|
+| **Sesquiterpene** | Built from three isoprene units (15 carbons, C15). | Pentalenene, albaflavenone |
+| **Diterpene** | Built from four isoprene units (20 carbons, C20). | Gibberellin, terpentecin |
+
+### Saccharide
+
+**Broad class:** Saccharide
+
+**Enzymatic logic:** Glycosyltransferases and sugar-modifying enzymes that build specialised sugar chains or aminosugar-containing products. These BGCs often work in concert with other biosynthetic classes (for example, attaching sugar moieties to polyketide or NRP scaffolds).
+
+**Subclasses:**
+
+| Subclass | Description | Example products |
+|----------|-------------|-----------------|
+| **Aminoglycoside** | Products are aminoglycosides --- sugar-based antibiotics with amino groups on the sugar rings. | Streptomycin, kanamycin |
+
+### Alkaloid
+
+**Broad class:** Alkaloid
+
+**Enzymatic logic:** Diverse enzymatic routes that produce nitrogen-containing heterocyclic compounds. Unlike NRPs, alkaloid biosynthesis does not follow a modular assembly-line logic; instead, individual enzymes catalyse specific transformations (oxidations, cyclisations, methylations) on amino acid-derived precursors.
+
+**Subclasses:**
+
+| Subclass | Description | Example products |
+|----------|-------------|-----------------|
+| **Indole** | Products contain an indole ring system, typically derived from tryptophan. | Rebeccamycin, staurosporine |
+| **Pyrrolidine** | Products contain a pyrrolidine ring, often derived from proline or ornithine. | Prodiginine-related alkaloids |
+
+### Other
+
+**Broad class:** Other
+
+**Enzymatic logic:** Biosynthetic gene clusters that do not fit neatly into the major classes above. This category includes diverse enzymatic strategies.
+
+**Subclasses:**
+
+| Subclass | Description | Example products |
+|----------|-------------|-----------------|
+| **Phosphonate** | Products contain a direct carbon-phosphorus bond, formed by phosphoenolpyruvate mutase. | Fosfomycin, phosphinothricin |
+| **Aminocoumarin** | Products contain an aminocoumarin ring system, typically targeting DNA gyrase. | Novobiocin, clorobiocin |
+
+## Hybrid BGCs
+
+Some BGCs encode enzymes from multiple classes. For example, a PKS-NRPS hybrid BGC contains both polyketide synthase and non-ribosomal peptide synthetase modules. The platform represents hybrids by listing all applicable classes, separated by a forward slash (e.g., `Polyketide/NRP`). When filtering by class, a hybrid BGC matches filters for any of its component classes.
+
+## How classification relates to filtering
+
+In the platform's filter panel, you can filter by broad class (top level) or by subclass (second level). Selecting a broad class includes all its subclasses. Selecting a specific subclass excludes BGCs from other subclasses of the same broad class.
+
+## Tips
+
+- **BGC class reflects the enzyme, not the product.** Two BGCs in the same class can produce very different molecules. Use the [ChemOnt annotation](chemont.qmd) to filter by predicted product chemistry.
+- **Hybrid BGCs are common in actinobacteria.** If you are exploring *Streptomyces* assemblies, expect to see many PKS/NRPS hybrids.
+- **"Other" is not a low-quality label.** BGCs classified as "Other" use legitimate but less common biosynthetic strategies. Some of the most interesting discoveries come from this category.
+
+## Related pages
+
+- [Chemical Ontology (ChemOnt)](chemont.qmd) --- classification by predicted product chemistry
+- [Scores and Metrics Reference](scores-metrics.qmd) --- how class diversity contributes to assembly scores
+- [GCF Explained](gcf-explained.qmd) --- how BGCs are grouped into families regardless of class
+- [Glossary](glossary.qmd) --- quick definitions of all terms

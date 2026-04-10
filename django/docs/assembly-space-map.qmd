@@ -1,0 +1,147 @@
+---
+title: "The Assembly Space Map"
+subtitle: "Visualise assemblies as points in score space"
+---
+
+## Goal
+
+The Assembly Space Map is an interactive scatter plot that shows every assembly in your current filtered set as a single point. Each axis represents one of the four assembly scores (Novelty, Diversity, Density, Taxonomic Novelty), so the position of each point tells you how that assembly ranks on two dimensions simultaneously. This page explains how to read the map, configure its axes, and use it to find candidates.
+
+## When to use this page
+
+Refer to this page when:
+
+- You want to understand what the scatter plot in the centre of the Explore Assemblies screen represents.
+- You want to change the axes to explore a different pair of scores.
+- You want to interpret clusters, outliers, and empty regions in the plot.
+
+## Where the map appears
+
+The Assembly Space Map occupies the centre panel of the Assembly Triad (the top half of the Explore Assemblies screen). It sits between the Assembly Roster on the left and the Assembly Stats panel on the right.
+
+The map updates automatically whenever you change filters or re-run a query. Only assemblies that pass your current filter criteria appear as points.
+
+## Reading the map
+
+### Axes
+
+By default, the x-axis shows **Diversity** and the y-axis shows **Novelty**. You can change either axis using the dropdown selectors above the plot. The available axis options are:
+
+| Axis option | What it represents | Scale |
+|---|---|---|
+| **Diversity** | Fraction of known BGC classes represented | 0 -- 1 |
+| **Novelty** | Average distance of BGCs from validated references | 0 -- 1 |
+| **Density** | BGCs per megabase of assembled sequence | Open-ended (typically 0 -- 6) |
+| **Taxonomic Novelty** | Underrepresentation of the assembly's genus | 0 -- 1 |
+
+### Point colour
+
+Points are coloured by **top-level taxonomy** (phylum or equivalent rank). A legend at the bottom of the plot shows the colour assignments. This colouring helps you spot taxonomic patterns --- for example, whether all the high-novelty assemblies come from a single phylum or are scattered across the tree of life.
+
+### Point size
+
+All points are the same size in the default view. When you select an assembly (by clicking a roster row or a point), the selected point becomes larger and gains a highlight ring.
+
+### Tooltips
+
+Hovering over a point displays a tooltip with:
+
+- Assembly accession
+- Organism name
+- The x-axis and y-axis values
+- Type strain status (if true)
+
+## Interacting with the map
+
+### Click to select
+
+Click any point to select the corresponding assembly. This action:
+
+1. Highlights the point in the map with a ring and increased size.
+2. Scrolls the Assembly Roster to the corresponding row and highlights it.
+3. Populates the BGC Triad (bottom half of the screen) with the BGCs belonging to that assembly.
+
+### Pan and zoom
+
+- **Zoom in:** Use your mouse scroll wheel or pinch gesture on a trackpad.
+- **Zoom out:** Scroll in the opposite direction or use the zoom-out button in the plot toolbar.
+- **Pan:** Click and drag on an empty area of the plot to move the viewport.
+- **Reset view:** Double-click on an empty area or use the reset button in the toolbar to return to the default zoom level.
+
+### Lasso selection
+
+Some configurations support lasso (freehand) selection. Click the lasso icon in the toolbar, then draw a region around a group of points. The Assembly Roster updates to show only the assemblies within the lasso. This is useful when you spot an interesting cluster and want to inspect just those assemblies.
+
+## Configuring the axes
+
+To change an axis, click the dropdown selector above the plot and choose a different score. Common axis combinations and what they reveal:
+
+### Diversity (x) vs. Novelty (y) --- Default
+
+This is the recommended starting view. It answers the question: "Which assemblies combine broad biosynthetic repertoires with high novelty?"
+
+- **Upper-right quadrant:** High diversity, high novelty. These assemblies have many different BGC classes and their BGCs are unlike validated references. These are the strongest candidates for discovering new chemistry.
+- **Upper-left quadrant:** Low diversity, high novelty. These assemblies specialise in one or two BGC classes, but those BGCs are highly novel. Worth investigating if the BGC class matches your interest.
+- **Lower-right quadrant:** High diversity, low novelty. Versatile producers whose BGCs closely resemble known compounds. Useful for finding new variants of established compound families.
+- **Lower-left quadrant:** Low diversity, low novelty. Well-characterised organisms with a narrow biosynthetic repertoire. Least interesting for bioprospecting.
+
+### Novelty (x) vs. Density (y)
+
+This combination answers: "Which assemblies are both novel and biosynthetically prolific?"
+
+- **Upper-right quadrant:** High novelty, high density. These organisms have packed their genomes with unusual BGCs. Strong candidates.
+- Points near the x-axis (zero density) may be Region assemblies without a known genome size, where density cannot be computed.
+
+### Taxonomic Novelty (x) vs. Novelty (y)
+
+This combination answers: "Are the novel assemblies from underexplored lineages?"
+
+- **Upper-right quadrant:** High taxonomic novelty, high BGC novelty. These are rare organisms with unusual BGCs --- the strongest signal that genuinely new chemistry may be present.
+- **Lower-right quadrant:** High taxonomic novelty, low BGC novelty. A rare organism whose BGCs nonetheless resemble known compounds. The organism itself is interesting, but its chemistry may be familiar.
+
+### Diversity (x) vs. Density (y)
+
+This combination answers: "Which assemblies are both diverse and densely packed with BGCs?"
+
+- **Upper-right quadrant:** An organism that not only has many BGCs per megabase but also covers many different chemical classes. Likely an exceptional natural product producer.
+
+## Interpreting clusters and outliers
+
+### Clusters
+
+A dense cluster of points in the map means that many assemblies have similar scores on both axes. This often corresponds to a well-studied clade. For example, *Streptomyces* genomes tend to cluster at moderate-to-high diversity and moderate novelty, forming a recognisable cloud. Points outside this cloud are the ones most worth investigating.
+
+### Outliers
+
+An isolated point far from the main cloud may represent:
+
+- A genuinely exceptional assembly with unusual biosynthetic potential.
+- A metagenome fragment with incomplete data, leading to extreme score values.
+- A data quality artefact (e.g. an assembly with a single highly novel but partial BGC).
+
+Always click an outlier to inspect its BGCs in the BGC Triad before adding it to your shortlist.
+
+### Empty regions
+
+Large empty areas in the plot indicate score combinations that no assembly achieves. For example, the upper-right corner of the Diversity vs. Density plot may be empty because the most diverse genomes tend to be large (diluting density). Understanding which regions are naturally empty helps you calibrate your expectations.
+
+## The map and the Assembly Roster
+
+The map and the roster are linked. Clicking a point in the map highlights the corresponding roster row and vice versa. Sorting the roster does not change the map, but filtering (via the sidebar filters) updates both the roster and the map simultaneously.
+
+If you use lasso selection in the map, the roster temporarily shows only the selected assemblies. Click **Clear Selection** in the roster header to return to the full filtered set.
+
+## Tips
+
+- When the map is crowded, zoom into a region of interest before clicking individual points. This reduces accidental mis-clicks.
+- Use the Taxonomy colour legend to spot clades. If a colour dominates the high-novelty region, it may be worth filtering to that phylum and exploring it in the roster.
+- Switch axes frequently. Each combination reveals a different facet of the data. There is no single "best" axis pair.
+- The map respects your current filters. If you see too few points, check that you have not over-constrained with filters.
+- Type strain assemblies do not receive special visual treatment in the map by default, but you can identify them via tooltips. Enable the Type Strain toggle if you want to see only type strains.
+
+## Related pages
+
+- [Assembly Scores](assembly-scores.qmd) --- detailed explanation of each score shown on the axes
+- [Explore Assemblies](explore-overview.qmd) --- the full Explore workflow, of which the map is one component
+- [Filtering](filtering.qmd) --- how filter changes affect the map
+- [The BGC Triad](bgc-triad.qmd) --- what happens when you select an assembly in the map

@@ -8,7 +8,7 @@ export function Sidebar() {
   const mode = useModeStore((s) => s.mode);
 
   return (
-    <aside className="hidden h-full w-80 shrink-0 overflow-y-auto border-r xl:block">
+    <aside className="hidden h-full w-80 shrink-0 overflow-y-auto border-r xl:block" data-tour="sidebar">
       <div className="space-y-4 p-4">
         {mode === "assess" && (
           <>

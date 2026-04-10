@@ -141,7 +141,7 @@ export function TaxonomyFilter() {
   const displayed = filterTree(tree ?? []);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-tour="taxonomy-filter">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">Taxonomy</span>
         {deepest && (

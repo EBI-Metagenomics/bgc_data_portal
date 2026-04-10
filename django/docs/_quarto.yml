@@ -1,52 +1,138 @@
 project:
   type: website
+  output-dir: _site
 
 execute:
   freeze: auto
 
 website:
-  title: "MGnify Biosynthetic Gene Clusters Portal Documentation"
-  description: "Guides, examples, and API documentation for using the MGnify Biosynthetic Gene Clusters Portal."
+  title: "BGC Discovery Platform"
+  description: "Guides, tutorials, and reference for the MGnify BGC Discovery Platform."
   page-navigation: true
+  reader-mode: true
 
   navbar:
+    background: "#18974c"
+    foreground: "#ffffff"
+    left:
+      - text: "Getting Started"
+        href: index.qmd
+      - text: "Explore"
+        href: explore-overview.qmd
+      - text: "Search"
+        href: search-overview.qmd
+      - text: "Evaluate"
+        href: evaluate-overview.qmd
+      - text: "Reference"
+        href: scores-metrics.qmd
+      - text: "Tutorials"
+        href: tutorials-index.qmd
     right:
-      - href: https://ebi.ac.uk/finn-srv/mgnify-bgcs
-        text: MGnify BGCs
+      - text: "Launch Platform"
+        href: /dashboard/
+        icon: rocket
       - icon: github
-        href: https://github.com/Finn-Lab/bgc_data_portal
+        href: https://github.com/EBI-Metagenomics/mgnify-bgcs-v2
 
   sidebar:
-    style: docked
-    search: true
-    contents:
-      - text: "MGnify BGCs Portal"
-        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/index.html
-        contents:
-          - text: "Home Page"
-            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/landing-page-features.html
-          - text: "Explore BGCs"
-            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/explore-bgcs.html
-          - text: "BGC Details"
-            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/bgc-details.html
-      - text: "API Documentation"
-        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/api-documentation.html
-      - text: "Use cases"
-        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/intro.html
-        contents:
-          - text: "Introduction"
-            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/intro.html
-          - text: "Exploring RiPPs"
-            href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/ripp-glycosyltransferase-toxin-antitoxin.html
-      - text: "About"
-        href: https://ebi.ac.uk/finn-srv/mgnify-bgcs/docs/about.html
+    - title: "Getting Started"
+      style: docked
+      search: true
+      contents:
+        - text: "Platform Overview"
+          href: index.qmd
+        - text: "Key Concepts"
+          href: key-concepts.qmd
+        - text: "Quickstart"
+          href: quickstart.qmd
 
+    - title: "Explore Assemblies"
+      contents:
+        - text: "Overview"
+          href: explore-overview.qmd
+        - text: "Assembly Scores"
+          href: assembly-scores.qmd
+        - text: "Filtering"
+          href: filtering.qmd
+        - text: "Assembly Space Map"
+          href: assembly-space-map.qmd
+        - text: "BGC Triad"
+          href: bgc-triad.qmd
+        - text: "BGC Detail"
+          href: bgc-detail.qmd
+        - text: "Shortlists"
+          href: shortlists.qmd
+
+    - title: "Search BGCs"
+      contents:
+        - text: "Overview"
+          href: search-overview.qmd
+        - text: "Domain Query"
+          href: domain-query.qmd
+        - text: "Sequence Search"
+          href: sequence-search.qmd
+        - text: "Chemical Search"
+          href: chemical-search.qmd
+        - text: "Similarity Scores"
+          href: similarity-scores.qmd
+        - text: "Search Results"
+          href: search-results.qmd
+        - text: "Cross-Mode Transitions"
+          href: cross-mode.qmd
+
+    - title: "Evaluate Asset"
+      contents:
+        - text: "Overview"
+          href: evaluate-overview.qmd
+        - text: "DB Assembly"
+          href: evaluate-db-assembly.qmd
+        - text: "DB BGC"
+          href: evaluate-db-bgc.qmd
+        - text: "Upload Assembly"
+          href: upload-assembly.qmd
+        - text: "Upload BGC"
+          href: upload-bgc.qmd
+        - text: "Assembly Report"
+          href: assembly-report.qmd
+        - text: "BGC Report"
+          href: bgc-report.qmd
+        - text: "Cross-Mode Evaluate"
+          href: cross-mode-evaluate.qmd
+
+    - title: "Reference"
+      contents:
+        - text: "Scores & Metrics"
+          href: scores-metrics.qmd
+        - text: "BGC Classes"
+          href: bgc-classes.qmd
+        - text: "ChemOnt"
+          href: chemont.qmd
+        - text: "Biome Ontology"
+          href: biome-ontology.qmd
+        - text: "GCF Explained"
+          href: gcf-explained.qmd
+        - text: "MIBiG Validated"
+          href: mibig-validated.qmd
+        - text: "Export Formats"
+          href: export-formats.qmd
+        - text: "Glossary"
+          href: glossary.qmd
+
+    - title: "Tutorials"
+      contents:
+        - text: "Tutorials"
+          href: tutorials-index.qmd
+
+    - title: "About"
+      contents:
+        - text: "About"
+          href: about.qmd
 
   page-footer:
-    left: "© 2024 EMBL-EBI"
+    left: "© 2026 EMBL-EBI"
     right:
       - icon: github
-        href: https://github.com/Finn-Lab/bgc_data_portal
+        href: https://github.com/EBI-Metagenomics/mgnify-bgcs-v2
 
 format:
   html:
@@ -54,14 +140,6 @@ format:
       - zephyr
       - styles.scss
     toc: true
+    toc-depth: 3
+    code-copy: true
     embed-resources: true
-
-# files:
-#   - index.qmd
-#   - landing-page-features.qmd
-#   - explore-bgcs.qmd
-#   - bgc-details.qmd
-#   - use-cases/index.qmd
-#   - use-cases/ripp-glycosyltransferase-toxin-antitoxin.ipynb
-#   - api-documentation.qmd
-#   - about.qmd

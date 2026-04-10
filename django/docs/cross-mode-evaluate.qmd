@@ -1,0 +1,95 @@
+---
+title: "Cross-Mode Transitions from Evaluate"
+subtitle: "Move from a deep assessment to broader exploration or targeted search"
+---
+
+## Goal
+
+To use the links and actions embedded in the Assembly and BGC Assessment Reports to pivot into Explore or Search mode without losing context. Evaluate mode gives you a deep view of a single asset; cross-mode transitions let you zoom back out to see the broader landscape around that asset.
+
+## When to use cross-mode transitions
+
+Use these transitions when:
+
+- You have just read an assessment report and want to see what other assemblies share a similar biosynthetic profile.
+- A BGC report revealed an interesting Gene Cluster Family (GCF) and you want to browse all members of that family.
+- The report mentions that a type strain carries a similar BGC and you want to find that strain in the database.
+- You want to search for BGCs with a domain architecture similar to the one highlighted in the report.
+
+## Available transitions
+
+### From the Assembly Assessment Report
+
+The Assembly Assessment Report contains several clickable links and action buttons that take you to other modes:
+
+#### Browse Similar Assemblies (Evaluate to Explore)
+
+At the bottom of the BGC Embeddings Map section, click **Browse Similar Assemblies**. This switches the dashboard to Explore mode with the following pre-applied settings:
+
+- The Assembly Space Map centres on the evaluated assembly's position and highlights its nearest neighbours.
+- The filter panel is pre-populated with the evaluated assembly's biome and taxonomic lineage, so you see organisms from a similar ecological context.
+- The Assembly Roster sorts by proximity to the evaluated assembly in embedding space.
+
+This transition answers the question: *what other assemblies in the database look like this one, and are any of them easier to work with?*
+
+#### Find in Purchasable Strains (Evaluate to Search with Type Strain filter)
+
+If the Redundancy Matrix shows BGCs in the "Known GCF, type strain available" category, click **Find in Purchasable Strains**. This switches to Search mode (or Explore mode, depending on context) with the **Type Strain** filter enabled. The result set is narrowed to assemblies that correspond to strains deposited in public culture collections --- organisms you can order and grow in your laboratory.
+
+This transition answers the question: *can I get a culturable organism that carries similar chemistry?*
+
+#### Explore a Specific BGC Class (Evaluate to Explore)
+
+In the scoped BGC Triad, each BGC class label is clickable. Clicking a class label (for example, "Polyketide" or "RiPP") switches to Explore mode with the BGC Class filter set to that class. This lets you see the full landscape of that BGC class across the database, with the evaluated assembly highlighted.
+
+This transition answers the question: *how does this assembly's polyketide (or NRP, or RiPP, etc.) compare with all others of the same class?*
+
+### From the BGC Assessment Report
+
+#### Browse GCF Members (Evaluate to Explore)
+
+In the GCF Placement section, click the **family ID** link or the **Browse Family** button. This switches to Explore mode with a filter that restricts the BGC Roster to members of the selected GCF. You can then scroll through all family members, compare their novelty scores, and see which assemblies carry them.
+
+This transition answers the question: *what do the other members of this gene cluster family look like, and where are they found?*
+
+#### Search by Domain Architecture (Evaluate to Search)
+
+In the Domain Architecture Differential section, click **Search Similar Architectures**. This switches to Search mode and pre-populates the Domain Query with the core domains from the evaluated BGC. The query runs automatically, returning BGCs across the database that share the same enzymatic backbone.
+
+This transition answers the question: *what other BGCs in the database use the same core enzymes?*
+
+#### View Nearest MIBiG Entry (Evaluate to external)
+
+In the Domain Architecture Comparison section, the MIBiG accession is a hyperlink that opens the corresponding entry on the [MIBiG website](https://mibig.secondarymetabolites.org/) in a new tab. This is not a mode transition within the platform, but it provides essential context --- the MIBiG entry contains compound structures, bioactivity data, and literature references for the nearest validated BGC.
+
+#### Find Parent Assembly (Evaluate to Evaluate)
+
+At the top of the BGC report, the parent assembly accession is clickable. Clicking it generates a new Assembly Assessment Report, replacing the BGC report. This lets you step up from a single gene cluster to the organism that carries it.
+
+This transition answers the question: *is the organism that carries this BGC worth pursuing as a whole, or is this one BGC its only interesting feature?*
+
+## Step-by-step: pivoting from a BGC report to the GCF landscape
+
+1. **Evaluate a BGC** using any of the entry points described in [Evaluate a Database BGC](evaluate-db-bgc.qmd) or [Upload a BGC](upload-bgc.qmd).
+2. **Read the GCF Placement section.** Note the family ID and member count.
+3. **Click the family ID** or the **Browse Family** button.
+4. **The dashboard switches to Explore mode.** The BGC Roster now shows all members of the GCF, sorted by novelty score. The BGC Space Map highlights family members.
+5. **Sort and filter** to find the most novel or the most accessible members. For example, enable the Type Strain filter to see only family members from culturable organisms.
+6. **Select a different family member** and right-click to evaluate it, returning to Evaluate mode with a new report.
+
+## Tips
+
+- **Cross-mode transitions preserve your shortlist.** Any assemblies or BGCs you pinned before switching modes remain in your shortlist and are visible in the new mode.
+- **Use the browser back button.** After a cross-mode transition, your browser history contains the previous view. Click back to return to the assessment report without regenerating it.
+- **Chain transitions for deeper exploration.** A common workflow is: Evaluate BGC, browse GCF members (Explore), evaluate a different family member (Evaluate), and compare the two reports side by side in separate tabs.
+- **The Type Strain filter is your bridge to the bench.** Whenever a report suggests interesting chemistry, use "Find in Purchasable Strains" to check whether a convenient organism already exists.
+
+## Related pages
+
+- [Evaluate Overview](evaluate-overview.qmd) --- all entry points and the general Evaluate workflow
+- [Assembly Assessment Report](assembly-report.qmd) --- the report you are transitioning from (assembly)
+- [BGC Assessment Report](bgc-report.qmd) --- the report you are transitioning from (BGC)
+- [Explore Assemblies](explore-overview.qmd) --- the mode you transition into for browsing
+- [Search BGCs](search-overview.qmd) --- the mode you transition into for querying
+- [GCF Explained](gcf-explained.qmd) --- background on Gene Cluster Families
+- [Glossary](glossary.qmd) --- quick definitions of all terms
