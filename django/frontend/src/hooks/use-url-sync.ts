@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useModeStore } from "@/stores/mode-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useSelectionStore } from "@/stores/selection-store";
+import { useQueryStore } from "@/stores/query-store";
 
 export function useUrlSync() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -42,7 +43,27 @@ export function useUrlSync() {
     if (assemblyId) {
       useSelectionStore.getState().setActiveAssemblyId(Number(assemblyId));
     }
-  }, [searchParams]);
+
+    // Auto-run query when redirected from landing page keyword search
+    const autoRun = searchParams.get("auto_run");
+    if (autoRun === "true") {
+      const currentMode = useModeStore.getState().mode;
+      if (currentMode === "query") {
+        useQueryStore.getState().setDomainQueryTriggered(true);
+      } else {
+        useFilterStore.getState().runExploreQuery();
+      }
+      // Remove auto_run from URL so refreshing doesn't re-trigger
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("auto_run");
+          return next;
+        },
+        { replace: true }
+      );
+    }
+  }, [searchParams, setSearchParams]);
 
   // Write store changes to URL
   useEffect(() => {

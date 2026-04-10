@@ -26,7 +26,7 @@ def _build_result(
 ) -> dict:
     """Build the resolver result dict with a dashboard redirect URL."""
     base = getattr(settings, "FORCE_SCRIPT_NAME", "") or ""
-    params = urlencode({"mode": "query", filter_param: filter_value})
+    params = urlencode({"mode": "query", filter_param: filter_value, "auto_run": "true"})
     return {
         "redirect_url": f"{base}/dashboard/?{params}",
         "match_type": match_type,
