@@ -1,24 +1,25 @@
 .shepherd-element {
   z-index: 9999;
-  max-width: 360px;
+  max-width: 380px;
   border-radius: 0.5rem;
-  border: 1px solid hsl(var(--border));
+  border: 2px solid #3b6fb6;
   background: hsl(var(--background));
-  box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  box-shadow: 0 0 0 4px rgba(59, 111, 182, 0.15), 0 10px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   font-family: "IBM Plex Sans", sans-serif;
 }
 
 .shepherd-text {
-  padding: 1rem;
+  padding: 1rem 1.25rem;
   font-size: 0.8125rem;
-  line-height: 1.5;
+  line-height: 1.6;
   color: hsl(var(--foreground));
 }
 
 .shepherd-text strong {
   display: block;
   margin-bottom: 0.25rem;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
+  color: #3b6fb6;
 }
 
 .shepherd-text p {
@@ -30,7 +31,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-  padding: 0 1rem 1rem;
+  padding: 0 1.25rem 1rem;
 }
 
 .shepherd-button {
@@ -38,19 +39,19 @@
   align-items: center;
   justify-content: center;
   height: 2rem;
-  padding: 0 0.75rem;
+  padding: 0 0.875rem;
   border-radius: 0.375rem;
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
   border: none;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: #3b6fb6;
+  color: #ffffff;
 }
 
 .shepherd-button:hover {
-  opacity: 0.9;
+  background: #2d5a9e;
 }
 
 .shepherd-button.shepherd-button-secondary {
@@ -67,31 +68,47 @@
 .shepherd-arrow,
 .shepherd-arrow::before {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .shepherd-arrow::before {
   content: "";
   transform: rotate(45deg);
   background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
+  border: 2px solid #3b6fb6;
 }
 
 .shepherd-element[data-popper-placement^="top"] .shepherd-arrow {
-  bottom: -7px;
+  bottom: -8px;
+}
+.shepherd-element[data-popper-placement^="top"] .shepherd-arrow::before {
+  border-top: none;
+  border-left: none;
 }
 
 .shepherd-element[data-popper-placement^="bottom"] .shepherd-arrow {
-  top: -7px;
+  top: -8px;
+}
+.shepherd-element[data-popper-placement^="bottom"] .shepherd-arrow::before {
+  border-bottom: none;
+  border-right: none;
 }
 
 .shepherd-element[data-popper-placement^="left"] .shepherd-arrow {
-  right: -7px;
+  right: -8px;
+}
+.shepherd-element[data-popper-placement^="left"] .shepherd-arrow::before {
+  border-bottom: none;
+  border-left: none;
 }
 
 .shepherd-element[data-popper-placement^="right"] .shepherd-arrow {
-  left: -7px;
+  left: -8px;
+}
+.shepherd-element[data-popper-placement^="right"] .shepherd-arrow::before {
+  border-top: none;
+  border-right: none;
 }
 
 .shepherd-modal-overlay-container {
@@ -101,4 +118,11 @@
 .shepherd-has-active-tour .shepherd-target {
   position: relative;
   z-index: 9998;
+}
+
+/* Ensure the target highlight punches through the sidebar scroll container */
+.shepherd-modal-is-visible .shepherd-target {
+  outline: 3px solid #3b6fb6;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
 }

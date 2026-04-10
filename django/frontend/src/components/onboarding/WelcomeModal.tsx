@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,13 @@ import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useModeStore } from "@/stores/mode-store";
 import { Compass, Layers, Search, FlaskConical, Pin } from "lucide-react";
 
-const slides = [
+interface Slide {
+  icon: typeof Compass;
+  headline: string;
+  body: ReactNode;
+}
+
+const slides: Slide[] = [
   {
     icon: Compass,
     headline: "Find promising organisms for your bioprospecting effort, faster.",
@@ -20,13 +25,25 @@ const slides = [
   },
   {
     icon: Layers,
-    headline: "Start from what you know \u2014 or from what you don\u2019t.",
-    body: "Three modes, one platform. Explore Assemblies \u2014 browse and filter the full catalogue. Search BGCs \u2014 search by protein domain, sequence similarity, or chemical structure. Evaluate Asset \u2014 submit your own assembly or BGC for a structured comparison.",
+    headline: "Three modes, one platform.",
+    body: (
+      <ul className="mt-2 space-y-2 text-left text-sm text-muted-foreground">
+        <li><strong className="text-foreground">Explore Assemblies</strong> \u2014 Browse and filter the full assembly catalogue. Best when you have no prior hypothesis.</li>
+        <li><strong className="text-foreground">Search BGCs</strong> \u2014 Search by protein domain, sequence similarity, or chemical structure. Best when tracking a specific compound or enzymatic family.</li>
+        <li><strong className="text-foreground">Evaluate Asset</strong> \u2014 Submit your own assembly or BGC and get a structured comparison against the full database.</li>
+      </ul>
+    ),
   },
   {
     icon: Search,
     headline: "Two levels, always in view.",
-    body: "Each mode shows two linked panels: one for assemblies (organisms or environmental samples) and one for their BGCs (the gene clusters that make natural products). Selecting an assembly populates its BGC panel automatically.",
+    body: (
+      <ul className="mt-2 space-y-2 text-left text-sm text-muted-foreground">
+        <li><strong className="text-foreground">Assemblies</strong> \u2014 The organisms or environmental samples. Filter, sort, and shortlist them for screening decisions.</li>
+        <li><strong className="text-foreground">BGCs</strong> \u2014 The gene clusters that make natural products. Selecting an assembly populates its BGC panel automatically.</li>
+        <li><strong className="text-foreground">Linked panels</strong> \u2014 Shortlisting multiple assemblies merges their BGCs into one view.</li>
+      </ul>
+    ),
   },
   {
     icon: Pin,
@@ -56,16 +73,18 @@ export function WelcomeModal() {
 
   return (
     <Dialog open={showWelcome} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl">
         <DialogHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Icon className="h-6 w-6 text-primary" />
+          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+            <Icon className="h-8 w-8 text-primary" />
           </div>
-          <DialogTitle className="text-lg">{slide.headline}</DialogTitle>
+          <DialogTitle className="text-xl">{slide.headline}</DialogTitle>
           {slide.body && (
-            <DialogDescription className="text-sm leading-relaxed">
-              {slide.body}
-            </DialogDescription>
+            typeof slide.body === "string" ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">{slide.body}</p>
+            ) : (
+              slide.body
+            )
           )}
         </DialogHeader>
 
