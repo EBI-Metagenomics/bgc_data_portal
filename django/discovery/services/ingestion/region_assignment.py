@@ -93,7 +93,7 @@ class RegionAssigner:
         ]
 
     def _create_region(self, contig_id: int, start: int, end: int) -> _Region:
-        obj = DashboardRegion.objects.create(
+        obj, _ = DashboardRegion.objects.get_or_create(
             contig_id=contig_id,
             start_position=start,
             end_position=end,
