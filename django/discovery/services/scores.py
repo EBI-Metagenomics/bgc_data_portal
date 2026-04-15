@@ -283,9 +283,9 @@ def _compute_percentile_ranks() -> None:
             FROM (
                 SELECT
                     id,
-                    ROUND(100.0 * PERCENT_RANK() OVER (ORDER BY bgc_novelty_score), 2) AS pctl_novelty,
-                    ROUND(100.0 * PERCENT_RANK() OVER (ORDER BY bgc_diversity_score), 2) AS pctl_diversity,
-                    ROUND(100.0 * PERCENT_RANK() OVER (ORDER BY bgc_density), 2) AS pctl_density
+                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_novelty_score))::numeric, 2) AS pctl_novelty,
+                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_diversity_score))::numeric, 2) AS pctl_diversity,
+                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_density))::numeric, 2) AS pctl_density
                 FROM discovery_assembly
             ) AS sub
             WHERE a.id = sub.id
