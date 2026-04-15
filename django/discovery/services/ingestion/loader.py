@@ -29,7 +29,7 @@ import logging
 import struct
 from pathlib import Path
 
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, Max
 from django.db.models.expressions import RawSQL
 
 from discovery.models import (
@@ -818,10 +818,17 @@ def compute_catalog_counts() -> None:
         batch_size=BATCH_SIZE,
     )
 
-    # Domain counts
+    # Domain counts — group by acc only so each acc maps to exactly one row,
+    # avoiding UniqueViolation when the same acc appears with different names
+    # across data batches (e.g. casing/punctuation drift between runs).
     domain_counts = (
-        BgcDomain.objects.values("domain_acc", "domain_name", "ref_db")
-        .annotate(cnt=Count("bgc_id", distinct=True))
+        BgcDomain.objects
+        .values("domain_acc")
+        .annotate(
+            cnt=Count("bgc_id", distinct=True),
+            domain_name=Max("domain_name"),
+            ref_db=Max("ref_db"),
+        )
     )
     DashboardDomain.objects.all().delete()
     DashboardDomain.objects.bulk_create(
