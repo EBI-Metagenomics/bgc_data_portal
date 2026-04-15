@@ -38,6 +38,7 @@ from discovery.models import (
     DashboardGCF,
     DashboardAssembly,
     DashboardNaturalProduct,
+    DiscoveryStats,
     NaturalProductChemOntClass,
     PrecomputedStats,
 )
@@ -67,6 +68,7 @@ from discovery.api_schemas import (
     ValidatedReferencePoint,
     ChemOntAnnotationNode,
     ChemOntClassNode,
+    DiscoveryStatsResponse,
     NaturalProductSummary,
     NpClassLevel,
     PaginatedDomainResponse,
@@ -1941,3 +1943,15 @@ def upload_for_assessment(request):
         result = assess_uploaded_assembly.delay(upload_key)
 
     return 202, AssessmentAccepted(task_id=result.id, asset_type=upload_type)
+
+
+# ── Platform overview ─────────────────────────────────────────────────────────
+
+
+@discovery_router.get("/stats/", response=DiscoveryStatsResponse)
+def discovery_stats(request):
+    """Latest Discovery Platform overview counts for the Run Query card."""
+    latest = DiscoveryStats.objects.order_by("-created_at").first()
+    if latest is None:
+        return DiscoveryStatsResponse()
+    return DiscoveryStatsResponse(**latest.stats, updated_at=latest.updated_at)

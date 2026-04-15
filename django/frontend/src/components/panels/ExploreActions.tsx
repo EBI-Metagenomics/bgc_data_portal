@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useFilterStore } from "@/stores/filter-store";
 import { Play } from "lucide-react";
+import { PlatformStats } from "@/components/panels/PlatformStats";
 
 export function ExploreActions() {
   const filters = useFilterStore();
@@ -38,6 +39,7 @@ export function ExploreActions() {
           </span>
         )}
       </div>
+      <PlatformStats />
     </div>
   );
 }

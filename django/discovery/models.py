@@ -726,3 +726,27 @@ class PrecomputedStats(models.Model):
 
     def __str__(self):
         return self.key
+
+
+# ── Append-only platform overview snapshots ────────────────────────────────────
+
+
+class DiscoveryStats(models.Model):
+    """Append-only snapshot of high-level Discovery Platform counts.
+
+    Populated by the ``update_discovery_stats`` management command and the
+    matching Celery task.  The latest row is surfaced via the
+    ``/api/dashboard/stats/`` endpoint and rendered in the Run Query card.
+    """
+
+    id = models.AutoField(primary_key=True)
+    stats = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "discovery_stats"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"DiscoveryStats id={self.pk} at {self.created_at.isoformat()}"

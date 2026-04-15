@@ -1,5 +1,6 @@
 """Pydantic schemas for the Discovery Platform API."""
 
+from datetime import datetime
 from typing import Optional
 
 from ninja import Schema
@@ -564,3 +565,15 @@ class BgcAssessmentResponse(Schema):
     submitted_domains: list[DomainArchitectureItem] = []
     nearest_validated_accession: Optional[str] = None
     nearest_validated_bgc_id: Optional[int] = None
+
+
+# ── Platform overview ─────────────────────────────────────────────────────────
+
+
+class DiscoveryStatsResponse(Schema):
+    genomes: int = 0
+    metagenomes: int = 0
+    validated_bgcs: int = 0
+    regions: int = 0
+    total_bgc_predictions: int = 0
+    updated_at: Optional[datetime] = None

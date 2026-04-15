@@ -7,6 +7,7 @@ import { useChemicalQuery } from "@/hooks/use-chemical-query";
 import { useSequenceQuery } from "@/hooks/use-sequence-query";
 import { useSimilarBgcQuery } from "@/hooks/use-similar-bgc-query";
 import { Play, Loader2 } from "lucide-react";
+import { PlatformStats } from "@/components/panels/PlatformStats";
 
 export function QueryActions() {
   const similarBgcSourceId = useQueryStore((s) => s.similarBgcSourceId);
@@ -108,6 +109,7 @@ export function QueryActions() {
           )}
         </div>
       )}
+      <PlatformStats />
     </div>
   );
 }

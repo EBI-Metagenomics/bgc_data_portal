@@ -11,10 +11,12 @@ from collections import defaultdict
 from django.db.models import Avg, Count, Q
 
 from discovery.models import (
+    AssemblyType,
     BgcDomain,
     DashboardBgc,
     DashboardAssembly,
     DashboardNaturalProduct,
+    DashboardRegion,
     NaturalProductChemOntClass,
     PrecomputedStats,
 )
@@ -303,3 +305,21 @@ def _build_chemont_sunburst(bgc_qs) -> list[dict]:
         }
 
     return list(nodes.values())
+
+
+# ── Platform overview ─────────────────────────────────────────────────────────
+
+
+def generate_discovery_stats() -> dict:
+    """High-level Discovery Platform counts shown in the Run Query card."""
+    return {
+        "genomes": DashboardAssembly.objects.filter(
+            assembly_type=AssemblyType.GENOME
+        ).count(),
+        "metagenomes": DashboardAssembly.objects.filter(
+            assembly_type=AssemblyType.METAGENOME
+        ).count(),
+        "validated_bgcs": DashboardBgc.objects.filter(is_validated=True).count(),
+        "regions": DashboardRegion.objects.count(),
+        "total_bgc_predictions": DashboardBgc.objects.count(),
+    }
