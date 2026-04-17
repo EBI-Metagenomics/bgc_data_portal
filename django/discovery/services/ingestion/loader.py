@@ -27,6 +27,7 @@ import base64
 import csv
 import logging
 import struct
+import sys
 from pathlib import Path
 
 from django.db.models import Avg, Count, Max
@@ -269,6 +270,7 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
     total = 0
 
     with open(path, newline="") as f:
+        csv.field_size_limit(sys.maxsize)
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
             contig_sha = row["contig_sha256"]
