@@ -591,6 +591,119 @@ class DashboardGCF(models.Model):
         return self.family_id
 
 
+# ── BGC Clustering ───────────────────────────────────────────────────────────────
+
+
+class ClusteringRun(models.Model):
+    """Versioned record of a full PCA → UMAP-20d → HDBSCAN → KNN → UMAP-2d run."""
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    n_samples = models.PositiveIntegerField()
+    pca_components = models.PositiveSmallIntegerField()
+    umap_n_neighbors = models.PositiveSmallIntegerField()
+    umap_min_dist = models.FloatField()
+    umap_n_components = models.PositiveSmallIntegerField()
+    umap_metric = models.CharField(max_length=50)
+    hdbscan_min_cluster_size = models.PositiveSmallIntegerField()
+    hdbscan_min_samples = models.PositiveSmallIntegerField()
+    knn_k = models.PositiveSmallIntegerField()
+
+    sklearn_version = models.CharField(max_length=50)
+    umap_version = models.CharField(max_length=50)
+    hdbscan_version = models.CharField(max_length=50)
+
+    n_bgcs_sampled = models.PositiveIntegerField(default=0)
+    n_clusters_found = models.PositiveIntegerField(default=0)
+    n_noise_points = models.PositiveIntegerField(default=0)
+    n_bgcs_classified = models.PositiveIntegerField(default=0)
+
+    pca_blob = models.BinaryField()
+    umap_blob = models.BinaryField()
+    hdbscan_blob = models.BinaryField()
+    knn_blob = models.BinaryField()
+    umap2d_blob = models.BinaryField()
+
+    sha256 = models.CharField(max_length=64, unique=True)
+
+    class Meta:
+        db_table = "discovery_clustering_run"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"ClusteringRun {self.pk} ({self.created_at:%Y-%m-%d})"
+
+
+class BgcCluster(models.Model):
+    """One HDBSCAN cluster from a ClusteringRun."""
+
+    clustering_run = models.ForeignKey(
+        ClusteringRun,
+        on_delete=models.CASCADE,
+        related_name="clusters",
+    )
+    cluster_id = models.IntegerField(help_text="Raw HDBSCAN label (-1 = noise)")
+    label = models.CharField(
+        max_length=255,
+        help_text="ltree-safe label, e.g. 'cluster.0042' or 'cluster.noise'",
+    )
+    n_bgcs = models.PositiveIntegerField(default=0)
+    n_validated = models.PositiveIntegerField(default=0)
+    representative_bgc = models.ForeignKey(
+        DashboardBgc,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="representative_of_clusters",
+    )
+
+    class Meta:
+        db_table = "discovery_bgc_cluster"
+        unique_together = [("clustering_run", "cluster_id")]
+        indexes = [
+            models.Index(
+                fields=["clustering_run", "cluster_id"],
+                name="idx_bgccluster_run_id",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Cluster {self.cluster_id} (run {self.clustering_run_id})"
+
+
+class ClusterAssignment(models.Model):
+    """Assignment of a single DashboardBgc to a BgcCluster."""
+
+    run = models.ForeignKey(
+        ClusteringRun,
+        on_delete=models.CASCADE,
+        related_name="assignments",
+    )
+    bgc = models.ForeignKey(
+        DashboardBgc,
+        on_delete=models.CASCADE,
+        related_name="cluster_assignments",
+    )
+    cluster = models.ForeignKey(
+        BgcCluster,
+        on_delete=models.CASCADE,
+        related_name="assignments",
+    )
+    is_noise = models.BooleanField(default=False)
+    assigned_by_knn = models.BooleanField(
+        default=False,
+        help_text="True if assigned via KNN (not in training sample)",
+    )
+
+    class Meta:
+        db_table = "discovery_cluster_assignment"
+        unique_together = [("run", "bgc")]
+        indexes = [
+            models.Index(fields=["run", "bgc"], name="idx_ca_run_bgc"),
+            models.Index(fields=["run", "cluster"], name="idx_ca_run_cluster"),
+        ]
+
+
 # ── Natural Product ──────────────────────────────────────────────────────────────
 
 

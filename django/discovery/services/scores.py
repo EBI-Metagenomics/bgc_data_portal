@@ -435,7 +435,7 @@ def _recompute_umap() -> None:
     latest_model = UMAPTransform.objects.order_by("-created_at").first()
     if latest_model is None:
         logger.warning("No UMAP model found — skipping UMAP recomputation. "
-                        "Run 'train_umap_model' to create one.")
+                        "Run 'run_bgc_clustering' to create one.")
         return
 
     import pickle

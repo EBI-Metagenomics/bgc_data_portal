@@ -614,15 +614,28 @@ This command computes:
 | `pctl_novelty`, `pctl_diversity`, `pctl_density` | `DashboardAssembly` | `PERCENT_RANK()` window function |
 | `DashboardGCF` table | `DashboardGCF` | Rebuilt from `gene_cluster_family` ltree grouping on BGCs |
 | `DashboardBgcClass`, `DashboardDomain` | Catalog tables | Rebuilt from BGC/domain data |
-| UMAP coordinates | `DashboardBgc.umap_x/y` | Transform via saved UMAP model (if available) |
+| UMAP coordinates | `DashboardBgc.umap_x/y` | Derived from UMAP-2d step in `run_bgc_clustering` |
 
-### UMAP Model Training
+### BGC Clustering and GCF Annotation
 
 ```bash
-python manage.py train_umap_model --n-samples 50000 --stratify-by-gcf --apply
+python manage.py run_bgc_clustering --apply
 ```
 
-Trains a PCA + UMAP pipeline on sampled BGC embeddings, saves the model to `UMAPTransform`, and optionally transforms all embeddings.
+Trains a full clustering pipeline on sampled BGC embeddings. This is the **primary mechanism for GCF annotation** and for generating visualization coordinates.
+
+| Step | Output |
+|------|--------|
+| PCA (50 components, whiten=True) | Reduced embeddings |
+| UMAP-20d (n\_neighbors=30, min\_dist=0.0) | Clustering space |
+| HDBSCAN (min\_cluster\_size=20) | Cluster labels per BGC |
+| KNN (k=5) | Assigns all remaining BGCs to a cluster |
+| UMAP-2d | Visualization coordinates → `DashboardBgc.umap_x/y` |
+| GCF annotation | Each cluster → `DashboardGCF` record + `DashboardBgc.gene_cluster_family` |
+
+Trained models are stored as a `ClusteringRun` record. The KNN model is also applied at assessment time to assign cluster/GCF membership to user-uploaded BGCs.
+
+Key options: `--n-samples` (default 100000), `--apply` (update DB after clustering), plus individual hyperparameter flags for each step (see `--help`).
 
 ---
 

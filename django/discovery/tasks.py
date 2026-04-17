@@ -455,6 +455,339 @@ def _apply_umap_transform(model_bundle: dict) -> int:
     return updated
 
 
+@shared_task(name="discovery.tasks.run_bgc_clustering", bind=True, acks_late=True)
+def run_bgc_clustering_task(
+    self,
+    n_samples: int = 100_000,
+    pca_components: int = 50,
+    umap_n_neighbors: int = 30,
+    umap_min_dist: float = 0.0,
+    umap_n_components: int = 20,
+    umap_metric: str = "euclidean",
+    hdbscan_min_cluster_size: int = 20,
+    hdbscan_min_samples: int = 5,
+    knn_k: int = 5,
+    apply: bool = False,
+) -> dict:
+    """Full PCA → UMAP-20d → HDBSCAN → KNN → UMAP-2d clustering pipeline.
+
+    Supersedes train_umap_model_task. This is the primary mechanism for GCF
+    annotation and for generating DashboardBgc.umap_x/y visualization coordinates.
+    """
+    import pickle
+
+    import hdbscan as hdbscan_lib
+    import numpy as np
+    import sklearn
+    import umap as umap_lib
+
+    from discovery.models import (
+        BgcCluster,
+        ClusterAssignment,
+        ClusteringRun,
+        DashboardBgc,
+    )
+    from discovery.services.clustering import (
+        build_training_sample,
+        classify_remaining,
+        compute_bundle_sha256,
+        pick_representative,
+        run_hdbscan,
+        run_pca,
+        run_umap,
+        run_umap_2d,
+        train_knn,
+    )
+
+    task_id = self.request.id
+    log.info("run_bgc_clustering starting (task %s, n_samples=%d)", task_id, n_samples)
+
+    # ── 1. Sample embeddings ─────────────────────────────────────────────
+    bgc_ids, embeddings = build_training_sample(n_samples)
+    if not bgc_ids:
+        log.error("run_bgc_clustering: no embeddings found (task %s)", task_id)
+        return {"error": "no embeddings found"}
+
+    # ── 2. PCA ───────────────────────────────────────────────────────────
+    pca_reduced, pca = run_pca(embeddings, n_components=pca_components)
+
+    # ── 3. UMAP-20d ──────────────────────────────────────────────────────
+    umap_20d, umap_reducer = run_umap(
+        pca_reduced,
+        n_neighbors=umap_n_neighbors,
+        min_dist=umap_min_dist,
+        n_components=umap_n_components,
+        metric=umap_metric,
+    )
+
+    # ── 4. HDBSCAN ───────────────────────────────────────────────────────
+    labels, hdbscan_model = run_hdbscan(
+        umap_20d,
+        min_cluster_size=hdbscan_min_cluster_size,
+        min_samples=hdbscan_min_samples,
+    )
+
+    # ── 5. KNN ───────────────────────────────────────────────────────────
+    knn = train_knn(umap_20d, labels, k=knn_k)
+
+    # ── 6. UMAP-2d for visualization ─────────────────────────────────────
+    umap_2d, umap2d_reducer = run_umap_2d(umap_20d)
+
+    # ── 7. Pickle + sha256 ───────────────────────────────────────────────
+    pca_blob = pickle.dumps(pca)
+    umap_blob = pickle.dumps(umap_reducer)
+    hdbscan_blob = pickle.dumps(hdbscan_model)
+    knn_blob = pickle.dumps(knn)
+    umap2d_blob = pickle.dumps(umap2d_reducer)
+    sha = compute_bundle_sha256(pca_blob, umap_blob, hdbscan_blob, knn_blob, umap2d_blob)
+
+    n_clusters = int(len(set(labels)) - (1 if -1 in labels else 0))
+    n_noise = int((labels == -1).sum())
+
+    # ── 8. Persist ClusteringRun ─────────────────────────────────────────
+    run, created = ClusteringRun.objects.update_or_create(
+        sha256=sha,
+        defaults={
+            "n_samples": n_samples,
+            "pca_components": pca_components,
+            "umap_n_neighbors": umap_n_neighbors,
+            "umap_min_dist": umap_min_dist,
+            "umap_n_components": umap_n_components,
+            "umap_metric": umap_metric,
+            "hdbscan_min_cluster_size": hdbscan_min_cluster_size,
+            "hdbscan_min_samples": hdbscan_min_samples,
+            "knn_k": knn_k,
+            "sklearn_version": sklearn.__version__,
+            "umap_version": umap_lib.__version__,
+            "hdbscan_version": hdbscan_lib.__version__,
+            "n_bgcs_sampled": len(bgc_ids),
+            "n_clusters_found": n_clusters,
+            "n_noise_points": n_noise,
+            "pca_blob": pca_blob,
+            "umap_blob": umap_blob,
+            "hdbscan_blob": hdbscan_blob,
+            "knn_blob": knn_blob,
+            "umap2d_blob": umap2d_blob,
+        },
+    )
+    log.info("%s ClusteringRun pk=%s (task %s)", "Created" if created else "Updated", run.pk, task_id)
+
+    # ── 9. Create BgcCluster records ─────────────────────────────────────
+    unique_labels = sorted(set(labels))
+    label_to_cluster: dict[int, BgcCluster] = {}
+
+    # Build per-cluster bgc_id lists and 20d coord arrays
+    label_bgc_ids: dict[int, list[int]] = {lbl: [] for lbl in unique_labels}
+    label_coords: dict[int, list] = {lbl: [] for lbl in unique_labels}
+    for i, (bgc_id, lbl) in enumerate(zip(bgc_ids, labels)):
+        label_bgc_ids[int(lbl)].append(bgc_id)
+        label_coords[int(lbl)].append(umap_20d[i])
+
+    BgcCluster.objects.filter(clustering_run=run).delete()
+    cluster_objects = []
+    for lbl in unique_labels:
+        lbl_int = int(lbl)
+        ids_in_cluster = label_bgc_ids[lbl_int]
+        coords_in_cluster = np.array(label_coords[lbl_int])
+        validated_count = DashboardBgc.objects.filter(
+            pk__in=ids_in_cluster, is_validated=True
+        ).count()
+        rep_id = pick_representative(ids_in_cluster, coords_in_cluster)
+        rep_bgc = DashboardBgc.objects.filter(pk=rep_id).first()
+        label_str = "cluster.noise" if lbl_int == -1 else f"cluster.{lbl_int:04d}"
+        cluster_objects.append(
+            BgcCluster(
+                clustering_run=run,
+                cluster_id=lbl_int,
+                label=label_str,
+                n_bgcs=len(ids_in_cluster),
+                n_validated=validated_count,
+                representative_bgc=rep_bgc,
+            )
+        )
+
+    BgcCluster.objects.bulk_create(cluster_objects)
+    for c in BgcCluster.objects.filter(clustering_run=run):
+        label_to_cluster[c.cluster_id] = c
+
+    # ── 10. ClusterAssignment for training sample ─────────────────────────
+    ClusterAssignment.objects.filter(run=run).delete()
+    assignment_batch: list[ClusterAssignment] = []
+    BATCH = 10_000
+    for bgc_id, lbl, xy in zip(bgc_ids, labels, umap_2d):
+        lbl_int = int(lbl)
+        cluster = label_to_cluster.get(lbl_int)
+        if cluster is None:
+            continue
+        bgc_obj = DashboardBgc.objects.filter(pk=bgc_id).first()
+        if bgc_obj is None:
+            continue
+        assignment_batch.append(
+            ClusterAssignment(
+                run=run,
+                bgc=bgc_obj,
+                cluster=cluster,
+                is_noise=(lbl_int == -1),
+                assigned_by_knn=False,
+            )
+        )
+        bgc_obj.umap_x = float(xy[0])
+        bgc_obj.umap_y = float(xy[1])
+        if len(assignment_batch) >= BATCH:
+            ClusterAssignment.objects.bulk_create(assignment_batch, ignore_conflicts=True)
+            DashboardBgc.objects.bulk_update(
+                [a.bgc for a in assignment_batch], ["umap_x", "umap_y"], batch_size=BATCH
+            )
+            assignment_batch.clear()
+
+    if assignment_batch:
+        ClusterAssignment.objects.bulk_create(assignment_batch, ignore_conflicts=True)
+        DashboardBgc.objects.bulk_update(
+            [a.bgc for a in assignment_batch], ["umap_x", "umap_y"], batch_size=BATCH
+        )
+
+    # ── 11-14. Classify + update remaining BGCs via KNN ──────────────────
+    excluded_ids = set(bgc_ids)
+    knn_results = classify_remaining(
+        knn, pca, umap_reducer, umap2d_reducer, excluded_ids
+    )
+    run.n_bgcs_classified = len(knn_results)
+    run.save(update_fields=["n_bgcs_classified"])
+
+    knn_batch: list[ClusterAssignment] = []
+    bgc_umap_batch: list[DashboardBgc] = []
+    for bgc_id, (lbl_int, x, y) in knn_results.items():
+        cluster = label_to_cluster.get(lbl_int)
+        if cluster is None:
+            continue
+        bgc_obj = DashboardBgc.objects.filter(pk=bgc_id).first()
+        if bgc_obj is None:
+            continue
+        knn_batch.append(
+            ClusterAssignment(
+                run=run,
+                bgc=bgc_obj,
+                cluster=cluster,
+                is_noise=(lbl_int == -1),
+                assigned_by_knn=True,
+            )
+        )
+        bgc_obj.umap_x = x
+        bgc_obj.umap_y = y
+        bgc_umap_batch.append(bgc_obj)
+        if len(knn_batch) >= BATCH:
+            ClusterAssignment.objects.bulk_create(knn_batch, ignore_conflicts=True)
+            DashboardBgc.objects.bulk_update(bgc_umap_batch, ["umap_x", "umap_y"], batch_size=BATCH)
+            knn_batch.clear()
+            bgc_umap_batch.clear()
+
+    if knn_batch:
+        ClusterAssignment.objects.bulk_create(knn_batch, ignore_conflicts=True)
+        DashboardBgc.objects.bulk_update(bgc_umap_batch, ["umap_x", "umap_y"], batch_size=BATCH)
+
+    # ── 15. Apply GCF assignments if requested ────────────────────────────
+    gcf_updated = 0
+    if apply:
+        gcf_updated = _apply_gcf_assignments(run)
+        log.info("GCF annotation: %d BGCs updated", gcf_updated)
+
+    result = {
+        "task_id": task_id,
+        "run_pk": run.pk,
+        "sha256": sha,
+        "n_bgcs_sampled": len(bgc_ids),
+        "n_clusters_found": n_clusters,
+        "n_noise_points": n_noise,
+        "n_bgcs_classified": len(knn_results),
+        "gcf_updated": gcf_updated,
+    }
+    log.info("run_bgc_clustering complete: %s", result)
+    return result
+
+
+def _classify_with_knn(embedding: list[float]) -> dict:
+    """Transform a single 960-d embedding through the latest ClusteringRun's models.
+
+    Returns cluster metadata dict, or {} if no ClusteringRun exists yet.
+    Importable directly (not a task) for use in assessment services.
+    """
+    import pickle
+
+    import numpy as np
+
+    from discovery.models import BgcCluster, ClusteringRun
+
+    run = ClusteringRun.objects.order_by("-created_at").first()
+    if run is None:
+        return {}
+
+    pca = pickle.loads(bytes(run.pca_blob))
+    umap_20d = pickle.loads(bytes(run.umap_blob))
+    knn = pickle.loads(bytes(run.knn_blob))
+    umap_2d = pickle.loads(bytes(run.umap2d_blob))
+
+    arr = np.array([embedding], dtype=np.float32)
+    arr = pca.transform(arr)
+    arr20 = umap_20d.transform(arr)
+    arr2 = umap_2d.transform(arr20)
+    label_int = int(knn.predict(arr20)[0])
+
+    cluster = BgcCluster.objects.filter(
+        clustering_run=run, cluster_id=label_int
+    ).first()
+    label_str = (
+        cluster.label if cluster
+        else ("cluster.noise" if label_int == -1 else f"cluster.{label_int:04d}")
+    )
+
+    return {
+        "cluster_id": label_int,
+        "cluster_label": label_str,
+        "umap_x": float(arr2[0, 0]),
+        "umap_y": float(arr2[0, 1]),
+        "run_id": run.pk,
+        "assigned_by_knn": True,
+    }
+
+
+def _apply_gcf_assignments(run: "ClusteringRun") -> int:  # noqa: F821
+    """Create/update DashboardGCF records and update DashboardBgc.gene_cluster_family."""
+    from discovery.models import BgcCluster, ClusterAssignment, DashboardBgc, DashboardGCF
+
+    BATCH = 10_000
+
+    for cluster in BgcCluster.objects.filter(clustering_run=run).select_related(
+        "representative_bgc"
+    ):
+        DashboardGCF.objects.update_or_create(
+            family_id=cluster.label,
+            defaults={
+                "member_count": cluster.n_bgcs,
+                "validated_count": cluster.n_validated,
+                "representative_bgc": cluster.representative_bgc,
+            },
+        )
+
+    bgc_batch: list[DashboardBgc] = []
+    updated = 0
+    for assignment in (
+        ClusterAssignment.objects.filter(run=run)
+        .select_related("bgc", "cluster")
+        .iterator(chunk_size=BATCH)
+    ):
+        assignment.bgc.gene_cluster_family = assignment.cluster.label
+        bgc_batch.append(assignment.bgc)
+        updated += 1
+        if len(bgc_batch) >= BATCH:
+            DashboardBgc.objects.bulk_update(bgc_batch, ["gene_cluster_family"], batch_size=BATCH)
+            bgc_batch.clear()
+
+    if bgc_batch:
+        DashboardBgc.objects.bulk_update(bgc_batch, ["gene_cluster_family"], batch_size=BATCH)
+
+    return updated
+
+
 @shared_task(name="discovery.tasks.sequence_similarity_search", bind=True, acks_late=True)
 def sequence_similarity_search(self, sequence: str, similarity_threshold: float) -> dict[int, float]:
     """Embed a protein sequence with ESM-C and find BGCs with similar proteins.

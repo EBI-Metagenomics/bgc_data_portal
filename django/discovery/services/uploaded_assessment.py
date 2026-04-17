@@ -151,6 +151,15 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
             nearest_validated_accession = ref
             nearest_validated_bgc_id = nv_bgc_id
 
+    # ── Cluster / GCF placement via KNN ─────────────────────────────────
+    cluster_info: dict = {}
+    try:
+        from discovery.tasks import _classify_with_knn
+
+        cluster_info = _classify_with_knn(embedding)
+    except Exception:
+        log.warning("Cluster assignment failed for uploaded BGC", exc_info=True)
+
     return {
         "bgc_id": -1,
         "accession": f"uploaded_bgc_{data.get('index', 0)}",
@@ -166,6 +175,9 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
         "submitted_domains": submitted_domains,
         "nearest_validated_accession": nearest_validated_accession,
         "nearest_validated_bgc_id": nearest_validated_bgc_id,
+        "cluster_id": cluster_info.get("cluster_id"),
+        "cluster_label": cluster_info.get("cluster_label"),
+        "cluster_run_id": cluster_info.get("run_id"),
     }
 
 

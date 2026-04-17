@@ -1,9 +1,18 @@
-"""Dispatch a UMAP training run to the Celery worker.
+"""DEPRECATED: Use ``run_bgc_clustering`` instead.
 
-Thin wrapper around `discovery.tasks.train_umap_model_task`. Heavy ML
-imports (sklearn, umap-learn) live inside the task, which runs on the
-worker image where those packages are installed.
+This command only trained a 2D UMAP for visualization. The new
+``run_bgc_clustering`` command runs the full PCA → UMAP-20d → HDBSCAN →
+KNN → UMAP-2d pipeline and is the primary mechanism for GCF annotation
+and visualization coordinate generation.
 """
+
+import warnings
+
+warnings.warn(
+    "train_umap_model is deprecated. Use 'run_bgc_clustering' instead.",
+    DeprecationWarning,
+    stacklevel=1,
+)
 
 from django.core.management.base import BaseCommand
 
