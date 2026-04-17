@@ -154,7 +154,13 @@ def load_detectors(data_dir: Path) -> dict[str, tuple[int, str]]:
                 )
             )
 
-    DashboardDetector.objects.bulk_create(rows_to_create, batch_size=BATCH_SIZE, ignore_conflicts=True)
+    DashboardDetector.objects.bulk_create(
+        rows_to_create,
+        batch_size=BATCH_SIZE,
+        update_conflicts=True,
+        unique_fields=["tool", "version"],
+        update_fields=["name", "tool_name_code", "version_sort_key"],
+    )
     lookup = {
         d.name: (d.id, d.tool_name_code)
         for d in DashboardDetector.objects.all()
@@ -202,7 +208,16 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
                 )
             )
 
-    DashboardAssembly.objects.bulk_create(rows, batch_size=BATCH_SIZE, ignore_conflicts=True)
+    DashboardAssembly.objects.bulk_create(
+        rows,
+        batch_size=BATCH_SIZE,
+        update_conflicts=True,
+        unique_fields=["assembly_accession"],
+        update_fields=[
+            "organism_name", "source", "assembly_type", "biome_path",
+            "is_type_strain", "type_strain_catalog_url", "assembly_size_mb", "url",
+        ],
+    )
     lookup = dict(
         DashboardAssembly.objects.values_list("assembly_accession", "id")
     )
@@ -247,7 +262,13 @@ def load_contigs(
                 )
             )
 
-    DashboardContig.objects.bulk_create(rows, batch_size=BATCH_SIZE, ignore_conflicts=True)
+    DashboardContig.objects.bulk_create(
+        rows,
+        batch_size=BATCH_SIZE,
+        update_conflicts=True,
+        unique_fields=["sequence_sha256"],
+        update_fields=["assembly", "accession", "length", "taxonomy_path", "source_contig_id"],
+    )
     lookup = dict(DashboardContig.objects.values_list("sequence_sha256", "id"))
     logger.info("Loaded %d contigs", len(lookup))
     return lookup
@@ -283,12 +304,16 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
             batch.append(ContigSequence(contig_id=contig_id, data=raw_zlib))
 
             if len(batch) >= BATCH_SIZE:
-                ContigSequence.objects.bulk_create(batch, ignore_conflicts=True)
+                ContigSequence.objects.bulk_create(
+                batch, update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
+            )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        ContigSequence.objects.bulk_create(batch, ignore_conflicts=True)
+        ContigSequence.objects.bulk_create(
+            batch, update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
+        )
         total += len(batch)
 
     logger.info("Loaded %d contig sequences", total)
@@ -398,12 +423,30 @@ def load_bgcs(
             )
 
             if len(batch) >= BATCH_SIZE:
-                DashboardBgc.objects.bulk_create(batch, ignore_conflicts=True)
+                DashboardBgc.objects.bulk_create(
+                    batch,
+                    update_conflicts=True,
+                    unique_fields=["contig", "start_position", "end_position", "detector"],
+                    update_fields=[
+                        "assembly", "classification_path", "novelty_score", "domain_novelty",
+                        "size_kb", "nearest_validated_accession", "nearest_validated_distance",
+                        "is_partial", "is_validated", "umap_x", "umap_y", "gene_cluster_family",
+                    ],
+                )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        DashboardBgc.objects.bulk_create(batch, ignore_conflicts=True)
+        DashboardBgc.objects.bulk_create(
+            batch,
+            update_conflicts=True,
+            unique_fields=["contig", "start_position", "end_position", "detector"],
+            update_fields=[
+                "assembly", "classification_path", "novelty_score", "domain_novelty",
+                "size_kb", "nearest_validated_accession", "nearest_validated_distance",
+                "is_partial", "is_validated", "umap_x", "umap_y", "gene_cluster_family",
+            ],
+        )
         total += len(batch)
 
     lookup = _build_bgc_lookup()
@@ -512,12 +555,16 @@ def load_cds_sequences(
             batch.append(CdsSequence(cds_id=cds_id, data=raw_zlib))
 
             if len(batch) >= BATCH_SIZE:
-                CdsSequence.objects.bulk_create(batch, ignore_conflicts=True)
+                CdsSequence.objects.bulk_create(
+                    batch, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+                )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        CdsSequence.objects.bulk_create(batch, ignore_conflicts=True)
+        CdsSequence.objects.bulk_create(
+            batch, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+        )
         total += len(batch)
 
     logger.info("Loaded %d CDS sequences", total)
@@ -564,12 +611,22 @@ def load_domains(
             )
 
             if len(batch) >= BATCH_SIZE:
-                BgcDomain.objects.bulk_create(batch, ignore_conflicts=True)
+                BgcDomain.objects.bulk_create(
+                    batch,
+                    update_conflicts=True,
+                    unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
+                    update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
+                )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        BgcDomain.objects.bulk_create(batch, ignore_conflicts=True)
+        BgcDomain.objects.bulk_create(
+            batch,
+            update_conflicts=True,
+            unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
+            update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
+        )
         total += len(batch)
 
     logger.info("Loaded %d domain rows", total)
@@ -602,12 +659,16 @@ def load_embeddings(
             batch.append(BgcEmbedding(bgc_id=bgc_id, vector=vector))
 
             if len(batch) >= BATCH_SIZE:
-                BgcEmbedding.objects.bulk_create(batch, ignore_conflicts=True)
+                BgcEmbedding.objects.bulk_create(
+                    batch, update_conflicts=True, unique_fields=["bgc"], update_fields=["vector"],
+                )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        BgcEmbedding.objects.bulk_create(batch, ignore_conflicts=True)
+        BgcEmbedding.objects.bulk_create(
+            batch, update_conflicts=True, unique_fields=["bgc"], update_fields=["vector"],
+        )
         total += len(batch)
 
     logger.info("Loaded %d BGC embeddings", total)
@@ -639,12 +700,22 @@ def load_protein_embeddings(data_dir: Path) -> int:
             )
 
             if len(batch) >= BATCH_SIZE:
-                ProteinEmbedding.objects.bulk_create(batch, ignore_conflicts=True)
+                ProteinEmbedding.objects.bulk_create(
+                    batch,
+                    update_conflicts=True,
+                    unique_fields=["protein_sha256"],
+                    update_fields=["vector"],
+                )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        ProteinEmbedding.objects.bulk_create(batch, ignore_conflicts=True)
+        ProteinEmbedding.objects.bulk_create(
+            batch,
+            update_conflicts=True,
+            unique_fields=["protein_sha256"],
+            update_fields=["vector"],
+        )
         total += len(batch)
 
     logger.info("Loaded %d protein embeddings", total)
@@ -749,14 +820,20 @@ def load_np_chemont_classes(
 
             if len(batch) >= BATCH_SIZE:
                 NaturalProductChemOntClass.objects.bulk_create(
-                    batch, ignore_conflicts=True
+                    batch,
+                    update_conflicts=True,
+                    unique_fields=["natural_product", "chemont_id"],
+                    update_fields=["chemont_name", "probability"],
                 )
                 total += len(batch)
                 batch.clear()
 
     if batch:
         NaturalProductChemOntClass.objects.bulk_create(
-            batch, ignore_conflicts=True
+            batch,
+            update_conflicts=True,
+            unique_fields=["natural_product", "chemont_id"],
+            update_fields=["chemont_name", "probability"],
         )
         total += len(batch)
 
