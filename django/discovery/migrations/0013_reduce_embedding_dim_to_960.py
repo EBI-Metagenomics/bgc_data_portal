@@ -31,6 +31,17 @@ class Migration(migrations.Migration):
                 "USING hnsw (vector halfvec_cosine_ops) WITH (m = 16, ef_construction = 512);"
             ),
         ),
+        # ── Clear existing 1152-dim data — cannot cast to 960-dim ───────────
+        # Old vectors (esmc_600m layer 29) are dimensionally incompatible with
+        # the new 960-dim schema; they must be re-ingested after this migration.
+        migrations.RunSQL(
+            sql="DELETE FROM discovery_bgc_embedding;",
+            reverse_sql="",
+        ),
+        migrations.RunSQL(
+            sql="DELETE FROM discovery_protein_embedding;",
+            reverse_sql="",
+        ),
         # ── Alter column dimensions 1152 → 960 ──────────────────────────────
         migrations.AlterField(
             model_name="bgcembedding",
