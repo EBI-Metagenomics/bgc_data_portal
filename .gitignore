@@ -63,3 +63,4 @@ node_modules/
 django/static/dashboard/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+CLAUDE.md

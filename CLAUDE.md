@@ -32,6 +32,7 @@ docker compose exec django python manage.py update_current_stats
 docker compose exec django python manage.py backfill_protein_embeddings
 ```
 
+
 ## Architecture
 
 ```
