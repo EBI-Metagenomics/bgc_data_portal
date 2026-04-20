@@ -64,7 +64,7 @@ ORIGIN
 
 2. **Locate the upload area** in the sidebar. Below the accession text field, you will see the drag-and-drop upload widget.
 
-3. **Select the BGC tab** in the upload widget. The widget has two sub-tabs: Assembly and BGC. Click the BGC tab. The accepted file type changes from `.tar.gz` to `.gbk` / `.gb`.
+3. **Select the BGC tab** in the upload widget. The widget has two sub-tabs: Assembly and BGC. Click the BGC tab. The accepted file type changes from `.tar.gz` / `.tgz` to `.gbk` / `.gb`.
 
 4. **Upload your GenBank file.** Drag the file onto the upload area, or click to open a file picker.
 

@@ -19,7 +19,7 @@ If the assembly you want to evaluate is already in the platform's database, use 
 
 ## Format requirements
 
-The platform accepts a compressed archive in `.tar.gz` format. The archive must contain one of the following directory structures:
+The platform accepts a compressed archive in `.tar.gz` or `.tgz` format. The archive must contain one of the following directory structures:
 
 ### Minimal format: FASTA only
 
@@ -56,12 +56,12 @@ If you include GenBank annotations and antiSMASH output, the platform can skip t
 
 2. **Locate the upload area.** In the sidebar, below the accession text field, you will see a dashed rectangle labelled "Drop archive here or click to browse". This is the upload widget.
 
-3. **Upload your archive.** Either drag your `.tar.gz` file from your file manager onto the upload area, or click the area to open a file picker and select the file. The widget shows the file name and size once the file is selected.
+3. **Upload your archive.** Either drag your `.tar.gz` / `.tgz` file from your file manager onto the upload area, or click the area to open a file picker and select the file. The widget shows the file name and size once the file is selected.
 
 4. **Click Upload.** The platform begins uploading the file. A progress bar shows the transfer status.
 
 5. **Wait for processing.** After upload completes, the platform extracts the archive, validates its contents, and runs the annotation pipeline. A status indicator shows the current step:
-   - *Extracting archive* --- unpacking the `.tar.gz` contents.
+   - *Extracting archive* --- unpacking the `.tar.gz` / `.tgz` contents.
    - *Predicting BGCs* --- running biosynthetic gene cluster prediction on the nucleotide sequences (skipped if antiSMASH output is included).
    - *Computing embeddings* --- generating protein-level embedding vectors for each predicted BGC.
    - *Scoring* --- computing novelty, diversity, and density scores and comparing them against the database.
@@ -91,7 +91,7 @@ The only difference is the **Uploaded** badge and a notice that the data is ephe
 
 - **Include antiSMASH output if you have it.** This dramatically reduces processing time and ensures the platform uses the same annotations you have already reviewed.
 - **Check your FASTA headers.** The platform uses the first whitespace-delimited token in each FASTA header as the contig identifier. Avoid special characters (semicolons, pipes) in contig names.
-- **Compress efficiently.** Use `tar -czf my_assembly.tar.gz my_assembly/` from the directory containing your assembly folder. The archive should unpack into a single top-level directory.
+- **Compress efficiently.** Use `tar -czf my_assembly.tar.gz my_assembly/` (or `.tgz`) from the directory containing your assembly folder. The archive should unpack into a single top-level directory.
 - **Large assemblies may time out.** If your assembly has more than 5,000 contigs, consider filtering to only the longest contigs (those most likely to contain complete BGCs) before uploading.
 - **Your data stays private.** The platform processes your upload in an isolated session. No data is written to the database or shared with other users. When you close the tab or evaluate another asset, the uploaded data is purged.
 

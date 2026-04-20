@@ -17,7 +17,7 @@ export function TypeStrainToggle() {
       />
       <Label htmlFor="type-strain" className="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
         <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-        Type strains only (purchasable)
+        Type strains only 
         <HelpTooltip tooltipKey="type_strain" side="right" />
       </Label>
     </div>

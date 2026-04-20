@@ -693,7 +693,7 @@ Content-Type: multipart/form-data
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `type` | string | **yes** | `"bgc"` (single BGC) or `"assembly"` (assembly bundle) |
-| `file` | file | **yes** | A `.tar.gz` archive containing TSV files (max **10 MB**) |
+| `file` | file | **yes** | A `.tar.gz` or `.tgz` archive containing TSV files (max **20 MB**) |
 
 **Response** (HTTP 202):
 
@@ -710,7 +710,7 @@ Poll `GET /api/dashboard/assess/status/{task_id}/` for results.
 
 ### Archive Structure
 
-The uploaded `.tar.gz` must contain **tab-separated** TSV files with a header row (UTF-8). Directory prefixes inside the archive are stripped — only basenames matter.
+The uploaded `.tar.gz` / `.tgz` must contain **tab-separated** TSV files with a header row (UTF-8). Directory prefixes inside the archive are stripped — only basenames matter.
 
 #### Single-BGC Upload (`type="bgc"`)
 
@@ -867,7 +867,7 @@ At least 1 row. Every `contig_sha256` in `bgcs.tsv` must reference a `sequence_s
 
 | Rule | Error condition |
 |------|-----------------|
-| Archive size | > 10 MB |
+| Archive size | > 20 MB |
 | Archive format | Not a valid gzip (magic bytes `\x1f\x8b`) |
 | Missing required files | Any required TSV absent from the archive |
 | `bgcs.tsv` row count | Single-BGC: not exactly 1; Assembly: 0 rows |

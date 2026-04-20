@@ -1894,11 +1894,11 @@ def export_assessment(request, task_id: str):
     tags=["Assessment"],
 )
 def upload_for_assessment(request):
-    """Upload a tar.gz of TSV files for ephemeral asset evaluation.
+    """Upload a .tar.gz / .tgz of TSV files for ephemeral asset evaluation.
 
     Expects a multipart form with:
     - ``type``: ``"bgc"`` or ``"assembly"``
-    - ``file``: the tar.gz archive
+    - ``file``: the .tar.gz or .tgz archive
     """
     from uuid import uuid4
 
@@ -1917,8 +1917,11 @@ def upload_for_assessment(request):
     uploaded_file = request.FILES.get("file")
     if not uploaded_file:
         raise HttpError(400, "No file provided")
-    if uploaded_file.size > 10 * 1024 * 1024:
-        raise HttpError(400, "File too large (max 10 MB)")
+    name = (uploaded_file.name or "").lower()
+    if not (name.endswith(".tar.gz") or name.endswith(".tgz")):
+        raise HttpError(400, "File must be a .tar.gz or .tgz archive")
+    if uploaded_file.size > 20 * 1024 * 1024:
+        raise HttpError(400, "File too large (max 20 MB)")
 
     tar_bytes = uploaded_file.read()
 

@@ -24,7 +24,7 @@ export function GcfMemberMap({ members, submittedPoint }: GcfMemberMapProps) {
     });
   }
 
-  // Type-strain members (purchasable)
+  // Type-strain members 
   const ts = members.filter((m) => m.is_type_strain);
   if (ts.length > 0) {
     traces.push({

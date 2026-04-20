@@ -38,7 +38,7 @@ Use this path when you already know the accession --- perhaps from a publication
 
 ### 3. Upload a file
 
-In Evaluate mode the sidebar also contains a drag-and-drop upload area. You can upload a `.tar.gz` archive containing an assembly or a single GenBank file containing a BGC. The platform processes the upload ephemerally: it annotates the file, computes scores, and generates the same assessment report you would see for a database entry, but it never stores your data.
+In Evaluate mode the sidebar also contains a drag-and-drop upload area. You can upload a `.tar.gz` / `.tgz` archive containing an assembly or a single GenBank file containing a BGC. The platform processes the upload ephemerally: it annotates the file, computes scores, and generates the same assessment report you would see for a database entry, but it never stores your data.
 
 See [Upload an Assembly](upload-assembly.qmd) and [Upload a BGC](upload-bgc.qmd) for format requirements and step-by-step instructions.
 

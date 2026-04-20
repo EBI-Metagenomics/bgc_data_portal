@@ -80,14 +80,14 @@ export function UploadForEvaluation() {
           <>
             <Upload className="h-5 w-5 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">
-              Drop .tar.gz or click
+              Drop .tar.gz / .tgz or click
             </span>
           </>
         )}
         <input
           ref={inputRef}
           type="file"
-          accept=".tar.gz,.tgz"
+          accept=".tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
           className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0])}
         />

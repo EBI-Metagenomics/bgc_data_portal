@@ -244,7 +244,7 @@ The upload panel has two tabs:
 - **Single BGC** — Upload a single BGC package
 - **Assembly** — Upload an assembly package
 
-Files are submitted as `.tar.gz` archives via drag-and-drop or file picker.
+Files are submitted as `.tar.gz` or `.tgz` archives via drag-and-drop or file picker.
 
 ### Entering Evaluate Mode
 There are three ways to evaluate an asset:
