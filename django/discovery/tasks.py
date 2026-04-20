@@ -475,8 +475,8 @@ def run_bgc_clustering_task(
     annotation and for generating DashboardBgc.umap_x/y visualization coordinates.
     """
     import pickle
+    from importlib.metadata import version as _pkg_version
 
-    import hdbscan as hdbscan_lib
     import numpy as np
     import sklearn
     import umap as umap_lib
@@ -559,7 +559,7 @@ def run_bgc_clustering_task(
             "knn_k": knn_k,
             "sklearn_version": sklearn.__version__,
             "umap_version": umap_lib.__version__,
-            "hdbscan_version": hdbscan_lib.__version__,
+            "hdbscan_version": _pkg_version("hdbscan"),
             "n_bgcs_sampled": len(bgc_ids),
             "n_clusters_found": n_clusters,
             "n_noise_points": n_noise,
