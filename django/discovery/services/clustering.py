@@ -66,7 +66,7 @@ def build_training_sample(
             "vector", flat=True
         )
     )
-    embeddings = np.array([v.tolist() for v in vectors], dtype=np.float32)
+    embeddings = np.array([v.to_list() for v in vectors], dtype=np.float32)
     return final_ids, embeddings
 
 
@@ -210,7 +210,7 @@ def classify_remaining(
 
     for bgc_id, vector in qs.iterator(chunk_size=BATCH):
         batch_ids.append(bgc_id)
-        batch_vecs.append(vector.tolist())
+        batch_vecs.append(vector.to_list())
         if len(batch_ids) >= BATCH:
             _flush()
 

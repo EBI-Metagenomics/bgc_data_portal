@@ -276,7 +276,7 @@ def train_umap_model_task(
             )
 
     vectors = [
-        vector.tolist()
+        vector.to_list()
         for _, vector in BgcEmbedding.objects.filter(bgc_id__in=sample_ids).values_list("bgc_id", "vector")
     ]
 
@@ -419,7 +419,7 @@ def _apply_umap_transform(model_bundle: dict) -> int:
     vectors: list = []
     for bgc_id, vector in BgcEmbedding.objects.values_list("bgc_id", "vector"):
         bgc_ids.append(bgc_id)
-        vectors.append(vector.tolist())
+        vectors.append(vector.to_list())
 
     if not vectors:
         return 0
