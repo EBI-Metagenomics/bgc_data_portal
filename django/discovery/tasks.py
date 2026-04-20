@@ -798,7 +798,7 @@ def sequence_similarity_search(self, sequence: str, similarity_threshold: float)
     import numpy as np
     from django.db import connection
 
-    from discovery.models import DashboardCds
+    from discovery.models import EMBEDDING_DIM, DashboardCds
 
     # Validate
     seq = sequence.strip().upper()
@@ -829,10 +829,10 @@ def sequence_similarity_search(self, sequence: str, similarity_threshold: float)
     max_distance = 1.0 - similarity_threshold
     with connection.cursor() as cursor:
         cursor.execute(
-            """
-            SELECT protein_sha256, (vector <=> %s::halfvec(1152)) AS distance
+            f"""
+            SELECT protein_sha256, (vector <=> %s::halfvec({EMBEDDING_DIM})) AS distance
             FROM discovery_protein_embedding
-            WHERE (vector <=> %s::halfvec(1152)) <= %s
+            WHERE (vector <=> %s::halfvec({EMBEDDING_DIM})) <= %s
             """,
             [vec_str, vec_str, max_distance],
         )

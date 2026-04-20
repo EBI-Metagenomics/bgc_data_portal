@@ -16,6 +16,7 @@ import numpy as np
 from factory.django import DjangoModelFactory
 
 from discovery.models import (
+    EMBEDDING_DIM,
     BgcEmbedding,
     DashboardAssembly,
     DashboardBgc,
@@ -29,7 +30,7 @@ from discovery.models import (
 
 
 def _embedding() -> list:
-    return np.random.randn(1152).astype(np.float32).tolist()
+    return np.random.randn(EMBEDDING_DIM).astype(np.float32).tolist()
 
 
 # Curated pools for realistic data generation

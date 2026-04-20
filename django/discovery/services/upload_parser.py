@@ -1,6 +1,6 @@
-"""Parse uploaded tar.gz bundles for ephemeral asset evaluation.
+"""Parse uploaded .tar.gz / .tgz bundles for ephemeral asset evaluation.
 
-Extracts TSV files from a tar.gz archive, validates structure and
+Extracts TSV files from a .tar.gz / .tgz archive, validates structure and
 content, and returns in-memory dataclasses — no ORM objects, no DB
 writes.  The parsed data is intended to be cached in Redis and fed
 to the uploaded-assessment service.
@@ -15,8 +15,9 @@ import struct
 import tarfile
 from dataclasses import dataclass, field, asdict
 
-EMBEDDING_DIM = 1152
-MAX_TAR_SIZE = 10 * 1024 * 1024  # 10 MB
+from discovery.models import EMBEDDING_DIM
+
+MAX_TAR_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
 class UploadValidationError(Exception):
@@ -76,7 +77,7 @@ class UploadedAssembly:
 
 
 def parse_bgc_upload(tar_bytes: bytes) -> dict:
-    """Parse a single-BGC tar.gz upload and return a serialisable dict.
+    """Parse a single-BGC .tar.gz / .tgz upload and return a serialisable dict.
 
     Required files: bgcs.tsv (1 row), domains.tsv, embeddings_bgc.tsv
     Optional files: contigs.tsv, detectors.tsv, cds.tsv, natural_products.tsv
@@ -111,7 +112,7 @@ def parse_bgc_upload(tar_bytes: bytes) -> dict:
 
 
 def parse_assembly_upload(tar_bytes: bytes) -> dict:
-    """Parse an assembly-bundle tar.gz upload and return a serialisable dict.
+    """Parse an assembly-bundle .tar.gz / .tgz upload and return a serialisable dict.
 
     Required files: assemblies.tsv (1 row), contigs.tsv, bgcs.tsv (N rows),
                     domains.tsv, embeddings_bgc.tsv
@@ -185,7 +186,7 @@ def parse_assembly_upload(tar_bytes: bytes) -> dict:
 
 
 def _extract_tar(tar_bytes: bytes) -> dict[str, bytes]:
-    """Extract tar.gz into a dict of {filename: file_bytes}.
+    """Extract a .tar.gz / .tgz into a dict of {filename: file_bytes}.
 
     Validates gzip magic bytes and enforces size limit.
     """
@@ -194,7 +195,7 @@ def _extract_tar(tar_bytes: bytes) -> dict[str, bytes]:
             f"Archive too large ({len(tar_bytes)} bytes, max {MAX_TAR_SIZE})"
         )
     if len(tar_bytes) < 2 or tar_bytes[:2] != b"\x1f\x8b":
-        raise UploadValidationError("File is not a valid gzip archive")
+        raise UploadValidationError("File is not a valid .tar.gz / .tgz archive")
 
     members: dict[str, bytes] = {}
     try:

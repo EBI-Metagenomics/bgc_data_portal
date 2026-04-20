@@ -18,6 +18,7 @@ from django.db import connection
 from django.db.models import Avg, Count
 
 from discovery.models import (
+    EMBEDDING_DIM,
     BgcDomain,
     BgcEmbedding,
     DashboardAssembly,
@@ -33,8 +34,6 @@ from discovery.services.assessment import (
 )
 
 log = logging.getLogger(__name__)
-
-EMBEDDING_DIM = 1152
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 import pytest
 
+from discovery.models import EMBEDDING_DIM
 from tests.factories.discovery_models import (
     BgcEmbeddingFactory,
     DashboardAssemblyFactory,
@@ -66,13 +67,13 @@ class TestDiscoveryFactories:
         assert ref.accession.startswith("BGC")
         assert ref.compound_name
         assert ref.embedding is not None
-        assert len(ref.embedding) == 1152
+        assert len(ref.embedding) == EMBEDDING_DIM
 
     def test_bgc_embedding_factory(self):
         emb = BgcEmbeddingFactory()
         assert emb.bgc is not None
         assert emb.vector is not None
-        assert len(emb.vector) == 1152
+        assert len(emb.vector) == EMBEDDING_DIM
 
     def test_bgc_class_factory(self):
         cls = DashboardBgcClassFactory()

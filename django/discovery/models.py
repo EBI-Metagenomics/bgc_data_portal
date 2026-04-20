@@ -16,6 +16,11 @@ from django.db import models
 from pgvector.django import HalfVectorField, HnswIndex
 
 
+# Single source of truth for the BGC/protein embedding dimension.
+# Reflects the esmc_300m model (layer 26); must match the halfvec column size.
+EMBEDDING_DIM = 960
+
+
 # ── Assembly source lookup ─────────────────────────────────────────────────────
 
 
@@ -403,7 +408,7 @@ class BgcEmbedding(models.Model):
         primary_key=True,
         related_name="embedding",
     )
-    vector = HalfVectorField(dimensions=960)
+    vector = HalfVectorField(dimensions=EMBEDDING_DIM)
 
     class Meta:
         db_table = "discovery_bgc_embedding"
@@ -427,7 +432,7 @@ class ProteinEmbedding(models.Model):
     id = models.BigAutoField(primary_key=True)
     source_protein_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
     protein_sha256 = models.CharField(max_length=64, unique=True)
-    vector = HalfVectorField(dimensions=960)
+    vector = HalfVectorField(dimensions=EMBEDDING_DIM)
 
     class Meta:
         db_table = "discovery_protein_embedding"

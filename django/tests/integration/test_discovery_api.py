@@ -10,6 +10,7 @@ import pytest
 from django.test import Client
 
 from discovery.models import (
+    EMBEDDING_DIM,
     BgcEmbedding,
     DashboardAssembly,
     DashboardBgc,
@@ -101,9 +102,9 @@ def seeded_data():
     a2.save()
 
     # Embeddings for similarity queries
-    vec1 = np.random.randn(1152).astype(np.float32).tolist()
-    vec2 = np.random.randn(1152).astype(np.float32).tolist()
-    vec3 = np.random.randn(1152).astype(np.float32).tolist()
+    vec1 = np.random.randn(EMBEDDING_DIM).astype(np.float32).tolist()
+    vec2 = np.random.randn(EMBEDDING_DIM).astype(np.float32).tolist()
+    vec3 = np.random.randn(EMBEDDING_DIM).astype(np.float32).tolist()
     BgcEmbedding.objects.create(bgc=bgc1, vector=vec1)
     BgcEmbedding.objects.create(bgc=bgc2, vector=vec2)
     BgcEmbedding.objects.create(bgc=bgc3, vector=vec3)
