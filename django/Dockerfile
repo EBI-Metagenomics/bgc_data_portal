@@ -31,6 +31,10 @@ RUN pip install --upgrade pip && pip install -r requirements-web.txt
 COPY . .
 
 # Build the React frontend (outputs to /app/static/dashboard/)
+# Vite needs the externally-mounted base path baked into the bundle so chunk
+# imports resolve through the production ingress prefix.
+ARG VITE_BASE_PATH=/finn-srv/mgnify-bgcs/static/dashboard/
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 WORKDIR /app/frontend
 RUN npm install && npm run build
 WORKDIR /app

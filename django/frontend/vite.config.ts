@@ -4,7 +4,7 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/static/dashboard/",
+  base: process.env.VITE_BASE_PATH ?? "/static/dashboard/",
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
