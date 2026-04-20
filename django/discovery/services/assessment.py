@@ -352,10 +352,6 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         if ref_bgc:
             nearest_validated_bgc_id = ref_bgc
 
-    comparison_bgc_ids = _select_comparison_bgc_ids(
-        gcf_context, exclude_bgc_id=bgc.id, limit=3
-    )
-
     return {
         "bgc_id": bgc.id,
         "accession": bgc.bgc_accession,
@@ -371,7 +367,6 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         "submitted_domains": submitted_domains,
         "nearest_validated_accession": nearest_validated_accession,
         "nearest_validated_bgc_id": nearest_validated_bgc_id,
-        "comparison_bgc_ids": comparison_bgc_ids,
     }
 
 
@@ -500,54 +495,6 @@ def _build_taxonomy_hierarchy(paths: list[str]) -> list[dict]:
         )
 
     return nodes
-
-
-def _select_comparison_bgc_ids(
-    gcf_context: dict | None,
-    *,
-    exclude_bgc_id: int | None = None,
-    limit: int = 3,
-) -> list[int]:
-    """Pick up to ``limit`` GCF sibling BGC ids for the comparison panel.
-
-    Ranking: validated members first (via GCF.validated_accession lookup),
-    then type-strain members, then the rest in their original order.
-    Returns an empty list when the asset is a novel singleton or the GCF
-    has no other members.
-    """
-    if not gcf_context:
-        return []
-    members = list(gcf_context.get("member_points") or [])
-    if not members:
-        return []
-
-    validated_acc = gcf_context.get("validated_accession") or ""
-    exclude = {exclude_bgc_id} if exclude_bgc_id is not None else set()
-
-    def _rank(m: dict) -> tuple[int, int]:
-        accession = m.get("accession", "")
-        is_validated = bool(validated_acc) and accession == validated_acc
-        is_ts = bool(m.get("is_type_strain"))
-        # Lower tuple sorts first: validated (0) < type-strain (1) < other (2).
-        if is_validated:
-            return (0, 0)
-        if is_ts:
-            return (1, 0)
-        return (2, 0)
-
-    ranked = sorted(
-        (m for m in members if m.get("bgc_id") not in exclude),
-        key=_rank,
-    )
-    out: list[int] = []
-    for m in ranked:
-        bid = m.get("bgc_id")
-        if bid is None:
-            continue
-        out.append(bid)
-        if len(out) >= limit:
-            break
-    return out
 
 
 def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:

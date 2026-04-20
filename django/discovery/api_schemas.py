@@ -397,15 +397,6 @@ class BgcRegionOut(Schema):
     cluster_list: list[RegionClusterOut] = []
 
 
-class BgcRegionWithHeader(Schema):
-    """A BGC region wrapped with identifying metadata so a batched response
-    can be correlated back to its originating BGC without a second lookup."""
-
-    bgc_id: int
-    accession: str
-    region: BgcRegionOut
-
-
 # ── Assessment schemas ──────────────────────────────────────────────────────
 
 
@@ -591,9 +582,6 @@ class BgcAssessmentResponse(Schema):
     submitted_domains: list[DomainArchitectureItem] = []
     nearest_validated_accession: Optional[str] = None
     nearest_validated_bgc_id: Optional[int] = None
-    # Sibling BGCs selected from the placed GCF (validated > type-strain > other),
-    # capped at 3, for the domain-architecture comparison panel.
-    comparison_bgc_ids: list[int] = []
 
 
 # ── Platform overview ─────────────────────────────────────────────────────────

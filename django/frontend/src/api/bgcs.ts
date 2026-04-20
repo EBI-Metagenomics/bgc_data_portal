@@ -2,7 +2,6 @@ import { apiGet } from "./client";
 import type {
   BgcDetail,
   BgcRegionData,
-  BgcRegionWithHeader,
   BgcScatterPoint,
   BgcStatsResponse,
   PaginatedBgcRosterResponse,
@@ -14,12 +13,6 @@ export function fetchBgcDetail(bgcId: number) {
 
 export function fetchBgcRegion(bgcId: number) {
   return apiGet<BgcRegionData>(`/bgcs/${bgcId}/region/`);
-}
-
-export function fetchBgcRegions(bgcIds: number[]) {
-  return apiGet<BgcRegionWithHeader[]>("/bgcs/regions/", {
-    ids: bgcIds.join(","),
-  });
 }
 
 export interface BgcScatterParams {

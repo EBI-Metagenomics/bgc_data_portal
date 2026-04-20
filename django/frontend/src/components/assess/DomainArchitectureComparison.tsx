@@ -1,35 +1,28 @@
 import { useState } from "react";
 import { RegionPlot } from "@/components/bgc/RegionPlot";
 import { useBgcRegion } from "@/hooks/use-bgc-region";
-import { useBgcRegions } from "@/hooks/use-bgc-regions";
+import { useSelectionStore } from "@/stores/selection-store";
 import { Loader2 } from "lucide-react";
 import type { RegionCds } from "@/api/types";
 
 interface DomainArchitectureComparisonProps {
   bgcId: number;
-  nearestValidatedBgcId: number | null;
-  nearestValidatedAccession: string | null;
-  comparisonBgcIds?: number[];
 }
 
 export function DomainArchitectureComparison({
   bgcId,
-  nearestValidatedBgcId,
-  nearestValidatedAccession,
-  comparisonBgcIds,
 }: DomainArchitectureComparisonProps) {
   const isUploaded = bgcId < 0;
   // Uploaded BGCs aren't in the DB, so skip the region fetch that would 404.
   const submittedRegion = useBgcRegion(isUploaded ? null : bgcId);
-  const validatedRegion = useBgcRegion(nearestValidatedBgcId);
 
-  // Filter the comparison list to avoid redundant fetches: drop the
-  // submitted BGC and the nearest-validated reference (both rendered
-  // separately above the sibling section).
-  const siblingIds = (comparisonBgcIds ?? []).filter(
-    (id) => id !== bgcId && id !== nearestValidatedBgcId,
-  );
-  const siblingRegions = useBgcRegions(siblingIds);
+  // The comparison slot is driven by whichever BGC row the user clicks
+  // in the BGC Roster panel above — same global activeBgcId that the
+  // rest of the app uses for selection.
+  const activeBgcId = useSelectionStore((s) => s.activeBgcId);
+  const comparisonId =
+    activeBgcId !== null && activeBgcId !== bgcId ? activeBgcId : null;
+  const comparisonRegion = useBgcRegion(comparisonId);
 
   const [selectedCds, setSelectedCds] = useState<string | null>(null);
 
@@ -46,22 +39,18 @@ export function DomainArchitectureComparison({
   }
 
   const hasSubmittedRegion = !isUploaded && !!submittedRegion.data;
-  const hasAnyPanel =
-    hasSubmittedRegion ||
-    !!nearestValidatedBgcId ||
-    siblingIds.length > 0;
 
-  if (isUploaded && !hasAnyPanel) {
+  if (isUploaded && !comparisonId) {
     return (
       <p className="py-4 text-sm text-muted-foreground">
         Region-level architecture is unavailable for uploaded BGCs — the
-        upload bundle doesn't include CDS coordinates. See the Domain
-        Architecture Differential panel above for the domain summary.
+        upload bundle doesn't include CDS coordinates. Click a BGC in the
+        roster above to show its architecture here.
       </p>
     );
   }
 
-  if (!hasAnyPanel) {
+  if (!hasSubmittedRegion && !comparisonId) {
     return (
       <p className="py-4 text-sm text-muted-foreground">
         Region data not available for this BGC.
@@ -83,63 +72,33 @@ export function DomainArchitectureComparison({
         </div>
       )}
 
-      {/* Nearest Validated region */}
-      {nearestValidatedBgcId && (
+      {/* Comparison BGC — the row clicked in the BGC Roster. */}
+      {comparisonId ? (
         <div>
           <p className="mb-1 text-xs font-medium">
-            Nearest Validated: {nearestValidatedAccession || "Unknown"}
+            Compared against BGC #{comparisonId}
           </p>
-          {validatedRegion.isLoading ? (
+          {comparisonRegion.isLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : validatedRegion.data ? (
+          ) : comparisonRegion.data ? (
             <RegionPlot
-              data={validatedRegion.data}
+              data={comparisonRegion.data}
               onCdsClick={handleCdsClick}
               selectedCdsId={selectedCds}
             />
           ) : (
             <p className="py-2 text-xs text-muted-foreground">
-              Region data not available for validated reference.
+              Region data not available for the selected BGC.
             </p>
           )}
         </div>
-      )}
-
-      {!nearestValidatedBgcId && nearestValidatedAccession && (
-        <p className="text-xs text-muted-foreground">
-          Nearest Validated: {nearestValidatedAccession} (region data not available)
+      ) : (
+        <p className="py-2 text-xs text-muted-foreground">
+          Click a BGC in the roster above to compare its domain architecture
+          against the submitted BGC.
         </p>
-      )}
-
-      {/* GCF sibling BGCs — batched fetch so one request covers all. */}
-      {siblingIds.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-medium text-muted-foreground">
-            GCF siblings
-          </p>
-          {siblingRegions.isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : siblingRegions.data && siblingRegions.data.length > 0 ? (
-            siblingRegions.data.map((sibling) => (
-              <div key={sibling.bgc_id}>
-                <p className="mb-1 text-xs font-medium">{sibling.accession}</p>
-                <RegionPlot
-                  data={sibling.region}
-                  onCdsClick={handleCdsClick}
-                  selectedCdsId={selectedCds}
-                />
-              </div>
-            ))
-          ) : (
-            <p className="py-2 text-xs text-muted-foreground">
-              No sibling region data available.
-            </p>
-          )}
-        </div>
       )}
     </div>
   );

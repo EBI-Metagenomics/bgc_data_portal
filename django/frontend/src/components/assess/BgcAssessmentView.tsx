@@ -131,15 +131,12 @@ export function BgcAssessmentView() {
         </PanelContainer>
       )}
 
-      {/* Domain architecture comparison */}
+      {/* Domain architecture comparison — driven by the BGC Roster
+          selection below. User clicks a roster row to pick the
+          comparison BGC. */}
       {result.bgc_id && (
         <PanelContainer title="Domain Architecture Comparison">
-          <DomainArchitectureComparison
-            bgcId={result.bgc_id}
-            nearestValidatedBgcId={result.nearest_validated_bgc_id}
-            nearestValidatedAccession={result.nearest_validated_accession}
-            comparisonBgcIds={result.comparison_bgc_ids}
-          />
+          <DomainArchitectureComparison bgcId={result.bgc_id} />
         </PanelContainer>
       )}
 

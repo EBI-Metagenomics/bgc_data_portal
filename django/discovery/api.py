@@ -50,7 +50,6 @@ from discovery.api_schemas import (
     BgcClassOption,
     BgcDetail,
     BgcRegionOut,
-    BgcRegionWithHeader,
     BgcRosterItem,
     BgcScatterPoint,
     BgcStatsResponse,
@@ -804,62 +803,6 @@ def bgc_region(request, bgc_id: int):
     except DashboardBgc.DoesNotExist:
         raise HttpError(404, "BGC not found")
     return _build_bgc_region_data(bgc)
-
-
-# Cap for the batched regions endpoint. Each region payload is a few KB of
-# CDS + domain rows, so 10 is more than enough for the Evaluate Asset
-# comparison card (submitted + nearest validated + up to 3 GCF siblings).
-_BGC_REGIONS_BATCH_MAX = 10
-
-
-@discovery_router.get("/bgcs/regions/", response=list[BgcRegionWithHeader])
-def bgc_regions_batch(request, ids: str):
-    """Return region data for multiple BGCs in a single call.
-
-    ``ids`` is a comma-separated list of DashboardBgc primary keys. Unknown
-    IDs are silently skipped so a stale frontend ID list doesn't 404 the
-    whole batch. The response preserves the input order.
-    """
-    raw_ids: list[int] = []
-    seen: set[int] = set()
-    for chunk in ids.split(","):
-        token = chunk.strip()
-        if not token:
-            continue
-        try:
-            value = int(token)
-        except ValueError:
-            raise HttpError(400, f"Invalid BGC id in ids param: {token!r}")
-        if value in seen:
-            continue
-        seen.add(value)
-        raw_ids.append(value)
-
-    if not raw_ids:
-        return []
-    if len(raw_ids) > _BGC_REGIONS_BATCH_MAX:
-        raise HttpError(
-            400,
-            f"Too many ids ({len(raw_ids)}); cap is {_BGC_REGIONS_BATCH_MAX}",
-        )
-
-    bgcs_by_id = {
-        b.id: b
-        for b in DashboardBgc.objects.filter(id__in=raw_ids)
-    }
-    out: list[BgcRegionWithHeader] = []
-    for bid in raw_ids:
-        bgc = bgcs_by_id.get(bid)
-        if bgc is None:
-            continue
-        out.append(
-            BgcRegionWithHeader(
-                bgc_id=bgc.id,
-                accession=bgc.bgc_accession,
-                region=_build_bgc_region_data(bgc),
-            )
-        )
-    return out
 
 
 @discovery_router.get("/bgcs/{bgc_id}/download/")

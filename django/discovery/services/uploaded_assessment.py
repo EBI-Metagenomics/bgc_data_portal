@@ -32,7 +32,6 @@ from discovery.services.assessment import (
     _build_gcf_context,
     _build_taxonomy_hierarchy,
     _compute_gcf_domain_frequency,
-    _select_comparison_bgc_ids,
 )
 
 log = logging.getLogger(__name__)
@@ -168,8 +167,6 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
     except Exception:
         log.warning("Cluster assignment failed for uploaded BGC", exc_info=True)
 
-    comparison_bgc_ids = _select_comparison_bgc_ids(gcf_context, limit=3)
-
     return {
         "bgc_id": -1,
         "accession": f"uploaded_bgc_{data.get('index', 0)}",
@@ -185,7 +182,6 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
         "submitted_domains": submitted_domains,
         "nearest_validated_accession": nearest_validated_accession,
         "nearest_validated_bgc_id": nearest_validated_bgc_id,
-        "comparison_bgc_ids": comparison_bgc_ids,
         "cluster_id": cluster_info.get("cluster_id"),
         "cluster_label": cluster_info.get("cluster_label"),
         "cluster_run_id": cluster_info.get("run_id"),

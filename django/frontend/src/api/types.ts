@@ -286,12 +286,6 @@ export interface BgcRegionData {
   cluster_list: RegionCluster[];
 }
 
-export interface BgcRegionWithHeader {
-  bgc_id: number;
-  accession: string;
-  region: BgcRegionData;
-}
-
 // ── Stats schemas ─────────────────────────────────────────────────────────
 
 export interface SunburstNode {
@@ -507,5 +501,4 @@ export interface BgcAssessmentResult {
   submitted_domains: DomainArchitectureItem[];
   nearest_validated_accession: string | null;
   nearest_validated_bgc_id: number | null;
-  comparison_bgc_ids: number[];
 }
