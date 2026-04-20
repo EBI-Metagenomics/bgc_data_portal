@@ -159,18 +159,25 @@ def _bulk_update_bgc_scores(updates: list[dict]) -> None:
 def _compute_bgc_domain_novelty() -> None:
     """Compute domain_novelty for each BGC.
 
-    domain_novelty = fraction of this BGC's domains not found in any other BGC.
+    domain_novelty = fraction of this BGC's domains not found in any other BGC
+    within the same GCF. BGCs without a GCF are compared only against each other.
     """
     logger.info("Computing BGC domain novelty ...")
 
-    # Build domain_acc -> set of bgc_ids
-    domain_to_bgcs: dict[str, set[int]] = defaultdict(set)
-    for domain_acc, bgc_id in BgcDomain.objects.values_list("domain_acc", "bgc_id"):
-        domain_to_bgcs[domain_acc].add(bgc_id)
+    # bgc_id -> gene_cluster_family ("" means no GCF)
+    bgc_to_gcf: dict[int, str] = dict(
+        DashboardBgc.objects.values_list("id", "gene_cluster_family")
+    )
 
+    # Per-GCF-bucket: domain_acc -> set of bgc_ids (key "" = no-GCF bucket)
+    bucket_domain_to_bgcs: dict[str, dict[str, set[int]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
     # Build bgc_id -> set of domain_accs
     bgc_to_domains: dict[int, set[str]] = defaultdict(set)
     for domain_acc, bgc_id in BgcDomain.objects.values_list("domain_acc", "bgc_id"):
+        gcf = bgc_to_gcf.get(bgc_id, "")
+        bucket_domain_to_bgcs[gcf][domain_acc].add(bgc_id)
         bgc_to_domains[bgc_id].add(domain_acc)
 
     batch = []
@@ -179,9 +186,9 @@ def _compute_bgc_domain_novelty() -> None:
     for bgc_id, domains in bgc_to_domains.items():
         if not domains:
             continue
-        unique_count = sum(
-            1 for d in domains if len(domain_to_bgcs[d]) == 1
-        )
+        gcf = bgc_to_gcf.get(bgc_id, "")
+        scoped = bucket_domain_to_bgcs[gcf]
+        unique_count = sum(1 for d in domains if len(scoped[d]) == 1)
         domain_novelty = unique_count / len(domains)
         batch.append((bgc_id, domain_novelty))
 
