@@ -9,6 +9,7 @@ import { NoveltyGauges } from "./NoveltyGauges";
 import { DomainDifferentialChart } from "./DomainDifferentialChart";
 import { DomainArchitectureComparison } from "./DomainArchitectureComparison";
 import { BgcChemicalSpaceMap } from "./BgcChemicalSpaceMap";
+import { BgcRoster } from "@/components/bgc/BgcRoster";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { CrossModeActions } from "./CrossModeActions";
 import { AssessmentExportButton } from "./AssessmentExportButton";
@@ -109,6 +110,20 @@ export function BgcAssessmentView() {
         </PanelContainer>
       </div>
 
+      {/* BGC Roster — sibling BGCs of the placed GCF. Skipped for novel
+          singletons (no GCF) and for GCFs with no member points. */}
+      {result.gcf_context && (result.gcf_context.member_points?.length ?? 0) > 0 && (
+        <PanelContainer
+          title="BGC Roster"
+          className="min-h-[300px]"
+          constrained
+        >
+          <BgcRoster
+            bgcIdsOverride={result.gcf_context.member_points.map((m) => m.bgc_id)}
+          />
+        </PanelContainer>
+      )}
+
       {/* Domain differential */}
       {result.domain_differential.length > 0 && (
         <PanelContainer title="Domain Architecture Differential" className="min-h-[500px]">
@@ -123,6 +138,7 @@ export function BgcAssessmentView() {
             bgcId={result.bgc_id}
             nearestValidatedBgcId={result.nearest_validated_bgc_id}
             nearestValidatedAccession={result.nearest_validated_accession}
+            comparisonBgcIds={result.comparison_bgc_ids}
           />
         </PanelContainer>
       )}
@@ -137,16 +153,16 @@ export function BgcAssessmentView() {
         </PanelContainer>
       )}
 
-      {/* BGC Embeddings Map — real UMAP */}
-      {result.submitted_point && (
-        <PanelContainer title="BGC Embeddings Map" className="min-h-[400px]">
-          <BgcChemicalSpaceMap
-            submittedPoint={result.submitted_point}
-            neighbors={result.nearest_neighbors}
-            validatedPoints={result.validated_reference_points}
-          />
-        </PanelContainer>
-      )}
+      {/* BGC Embeddings Map — real UMAP. Always render so the panel can
+          display an explicit "projection unavailable" notice when
+          submitted_point is null, rather than silently hiding. */}
+      <PanelContainer title="BGC Embeddings Map" className="min-h-[400px]">
+        <BgcChemicalSpaceMap
+          submittedPoint={result.submitted_point ?? null}
+          neighbors={result.nearest_neighbors}
+          validatedPoints={result.validated_reference_points}
+        />
+      </PanelContainer>
     </>
   );
 }

@@ -40,11 +40,25 @@ export function GcfContextPanel({
     );
   }
 
-  // Build sunburst data from taxonomy distribution
-  const sunburstIds = gcfContext.taxonomy_distribution.map((t) => t.taxonomy_label);
-  const sunburstLabels = gcfContext.taxonomy_distribution.map((t) => t.taxonomy_label);
-  const sunburstParents = gcfContext.taxonomy_distribution.map(() => "");
-  const sunburstValues = gcfContext.taxonomy_distribution.map((t) => t.count);
+  // Prefer the hierarchical taxonomy (kingdom → phylum → … → species).
+  // Fall back to the flat distribution when the backend didn't populate
+  // a hierarchy (e.g. older responses or when no contig lineage is
+  // available for any member).
+  const hierarchy = gcfContext.taxonomy_hierarchy ?? [];
+  const useHierarchy = hierarchy.length > 0;
+  const sunburstIds = useHierarchy
+    ? hierarchy.map((n) => n.id)
+    : gcfContext.taxonomy_distribution.map((t) => t.taxonomy_label);
+  const sunburstLabels = useHierarchy
+    ? hierarchy.map((n) => n.label)
+    : gcfContext.taxonomy_distribution.map((t) => t.taxonomy_label);
+  const sunburstParents = useHierarchy
+    ? hierarchy.map((n) => n.parent)
+    : gcfContext.taxonomy_distribution.map(() => "");
+  const sunburstValues = useHierarchy
+    ? hierarchy.map((n) => n.count)
+    : gcfContext.taxonomy_distribution.map((t) => t.count);
+  const hasTaxonomyData = sunburstIds.length > 0;
 
   return (
     <div className="space-y-3">
@@ -69,8 +83,9 @@ export function GcfContextPanel({
         </p>
       )}
 
-      {/* Taxonomy distribution as sunburst */}
-      {gcfContext.taxonomy_distribution.length > 0 && (
+      {/* Taxonomy distribution as sunburst (hierarchical when backend
+          provides taxonomy_hierarchy, flat ring otherwise). */}
+      {hasTaxonomyData && (
         <div>
           <p className="mb-1 text-xs font-medium text-muted-foreground">
             Taxonomy distribution
@@ -89,13 +104,13 @@ export function GcfContextPanel({
               },
             ]}
             layout={{
-              height: 220,
+              height: 260,
               margin: { t: 10, b: 10, l: 10, r: 10 },
               autosize: true,
             }}
             config={{ responsive: true, displayModeBar: false }}
             useResizeHandler
-            style={{ width: "100%", height: 220 }}
+            style={{ width: "100%", height: 260 }}
           />
         </div>
       )}

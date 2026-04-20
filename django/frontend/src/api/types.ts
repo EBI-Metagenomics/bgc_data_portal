@@ -286,6 +286,12 @@ export interface BgcRegionData {
   cluster_list: RegionCluster[];
 }
 
+export interface BgcRegionWithHeader {
+  bgc_id: number;
+  accession: string;
+  region: BgcRegionData;
+}
+
 // ── Stats schemas ─────────────────────────────────────────────────────────
 
 export interface SunburstNode {
@@ -430,6 +436,14 @@ export interface GcfTaxonomyCount {
   count: number;
 }
 
+export interface GcfTaxonomyNode {
+  id: string;
+  label: string;
+  parent: string;
+  count: number;
+  rank: string;
+}
+
 
 export interface GcfMemberPoint {
   bgc_id: number;
@@ -450,6 +464,7 @@ export interface GcfContext {
   validated_accession: string | null;
   domain_frequency: GcfDomainFrequency[];
   taxonomy_distribution: GcfTaxonomyCount[];
+  taxonomy_hierarchy: GcfTaxonomyNode[];
   member_points: GcfMemberPoint[];
 }
 
@@ -492,4 +507,5 @@ export interface BgcAssessmentResult {
   submitted_domains: DomainArchitectureItem[];
   nearest_validated_accession: string | null;
   nearest_validated_bgc_id: number | null;
+  comparison_bgc_ids: number[];
 }

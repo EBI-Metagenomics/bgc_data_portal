@@ -5,7 +5,6 @@ import { PanelContainer } from "@/components/panels/PanelContainer";
 import { AssessmentLoading } from "./AssessmentLoading";
 import { AssemblyRankCard } from "./AssemblyRankCard";
 import { PriorityRadar } from "./PriorityRadar";
-import { PercentileCharts } from "./PercentileCharts";
 import { RedundancyMatrix } from "./RedundancyMatrix";
 import { AssessmentBgcStats } from "./AssessmentBgcStats";
 import { ChemicalSpaceMap } from "./ChemicalSpaceMap";
@@ -99,14 +98,6 @@ export function AssemblyAssessmentView() {
           />
         </PanelContainer>
       </div>
-
-      {/* Percentile distribution charts */}
-      <PanelContainer title="Score Percentile Distributions">
-        <PercentileCharts
-          percentileRanks={result.percentile_ranks}
-          radarReferences={result.radar_references}
-        />
-      </PanelContainer>
 
       {/* BGC Triad — same layout as ExploreLayout */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">

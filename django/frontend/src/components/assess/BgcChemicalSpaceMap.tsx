@@ -108,6 +108,13 @@ export function BgcChemicalSpaceMap({
           Show validated references
         </Label>
       </div>
+      {!submittedPoint && (
+        <p className="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+          Embeddings map unavailable for this BGC — the UMAP projection model is
+          missing or failed to project the submitted embedding. Reference points
+          are still shown below.
+        </p>
+      )}
       <Plot
         data={traces}
         layout={{

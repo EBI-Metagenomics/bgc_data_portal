@@ -30,7 +30,9 @@ from discovery.services.assessment import (
     ASSEMBLY_SCORE_DIMENSIONS,
     GCF_NOVELTY_DISTANCE_THRESHOLD,
     _build_gcf_context,
+    _build_taxonomy_hierarchy,
     _compute_gcf_domain_frequency,
+    _select_comparison_bgc_ids,
 )
 
 log = logging.getLogger(__name__)
@@ -119,16 +121,23 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
     novelty = _compute_uploaded_novelty(embedding, submitted_domain_accs)
 
     # ── Chemical space ──────────────────────────────────────────────────
-    umap_x, umap_y = _compute_umap_coords_single(embedding)
-    submitted_point = {
-        "bgc_id": -1,
-        "accession": f"uploaded_bgc_{data.get('index', 0)}",
-        "umap_x": umap_x,
-        "umap_y": umap_y,
-        "classification_path": classification_path,
-        "nearest_validated_distance": round(novelty["chemistry_novelty"], 4),
-        "is_sparse": False,
-    }
+    coords = _compute_umap_coords_single(embedding)
+    submitted_point: dict | None
+    if coords is None:
+        # No UMAP transform available (or projection failed) — surface this
+        # as null rather than plotting a misleading point at (0, 0).
+        submitted_point = None
+    else:
+        umap_x, umap_y = coords
+        submitted_point = {
+            "bgc_id": -1,
+            "accession": f"uploaded_bgc_{data.get('index', 0)}",
+            "umap_x": umap_x,
+            "umap_y": umap_y,
+            "classification_path": classification_path,
+            "nearest_validated_distance": round(novelty["chemistry_novelty"], 4),
+            "is_sparse": False,
+        }
 
     nearest_neighbors = _find_nearest_neighbors_for_vector(embedding, k=20)
     validated_ref_points = list(
@@ -159,6 +168,8 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
     except Exception:
         log.warning("Cluster assignment failed for uploaded BGC", exc_info=True)
 
+    comparison_bgc_ids = _select_comparison_bgc_ids(gcf_context, limit=3)
+
     return {
         "bgc_id": -1,
         "accession": f"uploaded_bgc_{data.get('index', 0)}",
@@ -174,6 +185,7 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
         "submitted_domains": submitted_domains,
         "nearest_validated_accession": nearest_validated_accession,
         "nearest_validated_bgc_id": nearest_validated_bgc_id,
+        "comparison_bgc_ids": comparison_bgc_ids,
         "cluster_id": cluster_info.get("cluster_id"),
         "cluster_label": cluster_info.get("cluster_label"),
         "cluster_run_id": cluster_info.get("run_id"),
@@ -502,11 +514,12 @@ def _build_gcf_context_for_uploaded(gcf: DashboardGCF) -> dict:
     """Build GCF context panel — same as _build_gcf_context but without excluding a DB BGC."""
     members = DashboardBgc.objects.filter(
         gene_cluster_family=gcf.family_id
-    ).select_related("assembly")
+    ).select_related("assembly", "contig")
 
     member_points = []
     novelty_values = []
     taxonomy_counts: dict[str, int] = {}
+    taxonomy_paths: list[str] = []
 
     for mbgc in members:
         assembly = mbgc.assembly
@@ -523,6 +536,7 @@ def _build_gcf_context_for_uploaded(gcf: DashboardGCF) -> dict:
         novelty_values.append(mbgc.novelty_score)
         tf = tax_label or "Unknown"
         taxonomy_counts[tf] = taxonomy_counts.get(tf, 0) + 1
+        taxonomy_paths.append(mbgc.contig.taxonomy_path if mbgc.contig else "")
 
     member_bgc_ids = [m.id for m in members]
     domain_frequency = _compute_gcf_domain_frequency(member_bgc_ids)
@@ -531,6 +545,7 @@ def _build_gcf_context_for_uploaded(gcf: DashboardGCF) -> dict:
         {"taxonomy_label": k, "count": v}
         for k, v in sorted(taxonomy_counts.items(), key=lambda x: -x[1])
     ]
+    taxonomy_hierarchy = _build_taxonomy_hierarchy(taxonomy_paths)
 
     return {
         "gcf_id": gcf.id,
@@ -542,6 +557,7 @@ def _build_gcf_context_for_uploaded(gcf: DashboardGCF) -> dict:
         "validated_accession": gcf.validated_accession or None,
         "domain_frequency": domain_frequency,
         "taxonomy_distribution": taxonomy_distribution,
+        "taxonomy_hierarchy": taxonomy_hierarchy,
         "member_points": member_points,
     }
 
@@ -620,27 +636,75 @@ def _compute_domain_novelty(domain_accs: set[str]) -> float:
     return len(domain_accs - known) / len(domain_accs)
 
 
-def _compute_umap_coords_single(embedding: list[float]) -> tuple[float, float]:
-    """Transform a single embedding through the saved UMAP model."""
-    try:
-        from mgnify_bgcs.models import UMAPTransform
-    except ImportError:
-        return 0.0, 0.0
+def _compute_umap_coords_single(embedding: list[float]) -> tuple[float, float] | None:
+    """Project a single embedding onto the 2D UMAP plane used by reference points.
 
-    latest_model = UMAPTransform.objects.order_by("-created_at").first()
-    if latest_model is None:
-        return 0.0, 0.0
+    Matches the training pipeline that populates ``DashboardBgc.umap_x/y``:
+    the current pipeline (``run_bgc_clustering``) pickles separate blobs into
+    ``ClusteringRun`` and projects via PCA → UMAP-20d → UMAP-2d. Falls back
+    to the legacy ``UMAPTransform`` (bundle dict of ``{"pca": pca, "umap":
+    reducer}``) only when no ``ClusteringRun`` exists.
 
+    Returns ``None`` (not the origin) when no transform is available or the
+    projection fails, so callers can signal "unavailable" to the frontend
+    rather than silently plotting a misleading point at (0, 0).
+    """
     import pickle
 
+    arr = np.array([embedding], dtype=np.float32)
+
+    # ── Primary: current clustering run ──────────────────────────────────
     try:
-        umap_model = pickle.loads(latest_model.model_blob)
-        arr = np.array([embedding], dtype=np.float32)
-        coords = umap_model.transform(arr)
+        from discovery.models import ClusteringRun
+
+        run = ClusteringRun.objects.order_by("-created_at").first()
+    except Exception:
+        run = None
+
+    if run is not None:
+        try:
+            pca = pickle.loads(bytes(run.pca_blob))
+            umap_20d = pickle.loads(bytes(run.umap_blob))
+            umap_2d = pickle.loads(bytes(run.umap2d_blob))
+            reduced = pca.transform(arr)
+            twentyd = umap_20d.transform(reduced)
+            coords = umap_2d.transform(twentyd)
+            return float(coords[0, 0]), float(coords[0, 1])
+        except Exception:
+            log.exception(
+                "Failed to project uploaded BGC via ClusteringRun pk=%s", run.pk
+            )
+
+    # ── Fallback: legacy UMAPTransform bundle ────────────────────────────
+    try:
+        from mgnify_bgcs.models import UMAPTransform
+
+        legacy = UMAPTransform.objects.order_by("-created_at").first()
+    except Exception:
+        legacy = None
+
+    if legacy is None:
+        return None
+
+    try:
+        bundle = pickle.loads(bytes(legacy.model_blob))
+    except Exception:
+        log.exception("Failed to unpickle legacy UMAPTransform pk=%s", legacy.pk)
+        return None
+
+    pca = bundle.get("pca") if isinstance(bundle, dict) else None
+    umap_model = bundle.get("umap") if isinstance(bundle, dict) else bundle
+
+    try:
+        projected = arr if pca is None else pca.transform(arr)
+        coords = umap_model.transform(projected)
         return float(coords[0, 0]), float(coords[0, 1])
     except Exception:
-        log.exception("Failed to compute UMAP coordinates for uploaded BGC")
-        return 0.0, 0.0
+        log.exception(
+            "Failed to project uploaded BGC via legacy UMAPTransform pk=%s",
+            legacy.pk,
+        )
+        return None
 
 
 def _get_domain_name(acc: str) -> str:

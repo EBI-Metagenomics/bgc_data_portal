@@ -397,6 +397,15 @@ class BgcRegionOut(Schema):
     cluster_list: list[RegionClusterOut] = []
 
 
+class BgcRegionWithHeader(Schema):
+    """A BGC region wrapped with identifying metadata so a batched response
+    can be correlated back to its originating BGC without a second lookup."""
+
+    bgc_id: int
+    accession: str
+    region: BgcRegionOut
+
+
 # ── Assessment schemas ──────────────────────────────────────────────────────
 
 
@@ -500,6 +509,22 @@ class GcfTaxonomyCount(Schema):
     count: int = 0
 
 
+class GcfTaxonomyNode(Schema):
+    """One node in the hierarchical taxonomy sunburst for a GCF.
+
+    ``id`` is the full dot-path (e.g. ``Bacteria.Actinomycetota``), ``parent``
+    is the dot-path of the parent (empty string for root nodes), ``count`` is
+    the number of GCF members whose lineage passes through this node.
+    Ready-to-feed into Plotly sunburst with ``branchvalues: 'total'``.
+    """
+
+    id: str
+    label: str
+    parent: str = ""
+    count: int = 0
+    rank: str = ""
+
+
 class GcfMemberPoint(Schema):
     bgc_id: int
     umap_x: float
@@ -518,6 +543,7 @@ class GcfContext(Schema):
     validated_accession: Optional[str] = None
     domain_frequency: list[GcfDomainFrequency] = []
     taxonomy_distribution: list[GcfTaxonomyCount] = []
+    taxonomy_hierarchy: list[GcfTaxonomyNode] = []
     member_points: list[GcfMemberPoint] = []
 
 
@@ -565,6 +591,9 @@ class BgcAssessmentResponse(Schema):
     submitted_domains: list[DomainArchitectureItem] = []
     nearest_validated_accession: Optional[str] = None
     nearest_validated_bgc_id: Optional[int] = None
+    # Sibling BGCs selected from the placed GCF (validated > type-strain > other),
+    # capped at 3, for the domain-architecture comparison panel.
+    comparison_bgc_ids: list[int] = []
 
 
 # ── Platform overview ─────────────────────────────────────────────────────────

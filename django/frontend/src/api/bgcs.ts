@@ -1,5 +1,12 @@
 import { apiGet } from "./client";
-import type { BgcDetail, BgcRegionData, BgcScatterPoint, BgcStatsResponse, PaginatedBgcRosterResponse } from "./types";
+import type {
+  BgcDetail,
+  BgcRegionData,
+  BgcRegionWithHeader,
+  BgcScatterPoint,
+  BgcStatsResponse,
+  PaginatedBgcRosterResponse,
+} from "./types";
 
 export function fetchBgcDetail(bgcId: number) {
   return apiGet<BgcDetail>(`/bgcs/${bgcId}/`);
@@ -7,6 +14,12 @@ export function fetchBgcDetail(bgcId: number) {
 
 export function fetchBgcRegion(bgcId: number) {
   return apiGet<BgcRegionData>(`/bgcs/${bgcId}/region/`);
+}
+
+export function fetchBgcRegions(bgcIds: number[]) {
+  return apiGet<BgcRegionWithHeader[]>("/bgcs/regions/", {
+    ids: bgcIds.join(","),
+  });
 }
 
 export interface BgcScatterParams {
@@ -31,6 +44,7 @@ export function fetchBgcScatter(params: BgcScatterParams = {}) {
 
 export interface BgcRosterParams {
   assembly_ids?: string;
+  bgc_ids?: string;
   sort_by?: string;
   order?: "asc" | "desc";
   page?: number;

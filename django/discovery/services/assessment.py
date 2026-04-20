@@ -318,15 +318,22 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
     novelty = _compute_novelty_decomposition(bgc, submitted_domain_accs)
 
     # ── Chemical space ───────────────────────────────────────────────────
-    submitted_point = {
-        "bgc_id": bgc.id,
-        "accession": bgc.bgc_accession,
-        "umap_x": bgc.umap_x,
-        "umap_y": bgc.umap_y,
-        "classification_path": classification_path,
-        "nearest_validated_distance": round(bgc.nearest_validated_distance or 0.0, 4),
-        "is_sparse": False,
-    }
+    # DashboardBgc.umap_x/y default to 0.0, so a BGC that has never been
+    # projected through a clustering run looks identical to one legitimately
+    # at the origin. Treat exact (0, 0) as "not yet projected" and return
+    # None rather than plotting the BGC on top of the axis origin.
+    if bgc.umap_x == 0.0 and bgc.umap_y == 0.0:
+        submitted_point = None
+    else:
+        submitted_point = {
+            "bgc_id": bgc.id,
+            "accession": bgc.bgc_accession,
+            "umap_x": bgc.umap_x,
+            "umap_y": bgc.umap_y,
+            "classification_path": classification_path,
+            "nearest_validated_distance": round(bgc.nearest_validated_distance or 0.0, 4),
+            "is_sparse": False,
+        }
 
     nearest_neighbors = _find_nearest_neighbors(bgc, k=20)
     validated_ref_points = list(
@@ -345,6 +352,10 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         if ref_bgc:
             nearest_validated_bgc_id = ref_bgc
 
+    comparison_bgc_ids = _select_comparison_bgc_ids(
+        gcf_context, exclude_bgc_id=bgc.id, limit=3
+    )
+
     return {
         "bgc_id": bgc.id,
         "accession": bgc.bgc_accession,
@@ -360,6 +371,7 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         "submitted_domains": submitted_domains,
         "nearest_validated_accession": nearest_validated_accession,
         "nearest_validated_bgc_id": nearest_validated_bgc_id,
+        "comparison_bgc_ids": comparison_bgc_ids,
     }
 
 
@@ -405,15 +417,149 @@ def find_similar_assemblies(assembly_id: int, k: int = 10) -> list[int]:
 # ── Private helpers ──────────────────────────────────────────────────────────
 
 
+_TAXONOMY_RANK_NAMES = [
+    "kingdom",
+    "phylum",
+    "class",
+    "order",
+    "family",
+    "genus",
+    "species",
+]
+
+
+def _build_taxonomy_hierarchy(paths: list[str]) -> list[dict]:
+    """Aggregate a list of dot-separated lineage paths into sunburst nodes.
+
+    Each returned node is ``{id, label, parent, count, rank}`` where ``id`` is
+    the cumulative dot-path (unique per node), ``parent`` is the dot-path of
+    the ancestor node (empty string for root children), ``count`` is the
+    number of input paths that pass through this node, and ``rank`` is a
+    human-readable rank name (kingdom/phylum/…) derived from depth.
+
+    Empty / missing paths are bucketed under a single ``"Unclassified"`` root
+    so the sunburst is never blank when at least one member exists.
+    """
+    if not paths:
+        return []
+
+    # tree[label] = {"count": int, "children": dict, "depth": int}
+    tree: dict[str, dict] = {}
+    unclassified_count = 0
+
+    for path in paths:
+        clean = (path or "").strip()
+        if not clean:
+            unclassified_count += 1
+            continue
+        parts = [p for p in clean.split(".") if p]
+        if not parts:
+            unclassified_count += 1
+            continue
+        level = tree
+        for depth, label in enumerate(parts):
+            node = level.get(label)
+            if node is None:
+                node = {"count": 0, "children": {}, "depth": depth}
+                level[label] = node
+            node["count"] += 1
+            level = node["children"]
+
+    nodes: list[dict] = []
+
+    def _walk(level: dict, parent_id: str) -> None:
+        for label, node in sorted(level.items()):
+            node_id = f"{parent_id}.{label}" if parent_id else label
+            rank = (
+                _TAXONOMY_RANK_NAMES[node["depth"]]
+                if node["depth"] < len(_TAXONOMY_RANK_NAMES)
+                else f"rank_{node['depth']}"
+            )
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": label,
+                    "parent": parent_id,
+                    "count": node["count"],
+                    "rank": rank,
+                }
+            )
+            _walk(node["children"], node_id)
+
+    _walk(tree, "")
+
+    if unclassified_count > 0:
+        nodes.append(
+            {
+                "id": "Unclassified",
+                "label": "Unclassified",
+                "parent": "",
+                "count": unclassified_count,
+                "rank": "",
+            }
+        )
+
+    return nodes
+
+
+def _select_comparison_bgc_ids(
+    gcf_context: dict | None,
+    *,
+    exclude_bgc_id: int | None = None,
+    limit: int = 3,
+) -> list[int]:
+    """Pick up to ``limit`` GCF sibling BGC ids for the comparison panel.
+
+    Ranking: validated members first (via GCF.validated_accession lookup),
+    then type-strain members, then the rest in their original order.
+    Returns an empty list when the asset is a novel singleton or the GCF
+    has no other members.
+    """
+    if not gcf_context:
+        return []
+    members = list(gcf_context.get("member_points") or [])
+    if not members:
+        return []
+
+    validated_acc = gcf_context.get("validated_accession") or ""
+    exclude = {exclude_bgc_id} if exclude_bgc_id is not None else set()
+
+    def _rank(m: dict) -> tuple[int, int]:
+        accession = m.get("accession", "")
+        is_validated = bool(validated_acc) and accession == validated_acc
+        is_ts = bool(m.get("is_type_strain"))
+        # Lower tuple sorts first: validated (0) < type-strain (1) < other (2).
+        if is_validated:
+            return (0, 0)
+        if is_ts:
+            return (1, 0)
+        return (2, 0)
+
+    ranked = sorted(
+        (m for m in members if m.get("bgc_id") not in exclude),
+        key=_rank,
+    )
+    out: list[int] = []
+    for m in ranked:
+        bid = m.get("bgc_id")
+        if bid is None:
+            continue
+        out.append(bid)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
     """Build the GCF context panel data."""
     members = DashboardBgc.objects.filter(
         gene_cluster_family=gcf.family_id
-    ).select_related("assembly")
+    ).select_related("assembly", "contig")
 
     member_points = []
     novelty_values = []
     taxonomy_counts: dict[str, int] = {}
+    taxonomy_paths: list[str] = []
 
     for mbgc in members:
         assembly = mbgc.assembly
@@ -433,6 +579,7 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
 
         tf = tax_label or "Unknown"
         taxonomy_counts[tf] = taxonomy_counts.get(tf, 0) + 1
+        taxonomy_paths.append(mbgc.contig.taxonomy_path if mbgc.contig else "")
 
     # Domain frequency via BgcDomain (single join)
     member_bgc_ids = [m.id for m in members]
@@ -442,6 +589,7 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
         {"taxonomy_label": k, "count": v}
         for k, v in sorted(taxonomy_counts.items(), key=lambda x: -x[1])
     ]
+    taxonomy_hierarchy = _build_taxonomy_hierarchy(taxonomy_paths)
 
     return {
         "gcf_id": gcf.id,
@@ -453,6 +601,7 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
         "validated_accession": gcf.validated_accession or None,
         "domain_frequency": domain_frequency,
         "taxonomy_distribution": taxonomy_distribution,
+        "taxonomy_hierarchy": taxonomy_hierarchy,
         "member_points": member_points,
     }
 

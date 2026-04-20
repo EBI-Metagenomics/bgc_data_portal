@@ -50,6 +50,7 @@ from discovery.api_schemas import (
     BgcClassOption,
     BgcDetail,
     BgcRegionOut,
+    BgcRegionWithHeader,
     BgcRosterItem,
     BgcScatterPoint,
     BgcStatsResponse,
@@ -315,6 +316,7 @@ def _apply_bgc_filters(
     qs,
     *,
     assembly_ids: Optional[str] = None,
+    bgc_ids: Optional[str] = None,
     tools: Optional[str] = None,
     include_all_versions: bool = False,
 ):
@@ -322,20 +324,37 @@ def _apply_bgc_filters(
 
     Parameters
     ----------
+    assembly_ids:
+        Comma-separated DashboardAssembly pks. Restricts to BGCs belonging
+        to those assemblies.
+    bgc_ids:
+        Comma-separated DashboardBgc pks. Restricts to that exact set. Used
+        by callers (e.g. Evaluate Asset's BGC Roster) that want to show a
+        specific list of sibling BGCs without knowing their assembly.
     tools:
         Comma-separated tool names to filter by (e.g. "antiSMASH,GECCO").
     include_all_versions:
         If False (default), only the latest detector version per tool per
         contig is returned.
     """
+    if not assembly_ids and not bgc_ids:
+        # At least one primary identifier filter is required — the roster
+        # endpoint must never fall through and return every BGC in the DB.
+        return qs.none()
+
     if assembly_ids:
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
             qs = qs.filter(assembly_id__in=ids)
         else:
             qs = qs.none()
-    else:
-        qs = qs.none()
+
+    if bgc_ids:
+        ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            qs = qs.filter(id__in=ids)
+        else:
+            qs = qs.none()
 
     if tools:
         tool_list = [t.strip() for t in tools.split(",") if t.strip()]
@@ -466,6 +485,7 @@ def assembly_bgc_roster(request, assembly_id: int):
 def bgc_roster(
     request,
     assembly_ids: Optional[str] = None,
+    bgc_ids: Optional[str] = None,
     sort_by: str = "novelty_score",
     order: str = "desc",
     page: int = 1,
@@ -475,7 +495,11 @@ def bgc_roster(
 ):
     qs = DashboardBgc.objects.select_related("assembly")
     qs = _apply_bgc_filters(
-        qs, assembly_ids=assembly_ids, tools=tools, include_all_versions=include_all_versions,
+        qs,
+        assembly_ids=assembly_ids,
+        bgc_ids=bgc_ids,
+        tools=tools,
+        include_all_versions=include_all_versions,
     )
 
     sort_map = {
@@ -660,17 +684,12 @@ def bgc_detail(request, bgc_id: int):
     )
 
 
-@discovery_router.get("/bgcs/{bgc_id}/region/", response=BgcRegionOut)
-def bgc_region(request, bgc_id: int):
-    """Return CDS, domain, and cluster data for the BGC genomic region.
+def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
+    """Build a BgcRegionOut for a single DB-ingested BGC.
 
-    Served entirely from discovery models (DashboardCds, BgcDomain).
+    Extracted from the ``bgc_region`` endpoint so the assessment services
+    and the batched regions endpoint can reuse the same query logic.
     """
-    try:
-        bgc = DashboardBgc.objects.get(id=bgc_id)
-    except DashboardBgc.DoesNotExist:
-        raise HttpError(404, "BGC not found")
-
     extended_window = 2000
     window_start = max(0, bgc.start_position - extended_window)
     window_end = bgc.end_position + extended_window
@@ -772,6 +791,75 @@ def bgc_region(request, bgc_id: int):
         domain_list=domain_list,
         cluster_list=cluster_list,
     )
+
+
+@discovery_router.get("/bgcs/{bgc_id}/region/", response=BgcRegionOut)
+def bgc_region(request, bgc_id: int):
+    """Return CDS, domain, and cluster data for the BGC genomic region.
+
+    Served entirely from discovery models (DashboardCds, BgcDomain).
+    """
+    try:
+        bgc = DashboardBgc.objects.get(id=bgc_id)
+    except DashboardBgc.DoesNotExist:
+        raise HttpError(404, "BGC not found")
+    return _build_bgc_region_data(bgc)
+
+
+# Cap for the batched regions endpoint. Each region payload is a few KB of
+# CDS + domain rows, so 10 is more than enough for the Evaluate Asset
+# comparison card (submitted + nearest validated + up to 3 GCF siblings).
+_BGC_REGIONS_BATCH_MAX = 10
+
+
+@discovery_router.get("/bgcs/regions/", response=list[BgcRegionWithHeader])
+def bgc_regions_batch(request, ids: str):
+    """Return region data for multiple BGCs in a single call.
+
+    ``ids`` is a comma-separated list of DashboardBgc primary keys. Unknown
+    IDs are silently skipped so a stale frontend ID list doesn't 404 the
+    whole batch. The response preserves the input order.
+    """
+    raw_ids: list[int] = []
+    seen: set[int] = set()
+    for chunk in ids.split(","):
+        token = chunk.strip()
+        if not token:
+            continue
+        try:
+            value = int(token)
+        except ValueError:
+            raise HttpError(400, f"Invalid BGC id in ids param: {token!r}")
+        if value in seen:
+            continue
+        seen.add(value)
+        raw_ids.append(value)
+
+    if not raw_ids:
+        return []
+    if len(raw_ids) > _BGC_REGIONS_BATCH_MAX:
+        raise HttpError(
+            400,
+            f"Too many ids ({len(raw_ids)}); cap is {_BGC_REGIONS_BATCH_MAX}",
+        )
+
+    bgcs_by_id = {
+        b.id: b
+        for b in DashboardBgc.objects.filter(id__in=raw_ids)
+    }
+    out: list[BgcRegionWithHeader] = []
+    for bid in raw_ids:
+        bgc = bgcs_by_id.get(bid)
+        if bgc is None:
+            continue
+        out.append(
+            BgcRegionWithHeader(
+                bgc_id=bgc.id,
+                accession=bgc.bgc_accession,
+                region=_build_bgc_region_data(bgc),
+            )
+        )
+    return out
 
 
 @discovery_router.get("/bgcs/{bgc_id}/download/")

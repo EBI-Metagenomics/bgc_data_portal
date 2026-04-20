@@ -33,9 +33,13 @@ const SORT_OPTIONS = [
 
 interface BgcRosterProps {
   assemblyIdOverride?: number;
+  bgcIdsOverride?: number[];
 }
 
-export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
+export function BgcRoster({
+  assemblyIdOverride,
+  bgcIdsOverride,
+}: BgcRosterProps = {}) {
   const {
     data,
     isLoading,
@@ -45,7 +49,7 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
     setSortBy,
     order,
     setOrder,
-  } = useBgcRoster(assemblyIdOverride);
+  } = useBgcRoster(assemblyIdOverride, bgcIdsOverride);
 
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
