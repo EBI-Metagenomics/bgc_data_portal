@@ -11,11 +11,16 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import logging
 import struct
 import tarfile
 from dataclasses import dataclass, field, asdict
 
+from django.conf import settings
+
 from discovery.models import EMBEDDING_DIM
+
+log = logging.getLogger(__name__)
 
 MAX_TAR_SIZE = 20 * 1024 * 1024  # 20 MB
 
@@ -328,25 +333,74 @@ def _parse_contig_row(row: dict[str, str]) -> UploadedContig:
 def _parse_domain_rows(
     rows: list[dict[str, str]], bgc_key_map: dict[tuple, int]
 ) -> list[UploadedDomain]:
-    """Parse domain rows, validating that each references a known BGC."""
+    """Parse domain rows, validating each row and filtering by the ref_db allowlist.
+
+    Rows are skipped (not fatal) when any of the following is true:
+      - ``domain_acc`` is missing or empty
+      - the BGC coordinates reference a BGC that is not in ``bgc_key_map``
+      - ``ref_db`` is outside ``settings.ALLOWED_DOMAIN_REF_DBS`` (PFAM/TIGRFAM)
+      - ``start_position`` / ``end_position`` are missing, unparsable, or form
+        an empty range — they participate in the ``BgcDomain`` unique constraint
+        ``(bgc, domain_acc, cds, start_position, end_position)`` so an empty
+        value collapses unrelated rows together.
+
+    Drop counts per reason are logged at INFO once the pass finishes.
+    """
+    allowed = {v.upper() for v in getattr(settings, "ALLOWED_DOMAIN_REF_DBS", ())}
+    dropped: dict[str, int] = {}
+
     domains: list[UploadedDomain] = []
     for row in rows:
-        if "domain_acc" not in row or not row["domain_acc"].strip():
-            continue  # skip rows without domain accession
-        key = _domain_bgc_key(row)
+        domain_acc = (row.get("domain_acc") or "").strip()
+        if not domain_acc:
+            dropped["missing_domain_acc"] = dropped.get("missing_domain_acc", 0) + 1
+            continue
+
+        try:
+            key = _domain_bgc_key(row)
+        except (KeyError, ValueError):
+            dropped["bad_bgc_key"] = dropped.get("bad_bgc_key", 0) + 1
+            continue
         if key not in bgc_key_map:
-            continue  # skip domains for unknown BGCs
+            dropped["unknown_bgc"] = dropped.get("unknown_bgc", 0) + 1
+            continue
+
+        if allowed:
+            ref_db_value = (row.get("ref_db") or "").strip().upper()
+            if ref_db_value not in allowed:
+                dropped["ref_db_not_allowed"] = dropped.get("ref_db_not_allowed", 0) + 1
+                continue
+
+        start_raw = (row.get("start_position") or "").strip()
+        end_raw = (row.get("end_position") or "").strip()
+        if not start_raw or not end_raw:
+            dropped["missing_position"] = dropped.get("missing_position", 0) + 1
+            continue
+        start_pos = _parse_int(start_raw, default=-1)
+        end_pos = _parse_int(end_raw, default=-1)
+        if start_pos < 0 or end_pos < 0 or end_pos <= start_pos:
+            dropped["bad_position"] = dropped.get("bad_position", 0) + 1
+            continue
+
         score_str = row.get("score", "")
         domains.append(
             UploadedDomain(
-                domain_acc=row["domain_acc"].strip(),
+                domain_acc=domain_acc,
                 domain_name=row.get("domain_name", ""),
                 domain_description=row.get("domain_description", ""),
                 ref_db=row.get("ref_db", ""),
-                start_position=_parse_int(row.get("start_position", "")),
-                end_position=_parse_int(row.get("end_position", "")),
+                start_position=start_pos,
+                end_position=end_pos,
                 score=float(score_str) if score_str and score_str.strip() else None,
             )
+        )
+
+    if dropped:
+        log.info(
+            "asset-upload domain filter: kept=%d dropped=%d by reason: %s",
+            len(domains),
+            sum(dropped.values()),
+            dict(sorted(dropped.items())),
         )
     return domains
 

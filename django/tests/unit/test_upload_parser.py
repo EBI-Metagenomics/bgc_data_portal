@@ -138,9 +138,21 @@ def _assembly_archive() -> bytes:
                 "bgc_end": 2000,
                 "detector_name": "sanntis",
                 "domain_acc": "PF00001",
+                "ref_db": "PFAM",
+                "start_position": 150,
+                "end_position": 300,
             }
         ],
-        ["contig_sha256", "bgc_start", "bgc_end", "detector_name", "domain_acc"],
+        [
+            "contig_sha256",
+            "bgc_start",
+            "bgc_end",
+            "detector_name",
+            "domain_acc",
+            "ref_db",
+            "start_position",
+            "end_position",
+        ],
     )
     embeddings = _tsv(
         [
@@ -214,3 +226,144 @@ def test_extract_tar_ignores_non_tsv_members():
     members = _extract_tar(archive)
 
     assert set(members.keys()) == {"bgcs.tsv"}
+
+
+# ── Domain ref_db allowlist & reject-count tests ──────────────────────────────
+
+
+DOMAIN_COLUMNS = [
+    "contig_sha256",
+    "bgc_start",
+    "bgc_end",
+    "detector_name",
+    "domain_acc",
+    "ref_db",
+    "start_position",
+    "end_position",
+]
+
+
+def _bgc_archive_with_domain_rows(domain_rows: list[dict]) -> bytes:
+    bgcs = _tsv(
+        [
+            {
+                "contig_sha256": SAMPLE_CONTIG_SHA,
+                "detector_name": "sanntis",
+                "start_position": 100,
+                "end_position": 2000,
+            }
+        ],
+        ["contig_sha256", "detector_name", "start_position", "end_position"],
+    )
+    defaults = {
+        "contig_sha256": SAMPLE_CONTIG_SHA,
+        "bgc_start": 100,
+        "bgc_end": 2000,
+        "detector_name": "sanntis",
+        "start_position": 150,
+        "end_position": 300,
+    }
+    domains = _tsv(
+        [{**defaults, **r} for r in domain_rows],
+        DOMAIN_COLUMNS,
+    )
+    embeddings = _tsv(
+        [
+            {
+                "contig_sha256": SAMPLE_CONTIG_SHA,
+                "bgc_start": 100,
+                "bgc_end": 2000,
+                "detector_name": "sanntis",
+                "vector_base64": SAMPLE_EMBEDDING,
+            }
+        ],
+        ["contig_sha256", "bgc_start", "bgc_end", "detector_name", "vector_base64"],
+    )
+    return _build_archive(
+        {
+            "bgcs.tsv": bgcs,
+            "domains.tsv": domains,
+            "embeddings_bgc.tsv": embeddings,
+        }
+    )
+
+
+def test_domain_ref_db_allowlist_filters_smart_rows(caplog):
+    archive = _bgc_archive_with_domain_rows(
+        [
+            {"domain_acc": "PF00001", "ref_db": "PFAM"},
+            {"domain_acc": "SM00001", "ref_db": "SMART"},
+            {"domain_acc": "TIGR00001", "ref_db": "TIGRFAM"},
+            {"domain_acc": "G3DSA:1", "ref_db": "GENE3D"},
+        ]
+    )
+
+    with caplog.at_level("INFO", logger="discovery.services.upload_parser"):
+        result = parse_bgc_upload(archive)
+
+    accs = [d["domain_acc"] for d in result["domains"]]
+    assert accs == ["PF00001", "TIGR00001"]
+    # Summary log records dropped rows by reason.
+    dropped_logs = [r for r in caplog.records if "asset-upload domain filter" in r.message]
+    assert dropped_logs, "expected INFO log summarising dropped domains"
+    assert "ref_db_not_allowed" in dropped_logs[0].message
+
+
+def test_domain_ref_db_allowlist_is_case_insensitive():
+    archive = _bgc_archive_with_domain_rows(
+        [
+            {"domain_acc": "PF00001", "ref_db": "Pfam"},     # mixed case
+            {"domain_acc": "TIGR00001", "ref_db": "tigrfam"}, # lowercase
+        ]
+    )
+
+    result = parse_bgc_upload(archive)
+    assert {d["domain_acc"] for d in result["domains"]} == {"PF00001", "TIGR00001"}
+
+
+def test_domain_missing_ref_db_is_dropped(caplog):
+    archive = _bgc_archive_with_domain_rows(
+        [
+            {"domain_acc": "PF00001", "ref_db": "PFAM"},
+            {"domain_acc": "MISSING", "ref_db": ""},
+        ]
+    )
+
+    with caplog.at_level("INFO", logger="discovery.services.upload_parser"):
+        result = parse_bgc_upload(archive)
+
+    assert [d["domain_acc"] for d in result["domains"]] == ["PF00001"]
+    assert any("ref_db_not_allowed" in r.message for r in caplog.records)
+
+
+def test_domain_bad_position_is_dropped(caplog):
+    archive = _bgc_archive_with_domain_rows(
+        [
+            {"domain_acc": "PF00001", "ref_db": "PFAM"},
+            {"domain_acc": "PF00002", "ref_db": "PFAM", "start_position": "", "end_position": ""},
+            {"domain_acc": "PF00003", "ref_db": "PFAM", "start_position": "200", "end_position": "100"},
+        ]
+    )
+
+    with caplog.at_level("INFO", logger="discovery.services.upload_parser"):
+        result = parse_bgc_upload(archive)
+
+    assert [d["domain_acc"] for d in result["domains"]] == ["PF00001"]
+    summary = next(r for r in caplog.records if "asset-upload domain filter" in r.message)
+    assert "missing_position" in summary.message
+    assert "bad_position" in summary.message
+
+
+def test_all_domains_filtered_still_parses():
+    archive = _bgc_archive_with_domain_rows(
+        [
+            {"domain_acc": "SM00001", "ref_db": "SMART"},
+            {"domain_acc": "G3DSA:1", "ref_db": "GENE3D"},
+        ]
+    )
+
+    result = parse_bgc_upload(archive)
+    assert result["domains"] == []
+    # BGC itself is still parsed — empty domain list is not an error.
+    assert result["detector_name"] == "sanntis"
+    assert len(result["embedding"]) == EMBEDDING_DIM

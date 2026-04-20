@@ -139,6 +139,13 @@ CELERY_TASK_ROUTES = {
 }
 
 
+# Domain reference databases accepted by the Evaluate Asset / asset-upload flow.
+# Must match ref_db_allowlist in mgnify-bgcs-etl/config/load/merge_staged_tsvs.yaml
+# so uploaded assets are compared against the same subset of domains that is
+# actually loaded into the Discovery DB.
+ALLOWED_DOMAIN_REF_DBS: tuple[str, ...] = ("PFAM", "TIGRFAM")
+
+
 # REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [
