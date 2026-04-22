@@ -59,6 +59,7 @@ from .tsv_copy import copy_tsv_to_table, truncate_tables
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 10_000
+SEQUENCE_INSERT_BATCH_SIZE = 500  # smaller SQL batches for large binary sequence data
 
 # Tables in truncation order (respects FK CASCADE but explicit is safer)
 ALL_DISCOVERY_TABLES = [
@@ -305,14 +306,18 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
 
             if len(batch) >= BATCH_SIZE:
                 ContigSequence.objects.bulk_create(
-                batch, update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
-            )
+                    batch,
+                    update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
+                    batch_size=SEQUENCE_INSERT_BATCH_SIZE,
+                )
                 total += len(batch)
                 batch.clear()
 
     if batch:
         ContigSequence.objects.bulk_create(
-            batch, update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
+            batch,
+            update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
+            batch_size=SEQUENCE_INSERT_BATCH_SIZE,
         )
         total += len(batch)
 
@@ -557,7 +562,9 @@ def load_cds_sequences(
             if len(batch) >= BATCH_SIZE:
                 deduped = list({obj.cds_id: obj for obj in batch}.values())
                 CdsSequence.objects.bulk_create(
-                    deduped, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+                    deduped,
+                    update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+                    batch_size=SEQUENCE_INSERT_BATCH_SIZE,
                 )
                 total += len(deduped)
                 batch.clear()
@@ -565,7 +572,9 @@ def load_cds_sequences(
     if batch:
         deduped = list({obj.cds_id: obj for obj in batch}.values())
         CdsSequence.objects.bulk_create(
-            deduped, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+            deduped,
+            update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+            batch_size=SEQUENCE_INSERT_BATCH_SIZE,
         )
         total += len(deduped)
 
