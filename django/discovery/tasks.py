@@ -821,8 +821,8 @@ def sequence_similarity_search(self, sequence: str, similarity_threshold: float)
         log.error("ESM-C embedding failed for sequence (len=%d)", len(seq))
         return {}
 
-    # Extract layer 26 → 960-dim vector
-    embedding = results[0][26].astype(np.float32)
+    # Extract final layer → 960-dim vector (matches bgc_embedding_aggregator vec[-1])
+    embedding = results[0][-1].astype(np.float32)
     vec_str = "[" + ",".join(str(float(v)) for v in embedding) + "]"
 
     # pgvector cosine distance search
