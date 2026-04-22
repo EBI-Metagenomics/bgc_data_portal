@@ -632,6 +632,7 @@ def bgc_detail(request, bgc_id: int):
             organism_name=assembly.organism_name,
             source_name=assembly.source.name if assembly.source else None,
             is_type_strain=assembly.is_type_strain,
+            url=assembly.url or "",
         )
 
     # Natural products

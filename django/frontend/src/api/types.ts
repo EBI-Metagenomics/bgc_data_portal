@@ -92,6 +92,7 @@ export interface ParentAssemblySummary {
   organism_name: string | null;
   source_name: string | null;
   is_type_strain: boolean;
+  url: string;
 }
 
 export interface ChemOntAnnotationNode {

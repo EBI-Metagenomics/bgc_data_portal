@@ -168,12 +168,15 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
             <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>Parent Assembly</h5>
             <div className="flex items-center gap-2">
               <a
-                href={`https://www.ebi.ac.uk/ena/browser/view/${bgc.parent_assembly.accession}`}
+                href={
+                  bgc.parent_assembly.url ||
+                  `https://www.ebi.ac.uk/ena/browser/view/${bgc.parent_assembly.accession}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-blue-600 hover:underline"
               >
-                {bgc.parent_assembly.organism_name ?? bgc.parent_assembly.accession}
+                {bgc.parent_assembly.accession}
                 <ExternalLink className="h-3 w-3" />
               </a>
               {bgc.parent_assembly.is_type_strain && (

@@ -125,6 +125,7 @@ class ParentAssemblySummary(Schema):
     organism_name: Optional[str] = None
     source_name: Optional[str] = None
     is_type_strain: bool = False
+    url: str = ""
 
 
 class ChemOntAnnotationNode(Schema):
