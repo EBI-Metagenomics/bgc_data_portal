@@ -368,6 +368,9 @@ export interface BgcNoveltyItem {
   novelty_vs_db: number;
   domain_novelty: number;
   is_partial: boolean;
+  size_kb: number;
+  nearest_validated_accession: string | null;
+  nearest_validated_distance: number | null;
 }
 
 export interface RedundancyCell {

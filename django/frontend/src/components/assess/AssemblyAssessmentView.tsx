@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useAssessStore } from "@/stores/assess-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useAssemblyAssessment } from "@/hooks/use-assembly-assessment";
+import type { BgcRosterItem } from "@/api/types";
 import { PanelContainer } from "@/components/panels/PanelContainer";
 import { AssessmentLoading } from "./AssessmentLoading";
 import { AssemblyRankCard } from "./AssemblyRankCard";
@@ -20,6 +22,26 @@ export function AssemblyAssessmentView() {
   const assetLabel = useAssessStore((s) => s.assetLabel);
   const isUploaded = useAssessStore((s) => s.isUploaded);
   const { isLoading, isError, result, retry } = useAssemblyAssessment();
+
+  // For uploaded assemblies the BGCs are ephemeral (synthetic negative IDs,
+  // never persisted) so the server-backed /bgcs/roster/ endpoint has
+  // nothing to return. Materialise roster rows directly from the in-memory
+  // bgc_novelty_breakdown that the assessment already computed.
+  const rosterItemsOverride = useMemo<BgcRosterItem[] | undefined>(() => {
+    if (!isUploaded || !result) return undefined;
+    return result.bgc_novelty_breakdown.map((b) => ({
+      id: b.bgc_id,
+      accession: b.accession,
+      classification_path: b.classification_path,
+      size_kb: b.size_kb,
+      novelty_score: b.novelty_vs_db,
+      domain_novelty: b.domain_novelty,
+      is_partial: b.is_partial,
+      nearest_validated_accession: b.nearest_validated_accession,
+      nearest_validated_distance: b.nearest_validated_distance,
+      assembly_accession: result.accession,
+    }));
+  }, [isUploaded, result]);
 
   if (isLoading) {
     return <AssessmentLoading label={assetLabel} />;
@@ -102,7 +124,11 @@ export function AssemblyAssessmentView() {
       {/* BGC Triad — same layout as ExploreLayout */}
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
         <PanelContainer title="BGC Roster" className="xl:row-span-2" constrained>
-          <BgcRoster assemblyIdOverride={result.assembly_id} />
+          {rosterItemsOverride ? (
+            <BgcRoster itemsOverride={rosterItemsOverride} />
+          ) : (
+            <BgcRoster assemblyIdOverride={result.assembly_id} />
+          )}
         </PanelContainer>
         <PanelContainer title="BGC Space Map" className="h-full" constrained>
           <BgcScatter

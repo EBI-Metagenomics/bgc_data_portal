@@ -1,6 +1,8 @@
+import { Fragment, useMemo } from "react";
 import { useBgcRoster } from "@/hooks/use-bgc-roster";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
+import type { BgcRosterItem } from "@/api/types";
 import { BgcContextMenu } from "./BgcContextMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,12 +36,23 @@ const SORT_OPTIONS = [
 interface BgcRosterProps {
   assemblyIdOverride?: number;
   bgcIdsOverride?: number[];
+  /**
+   * Render the roster from an in-memory array instead of fetching it from
+   * the server. Used by Evaluate Asset's Assembly view, where uploaded
+   * BGCs are not persisted to the database and therefore cannot be queried
+   * via the /bgcs/roster/ endpoint. When provided, rows are read-only —
+   * context menu and row selection are disabled since the synthetic IDs
+   * don't resolve to DB records.
+   */
+  itemsOverride?: BgcRosterItem[];
 }
 
 export function BgcRoster({
   assemblyIdOverride,
   bgcIdsOverride,
+  itemsOverride,
 }: BgcRosterProps = {}) {
+  const inline = itemsOverride !== undefined;
   const {
     data,
     isLoading,
@@ -49,17 +62,38 @@ export function BgcRoster({
     setSortBy,
     order,
     setOrder,
-  } = useBgcRoster(assemblyIdOverride, bgcIdsOverride);
+  } = useBgcRoster(assemblyIdOverride, bgcIdsOverride, !inline);
 
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
   const assemblyShortlist = useShortlistStore((s) => s.assemblies);
   const showAssemblyBadge = assemblyShortlist.length > 1;
 
-  const items = data?.items ?? [];
-  const pagination = data?.pagination;
+  const sortedInlineItems = useMemo(() => {
+    if (!inline || !itemsOverride) return [];
+    const dir = order === "asc" ? 1 : -1;
+    const cmp = (a: BgcRosterItem, b: BgcRosterItem) => {
+      switch (sortBy) {
+        case "size_kb":
+          return (a.size_kb - b.size_kb) * dir;
+        case "domain_novelty":
+          return (a.domain_novelty - b.domain_novelty) * dir;
+        case "classification_path":
+          return a.classification_path.localeCompare(b.classification_path) * dir;
+        case "accession":
+          return a.accession.localeCompare(b.accession) * dir;
+        case "novelty_score":
+        default:
+          return (a.novelty_score - b.novelty_score) * dir;
+      }
+    };
+    return [...itemsOverride].sort(cmp);
+  }, [inline, itemsOverride, sortBy, order]);
 
-  if (!data && !isLoading) {
+  const items = inline ? sortedInlineItems : (data?.items ?? []);
+  const pagination = inline ? undefined : data?.pagination;
+
+  if (!inline && !data && !isLoading) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
         Add assemblies to shortlist to view their BGCs
@@ -67,7 +101,7 @@ export function BgcRoster({
     );
   }
 
-  if (isLoading) {
+  if (!inline && isLoading) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -116,18 +150,14 @@ export function BgcRoster({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((bgc) => (
-              <BgcContextMenu
-                key={bgc.id}
-                bgcId={bgc.id}
-                label={bgc.accession}
-              >
+            {items.map((bgc) => {
+              const row = (
                 <TableRow
                   className={cn(
-                    "cursor-pointer",
-                    activeBgcId === bgc.id && "bg-primary/5"
+                    !inline && "cursor-pointer",
+                    !inline && activeBgcId === bgc.id && "bg-primary/5"
                   )}
-                  onClick={() => setActiveBgcId(bgc.id)}
+                  onClick={inline ? undefined : () => setActiveBgcId(bgc.id)}
                 >
                   <TableCell className="font-mono text-xs">
                     <div className="flex items-center gap-1">
@@ -166,8 +196,22 @@ export function BgcRoster({
                     )}
                   </TableCell>
                 </TableRow>
-              </BgcContextMenu>
-            ))}
+              );
+
+              if (inline) {
+                return <Fragment key={bgc.id}>{row}</Fragment>;
+              }
+
+              return (
+                <BgcContextMenu
+                  key={bgc.id}
+                  bgcId={bgc.id}
+                  label={bgc.accession}
+                >
+                  {row}
+                </BgcContextMenu>
+              );
+            })}
             {items.length === 0 && (
               <TableRow>
                 <TableCell

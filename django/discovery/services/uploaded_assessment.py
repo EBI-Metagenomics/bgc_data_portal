@@ -209,9 +209,19 @@ def compute_uploaded_assembly_assessment(data: dict) -> dict:
         embedding = bgc["embedding"]
         domain_accs = {d["domain_acc"] for d in bgc.get("domains", [])}
 
-        # Novelty vs validated
+        # Novelty vs validated (also carries the nearest validated BGC id)
         nearest_validated = _nearest_db_embeddings(embedding, k=1, filter_validated=True)
-        novelty_vs_validated = round(nearest_validated[0][1], 4) if nearest_validated else 0.0
+        if nearest_validated:
+            nearest_validated_distance = round(nearest_validated[0][1], 4)
+            nearest_validated_accession = (
+                DashboardBgc.objects.filter(pk=nearest_validated[0][0])
+                .values_list("bgc_accession", flat=True)
+                .first()
+            )
+        else:
+            nearest_validated_distance = None
+            nearest_validated_accession = None
+        novelty_vs_validated = nearest_validated_distance or 0.0
 
         # Novelty vs DB (any BGC)
         nearest_any = _nearest_db_embeddings(embedding, k=1)
@@ -222,6 +232,13 @@ def compute_uploaded_assembly_assessment(data: dict) -> dict:
 
         novelty_scores.append(novelty_vs_validated)
 
+        # size_kb comes straight from the parsed bgcs.tsv row; fall back to
+        # deriving it from start/end positions if the row didn't carry it.
+        size_kb = bgc.get("size_kb", 0.0) or max(
+            (bgc.get("end_position", 0) - bgc.get("start_position", 0)) / 1000.0,
+            0.0,
+        )
+
         bgc_details.append({
             "bgc_id": -(bgc["index"] + 1),
             "accession": f"uploaded_bgc_{bgc['index']}",
@@ -230,6 +247,9 @@ def compute_uploaded_assembly_assessment(data: dict) -> dict:
             "novelty_vs_db": novelty_vs_db,
             "domain_novelty": round(domain_novelty, 4),
             "is_partial": bgc.get("is_partial", False),
+            "size_kb": round(size_kb, 3),
+            "nearest_validated_accession": nearest_validated_accession,
+            "nearest_validated_distance": nearest_validated_distance,
             "embedding": embedding,
         })
     bgc_details.sort(key=lambda x: x["novelty_vs_db"], reverse=True)

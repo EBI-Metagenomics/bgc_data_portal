@@ -7,6 +7,7 @@ import { useState } from "react";
 export function useBgcRoster(
   assemblyIdOverride?: number,
   bgcIdsOverride?: number[],
+  queryEnabled: boolean = true,
 ) {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
@@ -45,7 +46,7 @@ export function useBgcRoster(
     page_size: pageSize,
   };
 
-  const enabled = assemblyIds.length > 0 || !!bgcIdsCsv;
+  const enabled = queryEnabled && (assemblyIds.length > 0 || !!bgcIdsCsv);
 
   const query = useQuery({
     queryKey: ["bgc-roster", params],

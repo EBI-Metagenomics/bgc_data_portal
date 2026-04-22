@@ -429,6 +429,9 @@ class BgcNoveltyItem(Schema):
     novelty_vs_db: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
+    size_kb: float = 0.0
+    nearest_validated_accession: Optional[str] = None
+    nearest_validated_distance: Optional[float] = None
 
 
 class RedundancyCell(Schema):

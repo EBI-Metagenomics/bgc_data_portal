@@ -1,5 +1,6 @@
 # Discovery Platform — Feature Reference
 
+
 The Discovery Platform is the primary interface for exploring, searching, and evaluating Biosynthetic Gene Clusters (BGCs) in the MGnify BGCs database. It provides three complementary modes of interaction, each designed for a different analytical workflow.
 
 ## Table of Contents
@@ -30,6 +31,227 @@ The Discovery Platform operates in three modes, selectable from the header tabs:
 
 ---
 
+## User Stories
+
+### Explore Assemblies Mode
+
+- I want to browse all assemblies ranked by how chemically novel and diverse their BGCs are, so I can identify the most promising candidates without a prior hypothesis.
+- I want to filter to type strains only, so I only see organisms I can actually purchase.
+- I want to filter by BGC class (enzymatic machinery) independently from ChemOnt class (product chemistry), so I can narrow to a specific research area without conflating the two.
+- I want to filter metagenome assemblies by biome, so I can focus on BGCs from ecologically relevant environments.
+- I want to click an assembly row and immediately see all its BGCs in a linked panel below, so I can assess its full biosynthetic repertoire at a glance.
+- I want to shortlist multiple assemblies and see their combined BGC set in one view.
+- I want to pin specific BGCs to a shortlist and export them as GenBank files ready for the lab.
+
+### Search BGCs Mode
+
+- I want to search by protein domain architecture (Pfam), so I can find all BGCs encoding a specific enzymatic function.
+- I want to search by a chemical structure (SMILES), so I can find BGCs predicted to produce compounds structurally similar to one I am studying.
+- I want to search by a protein or nucleotide sequence, so I can find BGCs related to a published or novel cluster.
+- I want BGC results ranked by similarity to my query, so the most relevant hits appear first.
+- I want to see which parent assemblies contain my result BGCs, so I can identify purchasable type strains that carry the chemistry I'm interested in.
+
+### Evaluate Asset Mode
+
+- I want to evaluate a database assembly and see how its scores rank against all other assemblies, so I can decide whether it is worth pursuing.
+- I want to evaluate a database BGC and see which GCF it belongs to, its novelty decomposition, and the nearest known compound, so I can assess its research value.
+- I want to upload my own assembly (as a .tar.gz file) and receive a structured assessment comparing it to the database, so I can decide whether to work with my strain or purchase an equivalent.
+- I want to see a Redundancy Matrix for my assembly showing which of its BGCs are in novel GCFs vs. already covered by purchasable type strains.
+- I want to upload my own BGC and see a domain architecture comparison with its nearest MIBiG relative, so I can identify what is novel about it.
+
+---
+
+## Mode 1: Explore Assemblies
+
+### Purpose
+Browse the full assembly catalogue — genomes, metagenomes, and regions — to identify assemblies worth pursuing, with no prior hypothesis required.
+
+### When to Use
+Use when starting a new screening campaign, exploring an unfamiliar taxonomic group or ecological niche, or when you want the database to surface promising candidates rather than confirming a specific hypothesis.
+
+### Use Flow
+
+1. Open the Discovery Platform. Click the **Explore Assemblies** tab.
+2. Set filters in the sidebar as needed (all are optional):
+   - **Type Strain only** — restricts to purchasable organisms. Enable this early if purchase is a hard requirement.
+   - **Assembly Type** — choose Genome, Metagenome, or Region, or leave unset for all types.
+   - **Taxonomy tree** — click any node to filter to that clade. Counts update in real time.
+   - **BGC Class** — click a class button (Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, Other) to filter to assemblies containing at least one BGC of that type. Only one class active at a time.
+   - **ChemOnt** — expand the tree to find a chemical class and click to filter. Independent of BGC Class.
+   - **Biome Lineage** — type a GOLD path substring to filter metagenome assemblies by ecological origin.
+   - **Organism Search** — type a name substring to filter by organism name.
+3. Click **Run Query** to load results.
+4. Review the **Assembly Roster** (top-left panel). Rows are assemblies matching your filters. Columns show Novelty, Diversity, Density, and BGC Count. Sort by any column.
+5. Explore the **Assembly Space Map** (top-right). Each point is an assembly. Choose axes from Diversity, Novelty, Density, or Taxonomic Novelty. Points are coloured by dominant taxonomy. Click a point to select its assembly.
+6. Click an assembly row (or point) to select it. The **BGC Roster** (bottom-left) populates with all BGCs from that assembly. The **Assembly Detail** panel appears below the assembly triad.
+7. Optionally, shortlist multiple assemblies. The BGC panels then show the merged BGC set from all shortlisted assemblies, with a badge indicating the source count.
+8. Review the **BGC Roster**. Sort by Novelty Score or Domain Novelty. Click a BGC row to open its **BGC Detail** panel, which shows the domain architecture, ChemOnt annotations, and nearest validated BGC.
+9. Use the right-click context menu on any row to: **Add to Shortlist**, **Evaluate Assembly**, or **Evaluate BGC** / **Find Similar BGCs**.
+10. Use the **Assembly Stats** and **BGC Stats** panels for summary charts. Export stats as JSON or TSV.
+11. To export, use the shortlist trays at the bottom of the sidebar.
+
+### Layout: The Triad System
+
+Each mode is organised around **triads** — groups of three linked panels for one entity level. Explore Assemblies has two triads stacked vertically.
+
+**Assembly Triad (top)**
+
+*Assembly Roster* — Full-height table on the left. Columns: Organism name, Accession, Type Strain badge, BGC Count, Diversity Score, Novelty Score, Density. Sortable by all columns. Paginated. Click a row to select; right-click for context menu.
+
+*Assembly Space Map* — Scatter plot (top right). Axes are user-configurable: Diversity, Novelty, Density, or Taxonomic Novelty. Points coloured by dominant taxonomy. Click a point to select the corresponding assembly row.
+
+*Assembly Stats* — Summary charts (bottom right): taxonomy sunburst of the current result set, score distributions (histograms), type strain breakdown. Export as JSON or TSV.
+
+**BGC Triad (bottom)**
+
+Populated by: the currently selected assembly, OR the merged set from all shortlisted assemblies. A badge at the top of the triad indicates the source (e.g. "From 3 shortlisted assemblies").
+
+*BGC Roster* — Table. Columns: Accession, Classification (BGC class path), Size (kb), Novelty Score, Domain Novelty, Nearest Validated BGC. Sortable. Click a row to select and open BGC Detail. Right-click: Add to Shortlist, Evaluate BGC, Find Similar BGCs.
+
+*BGC Space Map* — Scatter plot, typically Novelty Score vs. Domain Novelty. Points coloured by BGC class. MIBiG validated BGCs shown as distinct markers for reference. Click a point to select.
+
+*BGC Stats* — Summary charts: BGC class distribution, domain frequency bar chart, completeness breakdown, ChemOnt sunburst. Export as JSON or TSV.
+
+### Detail Panels
+
+**Assembly Detail** — Appears below the Assembly Triad when a row is selected. Shows: organism name, accession, type strain badge, score metrics as progress bars, links to external resources. Actions: Add to Shortlist, Evaluate Assembly.
+
+**BGC Detail** — Appears below the BGC Triad when a row is selected. Shows: accession, full classification path (BGC class → sub-type), novelty score, domain novelty, distance to nearest validated BGC, **domain architecture diagram** (a region plot showing each gene's position and Pfam domain annotations as coloured blocks), natural products with their ChemOnt lineage annotations and probability scores. Actions: Add to Shortlist, Evaluate BGC, Find Similar BGCs.
+
+---
+
+## Mode 2: Search BGCs
+
+### Purpose
+Find specific BGCs using advanced query criteria — protein domain architecture, sequence similarity, or chemical structure similarity. Returns BGCs ranked by similarity score, with parent assemblies derived below.
+
+### When to Use
+Use when you have a chemical scaffold you want analogs of, a protein family you are tracking, a published BGC you want to find relatives of, or a Pfam domain combination you want to survey across the database.
+
+### Layout
+
+Search BGCs inverts the triad order: **BGC Triad is on top** (primary results), **Assembly Triad is on bottom** (parent assemblies of the result BGCs).
+
+The sidebar has two tabs:
+- **Filters** — All shared filters (Taxonomy, Biome, BGC Class, ChemOnt) plus direct accession lookups for Assembly Accession and BGC Accession (MGYB format).
+- **Query** — Advanced search criteria (described below).
+
+### Building a Query
+
+Queries are built in the **Query tab** of the sidebar. Multiple query criteria can be combined; results are intersected. The **Run Query** button activates when at least one filter or query criterion is set. Status indicators in the sidebar show which criteria are active.
+
+**Domain Query Builder**
+Find BGCs by the Pfam protein domains they contain.
+- Add one or more domain conditions by entering Pfam accessions (e.g. `PF00109`).
+- Set domain logic: **AND** (all specified domains must be present) or **OR** (any domain matches).
+- Useful for: finding all BGCs encoding a specific enzyme family, or finding PKS clusters with an unusual tailoring domain.
+- Similarity score method: **Sorensen-Dice coefficient** on the set of matched domains.
+
+**Sequence Search**
+Find BGCs by sequence similarity to a query protein or nucleotide sequence.
+- Paste a FASTA sequence in the input box.
+- Select comparison scope: BGC-level or protein-level.
+- Select similarity method: **HMMER** (profile hidden Markov model scoring, best for divergent homologs) or **embedding cosine similarity** (faster, better for close relatives).
+- Set a similarity threshold (0–1).
+- Runs asynchronously for large databases; results stream in as available.
+
+**Chemical Structure Search (SMILES)**
+Find BGCs whose predicted natural products are structurally similar to a query compound.
+- Enter a SMILES string representing your compound of interest.
+- Set a Tanimoto similarity threshold (default 0.85; lower values return more distant analogs).
+- Matches by Morgan fingerprint similarity against all BGC-associated natural products.
+- Useful for: finding potential producers of structural analogs of a known bioactive compound.
+
+### Search Results
+
+The **BGC Roster** in Search mode shows results ranked by **similarity score** (the primary column). Additional columns: Accession, Classification, Novelty Score, Domain Novelty, Size (kb). Sort by any column. Click a row to open the BGC Detail panel.
+
+The **Assembly Triad** below is derived from the BGC results. It shows parent assemblies of: the selected BGC (if one is selected) or all shortlisted BGCs. This is the path from "matching BGCs" to "assemblies I can purchase." Apply the **Type Strain only** filter to immediately restrict to purchasable organisms.
+
+### Similarity Score by Method
+
+| Query method | Score meaning | Scale |
+|---|---|---|
+| Domain query | Sorensen-Dice coefficient: fraction of query domains matched vs. total domains in the union | 0–1 |
+| Sequence (embedding) | Cosine similarity between query embedding and BGC embedding | 0–1 |
+| Sequence (HMMER) | Normalised HMMER bit score | 0–1 |
+| Chemical structure | Tanimoto similarity of Morgan fingerprints | 0–1 |
+
+When multiple query methods are combined, results are intersected and the minimum score across active methods is shown.
+
+---
+
+## Mode 3: Evaluate Asset
+
+### Purpose
+Generate a comprehensive assessment report for a single assembly or BGC. Compare it against the full database to understand its novelty, GCF placement, and chemical space context. Works for both database entries (accessed by accession or via cross-mode actions) and externally uploaded files.
+
+### When to Use
+Use when: you want a detailed breakdown of a specific assembly's competitive position in the database; you want to understand a BGC's novelty from multiple angles; you have your own sequenced organism or cloned BGC and want to benchmark it against the database.
+
+### Entering Evaluate Mode
+
+Three entry points:
+1. **From any roster or detail panel** — right-click a row and select "Evaluate Assembly" or "Evaluate BGC"; or click the "Evaluate" action button in a detail panel.
+2. **Upload** — use the **Upload for Evaluation** panel in the sidebar. Accepts `.tar.gz` archives via drag-and-drop or file picker. Separate tabs for Single BGC and Assembly packages.
+3. **Direct navigation** — select an asset by accession via the sidebar.
+
+> **Important:** Uploaded assets are analysed ephemerally. They are never added to the database automatically.
+
+### Assembly Assessment View
+
+**Header** — Assembly accession, organism name, type strain badge. Actions: Add to Shortlist, Export JSON, Browse Similar Assemblies.
+
+**Priority Ranking** — The assembly's absolute rank within the full database (e.g. "Rank 42 of 15,000"). Immediately answers: how does this assembly compare to everything else?
+
+**Priority Score Radar** — A radar (spider) chart comparing the assembly's percentile scores across Diversity, Novelty, and Density against two reference rings: the database mean and the database 90th percentile. An assembly with scores outside the 90th percentile ring on multiple axes is an exceptional candidate.
+
+**Score Percentile Distributions** — Gauge charts for each score dimension (Percentile Novelty, Percentile Diversity, Percentile Density). Reference lines mark the database mean and 90th percentile. Shows precisely where the assembly falls within the database distribution for each dimension independently.
+
+**BGC Triad** — The standard BGC triad (Roster, Space Map, Stats) scoped to this assembly's BGCs. Same columns and interactions as in Explore mode.
+
+**Redundancy Matrix** — A heatmap showing the breakdown of this assembly's BGCs across three categories:
+- *Novel GCF* — BGC belongs to a gene cluster family not seen elsewhere in the database. Highest priority for experimental follow-up.
+- *Known GCF, no type strain* — The GCF has database members, but none are type strains available for purchase. Moderate priority.
+- *Known GCF, type strain available* — The chemistry represented by this BGC is already accessible via a purchasable type strain. Lower priority for this BGC specifically.
+
+Reading the Redundancy Matrix: an assembly where most BGCs fall in the "Novel GCF" column is a strong candidate for experimental work. An assembly where most BGCs are in the "Known GCF, type strain available" column offers little advantage over purchasing an existing reference strain.
+
+**BGC Embeddings Map** — A UMAP projection showing this assembly's BGCs positioned in the global embedding space. Validated (MIBiG) reference BGCs are shown as labelled landmarks. Summary statistics show: mean distance to nearest validated BGC (lower = chemistry is closer to known compounds) and sparse fraction (proportion of BGCs in low-density embedding regions, a measure of overall novelty).
+
+### BGC Assessment View
+
+**Header** — BGC accession, full classification path, Novel Singleton badge (if applicable). Actions: Add to Shortlist, Export JSON, Find in Purchasable Strains.
+
+**GCF Placement** — The primary contextual result. Shows:
+- *Family ID* and known chemistry annotation (compound name, if the family maps to a characterised natural product)
+- *Member count* — how many BGCs in the database share this family
+- *Validated count* — how many of those members are MIBiG-characterised
+- *Mean novelty* — average novelty score across family members
+- *Distance to representative* — how similar this BGC is to its family's representative (lower = more typical member; higher = outlier within its family)
+- *Novel Singleton indicator* — shown prominently if the BGC does not cluster with any other BGC
+
+A large family (many members) with zero validated members is a widespread, entirely uncharacterised biosynthetic strategy — one of the most compelling research targets on the platform.
+
+**Novelty Decomposition** — Three circular gauge charts breaking down the BGC's novelty score into independent components:
+- *Sequence Novelty* — based on protein-level embedding distances. High = protein sequences are unlike those in validated BGCs.
+- *Chemistry Novelty* — based on predicted natural product similarity to known compounds. High = predicted chemistry has no known structural analog.
+- *Architecture Novelty* — based on domain arrangement uniqueness. High = the specific combination and order of protein domains is unusual.
+
+These three axes can diverge in informative ways. A BGC with high Sequence Novelty but low Architecture Novelty uses familiar enzymatic logic in a new sequence context — the product may be a variant of a known compound. A BGC with high Architecture Novelty but moderate Sequence Novelty has unusual domain combinations — the product chemistry may be genuinely unprecedented.
+
+**Domain Architecture Differential** — A chart showing which protein domains in this BGC are:
+- *Core* — present in most GCF family members; defines the shared enzymatic logic of the family
+- *Variable* — present in some family members; may explain chemical variation within the family
+- *Rare / Unique* — not seen in the rest of the family; distinguishes this BGC and is a candidate for structural novelty
+
+**Domain Architecture Comparison** — Side-by-side domain map comparing this BGC (top) to its nearest validated (MIBiG) BGC (bottom). Shared domain regions are aligned; divergent regions are visually apparent. This is the most direct answer to "what makes my BGC different from the nearest known cluster?"
+
+**BGC Space Map** — Scatter plot showing GCF member BGCs plotted by novelty metrics. The evaluated BGC is highlighted; family members and validated references provide context.
+
+**BGC Embeddings Map** — UMAP projection with the evaluated BGC marked as a star (★) among its nearest embedding neighbours and validated reference landmarks.
+
+---
 ## Global UI Layout
 
 The interface is divided into three persistent regions:
