@@ -92,6 +92,7 @@ export interface ParentAssemblySummary {
   organism_name: string | null;
   source_name: string | null;
   is_type_strain: boolean;
+  url: string;
 }
 
 export interface ChemOntAnnotationNode {
@@ -184,6 +185,26 @@ export interface DomainOption {
 
 export interface PaginatedDomainResponse {
   items: DomainOption[];
+  pagination: PaginationMeta;
+}
+
+export interface SourceOption {
+  name: string;
+  count: number;
+}
+
+export interface PaginatedSourceResponse {
+  items: SourceOption[];
+  pagination: PaginationMeta;
+}
+
+export interface DetectorOption {
+  tool: string;
+  count: number;
+}
+
+export interface PaginatedDetectorResponse {
+  items: DetectorOption[];
   pagination: PaginationMeta;
 }
 

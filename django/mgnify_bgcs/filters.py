@@ -112,7 +112,7 @@ class BgcKeywordFilter(django_filters.FilterSet):
         # ------------------------------------------------------------------
         # 4. class / detector vocabulary
         # ------------------------------------------------------------------
-        class_qs = BgcClass.objects.filter(name__iregex=value)
+        class_qs = BgcClass.objects.filter(name__icontains=value)
         if class_qs.exists():
             log.info("BgcClass %s vocabulary hit", value)
             aggregated_with_class = Bgc.objects.filter(
@@ -148,8 +148,8 @@ class BgcKeywordFilter(django_filters.FilterSet):
             log.info("Free-text biome/metadata search for %s", value)
             return queryset.filter(
                 Q(contig__assembly__biome__lineage__icontains=value)
-                | Q(metadata__icontains=rf"^{re.escape(value)}$")
-                | Q(contig__cds__protein__domains__name=rf"^{re.escape(value)}$")
+                | Q(metadata__icontains=value)
+                | Q(contig__cds__protein__domains__name__iregex=rf"^{re.escape(value)}$")
             ).distinct()
 
         # fallthrough

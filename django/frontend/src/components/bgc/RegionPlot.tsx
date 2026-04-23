@@ -15,7 +15,6 @@ import type {
 const SVG_WIDTH = 800;
 const CDS_TRACK_Y = 50;
 const CDS_HEIGHT = 24;
-const DOMAIN_HEIGHT = 18;
 const CLUSTER_TRACK_Y = 110;
 const CLUSTER_HEIGHT = 16;
 const CLUSTER_LANE_GAP = 22;
@@ -143,10 +142,28 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
   );
   const maxLane = clusterLanes.length > 0 ? Math.max(...clusterLanes) : 0;
 
-  // GO Slim color map for domains
+  // GO Slim color map keyed on all GO slim terms in this region
   const goSlimColorMap = useMemo(() => {
     const allSlims = data.domain_list.flatMap((d) => d.go_slim);
     return makeDistinctColorMap(allSlims);
+  }, [data.domain_list]);
+
+  // Per-CDS dominant GO slim (most frequent across its domains)
+  const cdsGoSlimMap = useMemo(() => {
+    const cdsDomainSlims: Record<string, string[]> = {};
+    for (const d of data.domain_list) {
+      if (d.go_slim.length > 0 && d.parent_cds_id) {
+        (cdsDomainSlims[d.parent_cds_id] ??= []).push(...d.go_slim);
+      }
+    }
+    const result: Record<string, string> = {};
+    for (const [cdsId, slims] of Object.entries(cdsDomainSlims)) {
+      const freq: Record<string, number> = {};
+      for (const s of slims) freq[s] = (freq[s] ?? 0) + 1;
+      const top = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+      if (top) result[cdsId] = top[0];
+    }
+    return result;
   }, [data.domain_list]);
 
   // Collect unique legend entries
@@ -271,12 +288,14 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
             );
           })}
 
-          {/* CDS arrows */}
+          {/* CDS arrows — colored by dominant GO slim term */}
           {data.cds_list.map((cds) => {
             const cx1 = scaleX(cds.start);
             const cx2 = scaleX(cds.end);
             const isSelected = selectedCdsId === cds.protein_id;
             const isHovered = hoveredCdsId === cds.protein_id;
+            const dominantSlim = cdsGoSlimMap[cds.protein_id];
+            const fill = dominantSlim ? (goSlimColorMap[dominantSlim] ?? "#e8e8e8") : "#e8e8e8";
             return (
               <Tooltip key={`cds-${cds.protein_id}`}>
                 <TooltipTrigger asChild>
@@ -288,7 +307,7 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
                       CDS_HEIGHT / 2,
                       CDS_TRACK_Y,
                     )}
-                    fill="#ffffff"
+                    fill={fill}
                     stroke="black"
                     strokeWidth={isSelected ? 2.5 : isHovered ? 1.8 : 1.2}
                     cursor="pointer"
@@ -298,58 +317,32 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
                   />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <div className="text-xs">
+                  <div className="text-xs space-y-0.5">
                     <p className="font-medium">{cds.protein_id}</p>
                     <p>
                       {data.window_start + cds.start}..{data.window_start + cds.end}{" "}
                       ({cds.strand >= 0 ? "+" : "-"})
                     </p>
                     <p>{cds.protein_length} aa</p>
+                    {dominantSlim && (
+                      <p className="text-muted-foreground">{dominantSlim}</p>
+                    )}
+                    {cds.pfam.length > 0 && (
+                      <div className="mt-1 border-t pt-1 space-y-0.5">
+                        {[...new Map(cds.pfam.map((pf) => [pf.accession, pf])).values()].map((pf) => (
+                          <p key={pf.accession}>
+                            <span className="font-medium">{pf.accession}</span>
+                            {pf.description && ` — ${pf.description}`}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </TooltipContent>
               </Tooltip>
             );
           })}
 
-          {/* Domain arrows (overlaid on CDS) */}
-          {data.domain_list.map((domain, i) => {
-            const dx1 = scaleX(domain.start);
-            const dx2 = scaleX(domain.end);
-            const goSlim = domain.go_slim[0] || "";
-            const color = goSlimColorMap[goSlim] || "#cfcfcf";
-            return (
-              <Tooltip key={`domain-${i}`}>
-                <TooltipTrigger asChild>
-                  <polygon
-                    points={arrowPoints(
-                      dx1,
-                      dx2,
-                      domain.strand,
-                      DOMAIN_HEIGHT / 2,
-                      CDS_TRACK_Y,
-                    )}
-                    fill={color}
-                    stroke="black"
-                    strokeWidth={0.9}
-                    opacity={0.85}
-                    pointerEvents="visiblePainted"
-                  />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="text-xs">
-                    <p className="font-medium">{domain.accession}</p>
-                    <p>{domain.description}</p>
-                    {domain.go_slim.length > 0 && (
-                      <p className="text-muted-foreground">
-                        {domain.go_slim.join("; ")}
-                      </p>
-                    )}
-                    {domain.score != null && <p>Score: {domain.score}</p>}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            );
-          })}
 
           {/* X-axis */}
           <line

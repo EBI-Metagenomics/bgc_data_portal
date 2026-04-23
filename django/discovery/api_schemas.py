@@ -125,6 +125,7 @@ class ParentAssemblySummary(Schema):
     organism_name: Optional[str] = None
     source_name: Optional[str] = None
     is_type_strain: bool = False
+    url: str = ""
 
 
 class ChemOntAnnotationNode(Schema):
@@ -226,6 +227,26 @@ class DomainOption(Schema):
 
 class PaginatedDomainResponse(Schema):
     items: list[DomainOption]
+    pagination: PaginationMeta
+
+
+class SourceOption(Schema):
+    name: str
+    count: int
+
+
+class PaginatedSourceResponse(Schema):
+    items: list[SourceOption]
+    pagination: PaginationMeta
+
+
+class DetectorOption(Schema):
+    tool: str
+    count: int
+
+
+class PaginatedDetectorResponse(Schema):
+    items: list[DetectorOption]
     pagination: PaginationMeta
 
 
