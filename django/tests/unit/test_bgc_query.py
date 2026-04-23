@@ -10,9 +10,15 @@ import pytest
 from mgnify_bgcs.models import Bgc, BgcBgcClass
 from mgnify_bgcs.filters import BgcKeywordFilter
 from tests.factories.models import (
+    AssemblyFactory,
+    BiomeFactory,
     BgcClassFactory,
     BgcFactory,
+    CdsFactory,
     ContigFactory,
+    DomainFactory,
+    ProteinDomainFactory,
+    ProteinFactory,
 )
 
 
@@ -133,3 +139,67 @@ def test_class_keyword_case_insensitive():
     assert non_agg in _apply("nrp")
     assert non_agg in _apply("NRP")
     assert non_agg in _apply("Nrp")
+
+
+# ---------------------------------------------------------------------------
+# Robustness: regex metacharacters in keyword must not raise
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_class_keyword_regex_metacharacters_dont_raise():
+    """
+    Keywords containing regex metacharacters (e.g. '(', '+') must not raise a
+    PostgreSQL 'invalid regular expression' error — previously triggered by
+    passing raw user input to iregex on BgcClass.name.
+    """
+    for bad_input in ["NRP(s", "PKS+", "Polyketide["]:
+        result = _apply(bad_input)
+        # must return a queryset (empty is fine), not raise
+        assert result.count() >= 0
+
+
+# ---------------------------------------------------------------------------
+# Free-text search: biome lineage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_free_text_biome_search():
+    """
+    Searching a word that appears in a biome lineage must return non-aggregated
+    BGCs from that assembly.
+    """
+    biome = BiomeFactory(lineage="root:Environmental:Aquatic:Freshwater")
+    assembly = AssemblyFactory(biome=biome)
+    contig = ContigFactory(assembly=assembly)
+
+    bgc = BgcFactory(contig=contig, is_aggregated_region=False)
+    BgcFactory(is_aggregated_region=False)  # unrelated BGC on a different contig
+
+    result = _apply("Freshwater")
+
+    assert bgc in result
+
+
+# ---------------------------------------------------------------------------
+# Free-text search: domain name
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_free_text_domain_name_search():
+    """
+    Searching the exact name of a protein domain must return non-aggregated BGCs
+    whose contig carries a CDS with that domain.
+    """
+    domain = DomainFactory(name="Glycosyltransferase", acc="PF00953")
+    protein = ProteinFactory()
+    ProteinDomainFactory(protein=protein, domain=domain)
+
+    contig = ContigFactory()
+    CdsFactory(contig=contig, protein=protein)
+
+    bgc = BgcFactory(contig=contig, is_aggregated_region=False)
+    BgcFactory(is_aggregated_region=False)  # unrelated
+
+    result = _apply("Glycosyltransferase")
+
+    assert bgc in result
