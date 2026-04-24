@@ -11,6 +11,7 @@ interface QueryState {
   similarityThreshold: number;
   sequenceQuery: string;
   sequenceThreshold: number;
+  sequenceTaskId: string | null;
   domainQueryTriggered: boolean;
   chemicalQueryTriggered: boolean;
   sequenceQueryTriggered: boolean;
@@ -31,6 +32,7 @@ interface QueryState {
   setSimilarityThreshold: (v: number) => void;
   setSequenceQuery: (v: string) => void;
   setSequenceThreshold: (v: number) => void;
+  setSequenceTaskId: (id: string | null) => void;
   setDomainQueryTriggered: (v: boolean) => void;
   setChemicalQueryTriggered: (v: boolean) => void;
   setSequenceQueryTriggered: (v: boolean) => void;
@@ -75,6 +77,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   similarityThreshold: 0.5,
   sequenceQuery: "",
   sequenceThreshold: 0.7,
+  sequenceTaskId: null,
   domainQueryTriggered: false,
   chemicalQueryTriggered: false,
   sequenceQueryTriggered: false,
@@ -105,6 +108,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   setSimilarityThreshold: (v) => set({ similarityThreshold: v }),
   setSequenceQuery: (v) => set({ sequenceQuery: v }),
   setSequenceThreshold: (v) => set({ sequenceThreshold: v }),
+  setSequenceTaskId: (id) => set({ sequenceTaskId: id }),
   setDomainQueryTriggered: (v) => set({ domainQueryTriggered: v }),
   setChemicalQueryTriggered: (v) => set({ chemicalQueryTriggered: v }),
   setSequenceQueryTriggered: (v) => set({ sequenceQueryTriggered: v }),
@@ -136,6 +140,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       similarityThreshold: 0.5,
       sequenceQuery: "",
       sequenceThreshold: 0.7,
+      sequenceTaskId: null,
       domainQueryTriggered: false,
       chemicalQueryTriggered: false,
       sequenceQueryTriggered: false,

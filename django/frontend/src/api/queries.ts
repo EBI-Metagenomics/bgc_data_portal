@@ -117,8 +117,22 @@ export interface SequenceQueryParams {
   bgc_accession?: string;
 }
 
-export function postSequenceQuery(
-  body: SequenceQueryRequest,
+export interface SequenceQueryAccepted {
+  task_id: string;
+}
+
+export interface SequenceQueryStatusResponse {
+  status: "PENDING" | "SUCCESS" | "FAILURE";
+  items: import("./types").QueryResultBgc[];
+  pagination?: import("./types").PaginationMeta;
+}
+
+export function postSequenceQuery(body: SequenceQueryRequest) {
+  return apiPost<SequenceQueryAccepted>("/query/sequence/", body);
+}
+
+export function getSequenceQueryStatus(
+  taskId: string,
   params: SequenceQueryParams = {}
 ) {
   const queryString = new URLSearchParams();
@@ -126,9 +140,9 @@ export function postSequenceQuery(
     if (value !== undefined) queryString.set(key, String(value));
   }
   const qs = queryString.toString();
-  return apiPost<PaginatedQueryResultResponse>(
-    `/query/sequence/${qs ? `?${qs}` : ""}`,
-    body
+  return apiGet<SequenceQueryStatusResponse>(
+    `/query/sequence/status/${taskId}/${qs ? `?${qs}` : ""}`,
+    {} as Record<string, string | number | boolean | undefined>
   );
 }
 

@@ -48,6 +48,8 @@ from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
 from discovery.api_schemas import (
     AssessmentAccepted,
     AssessmentStatusResponse,
+    SequenceQueryAccepted,
+    SequenceQueryStatusResponse,
     BgcClassCount,
     BgcClassOption,
     BgcDetail,
@@ -1247,10 +1249,38 @@ def chemical_query(
     )
 
 
-@discovery_router.post("/query/sequence/", response=PaginatedQueryResultResponse)
-def sequence_query(
+@discovery_router.post(
+    "/query/sequence/",
+    response={202: SequenceQueryAccepted},
+    tags=["Query"],
+)
+def sequence_query(request, body: SequenceQueryRequest):
+    lines = body.sequence.strip().splitlines()
+    cleaned = "".join(l.strip() for l in lines if not l.startswith(">"))
+    if not cleaned:
+        raise HttpError(400, "Protein sequence is required")
+    if len(cleaned) > 5000:
+        raise HttpError(400, "Sequence exceeds maximum length of 5,000 amino acids")
+
+    from discovery.tasks import sequence_similarity_search
+
+    try:
+        result = sequence_similarity_search.delay(cleaned, body.similarity_threshold)
+    except Exception as e:
+        logger.error("Failed to dispatch sequence search task: %s", e)
+        raise HttpError(503, "Search service temporarily unavailable")
+
+    return 202, SequenceQueryAccepted(task_id=result.id)
+
+
+@discovery_router.get(
+    "/query/sequence/status/{task_id}/",
+    response=SequenceQueryStatusResponse,
+    tags=["Query"],
+)
+def sequence_query_status(
     request,
-    body: SequenceQueryRequest,
+    task_id: str,
     page: int = 1,
     page_size: int = 25,
     sort_by: str = "similarity_score",
@@ -1264,35 +1294,27 @@ def sequence_query(
     assembly_accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
 ):
-    # Strip FASTA header if present
-    lines = body.sequence.strip().splitlines()
-    cleaned = "".join(l.strip() for l in lines if not l.startswith(">"))
-    if not cleaned:
-        raise HttpError(400, "Protein sequence is required")
-    if len(cleaned) > 5000:
-        raise HttpError(400, "Sequence exceeds maximum length of 5,000 amino acids")
+    from celery.result import AsyncResult
 
-    from discovery.tasks import sequence_similarity_search
+    res = AsyncResult(task_id)
 
-    async_result = sequence_similarity_search.delay(
-        cleaned, body.similarity_threshold
-    )
-    try:
-        raw_result = async_result.get(timeout=180)
-        bgc_similarities: dict[int, float] = {int(k): v for k, v in raw_result.items()}
-    except Exception as e:
-        logger.error("Sequence similarity search failed: %s", e)
-        raise HttpError(500, "Sequence similarity search failed")
+    if res.failed():
+        return SequenceQueryStatusResponse(status="FAILURE")
+    if not res.ready():
+        return SequenceQueryStatusResponse(status="PENDING")
+
+    raw_result = res.result
+    bgc_similarities: dict[int, float] = {int(k): v for k, v in raw_result.items()}
 
     if not bgc_similarities:
-        return PaginatedQueryResultResponse(
+        return SequenceQueryStatusResponse(
+            status="SUCCESS",
             items=[],
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
     qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly", "assembly__source")
 
-    # Sidebar filters
     if source_names:
         names = [n.strip() for n in source_names.split(",") if n.strip()]
         if names:
@@ -1326,7 +1348,6 @@ def sequence_query(
         similarity = round(bgc_similarities.get(bgc.id, 0.0), 4)
         results.append((bgc, similarity))
 
-    # Sort
     sort_key_map = {
         "similarity_score": lambda x: x[1],
         "novelty_score": lambda x: x[0].novelty_score,
@@ -1359,7 +1380,8 @@ def sequence_query(
         for bgc, similarity in page_results
     ]
 
-    return PaginatedQueryResultResponse(
+    return SequenceQueryStatusResponse(
+        status="SUCCESS",
         items=items,
         pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
     )

@@ -295,6 +295,16 @@ class PaginatedQueryResultResponse(Schema):
     pagination: PaginationMeta
 
 
+class SequenceQueryAccepted(Schema):
+    task_id: str
+
+
+class SequenceQueryStatusResponse(Schema):
+    status: str  # "PENDING" | "SUCCESS" | "FAILURE"
+    items: list[QueryResultBgc] = []
+    pagination: Optional[PaginationMeta] = None
+
+
 class QueryResultAssemblyAggregation(Schema):
     assembly_id: int
     accession: str
