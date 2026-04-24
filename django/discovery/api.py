@@ -1290,7 +1290,7 @@ def sequence_query(
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
-    qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
+    qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly", "assembly__source")
 
     # Sidebar filters
     if source_names:
