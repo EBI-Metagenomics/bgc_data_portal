@@ -2,6 +2,7 @@
         dev dev-full dev-clean deploy-local delete-local deploy-dev deploy-prod \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
+        clean-images nuke \
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
         workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
 
@@ -39,10 +40,10 @@ create-local-secrets: validate-secrets create-local-namespace
 
 # ── Local dev loop ────────────────────────────────────────────────────────────
 dev: create-local-secrets
-	skaffold dev -p local --cleanup=false --no-prune
+	skaffold dev -p local --cleanup=false
 
 dev-full: create-local-secrets
-	skaffold dev -p local-full --cleanup=false --no-prune
+	skaffold dev -p local-full --cleanup=false
 
 dev-clean:
 	skaffold delete -p local
@@ -125,3 +126,22 @@ workspace-set-api-key:
 
 workspace-restart:
 	./scripts/workspace.sh restart
+
+# ── Disk reclaim ──────────────────────────────────────────────────────────────
+# Routine cleanup: prune dangling images on host Docker AND inside the Kind node.
+# Run between heavy rebuild sessions when 'docker system df' shows growing
+# RECLAIMABLE space. Safe — does not touch running containers or named volumes.
+clean-images:
+	@echo "Pruning dangling images in Docker daemon..."
+	docker image prune -af
+	@echo "Pruning unused images in Kind containerd..."
+	docker exec bgc-local-control-plane crictl rmi --prune || true
+	@echo "Done. Run 'docker system df' to verify."
+
+# Nuclear reset: delete the Kind cluster AND prune everything Docker, including
+# named volumes. WIPES local Postgres data (db_data volume). Use when 'make
+# clean-images' isn't enough or you want a known-good clean slate.
+nuke: cluster-delete
+	@echo "Pruning Docker daemon (images, containers, build cache, networks, VOLUMES)..."
+	docker system prune -af --volumes
+	@echo "Cluster deleted and Docker pruned. Next 'make dev' starts cold."
