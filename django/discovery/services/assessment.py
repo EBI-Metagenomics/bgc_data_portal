@@ -108,7 +108,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
             )
             continue
 
-        gcf = DashboardGCF.objects.filter(family_id=bgc.gene_cluster_family).first()
+        gcf = _lookup_leaf_gcf(bgc)
         if gcf is None:
             redundancy_matrix.append(
                 {
@@ -126,7 +126,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
 
         has_validated = gcf.validated_count > 0
         has_type_strain = DashboardBgc.objects.filter(
-            gene_cluster_family=gcf.family_id, assembly__is_type_strain=True
+            gene_cluster_family=gcf.family_path, assembly__is_type_strain=True
         ).exclude(id=bgc.id).exists()
 
         status = "known_gcf_type_strain" if has_type_strain else "known_gcf_no_type_strain"
@@ -136,7 +136,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
                 "bgc_id": bgc.id,
                 "accession": bgc.bgc_accession,
                 "classification_path": bgc.classification_path,
-                "gcf_family_id": gcf.family_id,
+                "gcf_family_id": gcf.family_path,
                 "gcf_member_count": gcf.member_count,
                 "gcf_has_validated": has_validated,
                 "gcf_has_type_strain": has_type_strain,
@@ -241,7 +241,7 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
     is_novel_singleton = False
 
     if bgc.gene_cluster_family:
-        gcf = DashboardGCF.objects.filter(family_id=bgc.gene_cluster_family).first()
+        gcf = _lookup_leaf_gcf(bgc)
         if gcf:
             gcf_context = _build_gcf_context(gcf, bgc)
             # Compute distance to representative via embedding if available
@@ -497,10 +497,27 @@ def _build_taxonomy_hierarchy(paths: list[str]) -> list[dict]:
     return nodes
 
 
+def _lookup_leaf_gcf(bgc: DashboardBgc) -> DashboardGCF | None:
+    """Resolve the leaf-level DashboardGCF for ``bgc.gene_cluster_family``.
+
+    Prefers the BGC's own ``classification_run`` to disambiguate when the
+    same family_path string exists across runs. Falls back to the most
+    recent run when classification_run is missing (e.g. legacy rows).
+    """
+    if not bgc.gene_cluster_family:
+        return None
+    qs = DashboardGCF.objects.filter(family_path=bgc.gene_cluster_family)
+    if bgc.classification_run_id:
+        leaf = qs.filter(clustering_run_id=bgc.classification_run_id).first()
+        if leaf is not None:
+            return leaf
+    return qs.order_by("-clustering_run__created_at").first()
+
+
 def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
     """Build the GCF context panel data."""
     members = DashboardBgc.objects.filter(
-        gene_cluster_family=gcf.family_id
+        gene_cluster_family=gcf.family_path
     ).select_related("assembly", "contig")
 
     member_points = []
@@ -540,12 +557,12 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
 
     return {
         "gcf_id": gcf.id,
-        "family_id": gcf.family_id,
+        "family_id": gcf.family_path,
         "member_count": gcf.member_count,
         "validated_count": gcf.validated_count,
         "mean_novelty": round(np.mean(novelty_values) if novelty_values else 0.0, 4),
-        "known_chemistry_annotation": gcf.known_chemistry_annotation or None,
-        "validated_accession": gcf.validated_accession or None,
+        "known_chemistry_annotation": None,
+        "validated_accession": None,
         "domain_frequency": domain_frequency,
         "taxonomy_distribution": taxonomy_distribution,
         "taxonomy_hierarchy": taxonomy_hierarchy,
@@ -612,10 +629,19 @@ def _get_domain_name(acc: str) -> str:
 
 
 def _find_nearest_gcf(bgc_emb: BgcEmbedding) -> tuple[DashboardGCF | None, float | None]:
-    """Find the nearest GCF by cosine distance to its representative's embedding."""
+    """Find the nearest leaf GCF by cosine distance to its representative's embedding."""
+    from discovery.models import ClusteringRun
+
+    latest_run = ClusteringRun.objects.order_by("-created_at").first()
+    if latest_run is None:
+        return None, None
+
+    leaf_level = max(int(latest_run.n_levels) - 1, 0)
     rep_bgc_ids = list(
         DashboardGCF.objects.filter(
-            representative_bgc__isnull=False
+            clustering_run=latest_run,
+            level=leaf_level,
+            representative_bgc__isnull=False,
         ).values_list("representative_bgc_id", flat=True)
     )
     if not rep_bgc_ids:
@@ -631,7 +657,13 @@ def _find_nearest_gcf(bgc_emb: BgcEmbedding) -> tuple[DashboardGCF | None, float
     if nearest is None:
         return None, None
 
-    gcf = DashboardGCF.objects.filter(representative_bgc_id=nearest.bgc_id).first()
+    gcf = (
+        DashboardGCF.objects.filter(
+            clustering_run=latest_run,
+            level=leaf_level,
+            representative_bgc_id=nearest.bgc_id,
+        ).first()
+    )
     return gcf, float(nearest.distance)
 
 

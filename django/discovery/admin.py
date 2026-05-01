@@ -5,11 +5,13 @@ from .models import (
     DashboardBgc,
     BgcEmbedding,
     BgcDomain,
+    ClusteringRun,
     DashboardGCF,
     DashboardNaturalProduct,
     DashboardBgcClass,
     DashboardDomain,
     PrecomputedStats,
+    ProteinSimilarPair,
 )
 
 
@@ -35,8 +37,41 @@ class DashboardBgcAdmin(admin.ModelAdmin):
 
 @admin.register(DashboardGCF)
 class DashboardGCFAdmin(admin.ModelAdmin):
-    list_display = ("family_id", "member_count", "known_chemistry_annotation", "validated_accession")
-    search_fields = ("family_id", "known_chemistry_annotation")
+    list_display = (
+        "family_path",
+        "level",
+        "member_count",
+        "validated_count",
+        "descendant_count",
+        "clustering_run_id",
+    )
+    list_filter = ("level", "clustering_run")
+    search_fields = ("family_path", "parent_path")
+
+
+@admin.register(ClusteringRun)
+class ClusteringRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "created_at",
+        "metric_name",
+        "dice_threshold",
+        "knn_k",
+        "n_levels",
+        "n_bgcs",
+        "n_pairs",
+    )
+    readonly_fields = (
+        "created_at", "sha256", "n_proteins", "n_pairs", "n_bgcs",
+        "n_levels", "n_root_communities", "n_leaf_communities",
+        "igraph_version", "leidenalg_version", "umap_version", "scipy_version",
+    )
+
+
+@admin.register(ProteinSimilarPair)
+class ProteinSimilarPairAdmin(admin.ModelAdmin):
+    list_display = ("protein_a_sha256", "protein_b_sha256", "cosine")
+    search_fields = ("protein_a_sha256", "protein_b_sha256")
 
 
 @admin.register(DashboardNaturalProduct)

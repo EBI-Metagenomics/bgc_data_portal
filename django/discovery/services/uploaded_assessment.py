@@ -56,7 +56,7 @@ def compute_uploaded_bgc_assessment(data: dict) -> dict:
 
     gcf_family = data.get("gene_cluster_family", "")
     if gcf_family:
-        gcf = DashboardGCF.objects.filter(family_id=gcf_family).first()
+        gcf = DashboardGCF.objects.filter(family_path=gcf_family).order_by("-clustering_run__created_at").first()
         if gcf:
             gcf_context = _build_gcf_context_for_uploaded(gcf)
             if gcf.representative_bgc_id:
@@ -319,7 +319,7 @@ def compute_uploaded_assembly_assessment(data: dict) -> dict:
         if not gcf_family:
             gcf, dist = _find_nearest_gcf_for_vector(bgc_data["embedding"])
             if gcf and dist is not None and dist <= GCF_NOVELTY_DISTANCE_THRESHOLD:
-                gcf_family = gcf.family_id
+                gcf_family = gcf.family_path
             else:
                 redundancy_matrix.append({
                     "bgc_id": detail["bgc_id"],
@@ -333,7 +333,7 @@ def compute_uploaded_assembly_assessment(data: dict) -> dict:
                 })
                 continue
 
-        gcf = DashboardGCF.objects.filter(family_id=gcf_family).first()
+        gcf = DashboardGCF.objects.filter(family_path=gcf_family).order_by("-clustering_run__created_at").first()
         if gcf is None:
             redundancy_matrix.append({
                 "bgc_id": detail["bgc_id"],
@@ -349,14 +349,14 @@ def compute_uploaded_assembly_assessment(data: dict) -> dict:
 
         has_validated = gcf.validated_count > 0
         has_type_strain = DashboardBgc.objects.filter(
-            gene_cluster_family=gcf.family_id, assembly__is_type_strain=True
+            gene_cluster_family=gcf.family_path, assembly__is_type_strain=True
         ).exists()
         status = "known_gcf_type_strain" if has_type_strain else "known_gcf_no_type_strain"
         redundancy_matrix.append({
             "bgc_id": detail["bgc_id"],
             "accession": detail["accession"],
             "classification_path": detail["classification_path"],
-            "gcf_family_id": gcf.family_id,
+            "gcf_family_id": gcf.family_path,
             "gcf_member_count": gcf.member_count,
             "gcf_has_validated": has_validated,
             "gcf_has_type_strain": has_type_strain,
@@ -448,18 +448,30 @@ def _nearest_db_embeddings(
     vector: list[float],
     k: int = 1,
     filter_validated: bool = False,
+    primary_only: bool = False,
 ) -> list[tuple[int, float]]:
     """Find K nearest BGC embeddings in the DB by cosine distance.
 
     Returns list of (bgc_id, distance) tuples ordered by distance.
     Uses raw SQL with a parameterized vector literal — the uploaded vector
     is never stored in the DB.
+
+    ``primary_only=True`` restricts to BGCs that drove community detection
+    (``classification_source='primary'``) — useful when borrowing UMAP
+    coordinates so the result lands inside the established cluster scatter.
     """
     vec_str = _vec_to_sql(vector)
 
-    where = ""
+    where_clauses: list[str] = []
     if filter_validated:
-        where = "WHERE be.bgc_id IN (SELECT id FROM discovery_bgc WHERE is_validated = TRUE)"
+        where_clauses.append(
+            "be.bgc_id IN (SELECT id FROM discovery_bgc WHERE is_validated = TRUE)"
+        )
+    if primary_only:
+        where_clauses.append(
+            "be.bgc_id IN (SELECT id FROM discovery_bgc WHERE classification_source = 'primary')"
+        )
+    where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
     with connection.cursor() as cursor:
         cursor.execute(
@@ -494,10 +506,19 @@ def _distance_to_bgc(vector: list[float], bgc_id: int) -> float | None:
 def _find_nearest_gcf_for_vector(
     vector: list[float],
 ) -> tuple[DashboardGCF | None, float | None]:
-    """Find the nearest GCF by cosine distance to its representative's embedding."""
+    """Find the nearest leaf GCF by cosine distance to its representative's embedding."""
+    from discovery.models import ClusteringRun
+
+    latest_run = ClusteringRun.objects.order_by("-created_at").first()
+    if latest_run is None:
+        return None, None
+
+    leaf_level = max(int(latest_run.n_levels) - 1, 0)
     rep_bgc_ids = list(
         DashboardGCF.objects.filter(
-            representative_bgc__isnull=False
+            clustering_run=latest_run,
+            level=leaf_level,
+            representative_bgc__isnull=False,
         ).values_list("representative_bgc_id", flat=True)
     )
     if not rep_bgc_ids:
@@ -522,14 +543,18 @@ def _find_nearest_gcf_for_vector(
     if row is None:
         return None, None
 
-    gcf = DashboardGCF.objects.filter(representative_bgc_id=row[0]).first()
+    gcf = DashboardGCF.objects.filter(
+        clustering_run=latest_run,
+        level=leaf_level,
+        representative_bgc_id=row[0],
+    ).first()
     return gcf, float(row[1])
 
 
 def _build_gcf_context_for_uploaded(gcf: DashboardGCF) -> dict:
     """Build GCF context panel — same as _build_gcf_context but without excluding a DB BGC."""
     members = DashboardBgc.objects.filter(
-        gene_cluster_family=gcf.family_id
+        gene_cluster_family=gcf.family_path
     ).select_related("assembly", "contig")
 
     member_points = []
@@ -565,12 +590,12 @@ def _build_gcf_context_for_uploaded(gcf: DashboardGCF) -> dict:
 
     return {
         "gcf_id": gcf.id,
-        "family_id": gcf.family_id,
+        "family_id": gcf.family_path,
         "member_count": gcf.member_count,
         "validated_count": gcf.validated_count,
         "mean_novelty": round(float(np.mean(novelty_values)) if novelty_values else 0.0, 4),
-        "known_chemistry_annotation": gcf.known_chemistry_annotation or None,
-        "validated_accession": gcf.validated_accession or None,
+        "known_chemistry_annotation": None,
+        "validated_accession": None,
         "domain_frequency": domain_frequency,
         "taxonomy_distribution": taxonomy_distribution,
         "taxonomy_hierarchy": taxonomy_hierarchy,
@@ -653,74 +678,36 @@ def _compute_domain_novelty(domain_accs: set[str]) -> float:
 
 
 def _compute_umap_coords_single(embedding: list[float]) -> tuple[float, float] | None:
-    """Project a single embedding onto the 2D UMAP plane used by reference points.
+    """Approximate 2D coords for an uploaded BGC.
 
-    Matches the training pipeline that populates ``DashboardBgc.umap_x/y``:
-    the current pipeline (``run_bgc_clustering``) pickles separate blobs into
-    ``ClusteringRun`` and projects via PCA → UMAP-20d → UMAP-2d. Falls back
-    to the legacy ``UMAPTransform`` (bundle dict of ``{"pca": pca, "umap":
-    reducer}``) only when no ``ClusteringRun`` exists.
+    The pair-based clustering pipeline stores umap coords directly on
+    ``DashboardBgc.umap_x/umap_y`` for primary members of the latest
+    ClusteringRun — there is no inverse transform available for a fresh
+    embedding. We borrow the coordinates of the nearest primary BGC by
+    cosine distance, which is good enough for "show this dot near its
+    neighbours on the scatter plot".
 
-    Returns ``None`` (not the origin) when no transform is available or the
-    projection fails, so callers can signal "unavailable" to the frontend
-    rather than silently plotting a misleading point at (0, 0).
+    Returns ``None`` when no clustering run exists yet, so callers can
+    signal "unavailable" to the frontend rather than plotting at (0, 0).
     """
-    import pickle
-
-    arr = np.array([embedding], dtype=np.float32)
-
-    # ── Primary: current clustering run ──────────────────────────────────
-    try:
-        from discovery.models import ClusteringRun
-
-        run = ClusteringRun.objects.order_by("-created_at").first()
-    except Exception:
-        run = None
-
-    if run is not None:
-        try:
-            pca = pickle.loads(bytes(run.pca_blob))
-            umap_20d = pickle.loads(bytes(run.umap_blob))
-            umap_2d = pickle.loads(bytes(run.umap2d_blob))
-            reduced = pca.transform(arr)
-            twentyd = umap_20d.transform(reduced)
-            coords = umap_2d.transform(twentyd)
-            return float(coords[0, 0]), float(coords[0, 1])
-        except Exception:
-            log.exception(
-                "Failed to project uploaded BGC via ClusteringRun pk=%s", run.pk
-            )
-
-    # ── Fallback: legacy UMAPTransform bundle ────────────────────────────
-    try:
-        from mgnify_bgcs.models import UMAPTransform
-
-        legacy = UMAPTransform.objects.order_by("-created_at").first()
-    except Exception:
-        legacy = None
-
-    if legacy is None:
+    nearest = _nearest_db_embeddings(
+        embedding, k=1, filter_validated=False, primary_only=True
+    )
+    if not nearest:
         return None
 
-    try:
-        bundle = pickle.loads(bytes(legacy.model_blob))
-    except Exception:
-        log.exception("Failed to unpickle legacy UMAPTransform pk=%s", legacy.pk)
+    nearest_bgc_id = nearest[0][0]
+    coords = (
+        DashboardBgc.objects.filter(pk=nearest_bgc_id)
+        .values_list("umap_x", "umap_y")
+        .first()
+    )
+    if coords is None:
         return None
-
-    pca = bundle.get("pca") if isinstance(bundle, dict) else None
-    umap_model = bundle.get("umap") if isinstance(bundle, dict) else bundle
-
-    try:
-        projected = arr if pca is None else pca.transform(arr)
-        coords = umap_model.transform(projected)
-        return float(coords[0, 0]), float(coords[0, 1])
-    except Exception:
-        log.exception(
-            "Failed to project uploaded BGC via legacy UMAPTransform pk=%s",
-            legacy.pk,
-        )
+    ux, uy = coords
+    if ux == 0.0 and uy == 0.0:
         return None
+    return float(ux), float(uy)
 
 
 def _get_domain_name(acc: str) -> str:

@@ -2,11 +2,13 @@
         dev dev-full dev-clean deploy-local delete-local deploy-dev deploy-prod \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
+        seed-real-data \
         clean-images nuke \
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
         workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
 
 ENV_FILE := deployments/k8s-local/.env.local
+STAGED_FILES_DIR := ../../SCRATCH/STAGED_FILES_SAMPLES
 
 # ── Secrets validation ─────────────────────────────────────────────────────────
 REQUIRED_VARS := DJANGO_SECRET_KEY DATABASE_URL POSTGRES_USER POSTGRES_PASSWORD \
@@ -98,6 +100,26 @@ clear-cache-django:
 	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 clear-cache: clear-cache-redis clear-cache-celery clear-cache-django
+
+# ── Real-data seeding ─────────────────────────────────────────────────────────
+# Copies precomputed ETL TSVs from $(STAGED_FILES_DIR) into the running django
+# pod and runs `load_discovery_data --truncate` to wipe and reload the discovery
+# tables. The staging directory is host-local and not part of the image — if it
+# is missing or empty the target aborts before touching the database.
+seed-real-data:
+	@test -d $(STAGED_FILES_DIR) || \
+	  (echo "ERROR: $(STAGED_FILES_DIR) not found. Place ETL TSVs there before running this target." && exit 1)
+	@ls $(STAGED_FILES_DIR)/*.tsv >/dev/null 2>&1 || \
+	  (echo "ERROR: no *.tsv files in $(STAGED_FILES_DIR). Nothing to load." && exit 1)
+	@POD=$$(kubectl get pod -n bgc-local -l app=bgc-data-portal-django -o jsonpath='{.items[0].metadata.name}') && \
+	  test -n "$$POD" || (echo "ERROR: django pod not found in namespace bgc-local. Is the cluster running?" && exit 1) && \
+	  echo "Copying $(STAGED_FILES_DIR)/ into pod $$POD:/tmp/staged_files ..." && \
+	  kubectl exec -n bgc-local $$POD -- rm -rf /tmp/staged_files && \
+	  kubectl cp $(STAGED_FILES_DIR)/ bgc-local/$$POD:/tmp/staged_files && \
+	  echo "Truncating discovery tables and loading TSVs ..." && \
+	  kubectl exec -n bgc-local deploy/bgc-data-portal-django -- \
+	    python manage.py load_discovery_data --data-dir /tmp/staged_files --truncate && \
+	  kubectl exec -n bgc-local $$POD -- rm -rf /tmp/staged_files
 
 # ── Workspace (Claude Code in isolated pod) ──────────────────────────────────
 workspace-enter:

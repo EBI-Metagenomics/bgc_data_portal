@@ -341,12 +341,36 @@ class DashboardBgc(models.Model):
     umap_x = models.FloatField(default=0.0)
     umap_y = models.FloatField(default=0.0)
 
-    # Gene Cluster Family — ltree dot-path
+    # Gene Cluster Family — leaf ltree dot-path, e.g. cluster.0042.0007.0003
     gene_cluster_family = models.CharField(
         max_length=512,
         blank=True,
         default="",
-        help_text="ltree dot-path, e.g. GCF_001.SubFamily_A",
+        help_text="ltree dot-path, e.g. cluster.0042.0007.0003 (leaf of the hierarchy)",
+    )
+
+    # ── Classification provenance (set by the clustering pipeline) ──────
+    # ``primary``      — drove community detection (is_partial=False members of a run)
+    # ``knn``          — assigned post-hoc via KNN reclassification
+    # ``unclassified`` — never matched any community (default for new rows)
+    CLASSIFICATION_SOURCE_CHOICES = [
+        ("primary", "primary"),
+        ("knn", "knn"),
+        ("unclassified", "unclassified"),
+    ]
+    classification_source = models.CharField(
+        max_length=16,
+        choices=CLASSIFICATION_SOURCE_CHOICES,
+        default="unclassified",
+        db_index=True,
+    )
+    classified_at = models.DateTimeField(null=True, blank=True)
+    classification_run = models.ForeignKey(
+        "ClusteringRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="classified_bgcs",
     )
 
     # Detector info
@@ -570,65 +594,49 @@ class BgcDomain(models.Model):
 # ── Gene Cluster Family ─────────────────────────────────────────────────────────
 
 
-class DashboardGCF(models.Model):
-    """Gene Cluster Family — materialized from DashboardBgc.gene_cluster_family ltree."""
-
-    id = models.AutoField(primary_key=True)
-    family_id = models.CharField(max_length=255, unique=True, db_index=True)
-    representative_bgc = models.ForeignKey(
-        DashboardBgc,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="represented_gcf",
-    )
-    member_count = models.IntegerField(default=0)
-    known_chemistry_annotation = models.CharField(max_length=255, blank=True, default="")
-    validated_accession = models.CharField(max_length=255, blank=True, default="")
-    mean_novelty = models.FloatField(default=0.0)
-    validated_count = models.IntegerField(default=0)
-
-    class Meta:
-        db_table = "discovery_gcf"
-        verbose_name = "GCF"
-        verbose_name_plural = "GCFs"
-
-    def __str__(self):
-        return self.family_id
-
-
-# ── BGC Clustering ───────────────────────────────────────────────────────────────
-
-
 class ClusteringRun(models.Model):
-    """Versioned record of a full PCA → UMAP-20d → HDBSCAN → KNN → UMAP-2d run."""
+    """One protein-pair → BGC-Dice → KNN-graph → hierarchical-Leiden run.
+
+    Stores parameters and counts only. The hierarchy itself lives in DashboardGCF
+    rows (one per node) and on DashboardBgc.gene_cluster_family (leaf path per BGC).
+    Re-running with identical inputs yields the same `sha256` and therefore the
+    same `pk` (idempotent via update_or_create).
+    """
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    n_samples = models.PositiveIntegerField()
-    pca_components = models.PositiveSmallIntegerField()
-    umap_n_neighbors = models.PositiveSmallIntegerField()
-    umap_min_dist = models.FloatField()
-    umap_n_components = models.PositiveSmallIntegerField()
-    umap_metric = models.CharField(max_length=50)
-    hdbscan_min_cluster_size = models.PositiveSmallIntegerField()
-    hdbscan_min_samples = models.PositiveSmallIntegerField()
+    # Pipeline parameters
+    pair_floor = models.FloatField(
+        help_text="Minimum cosine kept in ProteinSimilarPair (e.g. 0.7)",
+    )
+    dice_threshold = models.FloatField(
+        help_text="Cosine threshold applied at runtime when computing Dice (e.g. 0.9)",
+    )
     knn_k = models.PositiveSmallIntegerField()
+    leiden_resolutions = models.JSONField(
+        default=list,
+        help_text="List of Leiden resolution_parameter values (one per nesting level)",
+    )
+    metric_name = models.CharField(
+        max_length=50,
+        default="dice",
+        help_text="Name of the BgcSimilarityMetric used (e.g. dice, jaccard, overlap)",
+    )
+    seed = models.PositiveIntegerField(default=42)
 
-    sklearn_version = models.CharField(max_length=50)
-    umap_version = models.CharField(max_length=50)
-    hdbscan_version = models.CharField(max_length=50)
+    # Counts
+    n_proteins = models.PositiveIntegerField(default=0)
+    n_pairs = models.PositiveIntegerField(default=0)
+    n_bgcs = models.PositiveIntegerField(default=0)
+    n_levels = models.PositiveSmallIntegerField(default=0)
+    n_root_communities = models.PositiveIntegerField(default=0)
+    n_leaf_communities = models.PositiveIntegerField(default=0)
 
-    n_bgcs_sampled = models.PositiveIntegerField(default=0)
-    n_clusters_found = models.PositiveIntegerField(default=0)
-    n_noise_points = models.PositiveIntegerField(default=0)
-    n_bgcs_classified = models.PositiveIntegerField(default=0)
-
-    pca_blob = models.BinaryField()
-    umap_blob = models.BinaryField()
-    hdbscan_blob = models.BinaryField()
-    knn_blob = models.BinaryField()
-    umap2d_blob = models.BinaryField()
+    # Library versions used for this run
+    igraph_version = models.CharField(max_length=50, blank=True, default="")
+    leidenalg_version = models.CharField(max_length=50, blank=True, default="")
+    umap_version = models.CharField(max_length=50, blank=True, default="")
+    scipy_version = models.CharField(max_length=50, blank=True, default="")
 
     sha256 = models.CharField(max_length=64, unique=True)
 
@@ -640,74 +648,117 @@ class ClusteringRun(models.Model):
         return f"ClusteringRun {self.pk} ({self.created_at:%Y-%m-%d})"
 
 
-class BgcCluster(models.Model):
-    """One HDBSCAN cluster from a ClusteringRun."""
+# ── Gene Cluster Family ─────────────────────────────────────────────────────────
 
+
+class DashboardGCF(models.Model):
+    """A node in the hierarchical Leiden tree for a ClusteringRun.
+
+    One row per node at every level: roots, internal, and leaves. The full
+    ``family_path`` ltree string identifies the node uniquely; ``parent_path``
+    points at the immediate parent (empty string for level-0 roots).
+    """
+
+    id = models.AutoField(primary_key=True)
     clustering_run = models.ForeignKey(
         ClusteringRun,
         on_delete=models.CASCADE,
-        related_name="clusters",
+        related_name="gcfs",
+        db_index=True,
     )
-    cluster_id = models.IntegerField(help_text="Raw HDBSCAN label (-1 = noise)")
-    label = models.CharField(
-        max_length=255,
-        help_text="ltree-safe label, e.g. 'cluster.0042' or 'cluster.noise'",
+    family_path = models.CharField(
+        max_length=512,
+        db_index=True,
+        help_text="ltree dot-path identifying this node, e.g. cluster.0042.0007.0003",
     )
-    n_bgcs = models.PositiveIntegerField(default=0)
-    n_validated = models.PositiveIntegerField(default=0)
+    parent_path = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Immediate parent's family_path; empty string for level-0 roots",
+    )
+    level = models.PositiveSmallIntegerField(
+        help_text="Depth in the hierarchy (0 = coarsest root level)",
+    )
     representative_bgc = models.ForeignKey(
         DashboardBgc,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="representative_of_clusters",
+        related_name="represented_gcfs",
+    )
+
+    # Aggregates
+    member_count = models.IntegerField(
+        default=0,
+        help_text="Total BGCs whose leaf path is a descendant of this node (or equal at leaves)",
+    )
+    validated_count = models.IntegerField(default=0)
+    mean_novelty = models.FloatField(default=0.0)
+    descendant_count = models.IntegerField(
+        default=0,
+        help_text="Number of immediate child nodes (0 for leaves)",
     )
 
     class Meta:
-        db_table = "discovery_bgc_cluster"
-        unique_together = [("clustering_run", "cluster_id")]
-        indexes = [
-            models.Index(
-                fields=["clustering_run", "cluster_id"],
-                name="idx_bgccluster_run_id",
+        db_table = "discovery_gcf"
+        verbose_name = "GCF"
+        verbose_name_plural = "GCFs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clustering_run", "family_path"],
+                name="uniq_gcf_run_path",
             ),
+        ]
+        indexes = [
+            models.Index(fields=["clustering_run", "level"], name="idx_gcf_run_level"),
+            models.Index(fields=["clustering_run", "parent_path"], name="idx_gcf_run_parent"),
         ]
 
     def __str__(self):
-        return f"Cluster {self.cluster_id} (run {self.clustering_run_id})"
+        return self.family_path
 
 
-class ClusterAssignment(models.Model):
-    """Assignment of a single DashboardBgc to a BgcCluster."""
+# ── Protein–protein similarity (materialised, durable source for Dice) ─────
 
-    run = models.ForeignKey(
-        ClusteringRun,
-        on_delete=models.CASCADE,
-        related_name="assignments",
-    )
-    bgc = models.ForeignKey(
-        DashboardBgc,
-        on_delete=models.CASCADE,
-        related_name="cluster_assignments",
-    )
-    cluster = models.ForeignKey(
-        BgcCluster,
-        on_delete=models.CASCADE,
-        related_name="assignments",
-    )
-    is_noise = models.BooleanField(default=False)
-    assigned_by_knn = models.BooleanField(
-        default=False,
-        help_text="True if assigned via KNN (not in training sample)",
-    )
+
+class ProteinSimilarPair(models.Model):
+    """Symmetric protein–protein cosine pair table.
+
+    Built once at a permissive ``floor`` (e.g. 0.7) by per-protein pgvector
+    HNSW ANN. Both directions ``(a, b)`` and ``(b, a)`` are stored so a
+    threshold scan from ``protein_a_sha256`` is a single index seek. The
+    self-pair ``(p, p, 1.0)`` is implied by the diagonal of the protein-similarity
+    matrix and is *not* stored.
+
+    This is the durable source of truth for any BGC similarity metric — never
+    re-query pgvector inside the Dice path.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    protein_a_sha256 = models.CharField(max_length=64, db_index=True)
+    protein_b_sha256 = models.CharField(max_length=64)
+    cosine = models.FloatField(help_text="Cosine similarity (>= floor)")
 
     class Meta:
-        db_table = "discovery_cluster_assignment"
-        unique_together = [("run", "bgc")]
-        indexes = [
-            models.Index(fields=["run", "bgc"], name="idx_ca_run_bgc"),
-            models.Index(fields=["run", "cluster"], name="idx_ca_run_cluster"),
+        db_table = "discovery_protein_similar_pair"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["protein_a_sha256", "protein_b_sha256"],
+                name="uniq_protein_pair_a_b",
+            ),
         ]
+        indexes = [
+            models.Index(
+                fields=["protein_a_sha256", "cosine"],
+                name="idx_psp_a_cos",
+            ),
+            models.Index(fields=["protein_b_sha256"], name="idx_psp_b"),
+        ]
+
+    def __str__(self):
+        return f"{self.protein_a_sha256[:8]}…{self.protein_b_sha256[:8]}@{self.cosine:.3f}"
 
 
 # ── Natural Product ──────────────────────────────────────────────────────────────

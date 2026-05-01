@@ -305,79 +305,28 @@ def _compute_percentile_ranks() -> None:
 
 
 def _rebuild_gcf_table() -> None:
-    """Rebuild DashboardGCF from DashboardBgc.gene_cluster_family ltree grouping."""
-    logger.info("Rebuilding GCF table ...")
+    """Refresh DashboardGCF aggregates from the latest ClusteringRun.
 
-    DashboardGCF.objects.all().delete()
+    DashboardGCF rows are owned by ``run_bgc_clustering_task`` (one row per
+    node in the hierarchy). This function only refreshes the per-node
+    aggregates (``member_count``, ``validated_count``, ``mean_novelty``)
+    against the *current* ``DashboardBgc.gene_cluster_family`` values — it
+    never creates or deletes rows. If no ClusteringRun has been performed
+    yet, this is a no-op.
+    """
+    from discovery.services.clustering.reclassify import _refresh_gcf_aggregates
 
-    # Group BGCs by gene_cluster_family (exclude empty)
-    family_groups = (
-        DashboardBgc.objects.exclude(gene_cluster_family="")
-        .values("gene_cluster_family")
-        .annotate(
-            member_count=Count("id"),
-            mean_novelty=Avg("novelty_score"),
-            validated_count=Count("id", filter=DashboardBgc.objects.filter(is_validated=True).query.where),
-        )
+    from discovery.models import ClusteringRun
+
+    latest = ClusteringRun.objects.order_by("-created_at").values_list("id", flat=True).first()
+    if latest is None:
+        logger.info("No ClusteringRun yet — skipping GCF aggregate refresh")
+        return
+    _refresh_gcf_aggregates(latest)
+    logger.info(
+        "GCF aggregates refreshed for ClusteringRun pk=%s (%d nodes)",
+        latest, DashboardGCF.objects.filter(clustering_run_id=latest).count(),
     )
-
-    # For validated_count and representative, we need separate queries
-    family_stats = (
-        DashboardBgc.objects.exclude(gene_cluster_family="")
-        .values("gene_cluster_family")
-        .annotate(
-            member_count=Count("id"),
-            mean_novelty=Avg("novelty_score"),
-        )
-    )
-
-    gcf_batch = []
-    for group in family_stats:
-        family_id = group["gene_cluster_family"]
-
-        # Find representative (lowest novelty_score)
-        representative = (
-            DashboardBgc.objects.filter(gene_cluster_family=family_id)
-            .order_by("novelty_score")
-            .values_list("id", flat=True)
-            .first()
-        )
-
-        # Count validated members
-        val_count = DashboardBgc.objects.filter(
-            gene_cluster_family=family_id, is_validated=True
-        ).count()
-
-        # Get first validated accession if any
-        val_acc = ""
-        if val_count > 0:
-            val_acc = (
-                DashboardBgc.objects.filter(
-                    gene_cluster_family=family_id, is_validated=True
-                )
-                .values_list("bgc_accession", flat=True)
-                .first()
-            ) or ""
-
-        gcf_batch.append(
-            DashboardGCF(
-                family_id=family_id,
-                representative_bgc_id=representative,
-                member_count=group["member_count"],
-                mean_novelty=group["mean_novelty"] or 0.0,
-                validated_count=val_count,
-                validated_accession=val_acc,
-            )
-        )
-
-        if len(gcf_batch) >= BATCH_SIZE:
-            DashboardGCF.objects.bulk_create(gcf_batch, batch_size=BATCH_SIZE)
-            gcf_batch.clear()
-
-    if gcf_batch:
-        DashboardGCF.objects.bulk_create(gcf_batch, batch_size=BATCH_SIZE)
-
-    logger.info("GCF table rebuilt: %d families", DashboardGCF.objects.count())
 
 
 # ── Catalog rebuild ──────────────────────────────────────────────────────────
@@ -428,67 +377,16 @@ def _rebuild_catalog_tables() -> None:
 
 
 def _recompute_umap() -> None:
-    """Recompute UMAP coordinates from embeddings using the latest saved model.
+    """No-op stub kept for API compatibility.
 
-    Looks for a UMAPTransform model blob in the mgnify_bgcs app. If none is found,
-    logs a warning and skips.
+    UMAP coordinates are now written directly by ``run_bgc_clustering_task``
+    on the BGC graph (see ``services/clustering/layout.py``). There is no
+    standalone UMAP model to retrain — the layout step happens inline as
+    part of community detection.
     """
-    try:
-        from mgnify_bgcs.models import UMAPTransform
-    except ImportError:
-        logger.warning("mgnify_bgcs app not available — skipping UMAP recomputation")
-        return
-
-    latest_model = UMAPTransform.objects.order_by("-created_at").first()
-    if latest_model is None:
-        logger.warning("No UMAP model found — skipping UMAP recomputation. "
-                        "Run 'run_bgc_clustering' to create one.")
-        return
-
-    import pickle
-
-    import numpy as np
-
-    try:
-        umap_model = pickle.loads(latest_model.model_blob)
-    except Exception:
-        logger.exception("Failed to load UMAP model — skipping recomputation")
-        return
-
-    logger.info("Recomputing UMAP coordinates using model from %s ...", latest_model.created_at)
-
-    # Collect all embeddings
-    bgc_ids = []
-    vectors = []
-    for bgc_id, vector in BgcEmbedding.objects.values_list("bgc_id", "vector"):
-        bgc_ids.append(bgc_id)
-        vectors.append(vector)
-
-    if not vectors:
-        logger.info("No embeddings found — skipping UMAP")
-        return
-
-    embeddings = np.array(vectors, dtype=np.float32)
-    coords = umap_model.transform(embeddings)
-
-    batch = []
-    objs = {bgc.id: bgc for bgc in DashboardBgc.objects.in_bulk(bgc_ids).values()}
-    for i, bgc_id in enumerate(bgc_ids):
-        bgc = objs.get(bgc_id)
-        if bgc is None:
-            continue
-        bgc.umap_x = float(coords[i, 0])
-        bgc.umap_y = float(coords[i, 1])
-        batch.append(bgc)
-
-        if len(batch) >= BATCH_SIZE:
-            DashboardBgc.objects.bulk_update(batch, ["umap_x", "umap_y"], batch_size=BATCH_SIZE)
-            batch.clear()
-
-    if batch:
-        DashboardBgc.objects.bulk_update(batch, ["umap_x", "umap_y"], batch_size=BATCH_SIZE)
-
-    logger.info("UMAP coordinates recomputed for %d BGCs", len(bgc_ids))
+    logger.debug(
+        "_recompute_umap: no-op; umap_x/y are written by run_bgc_clustering_task"
+    )
 
 
 def _compute_chemont_ic() -> None:

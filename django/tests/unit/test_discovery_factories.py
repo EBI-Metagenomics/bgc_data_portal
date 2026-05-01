@@ -48,7 +48,8 @@ class TestDiscoveryFactories:
     def test_gcf_factory(self):
         gcf = DashboardGCFFactory()
         assert gcf.pk is not None
-        assert gcf.family_id.startswith("GCF_")
+        assert gcf.family_path.startswith("cluster.")
+        assert gcf.clustering_run_id is not None
         assert gcf.member_count >= 3
 
     def test_natural_product_factory(self):

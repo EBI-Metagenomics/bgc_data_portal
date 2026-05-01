@@ -185,6 +185,71 @@ You can also point to a custom manifest by absolute path inside the pod:
 python manage.py seed_data --manifest /app/path/to/my.yaml
 ```
 
+## Loading Real Precomputed Data
+
+As an alternative to the synthetic seeders above, you can load real
+precomputed TSV files (the output of the ETL pipeline) into the local KIND
+database. Use this when you want to exercise the portal against realistic
+accessions, taxonomies, embeddings, etc., without re-running the ETL.
+
+```bash
+make seed-real-data
+```
+
+What it does, in order:
+
+1. Verifies that `../../SCRATCH/STAGED_FILES_SAMPLES/` exists on the host and
+   contains at least one `*.tsv` file. If not, the target aborts with a
+   clear error **without touching the database**.
+2. Resolves the running django pod and `kubectl cp`s the directory to
+   `/tmp/staged_files` inside the pod.
+3. Runs `python manage.py load_discovery_data --data-dir /tmp/staged_files
+   --truncate`, which uses Postgres `COPY FROM` to bulk-load the TSVs.
+
+> **WARNING — destructive.** The `--truncate` flag wipes every discovery
+> table before loading. Do not run this against a database whose contents
+> you care about. It is intended for the local KIND cluster only.
+
+### Prerequisites
+
+- The KIND cluster must be running (`make dev` or `make deploy-local`).
+- `../../SCRATCH/STAGED_FILES_SAMPLES/` must exist at the repository root and
+  contain ETL TSV files. **If the directory is missing or empty, the make
+  target will exit non-zero and do nothing** — it will not silently
+  truncate your DB or load an empty dataset.
+
+### Expected file layout
+
+`../../SCRATCH/STAGED_FILES_SAMPLES/` should contain the TSV files consumed by
+`load_discovery_data`. The required and optional files (and their column
+contracts) are documented in
+`django/discovery/services/ingestion/loader.py`. At a minimum:
+
+- `detectors.tsv`
+- `assemblies.tsv`
+- `contigs.tsv`
+- `bgcs.tsv`
+
+Optional (loaded when present): `cds.tsv`, `cds_sequences.tsv`,
+`contig_sequences.tsv`, `domains.tsv`, `embeddings_bgc.tsv`,
+`embeddings_protein.tsv`, `natural_products.tsv`,
+`np_chemont_classes.tsv`.
+
+### Running with different options
+
+`make seed-real-data` is a thin wrapper around the Django command. If you
+want to skip the truncate (additive load) or skip the in-pipeline stats
+step, invoke the command directly inside the pod:
+
+```bash
+make shell
+python manage.py load_discovery_data --data-dir /tmp/staged_files            # no truncate
+python manage.py load_discovery_data --data-dir /tmp/staged_files --skip-stats
+```
+
+(You will need to copy the files into the pod yourself first, e.g. via
+`kubectl cp`, if you bypass the make target.)
+
 ## Running Tests
 
 ### Unit tests (no DB required)
