@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.3.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.2.0...bgc_data_portal-v3.3.0) (2026-05-01)
+
+
+### Features
+
+* **discovery:** convert sequence search to async POST→202+poll pattern ([ec5b1d9](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/ec5b1d9007d1469f17cd677e4eaf2b320ab5a474))
+* **local dev pattern:** Support auto clean of previous versions in `make dev` command ([edadcc4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/edadcc497269e7d2d97cd4205cb4264cdb1bf0df))
+
+
+### Performance Improvements
+
+* **api:** Retrive assembly source in first queryset pass ([bb3456c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/bb3456c495f9d94d4a078c9f8ddcabe9f88d594b))
+
 ## [3.2.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.1.0...bgc_data_portal-v3.2.0) (2026-04-23)
 
 
