@@ -1261,11 +1261,13 @@ def sequence_query(request, body: SequenceQueryRequest):
         raise HttpError(400, "Protein sequence is required")
     if len(cleaned) > 5000:
         raise HttpError(400, "Sequence exceeds maximum length of 5,000 amino acids")
+    if not (1e-100 <= body.max_evalue <= 1.0):
+        raise HttpError(400, "max_evalue must be between 1e-100 and 1.0")
 
     from discovery.tasks import sequence_similarity_search
 
     try:
-        result = sequence_similarity_search.delay(cleaned, body.similarity_threshold)
+        result = sequence_similarity_search.delay(cleaned, body.max_evalue)
     except Exception as e:
         logger.error("Failed to dispatch sequence search task: %s", e)
         raise HttpError(503, "Search service temporarily unavailable")

@@ -441,18 +441,20 @@ _classify_with_knn = _classify_uploaded_bgc
 
 
 @shared_task(name="discovery.tasks.sequence_similarity_search", bind=True, acks_late=True)
-def sequence_similarity_search(self, sequence: str, similarity_threshold: float) -> dict[int, float]:
-    """Embed a protein sequence with ESM-C and find BGCs with similar proteins.
+def sequence_similarity_search(self, sequence: str, max_evalue: float) -> dict[int, float]:
+    """Run phmmer for a query protein against the on-disk reference DB and
+    return BGCs that contain a matching protein.
 
-    Returns a dict mapping BGC id → max cosine similarity score.
-    Runs in the Celery worker where torch + ESM are available.
+    Returns a dict ``{bgc_id: -log10(best_evalue_among_matched_proteins)}``.
+    Larger numbers mean better matches, so the existing DESC sort on
+    ``similarity_score`` keeps "best first" semantics.
     """
-    import numpy as np
-    from django.db import connection
+    import math
 
-    from discovery.models import EMBEDDING_DIM, DashboardCds
+    from discovery.models import DashboardCds
+    from discovery.services.protein_search import phmmer_search
+    from discovery.services.protein_search.index import IndexNotBuiltError
 
-    # Validate
     seq = sequence.strip().upper()
     if not seq:
         log.warning("Empty sequence passed to sequence_similarity_search")
@@ -465,53 +467,70 @@ def sequence_similarity_search(self, sequence: str, similarity_threshold: float)
         log.warning("Invalid amino acid characters: %s", invalid)
         return {}
 
-    # Embed
-    from common_core.esmc_embedder import embed_sequences
-
-    results = embed_sequences([seq])
-    if not results or results[0] is None:
-        log.error("ESM-C embedding failed for sequence (len=%d)", len(seq))
-        return {}
-
-    # Extract final layer → 960-dim vector (matches bgc_embedding_aggregator vec[-1])
-    embedding = results[0][-1].astype(np.float32)
-    vec_str = "[" + ",".join(str(float(v)) for v in embedding) + "]"
-
-    # pgvector cosine distance search
-    max_distance = 1.0 - similarity_threshold
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"""
-            SELECT protein_sha256, (vector <=> %s::halfvec({EMBEDDING_DIM})) AS distance
-            FROM discovery_protein_embedding
-            WHERE (vector <=> %s::halfvec({EMBEDDING_DIM})) <= %s
-            """,
-            [vec_str, vec_str, max_distance],
+    try:
+        sha256_evalues = phmmer_search(seq, max_evalue=max_evalue, cpus=1)
+    except IndexNotBuiltError:
+        log.error(
+            "Protein search index not built; "
+            "run `python manage.py build_protein_search_index --rebuild`."
         )
-        rows = cursor.fetchall()
-
-    if not rows:
-        log.info("Sequence query: no protein matches at threshold=%.2f", similarity_threshold)
         return {}
 
-    # Map matched protein_sha256 → BGC ids via DashboardCds
-    matched_sha256s = {r[0]: 1.0 - r[1] for r in rows}  # sha256 → similarity
+    if not sha256_evalues:
+        log.info("Sequence query: no protein hits at max_evalue=%g", max_evalue)
+        return {}
+
     cds_qs = (
-        DashboardCds.objects.filter(protein_sha256__in=matched_sha256s.keys())
+        DashboardCds.objects
+        .filter(protein_sha256__in=sha256_evalues.keys())
         .values_list("bgc_id", "protein_sha256")
     )
 
-    bgc_similarities: dict[int, float] = {}
+    # For each BGC, keep the smallest E-value among its matched proteins, then
+    # transform to -log10(E) so DESC sort = best first. Guard against E == 0
+    # (pyhmmer rounds extremely strong hits to 0.0).
+    bgc_best_evalue: dict[int, float] = {}
     for bgc_id, sha256 in cds_qs:
-        sim = matched_sha256s[sha256]
-        existing = bgc_similarities.get(bgc_id, 0.0)
-        bgc_similarities[bgc_id] = max(existing, sim)
+        ev = sha256_evalues[sha256]
+        existing = bgc_best_evalue.get(bgc_id)
+        if existing is None or ev < existing:
+            bgc_best_evalue[bgc_id] = ev
+
+    bgc_scores: dict[int, float] = {}
+    for bgc_id, ev in bgc_best_evalue.items():
+        if ev <= 0:
+            bgc_scores[bgc_id] = 999.0  # effectively +inf for sort purposes
+        else:
+            bgc_scores[bgc_id] = -math.log10(ev)
 
     log.info(
-        "Sequence query: len=%d threshold=%.2f protein_matches=%d bgc_matches=%d",
-        len(seq), similarity_threshold, len(rows), len(bgc_similarities),
+        "Sequence query: len=%d max_evalue=%g protein_hits=%d bgc_matches=%d",
+        len(seq), max_evalue, len(sha256_evalues), len(bgc_scores),
     )
-    return bgc_similarities
+    return bgc_scores
+
+
+@shared_task(name="discovery.tasks.update_protein_search_index", bind=True, acks_late=True)
+def update_protein_search_index_task(self, rebuild: bool = False) -> dict:
+    """Append new proteins to the on-disk phmmer index (or rebuild from scratch).
+
+    Enqueued automatically at the end of ``load_discovery_data``; can also be
+    invoked manually via ``python manage.py build_protein_search_index``.
+    """
+    from discovery.services.protein_search.build import rebuild_index, update_index
+
+    stats = rebuild_index() if rebuild else update_index()
+    log.info(
+        "update_protein_search_index_task: total=%d added=%d elapsed=%.1fs version=%d",
+        stats.total_in_db, stats.newly_added, stats.elapsed_seconds, stats.version,
+    )
+    return {
+        "total_in_db": stats.total_in_db,
+        "already_indexed": stats.already_indexed,
+        "newly_added": stats.newly_added,
+        "elapsed_seconds": stats.elapsed_seconds,
+        "version": stats.version,
+    }
 
 
 @shared_task(name="discovery.tasks.update_discovery_stats", bind=True, acks_late=True)

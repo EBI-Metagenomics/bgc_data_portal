@@ -18,6 +18,7 @@ spec:
           image: bgc-data-portal-django-worker
           workingDir: /app
           # watchmedo restarts Celery automatically when Skaffold syncs .py files
+          # --concurrency=1 mirrors dev/prod: one phmmer DB resident per worker.
           command:
             - watchmedo
             - auto-restart
@@ -30,6 +31,10 @@ spec:
             - bgc_data_portal.celery
             - worker
             - --loglevel=info
+            - --concurrency=1
+          env:
+            - name: PROTEIN_SEARCH_INDEX_DIR
+              value: /data/protein_search
           envFrom:
             - secretRef:
                 name: bgc-data-portal-secret
@@ -38,6 +43,12 @@ spec:
           volumeMounts:
             - name: packages
               mountPath: /data/packages
+            - name: protein-search-index
+              mountPath: /data/protein_search
       volumes:
         - name: packages
+          emptyDir: {}
+        # Local-only: emptyDir survives pod restarts but not pod recreation.
+        # Rebuild via `make build-protein-index` after a fresh deploy.
+        - name: protein-search-index
           emptyDir: {}

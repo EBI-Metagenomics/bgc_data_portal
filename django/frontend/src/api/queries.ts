@@ -98,7 +98,7 @@ export function postChemicalQuery(
 
 export interface SequenceQueryRequest {
   sequence: string;
-  similarity_threshold: number;
+  max_evalue: number;
 }
 
 export interface SequenceQueryParams {

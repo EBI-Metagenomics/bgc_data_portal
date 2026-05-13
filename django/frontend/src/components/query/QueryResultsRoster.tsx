@@ -1,6 +1,7 @@
 import { useDomainQuery } from "@/hooks/use-domain-query";
 import { useSimilarBgcQuery } from "@/hooks/use-similar-bgc-query";
 import { useChemicalQuery } from "@/hooks/use-chemical-query";
+import { useSequenceQuery } from "@/hooks/use-sequence-query";
 import { useQueryStore } from "@/stores/query-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { BgcContextMenu } from "@/components/bgc/BgcContextMenu";
@@ -36,19 +37,23 @@ const SORT_OPTIONS = [
 export function QueryResultsRoster() {
   const similarBgcSourceId = useQueryStore((s) => s.similarBgcSourceId);
   const smilesQuery = useQueryStore((s) => s.smilesQuery);
+  const sequenceQueryText = useQueryStore((s) => s.sequenceQuery);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
 
   const domainQuery = useDomainQuery();
   const similarQuery = useSimilarBgcQuery();
   const chemicalQuery = useChemicalQuery();
+  const sequenceQuery = useSequenceQuery();
 
-  // Pick the active query: similar BGC > chemical > domain
+  // Pick the active query: similar BGC > sequence > chemical > domain
   const query = similarBgcSourceId
     ? similarQuery
-    : smilesQuery.trim()
-      ? chemicalQuery
-      : domainQuery;
+    : sequenceQueryText.trim()
+      ? sequenceQuery
+      : smilesQuery.trim()
+        ? chemicalQuery
+        : domainQuery;
   const { data, isLoading, page, setPage, sortBy, setSortBy, order, setOrder } = query;
 
   if (isLoading) {

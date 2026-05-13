@@ -73,9 +73,9 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     text: "Tanimoto coefficient comparing Morgan fingerprints of predicted natural products (0\u20131). Used in chemical structure (SMILES) search.",
     docsUrl: "/docs/similarity-scores.html#tanimoto",
   },
-  cosine_similarity: {
-    text: "Cosine similarity between protein sequence embeddings (0\u20131). Captures overall functional similarity including arrangement and context.",
-    docsUrl: "/docs/similarity-scores.html#cosine-similarity",
+  phmmer_evalue: {
+    text: "phmmer E-value cutoff for protein-sequence search. Lower values are stricter \u2014 1e-5 is the conventional significance threshold; 1e-50 effectively requires near-identical matches; 1 returns everything HMMER considers a hit.",
+    docsUrl: "/docs/similarity-scores.html#phmmer",
   },
 
   // ── Filters ────────────────────────────────────────────────────────

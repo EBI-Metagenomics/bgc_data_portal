@@ -13,7 +13,7 @@ export function useSequenceQuery() {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
 
   const sequenceQuery = useQueryStore((s) => s.sequenceQuery);
-  const sequenceThreshold = useQueryStore((s) => s.sequenceThreshold);
+  const sequenceEvalue = useQueryStore((s) => s.sequenceEvalue);
   const sequenceTaskId = useQueryStore((s) => s.sequenceTaskId);
   const setSequenceTaskId = useQueryStore((s) => s.setSequenceTaskId);
   const sequenceQueryTriggered = useQueryStore((s) => s.sequenceQueryTriggered);
@@ -29,11 +29,11 @@ export function useSequenceQuery() {
 
   // Phase 1: POST — fires once per trigger, disabled once task_id is stored
   const submitQuery = useQuery({
-    queryKey: ["sequence-submit", sequenceQuery, sequenceThreshold],
+    queryKey: ["sequence-submit", sequenceQuery, sequenceEvalue],
     queryFn: () =>
       postSequenceQuery({
         sequence: sequenceQuery,
-        similarity_threshold: sequenceThreshold,
+        max_evalue: sequenceEvalue,
       }),
     enabled: sequenceQueryTriggered && hasQuery && !sequenceTaskId,
     retry: false,
@@ -100,6 +100,7 @@ export function useSequenceQuery() {
   return {
     data,
     isFetching,
+    isLoading: isFetching,
     isError,
     page,
     setPage,

@@ -327,15 +327,56 @@ exit
 pytest tests/e2e/playwright -q --e2e-base-url http://localhost:8080
 ```
 
-## Notes on ML Management Commands
+## Protein Search Index (phmmer)
 
-`Dockerfile.dev` omits ML packages (torch, transformers, esm, biopython,
-pyrodigal, pyhmmer, rdkit). Management commands that need them
-(e.g. `backfill_protein_embeddings`) must be run using the full prod image:
+The Discovery Dashboard "Protein Sequence" search runs `phmmer` against an
+on-disk reference FASTA plus a `VERSION` stamp at
+`$PROTEIN_SEARCH_INDEX_DIR` (default `/data/protein_search`). In the KIND
+cluster this path is an `emptyDir` mounted only on the Celery pod, so the
+index lives in the worker.
+
+**You only need to build it once per fresh deploy.** After that, every
+`load_discovery_data` run (manual or via `make seed-real-data`) automatically
+enqueues an index update at the end. There's nothing to wire on subsequent
+deploys — re-rolling Skaffold preserves the index unless the celery pod is
+recreated (an emptyDir is destroyed when the pod is, which is why
+`make seed-real-data` automatically rebuilds it).
+
+### One-time bootstrap after `make deploy-local` / `make dev`
+
+```bash
+make build-protein-index     # = manage.py build_protein_search_index --rebuild on celery pod
+```
+
+### Steady state
+
+| Action | Effect on the index |
+|---|---|
+| `python manage.py load_discovery_data --data-dir X` | Append-only update auto-enqueued at end |
+| `python manage.py load_discovery_data --data-dir X --truncate` | Full rebuild auto-enqueued at end |
+| `make seed-real-data` | Truncate + rebuild on first archive; subsequent archives append |
+| `python manage.py load_discovery_data ... --skip-protein-index` | Skip the auto-update (e.g. while loading multi-archive batches) |
+| Celery pod recreated (e.g. `kubectl delete pod`) | Index gone — rerun `make build-protein-index` |
+
+The worker compares `VERSION` against its loaded copy on every query and
+reloads the DB lazily, so updates become visible without a worker restart.
+
+### Manual operations
+
+```bash
+make build-protein-index     # full rebuild from scratch
+make update-protein-index    # append-only (skips already-indexed sha256s)
+```
+
+## Notes on Heavy Management Commands
+
+`Dockerfile.dev` omits the heavier science packages (biopython, pyrodigal,
+pyhmmer, rdkit, umap-learn). Management commands that need them must be
+run using the full worker image:
 
 ```bash
 docker run --rm -it \
   --env-file deployments/k8s-local/.env.local \
-  quay.io/microbiome-informatics/bgc_dp_web_site:latest \
-  python manage.py backfill_protein_embeddings
+  quay.io/microbiome-informatics/bgc_dp_web_site_worker:latest \
+  python manage.py build_protein_search_index --rebuild
 ```

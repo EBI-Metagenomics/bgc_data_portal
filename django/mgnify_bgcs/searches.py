@@ -174,11 +174,8 @@ Main dispatcher; everything that touches Django lives here.
 # Public façade ------------------------------------------------
 # --------------------------------------------------------------
 from .services.bgc_query import (
-    _bgc_embedding_search,
     _bgc_hmmer_search,
-    _proteins_set_embedding_search,
     _proteins_set_hmmer_search,
-    _protein_embedding_search,
     _protein_hmmer_search,
 )
 
@@ -196,14 +193,15 @@ def search_bgcs_by_record(
     ----------
     record : Bio.SeqRecord.SeqRecord
         Input BGC or protein record (already parsed with BioPython).
-        *If unit_of_comparison == 'bgc'*        expect record.annotations['bgc_embedding']
-        *If unit_of_comparison == 'proteins'*   expect CDS features with .qualifiers['embedding'] or 'translation'
-        *If molecule_type == 'protein'*         expect whole-protein embedding / sequence in record.annotations
+        *If unit_of_comparison == 'proteins'*   expect CDS features with .qualifiers['translation']
     unit_of_comparison : {'bgc', 'proteins'}
-    similarity_measure : {'cosine', 'hmmer'}
+    similarity_measure : {'hmmer'}
+        Only HMMER is supported on the legacy search page; cosine/embedding
+        search has moved to the Discovery Dashboard (phmmer against an on-disk
+        reference DB).
     molecule_type : {'nucleotide', 'protein'}
     similarity_threshold : float
-        Cosine (≥) or Sørensen-Dice (≥) for embeddings; for HMMER treat as fraction identity.
+        HMMER bit-score threshold (Sørensen-Dice across protein sets).
 
     Returns
     -------
@@ -219,48 +217,31 @@ def search_bgcs_by_record(
         similarity_threshold,
     )
 
+    if similarity_measure != "hmmer":
+        raise ValueError(
+            "Only similarity_measure='hmmer' is supported. Use the Discovery "
+            "Dashboard sequence search for embedding/phmmer-based queries."
+        )
+
     if molecule_type == "protein":  # single-protein query
-        if similarity_measure == "cosine":
-            similarity_results = _protein_embedding_search(record, similarity_threshold)
-        elif similarity_measure == "hmmer":
-            similarity_results = _protein_hmmer_search(record, similarity_threshold)
-        else:
-            raise ValueError(
-                "Unsupported similarity_measure for molecule_type='protein'"
-            )
+        similarity_results = _protein_hmmer_search(record, similarity_threshold)
 
     elif unit_of_comparison == "bgc":
-        if similarity_measure == "cosine":
-            similarity_results = _bgc_embedding_search(record, similarity_threshold)
-        elif similarity_measure == "hmmer":
-            similarity_results = _bgc_hmmer_search(record, similarity_threshold)
-        else:
-            raise ValueError(
-                "Unsupported similarity_measure for unit_of_comparison='bgc'"
-            )
+        similarity_results = _bgc_hmmer_search(record, similarity_threshold)
 
     elif unit_of_comparison == "proteins":
-        if similarity_measure == "cosine":
-            similarity_results = _proteins_set_embedding_search(
-                record, similarity_threshold
-            )
-        elif similarity_measure == "hmmer":
-            # If caller didn't supply an explicit set-similarity threshold,
-            # fall back to the per-item similarity threshold.
-            _set_sim = (
-                similarity_threshold
-                if set_similarity_threshold is None
-                else set_similarity_threshold
-            )
-            similarity_results = _proteins_set_hmmer_search(
-                record,
-                similarity_threshold=similarity_threshold,
-                set_similarity_threshold=_set_sim,
-            )
-        else:
-            raise ValueError(
-                "Unsupported similarity_measure for unit_of_comparison='proteins'"
-            )
+        # If caller didn't supply an explicit set-similarity threshold,
+        # fall back to the per-item similarity threshold.
+        _set_sim = (
+            similarity_threshold
+            if set_similarity_threshold is None
+            else set_similarity_threshold
+        )
+        similarity_results = _proteins_set_hmmer_search(
+            record,
+            similarity_threshold=similarity_threshold,
+            set_similarity_threshold=_set_sim,
+        )
 
     else:
         raise ValueError("Combination of arguments not supported")

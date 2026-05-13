@@ -10,7 +10,6 @@ from Bio.Seq import Seq
 from Bio.Data import CodonTable
 
 import pyrodigal
-from ..utils.lazy_loaders import protein_embedder, umap_model
 
 # Configure logger for the module
 log = logging.getLogger(__name__)
@@ -94,42 +93,13 @@ class SeqAnnotator:
         return annotated_record
 
     def _annotate_record(self, record: SeqRecord) -> SeqRecord:
+        """Return the parsed record unchanged.
+
+        Historically this attached ESM-C protein embeddings, a BGC embedding,
+        and UMAP coords to support the legacy cosine-similarity search. Those
+        paths have been removed in favour of the phmmer-based search served by
+        the Discovery Dashboard, so no further annotation is required here.
         """
-        Annotate protein sequences in a SeqRecord with embeddings.
-        This method is called internally after loading the record.
-        """
-        protein_seqs = {
-            ix: feature.qualifiers["translation"][0]
-            for ix, feature in enumerate(record.features)
-            if feature.type == "CDS" and "translation" in feature.qualifiers
-        }
-
-        if not protein_seqs:
-            log.warning(
-                "No protein sequences found in record %s. Skipping embedding.",
-                record.id,
-            )
-            return record
-
-        embedder = protein_embedder()
-
-        embeddings, bgc_embedding = embedder.embed_gene_cluster(
-            protein_sequences=protein_seqs.values()
-        )
-
-        for ix, embedding in zip(protein_seqs.keys(), embeddings):
-            feature = record.features[ix]
-            if feature.type == "CDS":
-                # Add embedding as a qualifier
-                feature.qualifiers["embedding"] = [embedding]
-
-        record.annotations["bgc_embedding"] = bgc_embedding
-
-        umap = umap_model()
-        umap_coords = umap.transform([bgc_embedding])
-        record.annotations["umap_x_coord"] = umap_coords[0][0]
-        record.annotations["umap_y_coord"] = umap_coords[0][1]
-
         return record
 
     def _load_genbank(self, fasta_io: str) -> SeqRecord:

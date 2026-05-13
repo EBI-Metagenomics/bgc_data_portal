@@ -95,17 +95,6 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        if options["rebuild_nrb"]:
-            self.stdout.write("Rebuilding NonRedundantBGC table first ...")
-            if options["sync"]:
-                nrb_result = build_non_redundant_bgcs_task.apply().result
-                self.stdout.write(self.style.SUCCESS(f"NRB rebuild: {nrb_result}"))
-            else:
-                res = build_non_redundant_bgcs_task.apply_async(queue=options["queue"])
-                self.stdout.write(
-                    self.style.SUCCESS(f"Dispatched build_non_redundant_bgcs_task: {res.id}")
-                )
-
         kwargs = {
             "domain_sources": [s.upper() for s in options["domain_sources"]],
             "score_weights": options["score_weights"],
@@ -116,7 +105,15 @@ class Command(BaseCommand):
             "auto_reclassify": options["auto_reclassify"],
             "reclassify_scope": options["reclassify_scope"],
         }
+        queue = options["queue"]
+
+        # --sync runs both tasks in-process and sequentially, so there is no
+        # race; just dispatch them one after the other.
         if options["sync"]:
+            if options["rebuild_nrb"]:
+                self.stdout.write("Rebuilding NonRedundantBGC table first ...")
+                nrb_result = build_non_redundant_bgcs_task.apply().result
+                self.stdout.write(self.style.SUCCESS(f"NRB rebuild: {nrb_result}"))
             self.stdout.write("Running BGC clustering synchronously ...")
             result = run_bgc_clustering_task.apply(kwargs=kwargs).result
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
@@ -124,8 +121,31 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.SUCCESS(f"MIBiG analysis artifacts: {artifacts_dir}")
                 )
-        else:
-            res = run_bgc_clustering_task.apply_async(kwargs=kwargs, queue=options["queue"])
-            self.stdout.write(
-                self.style.SUCCESS(f"Dispatched run_bgc_clustering_task: {res.id}")
+            return
+
+        # Async + --rebuild-nrb: chain via Celery so the clustering task only
+        # fires once the rebuild has succeeded. Dispatching both independently
+        # races on the scores queue — the clustering captures NRB ids at the
+        # start of its run, then the rebuild deletes/recreates them, and the
+        # apply-step bulk_update silently no-ops against stale ids. Using an
+        # immutable signature (.si) keeps the build's return value from being
+        # prepended as a positional arg to the kwargs-only clustering task,
+        # and .set(queue=...) routes the linked task explicitly (link does not
+        # inherit the parent task's queue).
+        if options["rebuild_nrb"]:
+            cluster_sig = run_bgc_clustering_task.si(**kwargs).set(queue=queue)
+            async_result = build_non_redundant_bgcs_task.apply_async(
+                queue=queue, link=cluster_sig,
             )
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Dispatched build_non_redundant_bgcs_task: {async_result.id} "
+                    "(run_bgc_clustering_task will run on success)"
+                )
+            )
+            return
+
+        res = run_bgc_clustering_task.apply_async(kwargs=kwargs, queue=queue)
+        self.stdout.write(
+            self.style.SUCCESS(f"Dispatched run_bgc_clustering_task: {res.id}")
+        )

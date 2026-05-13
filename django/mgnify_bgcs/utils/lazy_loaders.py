@@ -35,25 +35,6 @@ def umap_model():
     return _umap_cache
 
 
-_esm_cache = None
-
-
-@lru_cache(maxsize=1)
-def protein_embedder():
-    """
-    Caches so we only ever load one embedder per worker.
-    """
-    from ..services.protein_embeddings import ESMEmbedder
-
-    global _esm_cache
-    if _esm_cache is None:
-        _esm_cache = ESMEmbedder()
-    return _esm_cache
-
-
-# Adjust the import to your app structure
-
-
 highest_tool_version = None
 
 

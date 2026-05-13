@@ -36,7 +36,7 @@ class SequenceSearchForm(forms.Form):
     )
 
     similarity_measure = forms.ChoiceField(
-        choices=[("hmmer", "HMMER / alignment"), ("cosine", "Cosine (embeddings)")],
+        choices=[("hmmer", "HMMER / alignment")],
         initial="hmmer",
         widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
     )
@@ -57,16 +57,8 @@ class SequenceSearchForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        data = self.data if self.is_bound else self.initial
-
-        sim = data.get("similarity_measure", "hmmer")
-        if sim == "hmmer":
-            self.fields["similarity_threshold"].initial = 32
-            self.fields["similarity_threshold"].widget.attrs["step"] = 1
-        else:
-            self.fields["similarity_threshold"].initial = 0.85
-            self.fields["similarity_threshold"].widget.attrs["step"] = 0.01
+        self.fields["similarity_threshold"].initial = 32
+        self.fields["similarity_threshold"].widget.attrs["step"] = 1
 
     def clean(self):
         cleaned_data = super().clean()

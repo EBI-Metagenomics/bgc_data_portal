@@ -260,7 +260,7 @@ class ChemicalQueryRequest(Schema):
 
 class SequenceQueryRequest(Schema):
     sequence: str
-    similarity_threshold: float = 0.7
+    max_evalue: float = 1e-5
 
 
 class DomainCondition(Schema):

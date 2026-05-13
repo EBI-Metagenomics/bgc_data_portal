@@ -154,6 +154,15 @@ CLUSTERING_ARTIFACTS_DIR: Path = Path(
     )
 )
 
+# On-disk phmmer protein search DB (FASTA + .ssi + VERSION).
+# Lives on the shared ML PVC so every Celery worker can read it.
+PROTEIN_SEARCH_INDEX_DIR: Path = Path(
+    os.environ.get(
+        "PROTEIN_SEARCH_INDEX_DIR",
+        BASE_DIR / "data" / "protein_search",
+    )
+)
+
 
 # REST Framework
 REST_FRAMEWORK = {

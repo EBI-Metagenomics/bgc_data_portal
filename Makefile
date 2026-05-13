@@ -3,6 +3,7 @@
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
         seed-real-data \
+        build-protein-index update-protein-index \
         clean-images nuke \
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
         workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
@@ -100,6 +101,17 @@ clear-cache-django:
 	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 clear-cache: clear-cache-redis clear-cache-celery clear-cache-django
+
+# ── Protein search index ──────────────────────────────────────────────────────
+# Runs inside the Celery pod — that's where the mount lives. Use --rebuild on
+# first bootstrap or after a TRUNCATE; the default is incremental append.
+build-protein-index:
+	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	  python manage.py build_protein_search_index --rebuild
+
+update-protein-index:
+	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	  python manage.py build_protein_search_index --append
 
 # ── Real-data seeding ─────────────────────────────────────────────────────────
 # Delegates to scripts/seed-real-data.sh — copies each *.tgz to the django pod

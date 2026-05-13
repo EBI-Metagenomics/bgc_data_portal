@@ -13,7 +13,8 @@ The production image build is triggered separately (see below).
 
 ## Building the Production Image
 
-The full production image (includes torch, esm, biopython, etc.) is built by
+The full production image (includes biopython, pyhmmer, rdkit, etc.; torch
+and ESM were removed when sequence search moved to phmmer) is built by
 `.github/workflows/release.yml` when a commit message contains `"release portal"`.
 
 To trigger manually from a release commit:
@@ -70,6 +71,50 @@ kubectl apply -f deployments/k8s-prod/ebi-wp-k8s-hl.yaml \
 KUBE_CONTEXT=<prod-kube-context> skaffold delete -p prod
 KUBE_CONTEXT=<prod-kube-context> make deploy-prod
 ```
+
+## Protein Search Index (phmmer)
+
+The Discovery Dashboard "Protein Sequence" search runs `phmmer` against an
+on-disk reference DB at `/data/protein_search`, mounted from the
+`bgc-hf-cache-claim` PVC (repurposed from the former HuggingFace/ESM model
+cache).
+
+**Build it once after the first rollout** that includes the phmmer-based
+search. The PVC persists across re-deploys, so subsequent rollouts reuse the
+populated FASTA — there is nothing to do on routine deploys.
+
+### One-time bootstrap
+
+Run on the **celery pod**:
+
+```bash
+kubectl exec -n bgc-data-portal-hl-prod deploy/bgc-data-portal-celery \
+  --context <prod-kube-context> -- \
+  python manage.py build_protein_search_index --rebuild
+```
+
+At 10M proteins this takes ~5–10 minutes; tail `kubectl logs` on the celery
+deployment to watch progress.
+
+> If the PVC carries leftover `huggingface/` data from before the repurpose,
+> wipe it once: `kubectl exec ... deploy/bgc-data-portal-celery -- rm -rf /data/protein_search/huggingface`.
+
+### Steady state
+
+`load_discovery_data` auto-enqueues an index update at the end of every
+ingest — `--truncate` triggers a rebuild, otherwise the new proteins are
+appended. Celery workers detect the new `VERSION` stamp and reload their
+in-memory block on the next query. **Nothing to wire per-deploy.**
+
+Pass `--skip-protein-index` to defer the update when loading multi-archive
+batches; then run `python manage.py build_protein_search_index --append`
+once at the end.
+
+### Resourcing
+
+Celery workers run `--concurrency=1` so a single phmmer DB is resident per
+pod; scale horizontally via replicas. At the 10M-protein scale, each worker
+pod needs roughly 5 GB requested / 8 GB limit.
 
 ## Post-Deploy Verification
 
