@@ -36,28 +36,8 @@ export function postDomainQuery(
   );
 }
 
-export interface SimilarBgcParams {
-  max_distance?: number;
-  page?: number;
-  page_size?: number;
-  sort_by?: string;
-  order?: "asc" | "desc";
-}
-
-export function postSimilarBgcQuery(
-  bgcId: number,
-  params: SimilarBgcParams = {}
-) {
-  const queryString = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) queryString.set(key, String(value));
-  }
-  const qs = queryString.toString();
-  return apiPost<PaginatedQueryResultResponse>(
-    `/query/similar-bgc/${bgcId}/${qs ? `?${qs}` : ""}`,
-    {}
-  );
-}
+// Composite-Dice "find similar NRBs" replaces the retired embedding-based
+// similar-BGC endpoint. See `src/api/nrbs.ts` → `postSimilarNrbQuery`.
 
 export interface ChemicalQueryRequest {
   smiles: string;

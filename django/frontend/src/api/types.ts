@@ -67,8 +67,6 @@ export interface BgcRosterItem {
   novelty_score: number;
   domain_novelty: number;
   is_partial: boolean;
-  nearest_validated_accession: string | null;
-  nearest_validated_distance: number | null;
   assembly_accession: string | null;
 }
 
@@ -121,8 +119,6 @@ export interface BgcDetail {
   novelty_score: number;
   domain_novelty: number;
   is_partial: boolean;
-  nearest_validated_accession: string | null;
-  nearest_validated_distance: number | null;
   is_validated: boolean;
   domain_architecture: DomainArchitectureItem[];
   parent_assembly: ParentAssemblySummary | null;
@@ -531,4 +527,189 @@ export interface BgcAssessmentResult {
   submitted_domains: DomainArchitectureItem[];
   nearest_validated_accession: string | null;
   nearest_validated_bgc_id: number | null;
+}
+
+// ── NRB (Non-Redundant BGC) schemas ──────────────────────────────────────
+
+export interface NrbRosterItem {
+  id: number;
+  label: string;
+  classification_path: string;
+  size_kb: number;
+  n_source_bgcs: number;
+  source_tools: string[];
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  umap_projected: boolean;
+  parent_assembly_id: number | null;
+  parent_assembly_accession: string | null;
+  organism_name: string | null;
+  contig_accession: string | null;
+  similarity_score: number | null;
+}
+
+export interface PaginatedNrbRosterResponse {
+  items: NrbRosterItem[];
+  pagination: PaginationMeta;
+}
+
+export interface NrbMemberBgc {
+  id: number;
+  accession: string;
+  detector_name: string | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  size_kb: number;
+}
+
+export interface NrbDetail {
+  id: number;
+  label: string;
+  classification_path: string;
+  size_kb: number;
+  start_position: number;
+  end_position: number;
+  contig_accession: string | null;
+  source_tools: string[];
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  umap_projected: boolean;
+  umap_x: number | null;
+  umap_y: number | null;
+  parent_assembly: ParentAssemblySummary | null;
+  representative_bgc_id: number | null;
+  member_bgcs: NrbMemberBgc[];
+  domain_architecture: DomainArchitectureItem[];
+  natural_products: NaturalProductSummary[];
+}
+
+export interface NrbScatterPoint {
+  id: number;
+  x: number;
+  y: number;
+  classification_path: string;
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  umap_projected: boolean;
+  similarity_score: number | null;
+}
+
+export interface NrbUmapPoint {
+  id: number;
+  label: string;
+  umap_x: number;
+  umap_y: number;
+  classification_path: string;
+  novelty_score: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  umap_projected: boolean;
+}
+
+export type NrbScatterAxis =
+  | "size_kb"
+  | "n_cds"
+  | "novelty_score"
+  | "domain_novelty"
+  | "similarity_score";
+
+// ── Shortlist Report schemas ─────────────────────────────────────────────
+
+export interface ReportSnapshotResponse {
+  token: string;
+  expires_at: string;
+  n_nrbs: number;
+}
+
+export interface DomainCompositionEntry {
+  domain_acc: string;
+  domain_name: string;
+  nrb_count: number;
+  fraction: number;
+  tier: "core" | "variable" | "rare";
+}
+
+export interface DomainCompositionSummary {
+  core_count: number;
+  variable_count: number;
+  rare_count: number;
+  total_unique: number;
+  rows: DomainCompositionEntry[];
+}
+
+export interface GcfDistributionEntry {
+  classification_path: string;
+  nrb_count: number;
+  fraction: number;
+}
+
+export interface CategoryCount {
+  name: string;
+  count: number;
+}
+
+export interface LengthBucket {
+  label: string;
+  count: number;
+}
+
+export interface ReportNrbRow {
+  id: number;
+  label: string;
+  classification_path: string;
+  size_kb: number;
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  n_source_bgcs: number;
+  source_tools: string[];
+  is_partial: boolean;
+  is_validated: boolean;
+  parent_assembly_accession: string | null;
+  parent_assembly_id: number | null;
+  organism_name: string | null;
+  biome_path: string;
+  taxonomy_phylum: string | null;
+  contig_accession: string | null;
+}
+
+export interface ReportAssemblyRow {
+  id: number;
+  accession: string;
+  organism_name: string | null;
+  source_name: string | null;
+  biome_path: string;
+  taxonomy_phylum: string | null;
+  assembly_size_mb: number | null;
+  total_bgcs_in_assembly: number;
+  nrbs_in_shortlist: number;
+  is_type_strain: boolean;
+}
+
+export interface ReportScoreDistribution {
+  label: string;
+  values: number[];
+}
+
+export interface ReportPayload {
+  token: string;
+  generated_at: string;
+  expires_at: string;
+  n_nrbs: number;
+  n_assemblies: number;
+  nrb_rows: ReportNrbRow[];
+  domain_composition: DomainCompositionSummary;
+  gcf_distribution: GcfDistributionEntry[];
+  score_distributions: ReportScoreDistribution[];
+  completeness_pie: CategoryCount[];
+  bgc_class_pie: CategoryCount[];
+  length_histogram: LengthBucket[];
+  predictor_distribution: CategoryCount[];
+  assembly_rows: ReportAssemblyRow[];
+  assembly_stats: Record<string, unknown>;
 }

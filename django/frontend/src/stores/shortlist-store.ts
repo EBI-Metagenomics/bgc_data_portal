@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const MAX_SHORTLIST = 20;
+// v2 raised the cap from 20 → 100 so a single shortlist can drive a
+// meaningful Report. Backend `MAX_SHORTLIST` in services/report.py matches.
+export const MAX_SHORTLIST = 100;
 
 interface ShortlistItem {
   id: number;
@@ -9,18 +11,21 @@ interface ShortlistItem {
 }
 
 interface ShortlistState {
-  assemblies: ShortlistItem[];
+  // ── BGC / NRB shortlist (primary unit in v2) ────────────────────────────
   bgcs: ShortlistItem[];
-
-  addAssembly: (item: ShortlistItem) => boolean;
-  removeAssembly: (id: number) => void;
-  clearAssemblies: () => void;
-  replaceAssemblies: (item: ShortlistItem) => void;
 
   addBgc: (item: ShortlistItem) => boolean;
   removeBgc: (id: number) => void;
   clearBgcs: () => void;
   replaceBgcs: (item: ShortlistItem) => void;
+
+  // ── Assembly shortlist (deprecated; kept for legacy components until P4
+  //    cleanup removes the sidebar). New surfaces should ignore this. ─────
+  assemblies: ShortlistItem[];
+  addAssembly: (item: ShortlistItem) => boolean;
+  removeAssembly: (id: number) => void;
+  clearAssemblies: () => void;
+  replaceAssemblies: (item: ShortlistItem) => void;
 }
 
 export const useShortlistStore = create<ShortlistState>()(

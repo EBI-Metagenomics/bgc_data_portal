@@ -1,0 +1,57 @@
+import { create } from "zustand";
+import type { NrbScatterAxis } from "@/api/types";
+
+/**
+ * Session state for the v2 Discovery dashboard.
+ *
+ * Persistence is intentionally OFF (per design decision): the reference NRB
+ * + compare slot reset on reload. URL state lives in route params, not here.
+ */
+
+export type ResultsTab = "roster" | "variables" | "umap";
+
+interface DiscoveryState {
+  // Reference NRB (top-right detail card, pinned across left-clicks).
+  referenceNrbId: number | null;
+  setReferenceNrbId: (id: number | null) => void;
+
+  // Compare slot NRB (bottom-right detail card; updated on left-click).
+  compareNrbId: number | null;
+  setCompareNrbId: (id: number | null) => void;
+
+  // Selected CDS feeds the Protein Information panel below the detail stack.
+  selectedCdsId: number | null;
+  setSelectedCdsId: (id: number | null) => void;
+
+  // Results card tab + axis selectors for the Variables Map.
+  activeResultsTab: ResultsTab;
+  setActiveResultsTab: (tab: ResultsTab) => void;
+
+  variablesAxisX: NrbScatterAxis;
+  variablesAxisY: NrbScatterAxis;
+  setVariablesAxes: (x: NrbScatterAxis, y: NrbScatterAxis) => void;
+
+  // Convenience: clear all selections (e.g., on a fresh Run Query).
+  clearSelections: () => void;
+}
+
+export const useDiscoveryStore = create<DiscoveryState>((set) => ({
+  referenceNrbId: null,
+  setReferenceNrbId: (id) => set({ referenceNrbId: id }),
+
+  compareNrbId: null,
+  setCompareNrbId: (id) => set({ compareNrbId: id }),
+
+  selectedCdsId: null,
+  setSelectedCdsId: (id) => set({ selectedCdsId: id }),
+
+  activeResultsTab: "roster",
+  setActiveResultsTab: (tab) => set({ activeResultsTab: tab }),
+
+  variablesAxisX: "novelty_score",
+  variablesAxisY: "domain_novelty",
+  setVariablesAxes: (x, y) => set({ variablesAxisX: x, variablesAxisY: y }),
+
+  clearSelections: () =>
+    set({ referenceNrbId: null, compareNrbId: null, selectedCdsId: null }),
+}));
