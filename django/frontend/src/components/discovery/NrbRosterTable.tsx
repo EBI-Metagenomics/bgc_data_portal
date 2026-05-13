@@ -73,7 +73,7 @@ export function NrbRosterTable() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" data-testid="nrb-roster">
       <ScrollArea className="flex-1">
         <Table>
           <TableHeader className="sticky top-0 bg-card z-10">
@@ -167,6 +167,8 @@ function NrbRosterRow({ nrb, selected, onSelect }: NrbRosterRowProps) {
     <NrbContextMenu nrbId={nrb.id} nrbLabel={nrb.label}>
       <TableRow
         onClick={onSelect}
+        data-testid="nrb-roster-row"
+        data-nrb-id={nrb.id}
         className={
           "cursor-pointer " +
           (selected ? "bg-accent" : "hover:bg-muted/40")

@@ -11,7 +11,12 @@ docker compose up --build                          # Start full stack
 docker compose exec django pytest -q               # Run all tests
 docker compose exec django pytest tests/unit/test_foo.py -q          # Single file
 docker compose exec django pytest tests/unit/test_foo.py::test_name -q  # Single test
-pytest tests/e2e/playwright -q --e2e-base-url http://localhost:8000  # E2E tests (run outside container)
+
+# E2E (run outside the container; needs `playwright install chromium` once):
+pytest tests/e2e/playwright/specs/test_bgc_journey.py -q \
+    --e2e-base-url http://localhost:8000              # legacy /mgnify_bgcs surface
+pytest tests/e2e/playwright/specs/test_v2_discovery_journey.py -q \
+    --e2e-v2-base-url http://localhost:8000           # v2 NRB-first dashboard
 ```
 
 ### Code quality

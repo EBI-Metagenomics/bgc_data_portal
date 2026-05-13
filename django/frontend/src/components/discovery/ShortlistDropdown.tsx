@@ -52,21 +52,35 @@ export function ShortlistDropdown() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          data-testid="shortlist-trigger"
+        >
           <ListChecks className="h-4 w-4" />
           Shortlist
-          <Badge variant="secondary" className="ml-1 px-1.5 font-mono">
+          <Badge
+            variant="secondary"
+            className="ml-1 px-1.5 font-mono"
+            data-testid="shortlist-count"
+          >
             {bgcs.length}
           </Badge>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent
+        align="end"
+        className="w-72"
+        data-testid="shortlist-menu"
+      >
         <div className="px-2 py-1.5">
           <Button
             size="sm"
             className="w-full gap-2"
             onClick={onGenerate}
             disabled={snapshot.isPending}
+            data-testid="generate-report"
           >
             {snapshot.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

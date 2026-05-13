@@ -23,12 +23,19 @@ export function ResultsCard() {
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as ResultsTab)}
         className="flex h-full flex-col"
+        data-testid="results-tabs"
       >
         <div className="border-b px-3 pt-2">
           <TabsList className="grid w-full max-w-md grid-cols-3">
-            <TabsTrigger value="roster">BGC roster</TabsTrigger>
-            <TabsTrigger value="variables">Variables map</TabsTrigger>
-            <TabsTrigger value="umap">UMAP</TabsTrigger>
+            <TabsTrigger value="roster" data-testid="results-tab-roster">
+              BGC roster
+            </TabsTrigger>
+            <TabsTrigger value="variables" data-testid="results-tab-variables">
+              Variables map
+            </TabsTrigger>
+            <TabsTrigger value="umap" data-testid="results-tab-umap">
+              UMAP
+            </TabsTrigger>
           </TabsList>
         </div>
         <TabsContent
