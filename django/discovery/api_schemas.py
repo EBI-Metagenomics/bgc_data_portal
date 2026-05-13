@@ -288,6 +288,104 @@ class SimilarNrbRequest(Schema):
     k: int = 25
 
 
+# ── Shortlist Report schemas ─────────────────────────────────────────────────
+
+
+class ReportSnapshotRequest(Schema):
+    nrb_ids: list[int]
+
+
+class ReportSnapshotResponse(Schema):
+    token: str
+    expires_at: str
+    n_nrbs: int
+
+
+class DomainCompositionEntry(Schema):
+    domain_acc: str
+    domain_name: str = ""
+    nrb_count: int
+    fraction: float
+    tier: str  # "core" | "variable" | "rare"
+
+
+class DomainCompositionSummary(Schema):
+    core_count: int = 0
+    variable_count: int = 0
+    rare_count: int = 0
+    total_unique: int = 0
+    rows: list[DomainCompositionEntry] = []
+
+
+class GcfDistributionEntry(Schema):
+    classification_path: str
+    nrb_count: int
+    fraction: float
+
+
+class CategoryCount(Schema):
+    name: str
+    count: int
+
+
+class LengthBucket(Schema):
+    label: str
+    count: int
+
+
+class ReportNrbRow(Schema):
+    id: int
+    label: str
+    classification_path: str = ""
+    size_kb: float = 0.0
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    n_source_bgcs: int = 0
+    source_tools: list[str] = []
+    is_partial: bool = False
+    is_validated: bool = False
+    parent_assembly_accession: Optional[str] = None
+    parent_assembly_id: Optional[int] = None
+    organism_name: Optional[str] = None
+    biome_path: str = ""
+    taxonomy_phylum: Optional[str] = None
+    contig_accession: Optional[str] = None
+
+
+class ReportAssemblyRow(Schema):
+    id: int
+    accession: str
+    organism_name: Optional[str] = None
+    source_name: Optional[str] = None
+    biome_path: str = ""
+    taxonomy_phylum: Optional[str] = None
+    assembly_size_mb: Optional[float] = None
+    total_bgcs_in_assembly: int = 0
+    nrbs_in_shortlist: int = 0
+    is_type_strain: bool = False
+
+
+class ReportPayload(Schema):
+    token: str
+    generated_at: str
+    expires_at: str
+    n_nrbs: int
+    n_assemblies: int
+    nrb_rows: list[ReportNrbRow] = []
+    domain_composition: DomainCompositionSummary = DomainCompositionSummary()
+    gcf_distribution: list[GcfDistributionEntry] = []
+    score_distributions: list[dict] = []
+    completeness_pie: list[CategoryCount] = []
+    bgc_class_pie: list[CategoryCount] = []
+    length_histogram: list[LengthBucket] = []
+    predictor_distribution: list[CategoryCount] = []
+    assembly_rows: list[ReportAssemblyRow] = []
+    assembly_stats: dict = {}
+
+    # Inner shape is {label: str, values: list[float]} — kept as raw dict to
+    # avoid a forward reference to ScoreDistribution defined further down.
+
+
 # ── Filter schemas ────────────────────────────────────────────────────────────
 
 

@@ -86,6 +86,9 @@ from discovery.api_schemas import (
     PaginatedNrbRosterResponse,
     PaginatedSourceResponse,
     PaginatedDetectorResponse,
+    ReportPayload,
+    ReportSnapshotRequest,
+    ReportSnapshotResponse,
     SimilarNrbRequest,
     SourceOption,
     DetectorOption,
@@ -1415,6 +1418,67 @@ def similar_nrb_query(
             page=pg, page_size=ps, total_count=total_count, total_pages=tp,
         ),
     )
+
+
+# ── Shortlist Report endpoints ───────────────────────────────────────────────
+
+
+@discovery_router.post("/report/snapshot/", response=ReportSnapshotResponse)
+def report_snapshot(request, body: ReportSnapshotRequest):
+    """Materialise a shortlist Report payload and cache it in Redis by token.
+
+    The token is ``sha256(sorted comma-joined ids)[:32]`` so the same shortlist
+    always resolves to the same token (cheap re-render across browsers/sessions).
+    """
+    from django.core.cache import cache
+    import hashlib
+
+    from discovery.services.report import (
+        MAX_SHORTLIST,
+        REPORT_TTL_SECONDS,
+        build_report_payload,
+    )
+
+    ids = sorted({int(i) for i in body.nrb_ids})
+    if not ids:
+        raise HttpError(400, "nrb_ids must be non-empty")
+    if len(ids) > MAX_SHORTLIST:
+        raise HttpError(400, f"shortlist limit is {MAX_SHORTLIST} NRBs")
+
+    token = hashlib.sha256(
+        ",".join(str(i) for i in ids).encode("utf-8")
+    ).hexdigest()[:32]
+    cache_key = f"report:{token}"
+
+    cached = cache.get(cache_key)
+    if cached:
+        return ReportSnapshotResponse(
+            token=token,
+            expires_at=cached.get("expires_at", ""),
+            n_nrbs=cached.get("n_nrbs", len(ids)),
+        )
+
+    payload = build_report_payload(ids)
+    cache.set(cache_key, payload, REPORT_TTL_SECONDS)
+    return ReportSnapshotResponse(
+        token=token,
+        expires_at=payload["expires_at"],
+        n_nrbs=payload["n_nrbs"],
+    )
+
+
+@discovery_router.get("/report/{token}/", response=ReportPayload)
+def report_get(request, token: str):
+    """Return the cached Report payload for ``token``; 404 if expired."""
+    from django.core.cache import cache
+
+    cached = cache.get(f"report:{token}")
+    if not cached:
+        raise HttpError(
+            404,
+            "Report not found or expired — POST /report/snapshot/ to regenerate.",
+        )
+    return ReportPayload(token=token, **cached)
 
 
 # ── Query mode endpoints ─────────────────────────────────────────────────────
