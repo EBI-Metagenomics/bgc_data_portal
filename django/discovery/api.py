@@ -2142,7 +2142,18 @@ def nrb_sequence_query_status(
 
     res = AsyncResult(task_id)
     if res.failed():
-        raise HttpError(500, "Sequence search failed")
+        # Surface the underlying message — the most actionable case is
+        # IndexNotBuiltError, which means the operator needs to run
+        # ``make build-protein-index`` before sequence search can return
+        # anything. Without this, the dashboard just showed an empty
+        # roster and the cause was invisible.
+        raw = res.result
+        detail = (
+            f"{type(raw).__name__}: {raw}"
+            if isinstance(raw, BaseException)
+            else "Sequence search failed"
+        )
+        raise HttpError(500, detail)
     if not res.ready():
         raise HttpError(503, "Sequence search still running")
 

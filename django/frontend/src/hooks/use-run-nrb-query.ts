@@ -101,8 +101,11 @@ export function useRunNrbQuery() {
           min_qcov: sequenceMinQcov,
         });
         const taskId = accepted.task_id;
-        // Poll until the task is ready (max ~30 attempts, 1s each).
-        const seqResp = await pollSequenceTask(taskId, 30);
+        // Poll with backoff until the task is ready. Long protein queries
+        // (~1000 AA against the full phmmer index) regularly take >1 min;
+        // we budget 5 min total before failing the UI flow. Celery itself
+        // has no time-limit so the task keeps running even if we abort.
+        const seqResp = await pollSequenceTask(taskId);
         const ids = seqResp.items.map((r) => r.id);
         idSets.push(new Set(ids));
         for (const item of seqResp.items) {
@@ -144,17 +147,30 @@ export function useRunNrbQuery() {
   return { run, isRunning, error };
 }
 
-async function pollSequenceTask(taskId: string, maxAttempts: number) {
-  for (let i = 0; i < maxAttempts; i++) {
+const SEQUENCE_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const SEQUENCE_POLL_INITIAL_MS = 1000;
+const SEQUENCE_POLL_MAX_MS = 5000;
+
+async function pollSequenceTask(taskId: string) {
+  // The backend returns 503 while the task is PENDING (so the
+  // dashboard stays responsive) and 200 when ready. We back off the
+  // poll interval to avoid hammering the API during multi-minute runs
+  // but stay responsive for short ones — the first hit lands at 1s.
+  const start = Date.now();
+  let waitMs = SEQUENCE_POLL_INITIAL_MS;
+  while (Date.now() - start < SEQUENCE_POLL_TIMEOUT_MS) {
     try {
       return await fetchNrbSequenceQueryStatus(taskId);
     } catch (e) {
       if (e instanceof ApiError && e.status === 503) {
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, waitMs));
+        waitMs = Math.min(SEQUENCE_POLL_MAX_MS, Math.round(waitMs * 1.5));
         continue;
       }
       throw e;
     }
   }
-  throw new Error("Sequence search timed out after 30s");
+  throw new Error(
+    `Sequence search timed out after ${Math.round(SEQUENCE_POLL_TIMEOUT_MS / 60000)} min — the task may still be running on the server; try again or shorten the query.`,
+  );
 }

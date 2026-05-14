@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ListChecks, FileBarChart, X, Trash2, Loader2 } from "lucide-react";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useReportSnapshot } from "@/hooks/use-report";
+import { buildAppUrl } from "@/lib/router-base";
 import { toast } from "sonner";
 
 /**
@@ -39,7 +40,14 @@ export function ShortlistDropdown() {
       bgcs.map((b) => b.id),
       {
         onSuccess: (resp) => {
-          window.open(`/report?token=${resp.token}`, "_blank");
+          // window.open bypasses React Router, so we need the absolute
+          // URL including the basePath (/dashboard/...) — buildAppUrl
+          // mirrors BrowserRouter's basename so the new tab loads the SPA
+          // instead of Django's 404.
+          window.open(
+            buildAppUrl("/report", { token: resp.token }),
+            "_blank",
+          );
           setOpen(false);
         },
         onError: (err) => {

@@ -380,11 +380,17 @@ def sequence_similarity_search(
             cpus=1,
         )
     except IndexNotBuiltError:
+        # Re-raise so Celery marks the task FAILURE — otherwise the API
+        # returns an empty SUCCESS payload and the dashboard renders
+        # "Query returned 0 NRB(s)", which is indistinguishable from a
+        # legitimate no-hit run. Surfacing the failure lets the frontend
+        # show a "search service unavailable" toast and prompts the
+        # operator to run ``make build-protein-index``.
         log.error(
             "Protein search index not built; "
             "run `python manage.py build_protein_search_index --rebuild`."
         )
-        return {}
+        raise
 
     if not sha256_metrics:
         log.info(
