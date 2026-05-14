@@ -72,6 +72,24 @@ def compute_assembly_stats(assembly_qs) -> dict:
         mean_l1=Avg("l1_class_count"),
     )
 
+    # Biome and source distributions (one count per assembly).
+    biome_distribution = [
+        {"name": row["biome_path"] or "(unknown)", "count": row["c"]}
+        for row in (
+            assembly_qs.values("biome_path")
+            .annotate(c=Count("id"))
+            .order_by("-c", "biome_path")
+        )
+    ]
+    source_distribution = [
+        {"name": row["source__name"] or "(unknown)", "count": row["c"]}
+        for row in (
+            assembly_qs.values("source__name")
+            .annotate(c=Count("id"))
+            .order_by("-c", "source__name")
+        )
+    ]
+
     return {
         "taxonomy_sunburst": taxonomy_sunburst,
         "score_distributions": score_distributions,
@@ -80,31 +98,35 @@ def compute_assembly_stats(assembly_qs) -> dict:
         "mean_bgc_per_assembly": round(avg_agg["mean_bgc"] or 0.0, 2),
         "mean_l1_class_per_assembly": round(avg_agg["mean_l1"] or 0.0, 2),
         "total_assemblies": assembly_qs.count(),
+        "biome_distribution": biome_distribution,
+        "source_distribution": source_distribution,
     }
 
 
-def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
-    """Build a flat list for Plotly sunburst from contig taxonomy_path (ltree).
+TAXONOMY_RANK_NAMES = [
+    "kingdom", "phylum", "class", "order", "family", "genus", "species",
+]
 
-    Returns [{id, label, parent, count}, ...] where parent="" for root nodes.
+
+def build_taxonomy_sunburst_from_paths(paths) -> list[dict]:
+    """Build flat sunburst nodes from an iterable of ltree taxonomy paths.
+
+    Each non-empty path contributes one count to every ancestor node it
+    traverses. Returns ``[{id, label, parent, count}, ...]`` with
+    ``parent=""`` for root nodes.
     """
-    from discovery.models import DashboardContig
-
-    RANK_NAMES = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
-
-    contig_paths = (
-        DashboardContig.objects.filter(assembly__in=assembly_qs)
-        .exclude(taxonomy_path="")
-        .values_list("taxonomy_path", flat=True)
-    )
-
     nodes: dict[str, dict] = {}
-
-    for path in contig_paths:
+    for path in paths:
+        if not path:
+            continue
         parts = path.split(".")
         parent_id = ""
         for depth, label in enumerate(parts):
-            rank = RANK_NAMES[depth] if depth < len(RANK_NAMES) else f"rank_{depth}"
+            rank = (
+                TAXONOMY_RANK_NAMES[depth]
+                if depth < len(TAXONOMY_RANK_NAMES)
+                else f"rank_{depth}"
+            )
             node_id = f"{rank}:{label}"
             if node_id not in nodes:
                 nodes[node_id] = {
@@ -115,8 +137,22 @@ def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
                 }
             nodes[node_id]["count"] += 1
             parent_id = node_id
-
     return list(nodes.values())
+
+
+def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
+    """Build a flat list for Plotly sunburst from contig taxonomy_path (ltree).
+
+    Returns [{id, label, parent, count}, ...] where parent="" for root nodes.
+    """
+    from discovery.models import DashboardContig
+
+    contig_paths = (
+        DashboardContig.objects.filter(assembly__in=assembly_qs)
+        .exclude(taxonomy_path="")
+        .values_list("taxonomy_path", flat=True)
+    )
+    return build_taxonomy_sunburst_from_paths(contig_paths)
 
 
 # ── BGC stats ────────────────────────────────────────────────────────────────

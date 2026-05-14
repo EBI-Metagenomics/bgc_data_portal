@@ -1791,6 +1791,75 @@ def report_get(request, token: str):
     return ReportPayload(token=token, **cached)
 
 
+def _get_cached_report(token: str) -> dict:
+    from django.core.cache import cache
+
+    cached = cache.get(f"report:{token}")
+    if not cached:
+        raise HttpError(
+            404,
+            "Report not found or expired — POST /report/snapshot/ to regenerate.",
+        )
+    return cached
+
+
+@discovery_router.get("/report/{token}/export.assemblies.tsv")
+def report_export_assemblies_tsv(request, token: str):
+    """Download the report's assembly roster as a TSV.
+
+    Reads from the cached snapshot — no extra DB queries within the 24h TTL.
+    """
+    from discovery.services.export import build_report_assembly_tsv
+
+    cached = _get_cached_report(token)
+    tsv = build_report_assembly_tsv(cached.get("assembly_rows", []))
+    response = HttpResponse(tsv, content_type="text/tab-separated-values")
+    response["Content-Disposition"] = (
+        f'attachment; filename="report_{token}_assemblies.tsv"'
+    )
+    return response
+
+
+@discovery_router.get("/report/{token}/export.json")
+def report_export_json(request, token: str):
+    """Download the report as an analyst-friendly tidy JSON.
+
+    Reshapes the cached chart-oriented payload into a two-layer
+    ``{metadata, ...tables}`` structure. Pure reshape (no DB).
+    """
+    from discovery.services.report import build_report_analyst_export
+
+    cached = _get_cached_report(token)
+    body = build_report_analyst_export(token, cached)
+    response = HttpResponse(
+        json.dumps(body, default=str),
+        content_type="application/json",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="report_{token}.json"'
+    )
+    return response
+
+
+@discovery_router.get("/report/{token}/export.gbk.zip")
+def report_export_gbk_zip(request, token: str):
+    """Download a zip of GBK files (one per source BGC) for the shortlist.
+
+    Each record carries BGC / NRB / Region features in addition to CDSs.
+    Files are grouped as ``NRB-{id}/{bgc_accession}.gbk``.
+    """
+    from discovery.services.gbk import build_shortlist_gbk_zip
+
+    cached = _get_cached_report(token)
+    nrb_ids = [row["id"] for row in cached.get("nrb_rows", [])]
+    zip_bytes = build_shortlist_gbk_zip(nrb_ids)
+    response = HttpResponse(zip_bytes, content_type="application/zip")
+    response["Content-Disposition"] = (
+        f'attachment; filename="report_{token}_gbk.zip"'
+    )
+    return response
+
+
 # ── Query mode endpoints ─────────────────────────────────────────────────────
 
 

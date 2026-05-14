@@ -630,6 +630,8 @@ export interface ReportSnapshotResponse {
 export interface DomainCompositionEntry {
   domain_acc: string;
   domain_name: string;
+  domain_description: string;
+  go_slim: string;
   nrb_count: number;
   fraction: number;
   tier: "core" | "variable" | "rare";
@@ -641,6 +643,25 @@ export interface DomainCompositionSummary {
   rare_count: number;
   total_unique: number;
   rows: DomainCompositionEntry[];
+}
+
+export interface DomainGoslimDomain {
+  domain_acc: string;
+  domain_name: string;
+  domain_description: string;
+}
+
+export interface DomainGoslimCell {
+  category: string;
+  tier: "core" | "variable" | "rare";
+  count: number;
+  domains: DomainGoslimDomain[];
+}
+
+export interface DomainGoslimMatrix {
+  categories: string[];
+  tiers: ("core" | "variable" | "rare")[];
+  cells: DomainGoslimCell[];
 }
 
 export interface GcfDistributionEntry {
@@ -684,6 +705,7 @@ export interface ReportAssemblyRow {
   organism_name: string | null;
   source_name: string | null;
   biome_path: string;
+  taxonomy_path: string;
   taxonomy_phylum: string | null;
   assembly_size_mb: number | null;
   total_bgcs_in_assembly: number;
@@ -710,6 +732,9 @@ export interface ReportPayload {
   bgc_class_pie: CategoryCount[];
   length_histogram: LengthBucket[];
   predictor_distribution: CategoryCount[];
+  source_distribution: CategoryCount[];
   assembly_rows: ReportAssemblyRow[];
   assembly_stats: Record<string, unknown>;
+  taxonomy_sunburst: SunburstNode[];
+  domain_goslim_matrix: DomainGoslimMatrix;
 }

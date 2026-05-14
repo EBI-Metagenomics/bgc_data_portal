@@ -5,7 +5,9 @@ sequences and CDS translations stored in the discovery schema's on-demand
 sequence tables (ContigSequence, CdsSequence).
 """
 
+import io
 import json
+import zipfile
 from io import StringIO
 from typing import List
 
@@ -68,25 +70,66 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
 
     features: List[SeqFeature] = []
 
-    # ── CLUSTER feature ──────────────────────────────────────────────────────
+    # ── Region feature (antiSMASH-style aggregate window) ────────────────────
+    region = getattr(bgc, "region", None)
+    if region is not None:
+        reg_rel_start = _crop(region.start_position, window_start, window_end) - window_start
+        reg_rel_end = _crop(region.end_position, window_start, window_end) - window_start
+        if reg_rel_end > reg_rel_start:
+            features.append(SeqFeature(
+                FeatureLocation(reg_rel_start, reg_rel_end),
+                type="Region",
+                qualifiers={
+                    "ID": [region.accession],
+                    "start": [str(region.start_position + 1)],
+                    "end": [str(region.end_position)],
+                },
+            ))
+
+    # ── NRB feature (consolidated non-redundant BGC) ─────────────────────────
+    nrb = getattr(bgc, "non_redundant_bgc", None)
+    if nrb is not None:
+        nrb_rel_start = _crop(nrb.start_position, window_start, window_end) - window_start
+        nrb_rel_end = _crop(nrb.end_position, window_start, window_end) - window_start
+        if nrb_rel_end > nrb_rel_start:
+            nrb_qualifiers = {
+                "ID": [f"NRB-{nrb.id}"],
+                "start": [str(nrb.start_position + 1)],
+                "end": [str(nrb.end_position)],
+                "source_tools": [",".join(nrb.source_tools or [])],
+            }
+            if nrb.gene_cluster_family:
+                nrb_qualifiers["gene_cluster_family"] = [nrb.gene_cluster_family]
+            if nrb.novelty_score is not None:
+                nrb_qualifiers["novelty_score"] = [f"{nrb.novelty_score:.4f}"]
+            if nrb.domain_novelty is not None:
+                nrb_qualifiers["domain_novelty"] = [f"{nrb.domain_novelty:.4f}"]
+            features.append(SeqFeature(
+                FeatureLocation(nrb_rel_start, nrb_rel_end),
+                type="NRB",
+                qualifiers=nrb_qualifiers,
+            ))
+
+    # ── BGC feature (the SanntiS / antiSMASH / GECCO prediction) ─────────────
     bgc_rel_start = bgc.start_position - window_start
     bgc_rel_end = bgc.end_position - window_start
 
     parts = bgc.classification_path.split(".") if bgc.classification_path else []
     classification = "/".join(parts)
     bgc_class_l1 = parts[0] if parts else "Unknown"
-    cluster_feat = SeqFeature(
+    bgc_feat = SeqFeature(
         FeatureLocation(bgc_rel_start, bgc_rel_end),
-        type="CLUSTER",
+        type="BGC",
         qualifiers={
             "ID": [bgc.bgc_accession],
             "BGC_CLASS": [bgc_class_l1],
             "classification": [classification or "Unknown"],
             "detector": [bgc.detector.name if bgc.detector else "Unknown"],
+            "tool": [bgc.detector.name if bgc.detector else "Unknown"],
             "contig_edge": ["True" if bgc.is_partial else "False"],
         },
     )
-    features.append(cluster_feat)
+    features.append(bgc_feat)
 
     # ── CDS features ─────────────────────────────────────────────────────────
     for cds in bgc.cds_list.all():
@@ -132,16 +175,47 @@ def _build_placeholder_record(bgc: DashboardBgc) -> SeqRecord:
     return record
 
 
-def build_multi_bgc_gbk(bgc_ids: List[int]) -> str:
-    """Build a multi-record GBK string for a list of dashboard BGC IDs."""
-    bgcs = (
-        DashboardBgc.objects.filter(id__in=bgc_ids)
-        .select_related("assembly", "contig", "contig__seq")
+def _fetch_bgcs_for_gbk(filter_kwargs: dict):
+    return (
+        DashboardBgc.objects.filter(**filter_kwargs)
+        .select_related(
+            "assembly",
+            "contig",
+            "contig__seq",
+            "detector",
+            "region",
+            "non_redundant_bgc",
+        )
         .prefetch_related("cds_list", "cds_list__seq")
+        .order_by("non_redundant_bgc_id", "id")
     )
 
-    records = [build_bgc_genbank_record(bgc) for bgc in bgcs]
 
+def build_multi_bgc_gbk(bgc_ids: List[int]) -> str:
+    """Build a multi-record GBK string for a list of dashboard BGC IDs."""
+    bgcs = _fetch_bgcs_for_gbk({"id__in": bgc_ids})
+    records = [build_bgc_genbank_record(bgc) for bgc in bgcs]
     handle = StringIO()
     SeqIO.write(records, handle, "genbank")
     return handle.getvalue()
+
+
+def build_shortlist_gbk_zip(nrb_ids: List[int]) -> bytes:
+    """Build a zip archive of GBK files, one per source DashboardBgc.
+
+    Source BGCs are grouped by their parent NRB; files are named
+    ``NRB-{nrb_id}/{bgc_accession}.gbk`` so the resulting tree reflects the
+    NRB → source-BGC hierarchy. Returns the zip bytes (in-memory).
+    """
+    bgcs = list(_fetch_bgcs_for_gbk({"non_redundant_bgc_id__in": list(nrb_ids)}))
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for bgc in bgcs:
+            record = build_bgc_genbank_record(bgc)
+            handle = StringIO()
+            SeqIO.write([record], handle, "genbank")
+            nrb_id = bgc.non_redundant_bgc_id or 0
+            filename = f"NRB-{nrb_id}/{bgc.bgc_accession}.gbk"
+            zf.writestr(filename, handle.getvalue())
+    return buf.getvalue()

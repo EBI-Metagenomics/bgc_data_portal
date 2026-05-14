@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { Fragment, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import Plot from "react-plotly.js";
 import { useReport, useReportSnapshot } from "@/hooks/use-report";
@@ -18,13 +18,21 @@ import { ReportDownloadButtons } from "./ReportDownloadButtons";
 import type {
   CategoryCount,
   DomainCompositionSummary,
+  DomainGoslimMatrix,
   GcfDistributionEntry,
   LengthBucket,
   ReportAssemblyRow,
   ReportNrbRow,
   ReportPayload,
   ReportScoreDistribution,
+  SunburstNode,
 } from "@/api/types";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /**
  * Shortlist Report page (route: ``/report``).
@@ -119,9 +127,45 @@ function ReportBody({ payload }: { payload: ReportPayload }) {
       <ReportHeader payload={payload} />
       <NrbResultsSection rows={payload.nrb_rows} />
       <BgcStatsSection payload={payload} />
+      <TaxonomySunburstSection nodes={payload.taxonomy_sunburst} />
       <AssemblyRosterSection rows={payload.assembly_rows} />
       <AssemblyStatsSection stats={payload.assembly_stats} />
     </div>
+  );
+}
+
+function TaxonomySunburstSection({ nodes }: { nodes: SunburstNode[] }) {
+  if (!nodes || nodes.length === 0) return null;
+  return (
+    <Card>
+      <CardHeader className="p-4">
+        <CardTitle className="text-base">Taxonomy</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4">
+        <Plot
+          data={[
+            {
+              type: "sunburst",
+              ids: nodes.map((n) => n.id),
+              labels: nodes.map((n) => n.label),
+              parents: nodes.map((n) => n.parent),
+              values: nodes.map((n) => n.count),
+              branchvalues: "total",
+              hovertemplate:
+                "<b>%{label}</b><br>%{value} NRB(s)<extra></extra>",
+            },
+          ]}
+          layout={{
+            autosize: true,
+            height: 420,
+            margin: { l: 8, r: 8, t: 8, b: 8 },
+          }}
+          useResizeHandler
+          style={{ width: "100%" }}
+          config={{ displayModeBar: false }}
+        />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -233,14 +277,44 @@ function BgcStatsSection({ payload }: { payload: ReportPayload }) {
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
         <DomainCompositionPanel composition={payload.domain_composition} />
+        <DomainGoslimHeatmapPanel matrix={payload.domain_goslim_matrix} />
         <GcfDistributionPanel rows={payload.gcf_distribution} />
         <ScoreDistributionPanel distributions={payload.score_distributions} />
         <CompletenessPanel rows={payload.completeness_pie} />
         <BgcClassPanel rows={payload.bgc_class_pie} />
         <LengthHistogramPanel rows={payload.length_histogram} />
         <PredictorPanel rows={payload.predictor_distribution} />
+        <SourceDistributionPanel rows={payload.source_distribution} />
       </CardContent>
     </Card>
+  );
+}
+
+function SourceDistributionPanel({ rows }: { rows: CategoryCount[] }) {
+  return (
+    <PanelCard title="Source distribution (NRBs per collection)">
+      <Plot
+        data={[
+          {
+            type: "bar",
+            orientation: "h",
+            x: rows.map((r) => r.count),
+            y: rows.map((r) => r.name),
+            marker: { color: "#a855f7" },
+          },
+        ]}
+        layout={{
+          autosize: true,
+          height: 240,
+          margin: { l: 140, r: 16, t: 8, b: 30 },
+          xaxis: { title: { text: "NRBs" } },
+          yaxis: { automargin: true, tickfont: { size: 10 } },
+        }}
+        useResizeHandler
+        style={{ width: "100%" }}
+        config={{ displayModeBar: false }}
+      />
+    </PanelCard>
   );
 }
 
@@ -322,6 +396,147 @@ function DomainCompositionPanel({
           </TableBody>
         </Table>
       </ScrollArea>
+    </PanelCard>
+  );
+}
+
+const TIER_LABEL: Record<string, string> = {
+  core: "CORE",
+  variable: "Variable",
+  rare: "RARE",
+};
+
+const TIER_COLOR: Record<string, [number, number, number]> = {
+  // RGB triples for cell shading. Saturation scales with count vs. tier max.
+  core: [16, 185, 129], // emerald-500
+  variable: [245, 158, 11], // amber-500
+  rare: [148, 163, 184], // slate-400
+};
+
+function cellBackground(rgb: [number, number, number], intensity: number): string {
+  // Intensity in [0, 1]; 0 → near-white, 1 → full tier color.
+  const i = Math.max(0.06, Math.min(1, intensity));
+  const [r, g, b] = rgb;
+  const mix = (v: number) => Math.round(255 - (255 - v) * i);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
+function DomainGoslimHeatmapPanel({ matrix }: { matrix: DomainGoslimMatrix }) {
+  const cellByKey = useMemo(() => {
+    const m = new Map<string, DomainGoslimMatrix["cells"][number]>();
+    for (const c of matrix.cells) m.set(`${c.category}::${c.tier}`, c);
+    return m;
+  }, [matrix.cells]);
+
+  const tierMaxCount = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const t of matrix.tiers) {
+      let max = 0;
+      for (const c of matrix.categories) {
+        const cell = cellByKey.get(`${c}::${t}`);
+        if (cell && cell.count > max) max = cell.count;
+      }
+      out[t] = max || 1;
+    }
+    return out;
+  }, [matrix.tiers, matrix.categories, cellByKey]);
+
+  if (matrix.categories.length === 0) {
+    return (
+      <PanelCard title="Domain composition × GO slim">
+        <p className="text-xs text-muted-foreground">
+          No GO slim data available for this shortlist.
+        </p>
+      </PanelCard>
+    );
+  }
+
+  return (
+    <PanelCard title="Domain composition × GO slim">
+      <TooltipProvider delayDuration={100}>
+        <div className="overflow-x-auto">
+          <div
+            className="grid gap-px"
+            style={{
+              gridTemplateColumns: `minmax(80px, auto) repeat(${matrix.categories.length}, minmax(40px, 1fr))`,
+            }}
+          >
+            {/* Header row */}
+            <div />
+            {matrix.categories.map((cat) => (
+              <div
+                key={`hdr-${cat}`}
+                className="px-1 pb-2 text-center text-[10px] font-medium text-muted-foreground"
+                title={cat}
+              >
+                <div className="-rotate-45 origin-bottom-left whitespace-nowrap">
+                  {cat}
+                </div>
+              </div>
+            ))}
+            {/* Tier rows */}
+            {matrix.tiers.map((tier) => (
+              <Fragment key={`row-${tier}`}>
+                <div className="flex items-center justify-end pr-2 text-[10px] font-medium">
+                  {TIER_LABEL[tier] ?? tier}
+                </div>
+                {matrix.categories.map((cat) => {
+                  const cell = cellByKey.get(`${cat}::${tier}`);
+                  const count = cell?.count ?? 0;
+                  const intensity = count / (tierMaxCount[tier] || 1);
+                  const bg = cellBackground(
+                    TIER_COLOR[tier] ?? [148, 163, 184],
+                    intensity,
+                  );
+                  const textColor =
+                    intensity > 0.55 ? "text-white" : "text-foreground";
+                  return (
+                    <Tooltip key={`${cat}-${tier}`}>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={`flex h-7 cursor-default items-center justify-center text-[10px] ${textColor}`}
+                          style={{ backgroundColor: bg }}
+                        >
+                          {count > 0 ? count : ""}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs">
+                        <div className="mb-1 font-semibold">
+                          {cat} · {TIER_LABEL[tier] ?? tier}
+                        </div>
+                        {count === 0 ? (
+                          <div className="text-muted-foreground">
+                            No domains
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {(cell?.domains ?? []).slice(0, 20).map((d) => (
+                              <div key={d.domain_acc}>
+                                <strong>{d.domain_acc}</strong>
+                                {d.domain_name && <> — {d.domain_name}</>}
+                                {d.domain_description && (
+                                  <div className="text-[10px] text-muted-foreground">
+                                    {d.domain_description}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {(cell?.domains?.length ?? 0) > 20 && (
+                              <div className="text-[10px] italic text-muted-foreground">
+                                …and {(cell?.domains?.length ?? 0) - 20} more
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+      </TooltipProvider>
     </PanelCard>
   );
 }
@@ -581,10 +796,8 @@ function AssemblyStatsSection({
 }: {
   stats: Record<string, unknown>;
 }) {
-  const taxonomyNodes = useMemo(
-    () => (stats?.taxonomy_sunburst as unknown[]) ?? [],
-    [stats],
-  );
+  // Taxonomy lives in its own NRB-derived TaxonomySunburstSection card; here
+  // we only surface biome + per-assembly source distributions.
   const biomeDistribution = useMemo(
     () => (stats?.biome_distribution as CategoryCount[]) ?? [],
     [stats],
@@ -593,7 +806,7 @@ function AssemblyStatsSection({
     () => (stats?.source_distribution as CategoryCount[]) ?? [],
     [stats],
   );
-  if (!taxonomyNodes.length && !biomeDistribution.length && !sourceDistribution.length) {
+  if (!biomeDistribution.length && !sourceDistribution.length) {
     return null;
   }
   return (
@@ -628,7 +841,7 @@ function AssemblyStatsSection({
           </PanelCard>
         )}
         {sourceDistribution.length > 0 && (
-          <PanelCard title="Source distribution">
+          <PanelCard title="Source distribution (per assembly)">
             <Plot
               data={[
                 {

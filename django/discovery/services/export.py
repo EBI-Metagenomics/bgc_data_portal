@@ -1,4 +1,4 @@
-"""Export builders for discovery BGCs — FNA, FAA, and JSON formats.
+"""Export builders for discovery BGCs — FNA, FAA, JSON, and TSV formats.
 
 GBK format is handled by ``gbk.py``.  All functions expect prefetched
 querysets (contig, contig__seq, cds_list, cds_list__seq, bgc_domains).
@@ -6,6 +6,7 @@ querysets (contig, contig__seq, cds_list, cds_list__seq, bgc_domains).
 
 from __future__ import annotations
 
+import csv
 import json
 from io import StringIO
 from typing import TYPE_CHECKING
@@ -18,6 +19,43 @@ if TYPE_CHECKING:
     from discovery.models import DashboardBgc
 
 FLANKING_WINDOW = 2000
+
+
+def build_report_assembly_tsv(assembly_rows: list[dict]) -> str:
+    """Tab-separated rendering of a Report shortlist's assembly roster.
+
+    Columns mirror the ``ReportAssemblyRow`` shape (taxonomy_path + phylum,
+    biome, source, BGC counts, NRBs in shortlist, type-strain flag). One
+    row per assembly. Caller passes the cached payload's ``assembly_rows``.
+    """
+    buf = StringIO()
+    writer = csv.writer(buf, delimiter="\t", lineterminator="\n")
+    writer.writerow([
+        "accession",
+        "organism_name",
+        "taxonomy_path",
+        "taxonomy_phylum",
+        "biome_path",
+        "source",
+        "assembly_size_mb",
+        "total_bgcs_in_assembly",
+        "nrbs_in_shortlist",
+        "is_type_strain",
+    ])
+    for r in assembly_rows:
+        writer.writerow([
+            r.get("accession", ""),
+            r.get("organism_name") or "",
+            r.get("taxonomy_path") or "",
+            r.get("taxonomy_phylum") or "",
+            r.get("biome_path") or "",
+            r.get("source_name") or "",
+            "" if r.get("assembly_size_mb") is None else f"{r['assembly_size_mb']:.3f}",
+            r.get("total_bgcs_in_assembly", 0),
+            r.get("nrbs_in_shortlist", 0),
+            "true" if r.get("is_type_strain") else "false",
+        ])
+    return buf.getvalue()
 
 
 def build_bgc_fna(bgc: DashboardBgc) -> str:

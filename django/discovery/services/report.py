@@ -119,20 +119,37 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
     # ── Domain composition (core / variable / rare per acc) ───────────────
     domain_to_nrbs: dict[str, set[int]] = defaultdict(set)
     domain_name_lookup: dict[str, str] = {}
+    domain_desc_lookup: dict[str, str] = {}
+    domain_goslim_lookup: dict[str, str] = {}
     domain_pairs = (
         BgcDomain.objects
         .filter(bgc__non_redundant_bgc_id__in=nrb_ids)
-        .values_list("bgc__non_redundant_bgc_id", "domain_acc", "domain_name")
+        .values_list(
+            "bgc__non_redundant_bgc_id",
+            "domain_acc",
+            "domain_name",
+            "domain_description",
+            "go_slim",
+        )
     )
-    for nid, acc, name in domain_pairs:
+    for nid, acc, name, desc, slim in domain_pairs:
         if not acc:
             continue
         domain_to_nrbs[acc].add(nid)
         if name and acc not in domain_name_lookup:
             domain_name_lookup[acc] = name
+        if desc and acc not in domain_desc_lookup:
+            domain_desc_lookup[acc] = desc
+        if slim and acc not in domain_goslim_lookup:
+            domain_goslim_lookup[acc] = slim
 
     composition_rows: list[dict] = []
     core_count = variable_count = rare_count = 0
+    # Per (go_slim, tier) bucket of distinct domains for the heatmap.
+    matrix_buckets: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    # Long-format rows for the analyst JSON export (one per NRB × domain hit).
+    domains_long: list[dict] = []
+    NO_GOSLIM = "No GO slim"
     for acc, hit_nrbs in sorted(
         domain_to_nrbs.items(), key=lambda kv: (-len(kv[1]), kv[0])
     ):
@@ -147,19 +164,68 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
         else:
             tier = "rare"
             rare_count += 1
+        name = domain_name_lookup.get(acc, "")
+        desc = domain_desc_lookup.get(acc, "")
+        slim = domain_goslim_lookup.get(acc, "") or NO_GOSLIM
         composition_rows.append({
             "domain_acc": acc,
-            "domain_name": domain_name_lookup.get(acc, ""),
+            "domain_name": name,
+            "domain_description": desc,
+            "go_slim": slim,
             "nrb_count": c,
             "fraction": round(frac, 4),
             "tier": tier,
         })
+        matrix_buckets[(slim, tier)].append({
+            "domain_acc": acc,
+            "domain_name": name,
+            "domain_description": desc,
+        })
+        for nid in sorted(hit_nrbs):
+            domains_long.append({
+                "nrb_id": nid,
+                "domain_acc": acc,
+                "domain_name": name,
+                "domain_description": desc,
+                "go_slim": slim,
+                "tier": tier,
+                "occurs_in_n_nrbs": c,
+                "fraction": round(frac, 4),
+            })
     domain_composition = {
         "core_count": core_count,
         "variable_count": variable_count,
         "rare_count": rare_count,
         "total_unique": len(composition_rows),
         "rows": composition_rows,
+    }
+
+    # ── GO slim × tier matrix (for the Domain composition heatmap) ────────
+    # Categories: every go_slim value with ≥1 domain in the shortlist, plus
+    # "No GO slim" if any unmapped domains. Sorted by total descending so the
+    # heaviest categories sit on the left of the heatmap.
+    category_totals: dict[str, int] = defaultdict(int)
+    for (slim, _tier), domains in matrix_buckets.items():
+        category_totals[slim] += len(domains)
+    categories = sorted(
+        category_totals.keys(),
+        key=lambda c: (-category_totals[c], c),
+    )
+    tiers = ["core", "variable", "rare"]
+    cells = []
+    for cat in categories:
+        for tier in tiers:
+            doms = matrix_buckets.get((cat, tier), [])
+            cells.append({
+                "category": cat,
+                "tier": tier,
+                "count": len(doms),
+                "domains": doms,
+            })
+    domain_goslim_matrix = {
+        "categories": categories,
+        "tiers": tiers,
+        "cells": cells,
     }
 
     # ── GCF distribution ──────────────────────────────────────────────────
@@ -203,12 +269,23 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
         {"name": "Unclustered", "count": unclustered_n},
     ]
 
-    # ── BGC class pie (first segment of classification_path) ──────────────
+    # ── BGC class pie ─────────────────────────────────────────────────────
+    # Mirrors the ``bgc_class`` filter (api.py): an NRB matches a class when
+    # any of its source DashboardBgcs has ``classification_path`` starting
+    # with that class. An NRB with source members in multiple classes counts
+    # once per distinct class.
     class_counts: dict[str, int] = defaultdict(int)
     for nrb in nrbs:
-        path = nrb.gene_cluster_family or ""
-        head = path.split(".")[0] if path else "(unclassified)"
-        class_counts[head] += 1
+        mems = members_by_nrb.get(nrb.id, [])
+        classes: set[str] = set()
+        for m in mems:
+            cp = (m.classification_path or "").strip()
+            if cp:
+                classes.add(cp.split(".")[0])
+        if not classes:
+            classes.add("(unclassified)")
+        for head in classes:
+            class_counts[head] += 1
     bgc_class_pie = sorted(
         [{"name": k, "count": v} for k, v in class_counts.items()],
         key=lambda r: (-r["count"], r["name"]),
@@ -234,6 +311,24 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
             predictor_counts[tool] += 1
     predictor_distribution = sorted(
         [{"name": k, "count": v} for k, v in predictor_counts.items()],
+        key=lambda r: (-r["count"], r["name"]),
+    )
+
+    # ── Source distribution (NRBs per source collection) ──────────────────
+    # For each NRB, collect the set of source-collection names across its
+    # source DashboardBgcs (deduped per NRB so an NRB with two members from
+    # the same collection counts once for that collection).
+    source_counts: dict[str, int] = defaultdict(int)
+    for nrb in nrbs:
+        names: set[str] = set()
+        for m in members_by_nrb.get(nrb.id, []):
+            src = getattr(m.assembly, "source", None) if m.assembly else None
+            if src and src.name:
+                names.add(src.name)
+        for name in names:
+            source_counts[name] += 1
+    source_distribution = sorted(
+        [{"name": k, "count": v} for k, v in source_counts.items()],
         key=lambda r: (-r["count"], r["name"]),
     )
 
@@ -264,6 +359,7 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
             "organism_name": asm.organism_name,
             "source_name": asm.source.name if asm.source else None,
             "biome_path": asm.biome_path,
+            "taxonomy_path": tx,
             "taxonomy_phylum": _taxonomy_phylum(tx),
             "assembly_size_mb": asm.assembly_size_mb,
             "total_bgcs_in_assembly": asm.bgc_count,
@@ -272,14 +368,29 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
         })
 
     # Reuse existing assembly-stats helper for taxonomy / biome / source.
+    # Stats are decorative; on failure we log and continue with an empty dict
+    # so the rest of the report still renders.
+    from discovery.services.stats import compute_assembly_stats
     try:
-        from discovery.services.stats import compute_assembly_stats
         assembly_stats = compute_assembly_stats(
             DashboardAssembly.objects.filter(id__in=assembly_ids)
         )
-    except Exception:  # noqa: BLE001 — stats are decorative; never fail the report
-        log.exception("compute_assembly_stats failed for shortlist; returning {}")
+    except Exception:  # noqa: BLE001
+        log.exception(
+            "compute_assembly_stats failed for shortlist; "
+            "returning empty assembly_stats"
+        )
         assembly_stats = {}
+
+    # ── NRB-derived taxonomy sunburst ─────────────────────────────────────
+    # One count per NRB (using its contig's taxonomy_path), so the sunburst
+    # reflects shortlist hits — not the size of the parent assembly.
+    from discovery.services.stats import build_taxonomy_sunburst_from_paths
+    nrb_taxonomy_paths = [
+        n.contig.taxonomy_path for n in nrbs
+        if n.contig and n.contig.taxonomy_path
+    ]
+    taxonomy_sunburst = build_taxonomy_sunburst_from_paths(nrb_taxonomy_paths)
 
     return {
         "generated_at": now.isoformat(),
@@ -294,8 +405,47 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
         "bgc_class_pie": bgc_class_pie,
         "length_histogram": length_histogram,
         "predictor_distribution": predictor_distribution,
+        "source_distribution": source_distribution,
         "assembly_rows": assembly_rows,
         "assembly_stats": assembly_stats,
+        "taxonomy_sunburst": taxonomy_sunburst,
+        "domain_goslim_matrix": domain_goslim_matrix,
+        # Internal: long-form per-NRB × domain rows for the analyst export.
+        # Not part of the ``ReportPayload`` schema (stripped before responding).
+        "_domains_long": domains_long,
+    }
+
+
+ANALYST_SCHEMA_VERSION = "1"
+
+
+def build_report_analyst_export(token: str, payload: dict) -> dict:
+    """Reshape a cached Report payload into an analyst-friendly JSON.
+
+    Two-layer structure: a ``metadata`` block plus tidy long-form arrays
+    suitable for pandas/R consumption. Pure function over the cached
+    payload — no DB queries — so it stays reload-safe within the TTL.
+    """
+    return {
+        "metadata": {
+            "schema_version": ANALYST_SCHEMA_VERSION,
+            "token": token,
+            "generated_at": payload.get("generated_at"),
+            "expires_at": payload.get("expires_at"),
+            "n_nrbs": payload.get("n_nrbs", 0),
+            "n_assemblies": payload.get("n_assemblies", 0),
+        },
+        "nrbs": payload.get("nrb_rows", []),
+        "assemblies": payload.get("assembly_rows", []),
+        "domains_long": payload.get("_domains_long", []),
+        "bgc_class_counts": payload.get("bgc_class_pie", []),
+        "completeness_counts": payload.get("completeness_pie", []),
+        "length_histogram": payload.get("length_histogram", []),
+        "predictor_distribution": payload.get("predictor_distribution", []),
+        "source_distribution": payload.get("source_distribution", []),
+        "gcf_distribution": payload.get("gcf_distribution", []),
+        "score_distributions": payload.get("score_distributions", []),
+        "taxonomy_sunburst": payload.get("taxonomy_sunburst", []),
     }
 
 
@@ -319,6 +469,10 @@ def _empty_payload(now, expires_at) -> dict:
         "bgc_class_pie": [],
         "length_histogram": [],
         "predictor_distribution": [],
+        "source_distribution": [],
         "assembly_rows": [],
         "assembly_stats": {},
+        "taxonomy_sunburst": [],
+        "domain_goslim_matrix": {"categories": [], "tiers": [], "cells": []},
+        "_domains_long": [],
     }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { useDiscoveryStore } from "@/stores/discovery-store";
 import { ChevronDown, ChevronUp, Dna } from "lucide-react";
@@ -12,6 +12,7 @@ import { CdsProteinInfo } from "@/components/bgc/CdsProteinInfo";
  */
 export function ProteinInfoPanel() {
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const [highlight, setHighlight] = useState(false);
   const selectedCds = useDiscoveryStore((s) => s.selectedCds);
   const setSelectedCds = useDiscoveryStore((s) => s.setSelectedCds);
 
@@ -20,8 +21,22 @@ export function ProteinInfoPanel() {
   const expanded =
     manualExpanded === null ? selectedCds !== null : manualExpanded;
 
+  // Briefly flash the card whenever the selected protein changes, so users
+  // notice the info has been updated.
+  useEffect(() => {
+    if (!selectedCds) return;
+    setHighlight(true);
+    const t = setTimeout(() => setHighlight(false), 900);
+    return () => clearTimeout(t);
+  }, [selectedCds?.protein_id]);
+
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
+    <Card
+      className={cn(
+        "flex h-full flex-col overflow-hidden transition-shadow duration-300",
+        highlight && "ring-2 ring-primary/60 shadow-lg shadow-primary/20",
+      )}
+    >
       <button
         type="button"
         onClick={() => setManualExpanded(!expanded)}

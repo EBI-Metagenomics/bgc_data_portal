@@ -304,9 +304,30 @@ class ReportSnapshotResponse(Schema):
 class DomainCompositionEntry(Schema):
     domain_acc: str
     domain_name: str = ""
+    domain_description: str = ""
+    go_slim: str = ""
     nrb_count: int
     fraction: float
     tier: str  # "core" | "variable" | "rare"
+
+
+class DomainGoslimDomain(Schema):
+    domain_acc: str
+    domain_name: str = ""
+    domain_description: str = ""
+
+
+class DomainGoslimCell(Schema):
+    category: str
+    tier: str  # "core" | "variable" | "rare"
+    count: int = 0
+    domains: list[DomainGoslimDomain] = []
+
+
+class DomainGoslimMatrix(Schema):
+    categories: list[str] = []
+    tiers: list[str] = []
+    cells: list[DomainGoslimCell] = []
 
 
 class DomainCompositionSummary(Schema):
@@ -358,6 +379,7 @@ class ReportAssemblyRow(Schema):
     organism_name: Optional[str] = None
     source_name: Optional[str] = None
     biome_path: str = ""
+    taxonomy_path: str = ""
     taxonomy_phylum: Optional[str] = None
     assembly_size_mb: Optional[float] = None
     total_bgcs_in_assembly: int = 0
@@ -379,8 +401,14 @@ class ReportPayload(Schema):
     bgc_class_pie: list[CategoryCount] = []
     length_histogram: list[LengthBucket] = []
     predictor_distribution: list[CategoryCount] = []
+    source_distribution: list[CategoryCount] = []
     assembly_rows: list[ReportAssemblyRow] = []
     assembly_stats: dict = {}
+    # NRB-derived taxonomy sunburst (one count per NRB). Items follow the
+    # ``SunburstNode`` shape ({id, label, parent, count}); typed as ``dict``
+    # because SunburstNode is defined further down in this module.
+    taxonomy_sunburst: list[dict] = []
+    domain_goslim_matrix: DomainGoslimMatrix = DomainGoslimMatrix()
 
     # Inner shape is {label: str, values: list[float]} — kept as raw dict to
     # avoid a forward reference to ScoreDistribution defined further down.
@@ -561,6 +589,8 @@ class AssemblyStatsResponse(Schema):
     mean_bgc_per_assembly: float = 0.0
     mean_l1_class_per_assembly: float = 0.0
     total_assemblies: int = 0
+    biome_distribution: list[CategoryCount] = []
+    source_distribution: list[CategoryCount] = []
 
 
 class BgcStatsResponse(Schema):

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Download, Printer } from "lucide-react";
+import { Download, FileArchive, FileJson, FileSpreadsheet, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -8,6 +8,12 @@ interface Props {
   /** Optional human label, e.g. number of NRBs. */
   label?: string;
 }
+
+const basePath =
+  (typeof document !== "undefined" &&
+    document.querySelector('meta[name="base-path"]')?.getAttribute("content")) ||
+  "";
+const REPORT_API = `${basePath}/api/dashboard/report`;
 
 /**
  * Save as HTML + Print (Save as PDF).
@@ -65,7 +71,25 @@ ${root.outerHTML}
   };
 
   return (
-    <div className="flex items-center gap-2" data-print-hide>
+    <div className="flex flex-wrap items-center gap-2" data-print-hide>
+      <Button variant="outline" size="sm" asChild>
+        <a href={`${REPORT_API}/${token}/export.json`} download>
+          <FileJson className="mr-1 h-4 w-4" />
+          JSON (analyst)
+        </a>
+      </Button>
+      <Button variant="outline" size="sm" asChild>
+        <a href={`${REPORT_API}/${token}/export.gbk.zip`} download>
+          <FileArchive className="mr-1 h-4 w-4" />
+          GBKs (zip)
+        </a>
+      </Button>
+      <Button variant="outline" size="sm" asChild>
+        <a href={`${REPORT_API}/${token}/export.assemblies.tsv`} download>
+          <FileSpreadsheet className="mr-1 h-4 w-4" />
+          Assemblies (TSV)
+        </a>
+      </Button>
       <Button variant="outline" size="sm" onClick={onDownloadHtml}>
         <Download className="mr-1 h-4 w-4" />
         Save as HTML
