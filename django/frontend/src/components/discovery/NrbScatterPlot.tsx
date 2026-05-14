@@ -168,7 +168,11 @@ function buildTraces(
     },
   });
 
-  const traces: ReturnType<typeof toTrace>[] = [];
+  // The base scatter traces and the halo traces share a scattergl shape but
+  // differ in their `marker` substructure (halos carry `marker.line.color`,
+  // which the inferred toTrace return type does not). Widen the element
+  // type so both flavours can live in the same array without TS noise.
+  const traces: Record<string, unknown>[] = [];
   if (primary.length) traces.push(toTrace(primary, "Primary", "#3b82f6", {}));
   if (validated.length)
     traces.push(
@@ -185,24 +189,47 @@ function buildTraces(
       }),
     );
 
-  // Highlight reference / compare points with a halo trace on top.
-  const highlights = points.filter(
-    (p) => p.id === referenceNrbId || p.id === compareNrbId,
+  // Highlight reference / compare points with halo traces on top. The two
+  // slots get distinct rings + legend entries so users can tell the pinned
+  // reference apart from the left-click "compare" slot — same convention
+  // across UMAP and Variables Map. The compare halo draws first so that when
+  // the same NRB is both reference and compare, the reference ring wins.
+  const compareOnly = points.filter(
+    (p) => p.id === compareNrbId && p.id !== referenceNrbId,
   );
-  if (highlights.length) {
+  if (compareOnly.length) {
     traces.push({
       type: "scattergl",
       mode: "markers",
-      name: "Selected",
-      x: highlights.map((p) => p.x),
-      y: highlights.map((p) => p.y),
-      customdata: highlights.map((p) => p.id),
-      text: highlights.map(baseHover),
+      name: "Selected NRB",
+      x: compareOnly.map((p) => p.x),
+      y: compareOnly.map((p) => p.y),
+      customdata: compareOnly.map((p) => p.id),
+      text: compareOnly.map(baseHover),
       hovertemplate: "%{text}",
       marker: {
         color: "rgba(0,0,0,0)",
         size: 16,
         line: { width: 2, color: "#0f172a" },
+      },
+    });
+  }
+
+  const reference = points.filter((p) => p.id === referenceNrbId);
+  if (reference.length) {
+    traces.push({
+      type: "scattergl",
+      mode: "markers",
+      name: "Reference NRB",
+      x: reference.map((p) => p.x),
+      y: reference.map((p) => p.y),
+      customdata: reference.map((p) => p.id),
+      text: reference.map(baseHover),
+      hovertemplate: "%{text}",
+      marker: {
+        color: "rgba(0,0,0,0)",
+        size: 20,
+        line: { width: 3, color: "#f59e0b" },
       },
     });
   }

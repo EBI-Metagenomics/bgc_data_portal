@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchNrbScatter } from "@/api/nrbs";
+import { fetchNrbDetail, fetchNrbScatter } from "@/api/nrbs";
 import {
   appliedFiltersToApiParams,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
-import type { NrbScatterAxis } from "@/api/types";
+import type { NrbDetail, NrbScatterAxis } from "@/api/types";
 import {
   Select,
   SelectContent,
@@ -37,6 +37,7 @@ export function VariablesMapTab() {
     (s) => s.resultSimilarityById,
   );
   const applied = useDiscoveryStore((s) => s.appliedFilters);
+  const referenceNrbId = useDiscoveryStore((s) => s.referenceNrbId);
 
   const wantsSimilarity =
     xAxis === "similarity_score" || yAxis === "similarity_score";
@@ -51,17 +52,41 @@ export function VariablesMapTab() {
     enabled: !wantsSimilarity,
   });
 
+  // ── Reference NRB detail ────────────────────────────────────────────
+  // The scatter endpoint drops NRBs with NULL axis values (e.g.
+  // domain_novelty is NULL for singleton GCFs) and also honours the
+  // `nrb_ids` allow-list from the active query. Either of those can hide
+  // the pinned reference. We refetch its detail and inject it manually so
+  // the reference halo is always rendered.
+  const { data: refDetail } = useQuery({
+    queryKey: ["nrb-detail", referenceNrbId],
+    queryFn: () => fetchNrbDetail(referenceNrbId as number),
+    enabled: referenceNrbId !== null,
+  });
+
   // ── Build points: either the live scatter response, or a synthesised
   //    set derived from the query result (when similarity_score is on an
   //    axis). The synthesised path uses scores already in
   //    discovery-store.resultSimilarityById. ────────────────────────────
   const points = useMemo(() => {
+    let base: Array<{
+      id: number;
+      x: number;
+      y: number;
+      is_partial: boolean;
+      is_validated: boolean;
+      umap_projected: boolean;
+      classification_path?: string | null;
+      novelty_score?: number | null;
+      domain_novelty?: number | null;
+      similarity_score?: number | null;
+    }> = [];
     if (useQueryAxes && resultNrbIds && resultSimilarityById) {
       // We need the other axis from /nrbs/scatter/, but Plotly is happy
       // with whatever we hand it — for v1 just plot similarity on both
       // axes that asked for it, falling back to similarity itself for the
       // non-similarity axis (caller is expected to pick a meaningful Y).
-      return resultNrbIds.map((id) => {
+      base = resultNrbIds.map((id) => {
         const sim = resultSimilarityById[id] ?? 0;
         return {
           id,
@@ -73,21 +98,62 @@ export function VariablesMapTab() {
           similarity_score: sim,
         };
       });
+    } else if (scatterData) {
+      base = scatterData.map((p) => ({
+        id: p.id,
+        x: p.x,
+        y: p.y,
+        is_partial: p.is_partial,
+        is_validated: p.is_validated,
+        umap_projected: p.umap_projected,
+        classification_path: p.classification_path,
+        novelty_score: p.novelty_score,
+        domain_novelty: p.domain_novelty,
+        similarity_score: p.similarity_score,
+      }));
     }
-    if (!scatterData) return [];
-    return scatterData.map((p) => ({
-      id: p.id,
-      x: p.x,
-      y: p.y,
-      is_partial: p.is_partial,
-      is_validated: p.is_validated,
-      umap_projected: p.umap_projected,
-      classification_path: p.classification_path,
-      novelty_score: p.novelty_score,
-      domain_novelty: p.domain_novelty,
-      similarity_score: p.similarity_score,
-    }));
-  }, [scatterData, resultNrbIds, useQueryAxes, resultSimilarityById, xAxis, yAxis]);
+
+    // Inject the pinned reference NRB if it was dropped by the scatter
+    // endpoint (NULL axis value or outside the query allow-list).
+    if (
+      referenceNrbId != null &&
+      refDetail &&
+      refDetail.id === referenceNrbId &&
+      !base.some((p) => p.id === referenceNrbId)
+    ) {
+      const x = axisValueFromDetail(refDetail, xAxis, resultSimilarityById);
+      const y = axisValueFromDetail(refDetail, yAxis, resultSimilarityById);
+      if (x != null && y != null) {
+        base = [
+          ...base,
+          {
+            id: refDetail.id,
+            x,
+            y,
+            is_partial: refDetail.is_partial,
+            is_validated: refDetail.is_validated,
+            umap_projected: refDetail.umap_projected,
+            classification_path: refDetail.classification_path,
+            novelty_score: refDetail.novelty_score,
+            domain_novelty: refDetail.domain_novelty,
+            similarity_score:
+              resultSimilarityById?.[refDetail.id] ?? null,
+          },
+        ];
+      }
+    }
+
+    return base;
+  }, [
+    scatterData,
+    resultNrbIds,
+    useQueryAxes,
+    resultSimilarityById,
+    xAxis,
+    yAxis,
+    referenceNrbId,
+    refDetail,
+  ]);
 
   return (
     <div className="flex h-full flex-col p-3">
@@ -151,4 +217,28 @@ export function VariablesMapTab() {
       </div>
     </div>
   );
+}
+
+function axisValueFromDetail(
+  d: NrbDetail,
+  axis: NrbScatterAxis,
+  resultSimilarityById: Record<number, number> | null,
+): number | null {
+  // NrbDetail does not carry `n_cds`; if that axis is selected and the
+  // reference is missing from the scatter response there is nothing
+  // meaningful to inject — skip the halo rather than guess a coordinate.
+  switch (axis) {
+    case "novelty_score":
+      return d.novelty_score ?? null;
+    case "domain_novelty":
+      return d.domain_novelty ?? null;
+    case "size_kb":
+      return d.size_kb ?? null;
+    case "similarity_score":
+      return resultSimilarityById?.[d.id] ?? null;
+    case "n_cds":
+      return null;
+    default:
+      return null;
+  }
 }
