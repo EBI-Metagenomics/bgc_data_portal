@@ -29,6 +29,10 @@ const SVG_PADDING_X = 10;
 const ARROW_PROP = 0.15;
 const ARROW_CAP_PX = 12; // max arrow head in SVG units
 
+// Above this CDS count, rendering ~one tooltip-wrapped <polygon> per CDS
+// stalls the browser and arrows collapse to sub-pixel width anyway.
+const CDS_RENDER_CAP = 800;
+
 const DETECTOR_COLORS: Record<string, string> = {
   mibig: "#b3de69",
   sanntis: "#8dd3c7",
@@ -198,6 +202,21 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
       <p className="py-4 text-center text-xs text-muted-foreground">
         No CDS found in this region
       </p>
+    );
+  }
+
+  // Oversized regions (a handful of MIBiG entries that span the entire
+  // contig) would mount thousands of tooltip-wrapped <polygon>s and freeze
+  // the main thread; render a summary instead.
+  if (data.cds_list.length > CDS_RENDER_CAP) {
+    return (
+      <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+        Region too large to plot ({(data.region_length / 1000).toFixed(0)} kb,{" "}
+        {data.cds_list.length.toLocaleString()} CDS,{" "}
+        {data.cluster_list.length} cluster
+        {data.cluster_list.length === 1 ? "" : "s"}). Open the BGC detail page
+        to inspect individual CDSs.
+      </div>
     );
   }
 
