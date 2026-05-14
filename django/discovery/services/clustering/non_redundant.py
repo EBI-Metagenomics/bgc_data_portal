@@ -8,25 +8,30 @@ one ``is_partial=False`` or ``is_validated=True`` source BGC).
 Construction rules (per contig):
 
   1. Pull all latest-version BGCs via
-     :func:`discovery.querysets.latest_version_bgcs` — no partial filter.
+     :func:`discovery.querysets.latest_version_bgcs`.
   2. Emit one standalone NRB per ``is_validated=True`` BGC, regardless of tool
      or ``is_partial``. Validated rows are ground truth — never merged into
      prediction NRBs, never absorbed.
-  3. Merge non-validated, non-partial GECCO and SanntiS predictions on the
-     same contig via *transitive* interval overlap (any positive intersection
-     joins a component). Each component becomes one NRB spanning
-     ``min(starts) → max(ends)`` and carries a sorted ``source_tools`` list.
-  4. Admit non-validated, non-partial antiSMASH predictions as their own NRB
-     iff they do **not** overlap any already-built NRB on the same contig
-     (validated standalones included). Overlapping antiSMASH calls are
-     absorbed (their source ``DashboardBgc`` rows get ``non_redundant_bgc=NULL``
-     and are reclassified later via KNN).
-  5. Emit one standalone NRB per non-validated **partial** BGC. These are kept
-     out of the merge/absorb logic so they don't perturb non-partial NRB
-     boundaries; they're filtered out at clustering time by the pipeline.
+  3. Merge non-validated GECCO and SanntiS predictions on the same contig via
+     *transitive* interval overlap, **regardless of ``is_partial``** (any
+     positive intersection joins a component). Each component becomes one NRB
+     spanning ``min(starts) → max(ends)`` and carries a sorted ``source_tools``
+     list. Then, for each chain NRB, if **any** non-validated antiSMASH BGC on
+     the same contig overlaps it, add ``'antiSMASH'`` to that chain's
+     ``source_tools`` — antiSMASH coordinates are *never* used to widen the
+     chain interval.
+  4. For each non-validated antiSMASH BGC (regardless of ``is_partial``):
+     if it overlaps any NRB built in steps 2–3 (validated standalone or
+     SanntiS/GECCO chain), it is absorbed — its ``DashboardBgc`` row keeps
+     ``non_redundant_bgc=NULL`` and is reclassified later via KNN. Otherwise
+     it becomes its own standalone NRB.
+  5. Dedup by ``(start, end)`` — different buckets can occasionally emit
+     identical intervals; collapse them so we don't violate the
+     ``uniq_nrb_contig_pos`` DB constraint. Tools and member BGC ids are
+     unioned into the surviving NRB.
   6. Set ``DashboardBgc.non_redundant_bgc`` + ``classification_source='merged'``
-     on every source row that fed an NRB. Non-contributing BGCs (only
-     overlap-absorbed antiSMASH today) get ``non_redundant_bgc=NULL``.
+     on every source row that fed an NRB. Absorbed antiSMASH rows stay at
+     ``non_redundant_bgc=NULL``.
 
 This service is idempotent — calling it again wipes and rebuilds the table.
 """
@@ -64,9 +69,12 @@ def build_non_redundant_bgcs(
             "n_source_bgcs": int,
             "n_absorbed_antismash": int,
             "n_validated_standalone": int,
-            "n_partial_standalone": int,
             "by_tool": {"GECCO": int, "SanntiS": int, "antiSMASH": int, ...},
         }
+
+    ``n_absorbed_antismash`` counts non-validated antiSMASH BGCs whose
+    ``DashboardBgc.non_redundant_bgc`` ended up NULL because they overlapped a
+    validated standalone or a SanntiS/GECCO chain.
     """
     log.info("Wiping existing NonRedundantBGC table")
     NonRedundantBGC.objects.all().delete()
@@ -107,17 +115,15 @@ def build_non_redundant_bgcs(
         "n_source_bgcs": 0,
         "n_absorbed_antismash": 0,
         "n_validated_standalone": 0,
-        "n_partial_standalone": 0,
         "by_tool": {TOOL_GECCO: 0, TOOL_SANNTIS: 0, TOOL_ANTISMASH: 0},
     }
 
     for processed, (contig_id, rows) in enumerate(rows_by_contig.items(), start=1):
-        nrbs, absorbed_anti, validated_standalone, partial_standalone = (
-            _build_nrbs_for_contig(contig_id, rows)
+        nrbs, absorbed_anti, validated_standalone = _build_nrbs_for_contig(
+            contig_id, rows,
         )
         counts["n_absorbed_antismash"] += absorbed_anti
         counts["n_validated_standalone"] += validated_standalone
-        counts["n_partial_standalone"] += partial_standalone
         with transaction.atomic():
             for interval_start, interval_end, source_tools, member_bgc_ids in nrbs:
                 nrb = NonRedundantBGC.objects.create(
@@ -145,33 +151,35 @@ def build_non_redundant_bgcs(
 def _build_nrbs_for_contig(
     contig_id: int,
     rows: list[tuple[int, int, int, str | None, bool, bool]],
-) -> tuple[list[tuple[int, int, list[str], list[int]]], int, int, int]:
-    """Return ``(NRB tuples, n_absorbed_antismash, n_validated_standalone,
-    n_partial_standalone)`` for a contig.
+) -> tuple[list[tuple[int, int, list[str], list[int]]], int, int]:
+    """Return ``(NRB tuples, n_absorbed_antismash, n_validated_standalone)``
+    for a contig.
 
     Row format: ``(bgc_id, start, end, tool, is_partial, is_validated)``.
     Each NRB tuple: ``(start, end, sorted_source_tools, member_bgc_ids)``.
     """
     validated_rows = [r for r in rows if r[5]]
     non_validated = [r for r in rows if not r[5]]
-    # Non-validated partials are emitted as standalone NRBs at the end; they
-    # do not participate in merge/absorb logic.
-    partial_rows = [r for r in non_validated if r[4]]
-    eligible = [r for r in non_validated if not r[4]]
-    merge_rows = [r for r in eligible if r[3] in MERGE_TOOLS]
-    antismash_rows = [r for r in eligible if r[3] == TOOL_ANTISMASH]
+    # Partial flag no longer gates eligibility: SanntiS/GECCO partials merge
+    # into chains, and partial antiSMASH goes through the same absorb logic
+    # as non-partial antiSMASH.
+    merge_rows = [r for r in non_validated if r[3] in MERGE_TOOLS]
+    antismash_rows = [r for r in non_validated if r[3] == TOOL_ANTISMASH]
 
     nrbs: list[tuple[int, int, list[str], list[int]]] = []
 
-    # 1. Validated BGCs → one standalone NRB each. Ground truth, never merged.
+    # 1. Validated BGCs → one standalone NRB each. Ground truth, never merged
+    #    with predictions, never tagged with overlapping antiSMASH.
     n_validated_standalone = 0
     for bgc_id, start, end, tool, _, _ in validated_rows:
         tools = [tool] if tool else []
         nrbs.append((start, end, tools, [bgc_id]))
         n_validated_standalone += 1
 
-    # 2. Sort-and-sweep merge for non-validated, non-partial GECCO + SanntiS
-    #    (transitive).
+    # 2. Sort-and-sweep merge for non-validated GECCO + SanntiS (transitive,
+    #    partial-agnostic). Track where chain NRBs begin so step 3 can mutate
+    #    only their source_tools.
+    chain_start_idx = len(nrbs)
     merge_rows.sort(key=lambda r: (r[1], r[2]))
     current: dict[str, Any] | None = None
     for bgc_id, start, end, tool, _, _ in merge_rows:
@@ -205,8 +213,27 @@ def _build_nrbs_for_contig(
             )
         )
 
-    # 3. Admit non-validated, non-partial antiSMASH iff non-overlapping with
-    #    any already-built NRB on this contig (including validated standalones).
+    # 3. Tag chain NRBs with overlapping non-validated antiSMASH — source_tools
+    #    only, no boundary change. antiSMASH coordinates never widen a chain.
+    if antismash_rows:
+        for i in range(chain_start_idx, len(nrbs)):
+            c_start, c_end, c_tools, c_ids = nrbs[i]
+            if any(
+                a_start <= c_end and a_end >= c_start
+                for _abgc, a_start, a_end, _t, _p, _v in antismash_rows
+            ):
+                nrbs[i] = (
+                    c_start,
+                    c_end,
+                    sorted(set(c_tools) | {TOOL_ANTISMASH}),
+                    c_ids,
+                )
+
+    # 4. Non-validated antiSMASH: absorb if overlaps any NRB built in steps
+    #    1–2 (validated standalone or chain); else standalone NRB. The chain
+    #    NRB's source_tools already records the antiSMASH overlap via step 3
+    #    — the absorbed DashboardBgc row keeps non_redundant_bgc=NULL and is
+    #    reclassified later via KNN.
     n_absorbed = 0
     for bgc_id, start, end, _tool, _, _ in antismash_rows:
         if _overlaps_any(start, end, nrbs):
@@ -214,16 +241,35 @@ def _build_nrbs_for_contig(
             continue
         nrbs.append((start, end, [TOOL_ANTISMASH], [bgc_id]))
 
-    # 4. Non-validated partials → one standalone NRB each. Kept out of the
-    #    clustering pipeline downstream, but registered here so every
-    #    latest-version BGC has an NRB.
-    n_partial_standalone = 0
-    for bgc_id, start, end, tool, _, _ in partial_rows:
-        tools = [tool] if tool else []
-        nrbs.append((start, end, tools, [bgc_id]))
-        n_partial_standalone += 1
+    # 5. Dedup by (start, end) — defensive. Different buckets can legitimately
+    #    emit identical intervals on the same contig; collapse them so we
+    #    don't violate the ``uniq_nrb_contig_pos`` DB constraint.
+    nrbs = _dedup_nrbs_by_interval(nrbs)
 
-    return nrbs, n_absorbed, n_validated_standalone, n_partial_standalone
+    return nrbs, n_absorbed, n_validated_standalone
+
+
+def _dedup_nrbs_by_interval(
+    nrbs: list[tuple[int, int, list[str], list[int]]],
+) -> list[tuple[int, int, list[str], list[int]]]:
+    """Collapse NRB tuples that share the same ``(start, end)`` interval.
+
+    Tools are sorted-unique; member BGC ids are concatenated in encounter
+    order. Used by :func:`_build_nrbs_for_contig` to keep the per-contig
+    output unique on ``(start, end)``.
+    """
+    by_key: dict[tuple[int, int], tuple[list[str], list[int]]] = {}
+    for start, end, tools, bgc_ids in nrbs:
+        key = (start, end)
+        if key in by_key:
+            existing_tools, existing_ids = by_key[key]
+            by_key[key] = (
+                sorted(set(existing_tools) | set(tools)),
+                existing_ids + list(bgc_ids),
+            )
+        else:
+            by_key[key] = (sorted(set(tools)), list(bgc_ids))
+    return [(s, e, tools, ids) for (s, e), (tools, ids) in by_key.items()]
 
 
 def _overlaps_any(

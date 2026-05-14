@@ -1016,9 +1016,20 @@ def _nrb_to_roster_item(
     )
 
 
+# Keep each `IN (...)` clause well under sqlparse's 10k-token cap (which
+# Django's DEBUG-mode SQL logger trips on). At ~3 tokens per id (digits,
+# comma, space) 500 ids is comfortably below the ceiling.
+_MEMBER_FACTS_CHUNK = 500
+
+
 def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
     """Return per-NRB aggregates: ``n_source_bgcs``, ``is_validated``,
-    ``parent_assembly``, ``contig_accession``. Single DB sweep."""
+    ``parent_assembly``, ``contig_accession``.
+
+    The DashboardBgc lookup is chunked so the generated SQL stays under the
+    DEBUG-mode SQL formatter's token limit on large id lists (umap / scatter
+    can request several thousand NRBs in one call).
+    """
     facts: dict[int, dict] = {
         nid: {
             "n_source_bgcs": 0,
@@ -1028,31 +1039,34 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
         }
         for nid in nrb_ids
     }
-    rows = (
-        DashboardBgc.objects
-        .filter(non_redundant_bgc_id__in=nrb_ids)
-        .select_related("assembly", "contig")
-        .values(
-            "non_redundant_bgc_id", "is_validated",
-            "assembly_id", "assembly__assembly_accession", "assembly__organism_name",
-            "contig__accession",
+    for i in range(0, len(nrb_ids), _MEMBER_FACTS_CHUNK):
+        chunk = nrb_ids[i: i + _MEMBER_FACTS_CHUNK]
+        rows = (
+            DashboardBgc.objects
+            .filter(non_redundant_bgc_id__in=chunk)
+            .select_related("assembly", "contig")
+            .values(
+                "non_redundant_bgc_id", "is_validated",
+                "assembly_id", "assembly__assembly_accession",
+                "assembly__organism_name",
+                "contig__accession",
+            )
         )
-    )
-    for r in rows:
-        nid = r["non_redundant_bgc_id"]
-        f = facts.get(nid)
-        if not f:
-            continue
-        f["n_source_bgcs"] += 1
-        f["is_validated"] = f["is_validated"] or bool(r["is_validated"])
-        if f["parent_assembly"] is None and r["assembly_id"]:
-            f["parent_assembly"] = type("AsmStub", (), {
-                "id": r["assembly_id"],
-                "assembly_accession": r["assembly__assembly_accession"],
-                "organism_name": r["assembly__organism_name"],
-            })()
-        if not f["contig_accession"]:
-            f["contig_accession"] = r["contig__accession"]
+        for r in rows:
+            nid = r["non_redundant_bgc_id"]
+            f = facts.get(nid)
+            if not f:
+                continue
+            f["n_source_bgcs"] += 1
+            f["is_validated"] = f["is_validated"] or bool(r["is_validated"])
+            if f["parent_assembly"] is None and r["assembly_id"]:
+                f["parent_assembly"] = type("AsmStub", (), {
+                    "id": r["assembly_id"],
+                    "assembly_accession": r["assembly__assembly_accession"],
+                    "organism_name": r["assembly__organism_name"],
+                })()
+            if not f["contig_accession"]:
+                f["contig_accession"] = r["contig__accession"]
     return facts
 
 
@@ -1238,6 +1252,119 @@ def nrb_roster(
     )
 
 
+@discovery_router.get("/nrbs/umap/", response=list[NrbUmapPoint])
+def nrb_umap(
+    request,
+    include_partials: bool = True,
+    max_points: int = 10_000,
+):
+    """All NRB UMAP coordinates. ``umap_projected`` marks partial-derived coords."""
+    qs = (
+        NonRedundantBGC.objects
+        .exclude(umap_x__isnull=True)
+        .exclude(umap_y__isnull=True)
+        .order_by("id")
+    )
+    if not include_partials:
+        qs = qs.filter(umap_projected=False)
+
+    # Materialise once and downsample in Python — re-filtering with
+    # ``id__in=[…]`` on a multi-thousand-id list trips the DEBUG SQL
+    # formatter's 10k-token cap.
+    all_nrbs = list(qs)
+    if len(all_nrbs) > max_points:
+        stride = len(all_nrbs) // max_points + 1
+        all_nrbs = all_nrbs[::stride]
+
+    facts = _nrb_member_facts([n.id for n in all_nrbs])
+    return [
+        NrbUmapPoint(
+            id=nrb.id,
+            label=_nrb_label(nrb.id),
+            umap_x=nrb.umap_x,
+            umap_y=nrb.umap_y,
+            classification_path=nrb.gene_cluster_family or "",
+            novelty_score=nrb.novelty_score,
+            is_partial=_nrb_is_partial(nrb),
+            is_validated=facts[nrb.id]["is_validated"],
+            umap_projected=nrb.umap_projected,
+        )
+        for nrb in all_nrbs
+    ]
+
+
+@discovery_router.get("/nrbs/scatter/", response=list[NrbScatterPoint])
+def nrb_scatter(
+    request,
+    x_axis: str = "novelty_score",
+    y_axis: str = "domain_novelty",
+    include_partials: bool = True,
+    max_points: int = 5_000,
+):
+    if x_axis not in _NRB_AXES or y_axis not in _NRB_AXES:
+        raise HttpError(
+            400, f"axes must be one of: {', '.join(sorted(_NRB_AXES))}"
+        )
+
+    qs = NonRedundantBGC.objects.all()
+    if not include_partials:
+        qs = qs.filter(classification_run_id__isnull=False)
+
+    # similarity_score is not a stored column — only meaningful when supplied
+    # by a similar-NRB or domain query. For the bare scatter endpoint, treat
+    # it as null and the UI will offer it only post-query.
+    if x_axis == "similarity_score" or y_axis == "similarity_score":
+        raise HttpError(
+            400,
+            "similarity_score axis requires a similarity-query context; "
+            "use the query response payload instead of /nrbs/scatter/",
+        )
+
+    n_cds_subq = (
+        DashboardBgc.objects
+        .filter(non_redundant_bgc_id=OuterRef("id"))
+        .values("non_redundant_bgc_id")
+        .annotate(c=Count("cds_list"))
+        .values("c")
+    )
+    qs = qs.annotate(
+        size_kb=(F("end_position") - F("start_position")) / 1000.0,
+        n_cds=Subquery(n_cds_subq[:1]),
+    )
+
+    total = qs.count()
+    if total > max_points:
+        qs = qs.order_by("?")[:max_points]
+
+    points: list[NrbScatterPoint] = []
+    nrb_list = list(qs)
+    facts = _nrb_member_facts([n.id for n in nrb_list])
+    for nrb in nrb_list:
+        x_val = getattr(nrb, x_axis, None)
+        y_val = getattr(nrb, y_axis, None)
+        if x_val is None or y_val is None:
+            continue
+        points.append(
+            NrbScatterPoint(
+                id=nrb.id,
+                x=float(x_val),
+                y=float(y_val),
+                classification_path=nrb.gene_cluster_family or "",
+                novelty_score=nrb.novelty_score,
+                domain_novelty=nrb.domain_novelty,
+                is_partial=not facts[nrb.id]["is_validated"]
+                           and nrb.classification_run_id is None,
+                is_validated=facts[nrb.id]["is_validated"],
+                umap_projected=nrb.umap_projected,
+            )
+        )
+    return points
+
+
+# NOTE: this catch-all path-param route MUST come after every other
+# `/nrbs/<literal>/` route above (roster, umap, scatter, …) — Django Ninja
+# matches in declaration order, so an earlier `{nrb_id}` would swallow
+# "umap" / "scatter" and 422 on int parsing.
 @discovery_router.get("/nrbs/{nrb_id}/", response=NrbDetail)
 def nrb_detail(request, nrb_id: int):
     try:
@@ -1345,113 +1472,6 @@ def nrb_detail(request, nrb_id: int):
         domain_architecture=domain_arch,
         natural_products=np_items,
     )
-
-
-@discovery_router.get("/nrbs/umap/", response=list[NrbUmapPoint])
-def nrb_umap(
-    request,
-    include_partials: bool = True,
-    max_points: int = 10_000,
-):
-    """All NRB UMAP coordinates. ``umap_projected`` marks partial-derived coords."""
-    qs = (
-        NonRedundantBGC.objects
-        .exclude(umap_x__isnull=True)
-        .exclude(umap_y__isnull=True)
-    )
-    if not include_partials:
-        qs = qs.filter(umap_projected=False)
-
-    nrb_ids = list(qs.values_list("id", flat=True))
-    if len(nrb_ids) > max_points:
-        # Deterministic downsampling by id stride (preserves coverage; cheap).
-        stride = len(nrb_ids) // max_points + 1
-        nrb_ids = nrb_ids[::stride]
-        qs = qs.filter(id__in=nrb_ids)
-
-    facts = _nrb_member_facts(list(qs.values_list("id", flat=True)))
-    return [
-        NrbUmapPoint(
-            id=nrb.id,
-            label=_nrb_label(nrb.id),
-            umap_x=nrb.umap_x,
-            umap_y=nrb.umap_y,
-            classification_path=nrb.gene_cluster_family or "",
-            novelty_score=nrb.novelty_score,
-            is_partial=_nrb_is_partial(nrb),
-            is_validated=facts[nrb.id]["is_validated"],
-            umap_projected=nrb.umap_projected,
-        )
-        for nrb in qs
-    ]
-
-
-@discovery_router.get("/nrbs/scatter/", response=list[NrbScatterPoint])
-def nrb_scatter(
-    request,
-    x_axis: str = "novelty_score",
-    y_axis: str = "domain_novelty",
-    include_partials: bool = True,
-    max_points: int = 5_000,
-):
-    if x_axis not in _NRB_AXES or y_axis not in _NRB_AXES:
-        raise HttpError(
-            400, f"axes must be one of: {', '.join(sorted(_NRB_AXES))}"
-        )
-
-    qs = NonRedundantBGC.objects.all()
-    if not include_partials:
-        qs = qs.filter(classification_run_id__isnull=False)
-
-    # similarity_score is not a stored column — only meaningful when supplied
-    # by a similar-NRB or domain query. For the bare scatter endpoint, treat
-    # it as null and the UI will offer it only post-query.
-    if x_axis == "similarity_score" or y_axis == "similarity_score":
-        raise HttpError(
-            400,
-            "similarity_score axis requires a similarity-query context; "
-            "use the query response payload instead of /nrbs/scatter/",
-        )
-
-    n_cds_subq = (
-        DashboardBgc.objects
-        .filter(non_redundant_bgc_id=OuterRef("id"))
-        .values("non_redundant_bgc_id")
-        .annotate(c=Count("cds_list"))
-        .values("c")
-    )
-    qs = qs.annotate(
-        size_kb=(F("end_position") - F("start_position")) / 1000.0,
-        n_cds=Subquery(n_cds_subq[:1]),
-    )
-
-    total = qs.count()
-    if total > max_points:
-        qs = qs.order_by("?")[:max_points]
-
-    points: list[NrbScatterPoint] = []
-    nrb_list = list(qs)
-    facts = _nrb_member_facts([n.id for n in nrb_list])
-    for nrb in nrb_list:
-        x_val = getattr(nrb, x_axis, None)
-        y_val = getattr(nrb, y_axis, None)
-        if x_val is None or y_val is None:
-            continue
-        points.append(
-            NrbScatterPoint(
-                id=nrb.id,
-                x=float(x_val),
-                y=float(y_val),
-                classification_path=nrb.gene_cluster_family or "",
-                novelty_score=nrb.novelty_score,
-                domain_novelty=nrb.domain_novelty,
-                is_partial=not facts[nrb.id]["is_validated"]
-                           and nrb.classification_run_id is None,
-                is_validated=facts[nrb.id]["is_validated"],
-                umap_projected=nrb.umap_projected,
-            )
-        )
-    return points
 
 
 @discovery_router.post(

@@ -294,25 +294,30 @@ class NonRedundantBGC(models.Model):
     Built from latest-version ``DashboardBgc`` rows:
       * Validated BGCs (``is_validated=True``) become standalone NRBs
         regardless of tool or ``is_partial`` — ground truth, never merged
-        with predictions nor absorbed.
-      * Non-validated, non-partial GECCO and SanntiS predictions on the
-        same contig are merged via transitive interval overlap (any
-        positive intersection joins a component). The merged interval
-        spans ``min(starts) → max(ends)``.
-      * Non-validated, non-partial antiSMASH predictions are admitted as
-        their own NRB iff they do not overlap any already-built NRB on
-        the same contig (validated standalones included). Overlapping
-        antiSMASH calls are absorbed and contribute nothing.
-      * Non-validated **partial** BGCs become standalone NRBs (one BGC
-        each). They sit outside the merge/absorb logic so they don't
-        perturb non-partial NRB boundaries, and the clustering pipeline
-        filters them out — they're reclassified via KNN downstream.
+        with predictions, never tagged with overlapping antiSMASH, never
+        absorbed.
+      * Non-validated GECCO and SanntiS predictions on the same contig are
+        merged via transitive interval overlap (any positive intersection
+        joins a component), **regardless of ``is_partial``**. The merged
+        interval spans ``min(starts) → max(ends)``.
+      * For each chain NRB above, if any non-validated antiSMASH BGC on the
+        same contig overlaps it, ``'antiSMASH'`` is added to that chain's
+        ``source_tools``. AntiSMASH coordinates are never used to widen a
+        chain interval.
+      * Non-validated antiSMASH predictions (regardless of ``is_partial``)
+        are admitted as their own NRB iff they do not overlap any
+        already-built NRB on the same contig (validated standalones and
+        chain NRBs alike). Overlapping antiSMASH calls are absorbed — their
+        source ``DashboardBgc.non_redundant_bgc`` stays NULL and they are
+        reclassified later via KNN.
 
     Source ``DashboardBgc`` rows point here via ``DashboardBgc.non_redundant_bgc``.
     Clustering writes ``gene_cluster_family`` and ``umap_x``/``umap_y`` here
-    on the clusterable subset; source BGCs inherit those values via
-    back-propagation. Partial-only NRBs are skipped by the clustering
-    pipeline; their source BGCs receive paths via ``reclassify_bgcs``.
+    on the clusterable subset (NRBs with at least one ``is_partial=False``
+    or ``is_validated=True`` source); source BGCs inherit those values via
+    back-propagation. NRBs composed entirely of partial, non-validated
+    sources are skipped by the clustering pipeline; their source BGCs
+    receive paths via ``reclassify_bgcs``.
     """
 
     id = models.BigAutoField(primary_key=True)
