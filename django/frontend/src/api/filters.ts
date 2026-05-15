@@ -4,6 +4,7 @@ import type {
   ChemOntClassNode,
   NpClassLevel,
   PaginatedDomainResponse,
+  PaginatedGcfResponse,
   PaginatedSourceResponse,
   PaginatedDetectorResponse,
   TaxonomyNode,
@@ -34,6 +35,20 @@ export interface DomainSearchParams {
 export function fetchDomains(params: DomainSearchParams = {}) {
   return apiGet<PaginatedDomainResponse>(
     "/filters/domains/",
+    params as Record<string, string | number | boolean | undefined>
+  );
+}
+
+export interface GcfSearchParams {
+  search?: string;
+  level?: number;
+  page?: number;
+  page_size?: number;
+}
+
+export function fetchGcfs(params: GcfSearchParams = {}) {
+  return apiGet<PaginatedGcfResponse>(
+    "/filters/gcfs/",
     params as Record<string, string | number | boolean | undefined>
   );
 }

@@ -87,6 +87,7 @@ export interface AppliedNrbFilters {
   assemblyType: string;
   taxonomyPath: string;
   bgcClass: string;
+  gcfPath: string;
   chemontIds: string[];
   biomeLineage: string;
   bgcAccession: string;
@@ -101,6 +102,7 @@ export const EMPTY_APPLIED_FILTERS: AppliedNrbFilters = {
   assemblyType: "",
   taxonomyPath: "",
   bgcClass: "",
+  gcfPath: "",
   chemontIds: [],
   biomeLineage: "",
   bgcAccession: "",
@@ -131,6 +133,7 @@ export function appliedFiltersToApiParams(
   if (applied.assemblyType) params.assembly_type = applied.assemblyType;
   if (applied.taxonomyPath) params.taxonomy_path = applied.taxonomyPath;
   if (applied.bgcClass) params.bgc_class = applied.bgcClass;
+  if (applied.gcfPath) params.leaf_path_prefix = applied.gcfPath;
   if (applied.chemontIds.length > 0) {
     params.chemont_ids = applied.chemontIds.join(",");
   }

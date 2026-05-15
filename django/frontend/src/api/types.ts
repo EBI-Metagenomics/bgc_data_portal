@@ -184,6 +184,19 @@ export interface PaginatedDomainResponse {
   pagination: PaginationMeta;
 }
 
+export interface GcfOption {
+  family_path: string;
+  level: number;
+  member_count: number;
+  validated_count: number;
+  mean_novelty: number;
+}
+
+export interface PaginatedGcfResponse {
+  items: GcfOption[];
+  pagination: PaginationMeta;
+}
+
 export interface SourceOption {
   name: string;
   count: number;

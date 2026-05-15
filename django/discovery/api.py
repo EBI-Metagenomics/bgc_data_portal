@@ -80,7 +80,9 @@ from discovery.api_schemas import (
     NrbRosterItem,
     NrbScatterPoint,
     NrbUmapPoint,
+    GcfOption,
     PaginatedDomainResponse,
+    PaginatedGcfResponse,
     PaginatedNrbRosterResponse,
     PaginatedSourceResponse,
     PaginatedDetectorResponse,
@@ -2975,6 +2977,50 @@ def domain_list(
     ]
 
     return PaginatedDomainResponse(
+        items=items,
+        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+    )
+
+
+@discovery_router.get("/filters/gcfs/", response=PaginatedGcfResponse)
+def gcf_list(
+    request,
+    search: Optional[str] = None,
+    level: Optional[int] = None,
+    page: int = 1,
+    page_size: int = 50,
+):
+    # Scope to the latest ClusteringRun — NonRedundantBGC.gene_cluster_family is
+    # rewritten on every successful run, so this is the only set whose paths
+    # match the live NRB rows that ``leaf_path_prefix`` filters against.
+    run = ClusteringRun.objects.order_by("-created_at").first()
+    if run is None:
+        return PaginatedGcfResponse(
+            items=[],
+            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+        )
+
+    qs = DashboardGCF.objects.filter(clustering_run=run, member_count__gt=0)
+    if search:
+        qs = qs.filter(family_path__icontains=search)
+    if level is not None:
+        qs = qs.filter(level=level)
+
+    total_count = qs.count()
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+
+    items = [
+        GcfOption(
+            family_path=g.family_path,
+            level=g.level,
+            member_count=g.member_count,
+            validated_count=g.validated_count,
+            mean_novelty=g.mean_novelty,
+        )
+        for g in qs.order_by("-member_count", "level", "family_path")[offset: offset + ps]
+    ]
+
+    return PaginatedGcfResponse(
         items=items,
         pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
     )

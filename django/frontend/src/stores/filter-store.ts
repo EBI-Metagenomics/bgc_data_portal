@@ -6,6 +6,7 @@ interface FilterState {
   taxonomyPath: string;
   assemblyType: string;
   bgcClass: string;
+  gcfPath: string;
   npClassL1: string[];
   npClassL2: string[];
   npClassL3: string[];
@@ -22,6 +23,7 @@ interface FilterState {
   setTaxonomyPath: (value: string) => void;
   setAssemblyType: (v: string) => void;
   setBgcClass: (v: string) => void;
+  setGcfPath: (v: string) => void;
   setNpClass: (level: "l1" | "l2" | "l3", values: string[]) => void;
   setChemontIds: (ids: string[]) => void;
   setSearch: (v: string) => void;
@@ -39,6 +41,7 @@ const initialState = {
   taxonomyPath: "",
   assemblyType: "",
   bgcClass: "",
+  gcfPath: "",
   npClassL1: [] as string[],
   npClassL2: [] as string[],
   npClassL3: [] as string[],
@@ -63,6 +66,7 @@ export const useFilterStore = create<FilterState>((set) => ({
   setAssemblyType: (v) => set({ assemblyType: v, exploreQueryTriggered: false }),
 
   setBgcClass: (v) => set({ bgcClass: v, exploreQueryTriggered: false }),
+  setGcfPath: (v) => set({ gcfPath: v, exploreQueryTriggered: false }),
   setNpClass: (level, values) =>
     set(
       level === "l1"

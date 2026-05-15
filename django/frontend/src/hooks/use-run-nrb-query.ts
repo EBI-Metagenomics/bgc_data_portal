@@ -50,6 +50,7 @@ export function useRunNrbQuery() {
       assemblyType: f.assemblyType,
       taxonomyPath: f.taxonomyPath,
       bgcClass: f.bgcClass,
+      gcfPath: f.gcfPath,
       chemontIds: f.chemontIds,
       biomeLineage: f.biomeLineage,
       bgcAccession: f.bgcAccession,

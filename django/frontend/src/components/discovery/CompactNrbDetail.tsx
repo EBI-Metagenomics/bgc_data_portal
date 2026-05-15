@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchNrbDetail } from "@/api/nrbs";
 import { fetchBgcRegion } from "@/api/bgcs";
 import { RegionPlot } from "@/components/bgc/RegionPlot";
+import { NrbActionsMenu } from "./NrbActionsMenu";
 import { useDiscoveryStore } from "@/stores/discovery-store";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -135,6 +136,7 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
             </Badge>
           )}
         </div>
+        <NrbActionsMenu nrbId={nrb.id} nrbLabel={nrb.label} variant={variant} />
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">

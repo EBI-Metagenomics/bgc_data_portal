@@ -464,6 +464,19 @@ class PaginatedDomainResponse(Schema):
     pagination: PaginationMeta
 
 
+class GcfOption(Schema):
+    family_path: str
+    level: int
+    member_count: int
+    validated_count: int
+    mean_novelty: float
+
+
+class PaginatedGcfResponse(Schema):
+    items: list[GcfOption]
+    pagination: PaginationMeta
+
+
 class SourceOption(Schema):
     name: str
     count: int

@@ -7,6 +7,7 @@ import { AssemblyTypeFilter } from "./AssemblyTypeFilter";
 import { TaxonomyFilter } from "./TaxonomyFilter";
 import { BiomeLineageFilter } from "./BiomeLineageFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
+import { GcfFilter } from "./GcfFilter";
 import { ChemOntClassFilter } from "./ChemOntClassFilter";
 import { AccessionsFilter } from "./AccessionsFilter";
 import { DomainsFilter } from "./DomainsFilter";
@@ -39,6 +40,7 @@ export function FilterPanel() {
       <TaxonomyFilter />
       <BiomeLineageFilter />
       <BgcClassFilter />
+      <GcfFilter />
       <ChemOntClassFilter />
 
       {mode === "query" && (
