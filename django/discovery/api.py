@@ -998,6 +998,8 @@ def _nrb_to_roster_item(
     contig_accession: Optional[str] = None,
     similarity_score: Optional[float] = None,
     best_hit_protein_id: Optional[str] = None,
+    best_pident: Optional[float] = None,
+    best_qcoverage: Optional[float] = None,
 ) -> NrbRosterItem:
     return NrbRosterItem(
         id=nrb.id,
@@ -1020,6 +1022,8 @@ def _nrb_to_roster_item(
         contig_accession=contig_accession,
         similarity_score=similarity_score,
         best_hit_protein_id=best_hit_protein_id,
+        best_pident=best_pident,
+        best_qcoverage=best_qcoverage,
     )
 
 
@@ -2005,6 +2009,8 @@ def _nrb_roster_page_response(
     page_size: int,
     similarity_lookup: Optional[dict[int, float]] = None,
     best_hit_protein_lookup: Optional[dict[int, str]] = None,
+    best_pident_lookup: Optional[dict[int, float]] = None,
+    best_qcoverage_lookup: Optional[dict[int, float]] = None,
 ) -> PaginatedNrbRosterResponse:
     """Sort, paginate, and serialise a filtered ``NonRedundantBGC`` queryset.
 
@@ -2049,6 +2055,14 @@ def _nrb_roster_page_response(
                     best_hit_protein_lookup.get(n.id)
                     if best_hit_protein_lookup else None
                 ),
+                best_pident=(
+                    best_pident_lookup.get(n.id)
+                    if best_pident_lookup else None
+                ),
+                best_qcoverage=(
+                    best_qcoverage_lookup.get(n.id)
+                    if best_qcoverage_lookup else None
+                ),
             )
             for n in page_rows
         ]
@@ -2084,6 +2098,14 @@ def _nrb_roster_page_response(
             best_hit_protein_id=(
                 best_hit_protein_lookup.get(n.id)
                 if best_hit_protein_lookup else None
+            ),
+            best_pident=(
+                best_pident_lookup.get(n.id)
+                if best_pident_lookup else None
+            ),
+            best_qcoverage=(
+                best_qcoverage_lookup.get(n.id)
+                if best_qcoverage_lookup else None
             ),
         )
         for n in page_qs
@@ -2277,23 +2299,32 @@ def nrb_sequence_query_status(
         )
 
     # Collapse BGC hits → NRB id with best bitscore. Also carry the
-    # ``protein_id`` of the winning CDS so the roster can show which
-    # protein scored the best hit for each NRB.
+    # ``protein_id`` of the winning CDS plus its aggregate alignment stats
+    # (pident, qcov) so the Variables Map can plot those metrics.
     bgc_to_nrb = dict(
         DashboardBgc.objects.filter(id__in=bgc_metrics.keys())
         .values_list("id", "non_redundant_bgc_id")
     )
     nrb_best: dict[int, float] = {}
     nrb_best_protein: dict[int, str] = {}
+    nrb_best_pident: dict[int, float] = {}
+    nrb_best_qcov: dict[int, float] = {}
     for bgc_id, nrb_id in bgc_to_nrb.items():
         if nrb_id is None:
             continue
-        bs = float(bgc_metrics[bgc_id].get("bitscore", 0.0))
+        m = bgc_metrics[bgc_id]
+        bs = float(m.get("bitscore", 0.0))
         if bs > nrb_best.get(nrb_id, float("-inf")):
             nrb_best[nrb_id] = bs
-            pid = bgc_metrics[bgc_id].get("protein_id")
+            pid = m.get("protein_id")
             if pid:
                 nrb_best_protein[nrb_id] = str(pid)
+            pident = m.get("pident")
+            if pident is not None:
+                nrb_best_pident[nrb_id] = float(pident)
+            qcov = m.get("qcoverage")
+            if qcov is not None:
+                nrb_best_qcov[nrb_id] = float(qcov)
 
     if not nrb_best:
         return PaginatedNrbRosterResponse(
@@ -2336,6 +2367,8 @@ def nrb_sequence_query_status(
         page_size=page_size,
         similarity_lookup=nrb_best,
         best_hit_protein_lookup=nrb_best_protein,
+        best_pident_lookup=nrb_best_pident,
+        best_qcoverage_lookup=nrb_best_qcov,
     )
 
 

@@ -5,7 +5,7 @@ import {
   appliedFiltersToApiParams,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
-import type { NrbDetail, NrbScatterAxis } from "@/api/types";
+import type { NrbDetail, NrbScatterAxis, NrbScatterPoint } from "@/api/types";
 import {
   Select,
   SelectContent,
@@ -16,17 +16,44 @@ import {
 import { Loader2 } from "lucide-react";
 import { NrbScatterPlot } from "./NrbScatterPlot";
 
-const AXIS_OPTIONS: { value: NrbScatterAxis; label: string }[] = [
+const STABLE_AXES: { value: NrbScatterAxis; label: string }[] = [
   { value: "novelty_score", label: "Novelty" },
   { value: "domain_novelty", label: "Domain novelty" },
   { value: "size_kb", label: "Size (kb)" },
   { value: "n_cds", label: "# CDS" },
-  { value: "similarity_score", label: "Query similarity" },
 ];
 
-const AXIS_LABELS: Record<NrbScatterAxis, string> = Object.fromEntries(
-  AXIS_OPTIONS.map((o) => [o.value, o.label]),
-) as Record<NrbScatterAxis, string>;
+/** Axes whose values come from the active-query store maps rather than
+ *  the ``/nrbs/scatter/`` endpoint. The display label of
+ *  ``similarity_score`` depends on which advanced-query path produced the
+ *  result set — Dice for domain searches, bitscore for sequence searches. */
+const QUERY_AXES = new Set<NrbScatterAxis>([
+  "similarity_score",
+  "best_pident",
+  "best_qcoverage",
+]);
+
+function axisOptionsFor(
+  searchSource: string | null,
+): { value: NrbScatterAxis; label: string }[] {
+  const opts = [...STABLE_AXES];
+  // The similarity axis is always available — what it *means* depends on
+  // the active search source.
+  opts.push({
+    value: "similarity_score",
+    label:
+      searchSource === "sequence"
+        ? "Bitscore"
+        : searchSource === "domain"
+          ? "Domain match (Dice)"
+          : "Query similarity",
+  });
+  if (searchSource === "sequence") {
+    opts.push({ value: "best_pident", label: "Identity %" });
+    opts.push({ value: "best_qcoverage", label: "Query coverage %" });
+  }
+  return opts;
+}
 
 export function VariablesMapTab() {
   const xAxis = useDiscoveryStore((s) => s.variablesAxisX);
@@ -36,20 +63,50 @@ export function VariablesMapTab() {
   const resultSimilarityById = useDiscoveryStore(
     (s) => s.resultSimilarityById,
   );
+  const resultPidentById = useDiscoveryStore((s) => s.resultPidentById);
+  const resultQcoverageById = useDiscoveryStore(
+    (s) => s.resultQcoverageById,
+  );
+  const searchSource = useDiscoveryStore((s) => s.searchSource);
   const applied = useDiscoveryStore((s) => s.appliedFilters);
   const referenceNrbId = useDiscoveryStore((s) => s.referenceNrbId);
 
-  const wantsSimilarity =
-    xAxis === "similarity_score" || yAxis === "similarity_score";
-  const useQueryAxes = wantsSimilarity && resultSimilarityById != null;
+  const axisOptions = axisOptionsFor(searchSource);
+  const axisLabel = (axis: NrbScatterAxis): string =>
+    axisOptions.find((o) => o.value === axis)?.label ?? axis;
+
+  const xIsQuery = QUERY_AXES.has(xAxis);
+  const yIsQuery = QUERY_AXES.has(yAxis);
+  const anyStableAxis = !xIsQuery || !yIsQuery;
+  const anyQueryAxis = xIsQuery || yIsQuery;
+  // Need a query result for any query axis to plot.
+  const queryAxesUnplottable = anyQueryAxis && resultSimilarityById == null;
+
   const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
 
-  // ── Scatter from /nrbs/scatter/ for stored axes ─────────────────────
+  // When at least one axis is stable, fetch ``/nrbs/scatter/`` for it. If
+  // only one axis is stable, request it on both x and y so we get the
+  // value back regardless of which slot it ends up in.
+  const scatterX: NrbScatterAxis = xIsQuery
+    ? yIsQuery
+      ? "novelty_score"
+      : yAxis
+    : xAxis;
+  const scatterY: NrbScatterAxis = yIsQuery
+    ? xIsQuery
+      ? "novelty_score"
+      : xAxis
+    : yAxis;
+
   const { data: scatterData, isLoading, isError, error } = useQuery({
-    queryKey: ["nrb-scatter", xAxis, yAxis, filterParams],
+    queryKey: ["nrb-scatter", scatterX, scatterY, filterParams],
     queryFn: () =>
-      fetchNrbScatter({ x_axis: xAxis, y_axis: yAxis, ...filterParams }),
-    enabled: !wantsSimilarity,
+      fetchNrbScatter({
+        x_axis: scatterX,
+        y_axis: scatterY,
+        ...filterParams,
+      }),
+    enabled: anyStableAxis,
   });
 
   // ── Reference NRB detail ────────────────────────────────────────────
@@ -64,12 +121,38 @@ export function VariablesMapTab() {
     enabled: referenceNrbId !== null,
   });
 
-  // ── Build points: either the live scatter response, or a synthesised
-  //    set derived from the query result (when similarity_score is on an
-  //    axis). The synthesised path uses scores already in
-  //    discovery-store.resultSimilarityById. ────────────────────────────
   const points = useMemo(() => {
-    let base: Array<{
+    if (queryAxesUnplottable) return [];
+
+    // Index scatter points by id and remember which slot held what so the
+    // resolver below can pluck the right scalar back out.
+    const stableById = new Map<number, NrbScatterPoint>();
+    if (scatterData) {
+      for (const p of scatterData) stableById.set(p.id, p);
+    }
+
+    function resolveAxis(axis: NrbScatterAxis, id: number): number | null {
+      if (axis === "similarity_score") {
+        return resultSimilarityById?.[id] ?? null;
+      }
+      if (axis === "best_pident") {
+        return resultPidentById?.[id] ?? null;
+      }
+      if (axis === "best_qcoverage") {
+        return resultQcoverageById?.[id] ?? null;
+      }
+      const sp = stableById.get(id);
+      if (!sp) return null;
+      if (axis === scatterX) return sp.x;
+      if (axis === scatterY) return sp.y;
+      return null;
+    }
+
+    // Candidate ids: active-query allow-list when present, otherwise the
+    // full scatter response.
+    const candidateIds = resultNrbIds ?? Array.from(stableById.keys());
+
+    type PlotPoint = {
       id: number;
       x: number;
       y: number;
@@ -81,39 +164,27 @@ export function VariablesMapTab() {
       novelty_score?: number | null;
       domain_novelty?: number | null;
       similarity_score?: number | null;
-    }> = [];
-    if (useQueryAxes && resultNrbIds && resultSimilarityById) {
-      // We need the other axis from /nrbs/scatter/, but Plotly is happy
-      // with whatever we hand it — for v1 just plot similarity on both
-      // axes that asked for it, falling back to similarity itself for the
-      // non-similarity axis (caller is expected to pick a meaningful Y).
-      base = resultNrbIds.map((id) => {
-        const sim = resultSimilarityById[id] ?? 0;
-        return {
-          id,
-          x: xAxis === "similarity_score" ? sim : sim,
-          y: yAxis === "similarity_score" ? sim : sim,
-          is_partial: false,
-          is_validated: false,
-          is_type_strain: false,
-          umap_projected: false,
-          similarity_score: sim,
-        };
+    };
+
+    const base: PlotPoint[] = [];
+    for (const id of candidateIds) {
+      const x = resolveAxis(xAxis, id);
+      const y = resolveAxis(yAxis, id);
+      if (x == null || y == null) continue;
+      const sp = stableById.get(id);
+      base.push({
+        id,
+        x,
+        y,
+        is_partial: sp?.is_partial ?? false,
+        is_validated: sp?.is_validated ?? false,
+        is_type_strain: sp?.is_type_strain ?? false,
+        umap_projected: sp?.umap_projected ?? false,
+        classification_path: sp?.classification_path,
+        novelty_score: sp?.novelty_score,
+        domain_novelty: sp?.domain_novelty,
+        similarity_score: resultSimilarityById?.[id] ?? null,
       });
-    } else if (scatterData) {
-      base = scatterData.map((p) => ({
-        id: p.id,
-        x: p.x,
-        y: p.y,
-        is_partial: p.is_partial,
-        is_validated: p.is_validated,
-        is_type_strain: p.is_type_strain,
-        umap_projected: p.umap_projected,
-        classification_path: p.classification_path,
-        novelty_score: p.novelty_score,
-        domain_novelty: p.domain_novelty,
-        similarity_score: p.similarity_score,
-      }));
     }
 
     // Inject the pinned reference NRB if it was dropped by the scatter
@@ -124,26 +195,34 @@ export function VariablesMapTab() {
       refDetail.id === referenceNrbId &&
       !base.some((p) => p.id === referenceNrbId)
     ) {
-      const x = axisValueFromDetail(refDetail, xAxis, resultSimilarityById);
-      const y = axisValueFromDetail(refDetail, yAxis, resultSimilarityById);
+      const x = axisValueFromDetail(
+        refDetail,
+        xAxis,
+        resultSimilarityById,
+        resultPidentById,
+        resultQcoverageById,
+      );
+      const y = axisValueFromDetail(
+        refDetail,
+        yAxis,
+        resultSimilarityById,
+        resultPidentById,
+        resultQcoverageById,
+      );
       if (x != null && y != null) {
-        base = [
-          ...base,
-          {
-            id: refDetail.id,
-            x,
-            y,
-            is_partial: refDetail.is_partial,
-            is_validated: refDetail.is_validated,
-            is_type_strain: refDetail.is_type_strain,
-            umap_projected: refDetail.umap_projected,
-            classification_path: refDetail.classification_path,
-            novelty_score: refDetail.novelty_score,
-            domain_novelty: refDetail.domain_novelty,
-            similarity_score:
-              resultSimilarityById?.[refDetail.id] ?? null,
-          },
-        ];
+        base.push({
+          id: refDetail.id,
+          x,
+          y,
+          is_partial: refDetail.is_partial,
+          is_validated: refDetail.is_validated,
+          is_type_strain: refDetail.is_type_strain,
+          umap_projected: refDetail.umap_projected,
+          classification_path: refDetail.classification_path,
+          novelty_score: refDetail.novelty_score,
+          domain_novelty: refDetail.domain_novelty,
+          similarity_score: resultSimilarityById?.[refDetail.id] ?? null,
+        });
       }
     }
 
@@ -151,12 +230,16 @@ export function VariablesMapTab() {
   }, [
     scatterData,
     resultNrbIds,
-    useQueryAxes,
     resultSimilarityById,
+    resultPidentById,
+    resultQcoverageById,
     xAxis,
     yAxis,
+    scatterX,
+    scatterY,
     referenceNrbId,
     refDetail,
+    queryAxesUnplottable,
   ]);
 
   return (
@@ -171,7 +254,7 @@ export function VariablesMapTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {AXIS_OPTIONS.map((opt) => (
+            {axisOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
@@ -187,35 +270,35 @@ export function VariablesMapTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {AXIS_OPTIONS.map((opt) => (
+            {axisOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {wantsSimilarity && !useQueryAxes && (
+        {queryAxesUnplottable && (
           <span className="ml-2 text-amber-600">
-            Run a query to populate similarity scores.
+            Run a query to populate this axis.
           </span>
         )}
       </div>
 
       <div className="flex flex-1 items-stretch overflow-hidden rounded border bg-card">
-        {isLoading && !useQueryAxes ? (
+        {isLoading && anyStableAxis ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
             Loading…
           </div>
-        ) : isError && !useQueryAxes ? (
+        ) : isError && anyStableAxis ? (
           <div className="flex flex-1 items-center justify-center text-sm text-destructive">
             {(error as Error)?.message ?? "Failed to load scatter data"}
           </div>
         ) : (
           <NrbScatterPlot
             points={points}
-            xLabel={AXIS_LABELS[xAxis]}
-            yLabel={AXIS_LABELS[yAxis]}
+            xLabel={axisLabel(xAxis)}
+            yLabel={axisLabel(yAxis)}
           />
         )}
       </div>
@@ -227,6 +310,8 @@ function axisValueFromDetail(
   d: NrbDetail,
   axis: NrbScatterAxis,
   resultSimilarityById: Record<number, number> | null,
+  resultPidentById: Record<number, number> | null,
+  resultQcoverageById: Record<number, number> | null,
 ): number | null {
   // NrbDetail does not carry `n_cds`; if that axis is selected and the
   // reference is missing from the scatter response there is nothing
@@ -240,6 +325,10 @@ function axisValueFromDetail(
       return d.size_kb ?? null;
     case "similarity_score":
       return resultSimilarityById?.[d.id] ?? null;
+    case "best_pident":
+      return resultPidentById?.[d.id] ?? null;
+    case "best_qcoverage":
+      return resultQcoverageById?.[d.id] ?? null;
     case "n_cds":
       return null;
     default:

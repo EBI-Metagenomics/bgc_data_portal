@@ -61,7 +61,7 @@ export function useRunNrbQuery() {
     if (domainConditions.length === 0 && !sequenceQuery.trim()) {
       // Filters-only run: clear any prior advanced-query allow-list so the
       // roster reflects the new filter snapshot.
-      setQueryResult(null, null, null, null);
+      setQueryResult(null, null, null, null, null, null);
       toast.success("Filters applied");
       return;
     }
@@ -71,6 +71,8 @@ export function useRunNrbQuery() {
       const idSets: Set<number>[] = [];
       const similarities: Record<number, number> = {};
       const bestHitProtein: Record<number, string> = {};
+      const pident: Record<number, number> = {};
+      const qcoverage: Record<number, number> = {};
 
       // ── Domain branch ─────────────────────────────────────────────────
       if (domainConditions.length > 0) {
@@ -118,6 +120,12 @@ export function useRunNrbQuery() {
           if (item.best_hit_protein_id) {
             bestHitProtein[item.id] = item.best_hit_protein_id;
           }
+          if (item.best_pident != null) {
+            pident[item.id] = item.best_pident;
+          }
+          if (item.best_qcoverage != null) {
+            qcoverage[item.id] = item.best_qcoverage;
+          }
         }
       }
 
@@ -148,6 +156,8 @@ export function useRunNrbQuery() {
         similarities,
         source,
         source === "sequence" ? bestHitProtein : null,
+        source === "sequence" ? pident : null,
+        source === "sequence" ? qcoverage : null,
       );
       toast.success(`Query returned ${intersection.length} NRB(s)`);
     } catch (e) {

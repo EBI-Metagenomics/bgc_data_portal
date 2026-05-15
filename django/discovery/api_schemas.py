@@ -215,8 +215,11 @@ class NrbRosterItem(Schema):
     contig_accession: Optional[str] = None
     similarity_score: Optional[float] = None  # filled by similar-nrb / query
     # Populated only by sequence-protein search responses — the protein_id
-    # of the highest-bitscore CDS within the NRB.
+    # of the highest-bitscore CDS within the NRB, and that CDS's aggregate
+    # alignment stats. Percent identity and query coverage are 0–100.
     best_hit_protein_id: Optional[str] = None
+    best_pident: Optional[float] = None
+    best_qcoverage: Optional[float] = None
 
 
 class PaginatedNrbRosterResponse(Schema):

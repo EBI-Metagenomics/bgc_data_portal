@@ -550,6 +550,8 @@ export interface NrbRosterItem {
   contig_accession: string | null;
   similarity_score: number | null;
   best_hit_protein_id: string | null;
+  best_pident: number | null;
+  best_qcoverage: number | null;
 }
 
 export interface PaginatedNrbRosterResponse {
@@ -622,7 +624,9 @@ export type NrbScatterAxis =
   | "n_cds"
   | "novelty_score"
   | "domain_novelty"
-  | "similarity_score";
+  | "similarity_score"
+  | "best_pident"
+  | "best_qcoverage";
 
 // ── Shortlist Report schemas ─────────────────────────────────────────────
 

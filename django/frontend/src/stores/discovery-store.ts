@@ -53,6 +53,12 @@ interface DiscoveryState {
    *  protein search; overlaid onto roster rows since the standard
    *  ``/nrbs/roster/`` endpoint does not carry per-query data. */
   resultBestHitProteinById: Record<number, string> | null;
+  /** Percent identity (0–100) of the winning CDS per NRB; feeds the
+   *  Variables Map "Identity" axis. */
+  resultPidentById: Record<number, number> | null;
+  /** Query coverage (0–100) of the winning CDS per NRB; feeds the
+   *  Variables Map "Query coverage" axis. */
+  resultQcoverageById: Record<number, number> | null;
   /** Which advanced-query path produced ``resultNrbIds``; toggles the
    *  bitscore + best-hit-protein columns in the roster. */
   searchSource: SearchSource;
@@ -61,6 +67,8 @@ interface DiscoveryState {
     similarity?: Record<number, number> | null,
     source?: SearchSource,
     bestHitProtein?: Record<number, string> | null,
+    pident?: Record<number, number> | null,
+    qcoverage?: Record<number, number> | null,
   ) => void;
 
   // Snapshot of filter-store values taken when the user last pressed Run
@@ -159,17 +167,23 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   resultNrbIds: null,
   resultSimilarityById: null,
   resultBestHitProteinById: null,
+  resultPidentById: null,
+  resultQcoverageById: null,
   searchSource: null,
   setQueryResult: (
     ids,
     similarity = null,
     source = null,
     bestHitProtein = null,
+    pident = null,
+    qcoverage = null,
   ) =>
     set({
       resultNrbIds: ids,
       resultSimilarityById: similarity,
       resultBestHitProteinById: bestHitProtein,
+      resultPidentById: pident,
+      resultQcoverageById: qcoverage,
       searchSource: source,
       // A fresh query resets compare/protein selections.
       compareNrbId: null,
@@ -187,6 +201,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       resultNrbIds: null,
       resultSimilarityById: null,
       resultBestHitProteinById: null,
+      resultPidentById: null,
+      resultQcoverageById: null,
       searchSource: null,
       appliedFilters: EMPTY_APPLIED_FILTERS,
     }),
