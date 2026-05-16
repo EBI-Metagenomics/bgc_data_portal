@@ -11,6 +11,9 @@ interface NrbPoint {
   is_validated: boolean;
   is_type_strain: boolean;
   umap_projected: boolean;
+  /** Negative-id NRB sourced from an ephemeral asset upload — rendered
+   *  with a distinct marker so the user spots their submitted data. */
+  is_asset?: boolean;
   classification_path?: string | null;
   novelty_score?: number | null;
   domain_novelty?: number | null;
@@ -112,14 +115,17 @@ function buildTraces(
   referenceNrbId: number | null,
   compareNrbId: number | null,
 ) {
-  // Three mutually-exclusive classes: Validated wins over Type Strain when
-  // both flags are true (per design — Validated is the stronger signal).
+  // Four mutually-exclusive classes — asset > validated > type strain >
+  // other — so submitted NRBs always render on top with their distinctive
+  // marker regardless of their other flags.
+  const asset: NrbPoint[] = [];
   const validated: NrbPoint[] = [];
   const typeStrain: NrbPoint[] = [];
   const other: NrbPoint[] = [];
 
   for (const p of points) {
-    if (p.is_validated) validated.push(p);
+    if (p.is_asset) asset.push(p);
+    else if (p.is_validated) validated.push(p);
     else if (p.is_type_strain) typeStrain.push(p);
     else other.push(p);
   }
@@ -182,6 +188,15 @@ function buildTraces(
       toTrace(validated, "Validated", "#16a34a", {
         symbol: "diamond",
         size: 9,
+      }),
+    );
+  if (asset.length)
+    traces.push(
+      toTrace(asset, "Submitted asset", "#b45309", {
+        symbol: "star",
+        size: 13,
+        line: { width: 1.5, color: "#1e293b" },
+        opacity: 0.95,
       }),
     );
 

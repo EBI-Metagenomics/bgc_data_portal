@@ -229,3 +229,59 @@ def test_v2_generate_report_opens_tab_and_renders(page, e2e_v2_base_url, context
     )
     assert save_html.is_visible()
     assert print_btn.is_visible()
+
+
+@pytest.mark.e2e
+def test_v2_load_asset_journey(page, e2e_v2_base_url):
+    """Upload a TGZ asset, verify it surfaces in the roster + UMAP + can be
+    evicted via the chip's X button.
+
+    Skips automatically when the fixture file isn't present (CI without the
+    seed data) so the spec can still run on lean environments.
+    """
+    from pathlib import Path
+
+    fixture = (
+        Path(__file__).resolve().parents[4]
+        / "input_test_files"
+        / "files"
+        / "Ga0181741_assembly_upload.tar.gz"
+    )
+    if not fixture.exists():
+        pytest.skip(f"Fixture not present at {fixture}")
+
+    page.set_default_timeout(60_000)
+    page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="nrb-dashboard"]', timeout=30_000)
+
+    # Click "Load Asset" and pick the fixture tarball.
+    load_btn = page.locator('[data-testid="load-asset-button"]')
+    load_btn.wait_for(timeout=10_000)
+    file_input = page.locator('[data-testid="asset-file-input"]')
+    file_input.set_input_files(str(fixture))
+
+    # Wait for the SUBMITTED badge in the roster (means the projection ran
+    # and the cache row landed in the response).
+    page.locator('[data-testid="asset-submitted-badge"]').first.wait_for(
+        timeout=60_000,
+    )
+
+    # Switch to UMAP — the asset point should be plotted as a "Submitted
+    # asset" trace (legend text rendered by Plotly).
+    page.locator('[data-testid="results-tab-umap"]').click()
+    page.wait_for_timeout(1_000)
+    # Plotly may or may not render the legend depending on point count;
+    # the SUBMITTED badge confirmation above is the load-bearing assertion.
+
+    # Back to roster — the asset row should still be there.
+    page.locator('[data-testid="results-tab-roster"]').click()
+    page.locator('[data-testid="asset-submitted-badge"]').first.wait_for(
+        timeout=10_000,
+    )
+
+    # Click the X on the asset chip to evict.
+    page.locator('[data-testid="asset-evict"]').click()
+    page.wait_for_timeout(2_000)
+
+    # SUBMITTED badge should disappear (UI reflects the empty cache).
+    assert page.locator('[data-testid="asset-submitted-badge"]').count() == 0

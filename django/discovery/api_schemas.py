@@ -220,6 +220,8 @@ class NrbRosterItem(Schema):
     best_hit_protein_id: Optional[str] = None
     best_pident: Optional[float] = None
     best_qcoverage: Optional[float] = None
+    # True for NRBs sourced from an uploaded asset (negative id, ephemeral).
+    is_asset: bool = False
 
 
 class PaginatedNrbRosterResponse(Schema):
@@ -276,6 +278,7 @@ class NrbScatterPoint(Schema):
     is_type_strain: bool = False
     umap_projected: bool = False
     similarity_score: Optional[float] = None
+    is_asset: bool = False
 
 
 class NrbUmapPoint(Schema):
@@ -291,6 +294,7 @@ class NrbUmapPoint(Schema):
     is_validated: bool = False
     is_type_strain: bool = False
     umap_projected: bool = False
+    is_asset: bool = False
 
 
 class NrbCountResponse(Schema):
@@ -344,6 +348,9 @@ class NrbArchitectureQueryRequest(Schema):
 
 class ReportSnapshotRequest(Schema):
     nrb_ids: list[int]
+    # When negative ids are present in ``nrb_ids`` the snapshot endpoint
+    # resolves them out of the asset cache identified by ``asset_token``.
+    asset_token: Optional[str] = None
 
 
 class ReportSnapshotResponse(Schema):
@@ -744,3 +751,27 @@ class DiscoveryStatsResponse(Schema):
     regions: int = 0
     total_bgc_predictions: int = 0
     updated_at: Optional[datetime] = None
+
+
+# ── Ephemeral asset upload schemas ──────────────────────────────────────────
+
+
+class AssetUploadAccepted(Schema):
+    """Response for ``POST /assets/upload/`` — async processing started."""
+
+    token: str
+    task_id: str
+
+
+class AssetStatusResponse(Schema):
+    """Polling response for ``GET /assets/{token}/status/``.
+
+    ``state`` is one of ``PENDING``, ``RUNNING``, ``SUCCESS``, ``FAILED``,
+    ``UNKNOWN`` (when the token has expired or never existed).
+    """
+
+    state: str
+    task_id: Optional[str] = None
+    progress: Optional[dict] = None
+    error: Optional[str] = None
+    summary: Optional[dict] = None

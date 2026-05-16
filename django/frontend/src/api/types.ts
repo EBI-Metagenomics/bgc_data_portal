@@ -565,6 +565,8 @@ export interface NrbRosterItem {
   best_hit_protein_id: string | null;
   best_pident: number | null;
   best_qcoverage: number | null;
+  /** Asset NRB sourced from an ephemeral upload (negative id). */
+  is_asset: boolean;
 }
 
 export interface PaginatedNrbRosterResponse {
@@ -617,6 +619,8 @@ export interface NrbScatterPoint {
   is_type_strain: boolean;
   umap_projected: boolean;
   similarity_score: number | null;
+  /** Asset NRB sourced from an ephemeral upload (negative id). */
+  is_asset?: boolean;
 }
 
 export interface NrbUmapPoint {
@@ -630,6 +634,8 @@ export interface NrbUmapPoint {
   is_validated: boolean;
   is_type_strain: boolean;
   umap_projected: boolean;
+  /** Asset NRB sourced from an ephemeral upload (negative id). */
+  is_asset?: boolean;
 }
 
 export interface NrbCountResponse {

@@ -80,12 +80,19 @@ export function NrbRosterTable() {
     (s) => s.resultBestHitProteinById,
   );
   const applied = useDiscoveryStore((s) => s.appliedFilters);
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
 
   const COLUMNS = columnsFor(searchSource);
 
-  const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
+  const filterParams = appliedFiltersToApiParams(
+    applied,
+    resultNrbIds,
+    assetToken,
+  );
   const hasActiveScope =
-    !isAppliedFiltersEmpty(applied) || resultNrbIds !== null;
+    !isAppliedFiltersEmpty(applied) ||
+    resultNrbIds !== null ||
+    assetToken !== null;
 
   // Reset to page 1 whenever the applied filter set or result allow-list
   // changes — otherwise a deep-page user could see an empty page after
@@ -253,18 +260,32 @@ function NrbRosterRow({
       nrbId={nrb.id}
       nrbLabel={nrb.label}
       isPartial={nrb.umap_projected}
+      isAsset={nrb.is_asset}
     >
       <TableRow
         onClick={onSelect}
         data-testid="nrb-roster-row"
         data-nrb-id={nrb.id}
+        data-is-asset={nrb.is_asset || undefined}
         className={
           "cursor-pointer " +
+          (nrb.is_asset
+            ? "bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 "
+            : "") +
           (selected ? "bg-accent" : "hover:bg-muted/40")
         }
       >
         <TableCell className="font-mono text-xs">
           {nrb.label}
+          {nrb.is_asset && (
+            <Badge
+              className="ml-2 h-4 px-1 text-[10px] text-white border-transparent"
+              style={{ backgroundColor: "#b45309" }}
+              data-testid="asset-submitted-badge"
+            >
+              SUBMITTED
+            </Badge>
+          )}
           {nrb.is_validated && (
             <Badge variant="default" className="ml-2 h-4 px-1 text-[10px]">
               Validated

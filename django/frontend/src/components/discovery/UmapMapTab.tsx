@@ -16,10 +16,17 @@ export function UmapMapTab() {
     (s) => s.resultSimilarityById,
   );
   const applied = useDiscoveryStore((s) => s.appliedFilters);
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
 
-  const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
+  const filterParams = appliedFiltersToApiParams(
+    applied,
+    resultNrbIds,
+    assetToken,
+  );
   const hasActiveScope =
-    !isAppliedFiltersEmpty(applied) || resultNrbIds !== null;
+    !isAppliedFiltersEmpty(applied) ||
+    resultNrbIds !== null ||
+    assetToken !== null;
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["nrb-umap", filterParams],
@@ -38,6 +45,7 @@ export function UmapMapTab() {
       is_validated: p.is_validated,
       is_type_strain: p.is_type_strain,
       umap_projected: p.umap_projected,
+      is_asset: p.is_asset ?? false,
       classification_path: p.classification_path,
       novelty_score: p.novelty_score,
       label: p.label,

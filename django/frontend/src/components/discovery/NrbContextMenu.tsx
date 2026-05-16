@@ -14,6 +14,9 @@ interface Props {
   /** True when the NRB is a projected partial — gates the find-similar
    *  action because the backend only accepts primary seeds. */
   isPartial?: boolean;
+  /** True when the NRB is sourced from an uploaded asset (negative id) —
+   *  hides find-similar and sequence-search per the locked scope. */
+  isAsset?: boolean;
   children: React.ReactNode;
 }
 
@@ -22,8 +25,14 @@ interface Props {
  * (roster row, variables-map point, UMAP point). The action set is owned by
  * the ``useNrbActions`` hook; this component is just the right-click shell.
  */
-export function NrbContextMenu({ nrbId, nrbLabel, isPartial, children }: Props) {
-  const items = useNrbActions(nrbId, nrbLabel, { isPartial });
+export function NrbContextMenu({
+  nrbId,
+  nrbLabel,
+  isPartial,
+  isAsset,
+  children,
+}: Props) {
+  const items = useNrbActions(nrbId, nrbLabel, { isPartial, isAsset });
 
   return (
     <ContextMenu>

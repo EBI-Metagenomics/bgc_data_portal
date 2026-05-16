@@ -85,6 +85,63 @@ export async function apiPostBlob(
   return response.blob();
 }
 
+/**
+ * POST a multipart/form-data payload (file uploads). Skips JSON serialisation
+ * so the browser sets the multipart boundary header itself.
+ */
+export async function apiPostMultipart<T>(
+  path: string,
+  formData: FormData
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  const csrf = getCsrfToken();
+  if (csrf) {
+    headers["X-CSRFToken"] = csrf;
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  return handleResponse<T>(response);
+}
+
+/** Fire-and-forget DELETE; returns true on 2xx. */
+export async function apiDelete(path: string): Promise<boolean> {
+  const headers: Record<string, string> = {};
+  const csrf = getCsrfToken();
+  if (csrf) {
+    headers["X-CSRFToken"] = csrf;
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!response.ok && response.status !== 204) {
+    const text = await response.text().catch(() => "Unknown error");
+    throw new ApiError(response.status, text);
+  }
+  return true;
+}
+
+/** GET with custom headers — used to thread X-Asset-Token through ``/nrbs/{id}/``. */
+export async function apiGetWithHeaders<T>(
+  path: string,
+  extraHeaders: Record<string, string>,
+  params?: Record<string, string | number | boolean | undefined>
+): Promise<T> {
+  const url = new URL(`${API_BASE}${path}`, window.location.origin);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") {
+        url.searchParams.set(key, String(value));
+      }
+    }
+  }
+  const response = await fetch(url.toString(), { headers: extraHeaders });
+  return handleResponse<T>(response);
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

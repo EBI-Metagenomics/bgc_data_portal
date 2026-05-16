@@ -47,9 +47,10 @@ function fmt(v: number | null | undefined, digits = 3): string {
 }
 
 export function CompactNrbDetail({ nrbId, variant }: Props) {
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
   const { data: nrb, isLoading, isError } = useQuery({
-    queryKey: ["nrb-detail", nrbId],
-    queryFn: () => fetchNrbDetail(nrbId as number),
+    queryKey: ["nrb-detail", nrbId, nrbId !== null && nrbId < 0 ? assetToken : null],
+    queryFn: () => fetchNrbDetail(nrbId as number, assetToken),
     enabled: nrbId !== null,
   });
 
@@ -141,6 +142,7 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
           nrbLabel={nrb.label}
           variant={variant}
           isPartial={nrb.umap_projected}
+          isAsset={nrb.id < 0}
         />
       </CardHeader>
 
@@ -181,9 +183,17 @@ function RegionStrip({
 }) {
   const setSelectedCds = useDiscoveryStore((s) => s.setSelectedCds);
   const selectedCds = useDiscoveryStore((s) => s.selectedCds);
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
+  const isAssetBgc =
+    representativeBgcId !== null && representativeBgcId < 0;
   const { data, isLoading } = useQuery({
-    queryKey: ["bgc-region", representativeBgcId],
-    queryFn: () => fetchBgcRegion(representativeBgcId as number),
+    queryKey: [
+      "bgc-region",
+      representativeBgcId,
+      isAssetBgc ? assetToken : null,
+    ],
+    queryFn: () =>
+      fetchBgcRegion(representativeBgcId as number, assetToken),
     enabled: representativeBgcId !== null,
   });
 

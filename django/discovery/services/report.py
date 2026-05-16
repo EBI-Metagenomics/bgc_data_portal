@@ -60,17 +60,31 @@ def _is_partial(nrb: NonRedundantBGC) -> bool:
     return bool(nrb.umap_projected) or nrb.classification_run_id is None
 
 
-def build_report_payload(nrb_ids: list[int]) -> dict:
+def build_report_payload(
+    nrb_ids: list[int],
+    *,
+    extra_nrb_rows: Optional[list[dict]] = None,
+) -> dict:
     """Assemble the complete report payload for a shortlist of NRB ids.
 
-    Returns a JSON-serialisable dict that matches the ``ReportPayload``
-    schema (minus ``token`` which the endpoint sets).
+    ``extra_nrb_rows`` are already-shaped asset roster rows (from
+    ``asset:{token}:nrb:*`` in Redis); they are prepended to ``nrb_rows``
+    and contribute to the simple per-row aggregates (score distributions,
+    completeness pie, length histogram, BGC-class pie, predictor pie).
+    Aggregates requiring DB joins (domain composition, GCF distribution,
+    taxonomy sunburst, assembly stats) ignore them by design — they
+    represent ephemeral data that doesn't fit those persistent rollups.
+
+    Returns a JSON-serialisable dict matching the ``ReportPayload`` schema
+    (minus ``token`` which the endpoint sets).
     """
-    nrb_ids = sorted(set(nrb_ids))
+    # Drop negative ids before the ORM filter — they belong to assets.
+    nrb_ids = sorted({nid for nid in nrb_ids if nid >= 0})
+    extra_nrb_rows = list(extra_nrb_rows or [])
     nrbs = list(
         NonRedundantBGC.objects.select_related("contig").filter(id__in=nrb_ids)
     )
-    n_nrbs = len(nrbs)
+    n_nrbs = len(nrbs) + len(extra_nrb_rows)
     now = timezone.now()
     expires_at = now + timedelta(seconds=REPORT_TTL_SECONDS)
 
@@ -252,10 +266,18 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
     # ── Score distributions (capped sample for histogram rendering) ───────
     novelty_vals = [
         float(n.novelty_score) for n in nrbs if n.novelty_score is not None
-    ][:SCORE_SAMPLE_CAP]
+    ]
+    for r in extra_nrb_rows:
+        if r.get("novelty_score") is not None:
+            novelty_vals.append(float(r["novelty_score"]))
+    novelty_vals = novelty_vals[:SCORE_SAMPLE_CAP]
     dn_vals = [
         float(n.domain_novelty) for n in nrbs if n.domain_novelty is not None
-    ][:SCORE_SAMPLE_CAP]
+    ]
+    for r in extra_nrb_rows:
+        if r.get("domain_novelty") is not None:
+            dn_vals.append(float(r["domain_novelty"]))
+    dn_vals = dn_vals[:SCORE_SAMPLE_CAP]
     score_distributions = [
         {"label": "Novelty", "values": novelty_vals},
         {"label": "Domain Novelty", "values": dn_vals},
@@ -267,6 +289,12 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
         1 for n in nrbs
         if not n.umap_projected and n.classification_run_id is None
     )
+    # Asset rows: projected when umap_projected, else unclustered.
+    for r in extra_nrb_rows:
+        if r.get("umap_projected"):
+            projected_n += 1
+        else:
+            unclustered_n += 1
     primary_n = n_nrbs - projected_n - unclustered_n
     completeness_pie = [
         {"name": "Clustered (primary)", "count": primary_n},
@@ -291,6 +319,10 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
             classes.add("(unclassified)")
         for head in classes:
             class_counts[head] += 1
+    for r in extra_nrb_rows:
+        cp = (r.get("classification_path") or "").strip()
+        head = cp.split(".")[0] if cp else "(unclassified)"
+        class_counts[head] += 1
     bgc_class_pie = sorted(
         [{"name": k, "count": v} for k, v in class_counts.items()],
         key=lambda r: (-r["count"], r["name"]),
@@ -304,6 +336,12 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
             if lo <= kb < hi:
                 bucket_counts[i] += 1
                 break
+    for r in extra_nrb_rows:
+        kb = float(r.get("size_kb") or 0.0)
+        for i, (lo, hi, _) in enumerate(LENGTH_BUCKETS):
+            if lo <= kb < hi:
+                bucket_counts[i] += 1
+                break
     length_histogram = [
         {"label": lbl, "count": c}
         for (_, _, lbl), c in zip(LENGTH_BUCKETS, bucket_counts)
@@ -313,6 +351,9 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
     predictor_counts: dict[str, int] = defaultdict(int)
     for nrb in nrbs:
         for tool in (nrb.source_tools or []):
+            predictor_counts[tool] += 1
+    for r in extra_nrb_rows:
+        for tool in (r.get("source_tools") or []):
             predictor_counts[tool] += 1
     predictor_distribution = sorted(
         [{"name": k, "count": v} for k, v in predictor_counts.items()],
@@ -396,6 +437,11 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
         if n.contig and n.contig.taxonomy_path
     ]
     taxonomy_sunburst = build_taxonomy_sunburst_from_paths(nrb_taxonomy_paths)
+
+    # Prepend ephemeral asset rows so they appear at the top of the report's
+    # NRB roster (matches the dashboard's ordering).
+    if extra_nrb_rows:
+        nrb_rows = list(extra_nrb_rows) + nrb_rows
 
     return {
         "generated_at": now.isoformat(),

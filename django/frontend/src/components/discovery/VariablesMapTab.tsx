@@ -84,9 +84,16 @@ export function VariablesMapTab() {
   // Need a query result for any query axis to plot.
   const queryAxesUnplottable = anyQueryAxis && resultSimilarityById == null;
 
-  const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
+  const filterParams = appliedFiltersToApiParams(
+    applied,
+    resultNrbIds,
+    assetToken,
+  );
   const hasActiveScope =
-    !isAppliedFiltersEmpty(applied) || resultNrbIds !== null;
+    !isAppliedFiltersEmpty(applied) ||
+    resultNrbIds !== null ||
+    assetToken !== null;
 
   // When at least one axis is stable, fetch ``/nrbs/scatter/`` for it. If
   // only one axis is stable, request it on both x and y so we get the
@@ -120,8 +127,12 @@ export function VariablesMapTab() {
   // the pinned reference. We refetch its detail and inject it manually so
   // the reference halo is always rendered.
   const { data: refDetail } = useQuery({
-    queryKey: ["nrb-detail", referenceNrbId],
-    queryFn: () => fetchNrbDetail(referenceNrbId as number),
+    queryKey: [
+      "nrb-detail",
+      referenceNrbId,
+      referenceNrbId !== null && referenceNrbId < 0 ? assetToken : null,
+    ],
+    queryFn: () => fetchNrbDetail(referenceNrbId as number, assetToken),
     enabled: referenceNrbId !== null && hasActiveScope,
   });
 
@@ -164,6 +175,7 @@ export function VariablesMapTab() {
       is_validated: boolean;
       is_type_strain: boolean;
       umap_projected: boolean;
+      is_asset: boolean;
       classification_path?: string | null;
       novelty_score?: number | null;
       domain_novelty?: number | null;
@@ -184,6 +196,7 @@ export function VariablesMapTab() {
         is_validated: sp?.is_validated ?? false,
         is_type_strain: sp?.is_type_strain ?? false,
         umap_projected: sp?.umap_projected ?? false,
+        is_asset: sp?.is_asset ?? id < 0,
         classification_path: sp?.classification_path,
         novelty_score: sp?.novelty_score,
         domain_novelty: sp?.domain_novelty,
@@ -222,6 +235,7 @@ export function VariablesMapTab() {
           is_validated: refDetail.is_validated,
           is_type_strain: refDetail.is_type_strain,
           umap_projected: refDetail.umap_projected,
+          is_asset: refDetail.id < 0,
           classification_path: refDetail.classification_path,
           novelty_score: refDetail.novelty_score,
           domain_novelty: refDetail.domain_novelty,

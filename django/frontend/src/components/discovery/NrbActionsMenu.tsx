@@ -19,12 +19,21 @@ interface Props {
   /** True when the NRB is a projected partial — gates the find-similar
    *  action because the backend only accepts primary seeds. */
   isPartial?: boolean;
+  /** True when the NRB is sourced from an uploaded asset (negative id) —
+   *  hides find-similar per the locked scope. */
+  isAsset?: boolean;
 }
 
 /** Kebab dropdown surfacing the same actions as the NRB roster right-click
  *  menu, sized for the dense ``CompactNrbDetail`` header. */
-export function NrbActionsMenu({ nrbId, nrbLabel, variant, isPartial }: Props) {
-  const items = useNrbActions(nrbId, nrbLabel, { variant, isPartial });
+export function NrbActionsMenu({
+  nrbId,
+  nrbLabel,
+  variant,
+  isPartial,
+  isAsset,
+}: Props) {
+  const items = useNrbActions(nrbId, nrbLabel, { variant, isPartial, isAsset });
 
   return (
     <DropdownMenu>

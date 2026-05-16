@@ -30,6 +30,9 @@ interface UseNrbActionsOptions {
   /** When true the NRB is a partial (umap_projected) — find-similar is
    *  disabled because the backend rejects partial seeds. */
   isPartial?: boolean;
+  /** When true the NRB is sourced from an uploaded asset (negative id).
+   *  Find-similar / sequence-search are skipped per the locked scope. */
+  isAsset?: boolean;
 }
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -48,11 +51,13 @@ export function useNrbActions(
 ): NrbActionItem[] {
   const setReferenceNrbId = useDiscoveryStore((s) => s.setReferenceNrbId);
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
   const addBgc = useShortlistStore((s) => s.addBgc);
   const replaceBgcs = useShortlistStore((s) => s.replaceBgcs);
 
   const isReference = options.variant === "reference";
   const isPartial = options.isPartial === true;
+  const isAsset = options.isAsset === true;
 
   const onSetRef = () => {
     setReferenceNrbId(nrbId);
@@ -89,7 +94,7 @@ export function useNrbActions(
   const onCopyArchitecture = async () => {
     const toastId = toast.loading(`Copying domain architecture…`);
     try {
-      const resp = await fetchNrbArchitecture(nrbId);
+      const resp = await fetchNrbArchitecture(nrbId, assetToken);
       if (resp.ordered_accs.length === 0) {
         toast.warning(
           `${nrbLabel} has no PFAM/NCBIFAM domains to copy`,
@@ -143,8 +148,12 @@ export function useNrbActions(
       label: "Find similar NRBs",
       icon: Search,
       onClick: onFindSimilar,
-      disabled: isPartial,
-      disabledHint: isPartial ? "Partial NRB" : undefined,
+      disabled: isPartial || isAsset,
+      disabledHint: isAsset
+        ? "Submitted asset — out of scope"
+        : isPartial
+          ? "Partial NRB"
+          : undefined,
     },
     {
       key: "copy-architecture",

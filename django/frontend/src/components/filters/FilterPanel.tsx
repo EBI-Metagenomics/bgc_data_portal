@@ -13,6 +13,7 @@ import { AccessionsFilter } from "./AccessionsFilter";
 import { DomainsFilter } from "./DomainsFilter";
 import { SequenceFilter } from "./SequenceFilter";
 import { ChemicalStructureFilter } from "./ChemicalStructureFilter";
+import { LoadAssetChip } from "./LoadAssetChip";
 import { useFilterStore } from "@/stores/filter-store";
 import { useModeStore } from "@/stores/mode-store";
 
@@ -51,6 +52,8 @@ export function FilterPanel() {
           <ChemicalStructureFilter />
         </>
       )}
+
+      <LoadAssetChip />
 
       <Button
         variant="ghost"

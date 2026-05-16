@@ -52,6 +52,8 @@ from discovery.services.architecture import (
 )
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
 from discovery.api_schemas import (
+    AssetStatusResponse,
+    AssetUploadAccepted,
     SequenceQueryAccepted,
     SequenceQueryStatusResponse,
     BgcClassCount,
@@ -841,7 +843,21 @@ def bgc_region(request, bgc_id: int):
     """Return CDS, domain, and cluster data for the BGC genomic region.
 
     Served entirely from discovery models (DashboardCds, BgcDomain).
+    Negative ``bgc_id`` resolves to an asset NRB's region payload via the
+    ``X-Asset-Token`` header — keeps the path schema stable while still
+    routing through the ephemeral cache.
     """
+    if bgc_id < 0:
+        token = request.headers.get("X-Asset-Token") or request.GET.get("asset_token")
+        if not token:
+            raise HttpError(404, "Asset token required for asset BGC")
+        from discovery.services.asset_upload import cache as asset_cache
+
+        payload = asset_cache.read_region(token, bgc_id)
+        if payload is None:
+            raise HttpError(404, "Asset BGC not found or expired")
+        return BgcRegionOut(**payload)
+
     try:
         bgc = DashboardBgc.objects.get(id=bgc_id)
     except DashboardBgc.DoesNotExist:
@@ -1005,6 +1021,96 @@ def _nrb_is_partial(nrb: NonRedundantBGC) -> bool:
     pass — either no clustering run touched it, or it was projected from a
     KNN average of its primary neighbours (``umap_projected=True``)."""
     return bool(nrb.umap_projected) or nrb.classification_run_id is None
+
+
+# ── Asset-NRB injection helpers ───────────────────────────────────────────
+#
+# Uploaded assets are stored in Redis under ``asset:{token}:*`` and never hit
+# the DB. Negative ids mark them everywhere — the dispatcher in this module
+# routes ``nrb_id < 0`` to the cache instead of the ORM. Asset NRBs bypass
+# every filter ("always shown in results") per the locked product decision.
+
+
+def _get_asset_roster_rows(asset_token: Optional[str]) -> list[dict]:
+    if not asset_token:
+        return []
+    from discovery.services.asset_upload import cache as asset_cache
+
+    return list(asset_cache.read_nrb_list(asset_token) or [])
+
+
+def _asset_row_to_roster_item(row: dict) -> NrbRosterItem:
+    return NrbRosterItem(
+        id=int(row["id"]),
+        label=row.get("label", ""),
+        classification_path=row.get("classification_path", "") or "",
+        size_kb=float(row.get("size_kb", 0.0) or 0.0),
+        n_source_bgcs=int(row.get("n_source_bgcs", 0) or 0),
+        source_tools=list(row.get("source_tools") or []),
+        novelty_score=row.get("novelty_score"),
+        domain_novelty=row.get("domain_novelty"),
+        is_partial=bool(row.get("is_partial", False)),
+        is_validated=bool(row.get("is_validated", False)),
+        is_type_strain=bool(row.get("is_type_strain", False)),
+        umap_projected=bool(row.get("umap_projected", False)),
+        parent_assembly_id=row.get("parent_assembly_id"),
+        parent_assembly_accession=row.get("parent_assembly_accession"),
+        organism_name=row.get("organism_name"),
+        contig_accession=row.get("contig_accession"),
+        similarity_score=row.get("similarity_score"),
+        best_hit_protein_id=row.get("best_hit_protein_id"),
+        best_pident=row.get("best_pident"),
+        best_qcoverage=row.get("best_qcoverage"),
+        is_asset=True,
+    )
+
+
+def _asset_row_to_umap_point(row: dict) -> Optional[NrbUmapPoint]:
+    if row.get("umap_x") is None or row.get("umap_y") is None:
+        return None
+    return NrbUmapPoint(
+        id=int(row["id"]),
+        label=row.get("label", ""),
+        umap_x=float(row["umap_x"]),
+        umap_y=float(row["umap_y"]),
+        classification_path=row.get("classification_path", "") or "",
+        novelty_score=row.get("novelty_score"),
+        is_partial=bool(row.get("is_partial", False)),
+        is_validated=bool(row.get("is_validated", False)),
+        is_type_strain=bool(row.get("is_type_strain", False)),
+        umap_projected=bool(row.get("umap_projected", False)),
+        is_asset=True,
+    )
+
+
+def _asset_row_to_scatter_point(
+    row: dict, x_axis: str, y_axis: str
+) -> Optional[NrbScatterPoint]:
+    # Asset rows expose the same numeric columns the DB rows do (novelty_score,
+    # domain_novelty, size_kb). For non-existent axes we drop the point so the
+    # surface stays consistent with the DB-row behaviour.
+    axis_value: dict[str, Optional[float]] = {
+        "novelty_score": row.get("novelty_score"),
+        "domain_novelty": row.get("domain_novelty"),
+        "size_kb": row.get("size_kb"),
+    }
+    x_val = axis_value.get(x_axis)
+    y_val = axis_value.get(y_axis)
+    if x_val is None or y_val is None:
+        return None
+    return NrbScatterPoint(
+        id=int(row["id"]),
+        x=float(x_val),
+        y=float(y_val),
+        classification_path=row.get("classification_path", "") or "",
+        novelty_score=row.get("novelty_score"),
+        domain_novelty=row.get("domain_novelty"),
+        is_partial=bool(row.get("is_partial", False)),
+        is_validated=bool(row.get("is_validated", False)),
+        is_type_strain=bool(row.get("is_type_strain", False)),
+        umap_projected=bool(row.get("umap_projected", False)),
+        is_asset=True,
+    )
 
 
 def _nrb_to_roster_item(
@@ -1304,6 +1410,7 @@ def nrb_count(
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     nrb_ids: Optional[str] = None,
+    asset_token: Optional[str] = None,
 ):
     """Cheap COUNT over the NRB filter surface.
 
@@ -1344,6 +1451,8 @@ def nrb_count(
         taxonomy_path=taxonomy_path,
     )
     total = qs.count()
+    asset_rows = _get_asset_roster_rows(asset_token)
+    total += len(asset_rows)
     return NrbCountResponse(
         exact_count=total,
         cap=DASHBOARD_RESULT_CAP,
@@ -1380,11 +1489,14 @@ def nrb_roster(
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     nrb_ids: Optional[str] = None,
+    asset_token: Optional[str] = None,
 ):
     """Paginated, filterable NRB roster (v2 Discovery primary unit).
 
     ``nrb_ids`` is an optional comma-separated id allow-list so the dashboard
     can refilter to a Run Query result set without re-issuing the query.
+    ``asset_token`` pre-pends ephemeral asset NRBs (negative ids) ahead of
+    the DB rows on page 1; they bypass filters and always render.
     """
     parsed_ids: Optional[list[int]] = None
     if nrb_ids:
@@ -1436,12 +1548,30 @@ def nrb_roster(
         else F(order_field).asc(nulls_last=True)
     )
 
-    total_count = qs.count()
+    asset_rows = _get_asset_roster_rows(asset_token)
+    asset_items = [_asset_row_to_roster_item(r) for r in asset_rows]
+    db_total = qs.count()
+    total_count = db_total + len(asset_items)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_qs = list(qs[offset: offset + ps])
+
+    # Asset rows always sit at the very top — they bypass filters and the
+    # roster's sort, so they only land in the slice covering global offset 0.
+    asset_slice: list[NrbRosterItem] = []
+    db_offset = offset
+    db_limit = ps
+    if offset < len(asset_items):
+        asset_slice = asset_items[offset : offset + ps]
+        db_limit = max(0, ps - len(asset_slice))
+        db_offset = 0
+    else:
+        db_offset = offset - len(asset_items)
+
+    page_qs = (
+        list(qs[db_offset : db_offset + db_limit]) if db_limit > 0 else []
+    )
 
     facts = _nrb_member_facts([nrb.id for nrb in page_qs])
-    items = [
+    db_items = [
         _nrb_to_roster_item(
             nrb,
             parent_assembly=facts[nrb.id]["parent_assembly"],
@@ -1453,7 +1583,7 @@ def nrb_roster(
         for nrb in page_qs
     ]
     return PaginatedNrbRosterResponse(
-        items=items,
+        items=asset_slice + db_items,
         pagination=PaginationMeta(
             page=pg, page_size=ps, total_count=total_count, total_pages=tp,
         ),
@@ -1479,6 +1609,7 @@ def nrb_umap(
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     nrb_ids: Optional[str] = None,
+    asset_token: Optional[str] = None,
 ):
     """All NRB UMAP coordinates. ``umap_projected`` marks partial-derived coords.
 
@@ -1527,7 +1658,7 @@ def nrb_umap(
     all_nrbs = list(qs.order_by("id"))
 
     facts = _nrb_member_facts([n.id for n in all_nrbs])
-    return [
+    db_points = [
         NrbUmapPoint(
             id=nrb.id,
             label=_nrb_label(nrb.id),
@@ -1542,6 +1673,12 @@ def nrb_umap(
         )
         for nrb in all_nrbs
     ]
+    asset_points: list[NrbUmapPoint] = []
+    for row in _get_asset_roster_rows(asset_token):
+        pt = _asset_row_to_umap_point(row)
+        if pt is not None:
+            asset_points.append(pt)
+    return asset_points + db_points
 
 
 @discovery_router.get("/nrbs/scatter/", response=list[NrbScatterPoint])
@@ -1565,6 +1702,7 @@ def nrb_scatter(
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     nrb_ids: Optional[str] = None,
+    asset_token: Optional[str] = None,
 ):
     if x_axis not in _NRB_AXES or y_axis not in _NRB_AXES:
         raise HttpError(
@@ -1649,15 +1787,38 @@ def nrb_scatter(
                 umap_projected=nrb.umap_projected,
             )
         )
-    return points
+    asset_points: list[NrbScatterPoint] = []
+    for row in _get_asset_roster_rows(asset_token):
+        pt = _asset_row_to_scatter_point(row, x_axis, y_axis)
+        if pt is not None:
+            asset_points.append(pt)
+    return asset_points + points
 
 
 # NOTE: this catch-all path-param route MUST come after every other
 # `/nrbs/<literal>/` route above (roster, umap, scatter, …) — Django Ninja
 # matches in declaration order, so an earlier `{nrb_id}` would swallow
 # "umap" / "scatter" and 422 on int parsing.
+def _asset_token_header(request) -> Optional[str]:
+    """Frontend passes the active asset token via ``X-Asset-Token`` so the
+    negative-id dispatcher can resolve asset NRBs out of Redis without
+    polluting the URL with a query param."""
+    return request.headers.get("X-Asset-Token") or request.GET.get("asset_token")
+
+
 @discovery_router.get("/nrbs/{nrb_id}/", response=NrbDetail)
 def nrb_detail(request, nrb_id: int):
+    if nrb_id < 0:
+        token = _asset_token_header(request)
+        if not token:
+            raise HttpError(404, "Asset token required for asset NRB")
+        from discovery.services.asset_upload import cache as asset_cache
+
+        payload = asset_cache.read_nrb_detail(token, nrb_id)
+        if payload is None:
+            raise HttpError(404, "Asset NRB not found or expired")
+        return NrbDetail(**payload)
+
     try:
         nrb = NonRedundantBGC.objects.select_related("contig").get(id=nrb_id)
     except NonRedundantBGC.DoesNotExist:
@@ -1774,6 +1935,21 @@ def nrb_architecture_endpoint(request, nrb_id: int):
     Lightweight wrapper around the same ordering rule that ``nrb_detail``
     uses for ``domain_architecture``.
     """
+    if nrb_id < 0:
+        token = _asset_token_header(request)
+        if not token:
+            raise HttpError(404, "Asset token required for asset NRB")
+        from discovery.services.asset_upload import cache as asset_cache
+
+        ordered_accs = asset_cache.read_architecture(token, nrb_id)
+        if ordered_accs is None:
+            raise HttpError(404, "Asset NRB not found or expired")
+        return NrbArchitectureResponse(
+            id=nrb_id,
+            label=f"NRB-A{abs(nrb_id)}",
+            ordered_accs=ordered_accs,
+        )
+
     try:
         nrb = NonRedundantBGC.objects.get(id=nrb_id)
     except NonRedundantBGC.DoesNotExist:
@@ -1822,7 +1998,9 @@ def similar_nrb_query(
         raise HttpError(
             503,
             "Similarity cache not present on this run — rerun "
-            "run_bgc_clustering with --score-nrbs (default) to materialise it.",
+            "run_bgc_clustering with --apply to persist NRB rows, MIBiG "
+            "artifacts, and the similarity cache (--score-nrbs is on by "
+            "default, but the cache is only written when --apply is set).",
         )
 
     sim = cache["sim"]
@@ -1916,7 +2094,9 @@ def nrb_architecture_query(
         raise HttpError(
             503,
             "Scoring cache not present on this run — rerun "
-            "run_bgc_clustering with --score-nrbs (default) to materialise it.",
+            "run_bgc_clustering with --apply to persist NRB rows, MIBiG "
+            "artifacts, and the similarity cache (--score-nrbs is on by "
+            "default, but the cache is only written when --apply is set).",
         )
 
     result = architecture_search(
@@ -1984,9 +2164,36 @@ def report_snapshot(request, body: ReportSnapshotRequest):
     if len(ids) > MAX_SHORTLIST:
         raise HttpError(400, f"shortlist limit is {MAX_SHORTLIST} NRBs")
 
-    token = hashlib.sha256(
-        ",".join(str(i) for i in ids).encode("utf-8")
-    ).hexdigest()[:32]
+    # Split positive (DB) from negative (asset) ids and hydrate the asset
+    # rows from Redis if a token was supplied.
+    asset_ids = [i for i in ids if i < 0]
+    extra_rows: list[dict] = []
+    if asset_ids:
+        if not body.asset_token:
+            raise HttpError(
+                400,
+                "asset_token is required when asset NRB ids (negative) are shortlisted",
+            )
+        from discovery.services.asset_upload import cache as asset_cache
+
+        cached_roster = {
+            int(r["id"]): r for r in (asset_cache.read_nrb_list(body.asset_token) or [])
+        }
+        for nid in asset_ids:
+            row = cached_roster.get(nid)
+            if row is None:
+                raise HttpError(
+                    404,
+                    f"Asset NRB {nid} not found in asset token {body.asset_token!r}",
+                )
+            extra_rows.append(row)
+
+    # The token covers both ids and asset rows so cached snapshots don't
+    # collide across different asset uploads with the same negative ids.
+    token_seed = ",".join(str(i) for i in ids)
+    if body.asset_token:
+        token_seed += f"|asset={body.asset_token}"
+    token = hashlib.sha256(token_seed.encode("utf-8")).hexdigest()[:32]
     cache_key = f"report:{token}"
 
     cached = cache.get(cache_key)
@@ -1997,7 +2204,7 @@ def report_snapshot(request, body: ReportSnapshotRequest):
             n_nrbs=cached.get("n_nrbs", len(ids)),
         )
 
-    payload = build_report_payload(ids)
+    payload = build_report_payload(ids, extra_nrb_rows=extra_rows)
     cache.set(cache_key, payload, REPORT_TTL_SECONDS)
     return ReportSnapshotResponse(
         token=token,
@@ -3487,3 +3694,95 @@ def discovery_stats(request):
     if latest is None:
         return DiscoveryStatsResponse()
     return DiscoveryStatsResponse(**latest.stats, updated_at=latest.updated_at)
+
+
+# ── Ephemeral asset upload ───────────────────────────────────────────────────
+
+
+# Upload size cap matches the asset-upload pipeline's per-tarball decompressed
+# cap. The streamed read is bounded so a hostile client can't OOM us.
+_ASSET_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+@discovery_router.post(
+    "/assets/upload/",
+    response={202: AssetUploadAccepted},
+)
+def asset_upload(request):
+    """Upload an ephemeral tarball of BGC TSVs (``Ga…_assembly_upload.tar.gz``).
+
+    Returns ``202`` with ``{token, task_id}``; the projection runs in a
+    Celery worker and the result is cached in Redis under ``asset:{token}:*``
+    for 6 hours. Poll ``GET /assets/{token}/status/`` for progress.
+
+    The request body is ``multipart/form-data`` with a single ``file`` field.
+    """
+    import hashlib
+    import os
+    import tempfile
+
+    from django.conf import settings
+
+    from discovery.services.asset_upload import cache as asset_cache
+    from discovery.tasks import process_asset_upload_task
+
+    upload = request.FILES.get("file")
+    if upload is None:
+        raise HttpError(400, "Missing 'file' field in multipart upload")
+
+    if upload.size and upload.size > _ASSET_MAX_UPLOAD_BYTES:
+        raise HttpError(413, "Upload exceeds 100 MB cap")
+
+    raw = upload.read(_ASSET_MAX_UPLOAD_BYTES + 1)
+    if len(raw) > _ASSET_MAX_UPLOAD_BYTES:
+        raise HttpError(413, "Upload exceeds 100 MB cap")
+
+    if not raw.startswith(b"\x1f\x8b"):
+        raise HttpError(400, "Upload must be a gzip-compressed tarball")
+
+    token = hashlib.sha256(raw).hexdigest()[:24]
+
+    upload_root = settings.MEDIA_ROOT if getattr(settings, "MEDIA_ROOT", None) else tempfile.gettempdir()
+    token_dir = os.path.join(str(upload_root), "asset_uploads", token)
+    os.makedirs(token_dir, exist_ok=True)
+    tmp_path = os.path.join(token_dir, "upload.tar.gz")
+    with open(tmp_path, "wb") as f:
+        f.write(raw)
+
+    # Mark pending up front so concurrent status polls don't return UNKNOWN
+    # in the gap between dispatch and the worker writing RUNNING.
+    asset_cache.mark_pending(token, task_id="")
+    async_result = process_asset_upload_task.delay(token, tmp_path)
+    # If the cache still says PENDING, fold the actual task_id in. The worker
+    # may have already written RUNNING / SUCCESS by now — leave that alone.
+    status_payload = asset_cache.read_status(token)
+    if status_payload and status_payload.get("state") == "PENDING":
+        asset_cache.mark_pending(token, task_id=async_result.id)
+
+    return 202, AssetUploadAccepted(token=token, task_id=async_result.id)
+
+
+@discovery_router.get(
+    "/assets/{token}/status/", response=AssetStatusResponse,
+)
+def asset_status(request, token: str):
+    """Return the current state of the asset projection.
+
+    ``state`` is one of ``PENDING``, ``RUNNING``, ``SUCCESS``, ``FAILED``,
+    ``UNKNOWN`` (when the token has expired or never existed).
+    """
+    from discovery.services.asset_upload import cache as asset_cache
+
+    payload = asset_cache.read_status(token)
+    if payload is None:
+        return AssetStatusResponse(state="UNKNOWN")
+    return AssetStatusResponse(**payload)
+
+
+@discovery_router.delete("/assets/{token}/", response={204: None})
+def asset_evict(request, token: str):
+    """Drop every Redis key tied to this asset token (user X-click on chip)."""
+    from discovery.services.asset_upload import cache as asset_cache
+
+    asset_cache.evict_asset(token)
+    return 204, None

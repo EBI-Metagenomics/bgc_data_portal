@@ -1,9 +1,10 @@
 """2D layout for the BGC graph (replacement for the old UMAP-2d step).
 
-Prefers UMAP with ``metric="precomputed_knn"`` fed by the same KNN graph
-used for community detection — keeps the visualization coherent with the
-clustering. Falls back to igraph DRL/Fruchterman–Reingold for small graphs
-or when umap-learn is unavailable.
+Prefers UMAP fed via its ``precomputed_knn`` constructor parameter with a
+top-k KNN derived from the same composite-Dice similarity matrix used for
+community detection — keeps the visualization coherent with the clustering.
+Falls back to igraph DRL/Fruchterman–Reingold for small graphs or when
+umap-learn is unavailable.
 
 Coordinates are normalized to ``[-10, 10]`` on both axes so the dashboard
 scatter plot scales stay stable across re-runs.
@@ -73,48 +74,55 @@ def _umap_layout(
     if n == 0:
         return np.zeros((0, 2), dtype=np.float64)
 
-    # Convert sparse similarity to per-row top-k indices/distances for UMAP.
-    # umap-learn's "precomputed_knn" wants knn_indices (n, k) and
-    # knn_dists (n, k); we synthesize them from the sparse rows.
+    # Synthesize per-row top-k KNN from the sparse similarity matrix and
+    # hand it to UMAP via the `precomputed_knn` constructor parameter.
+    # Convention (pynndescent format): column 0 is the point itself at
+    # distance 0; remaining columns are the nearest neighbours ordered by
+    # increasing distance. Rows with fewer than k true neighbours are padded
+    # with self-reference / distance 0.
     sim_csr = sim.tocsr(copy=False)
-    k_default = max(5, min(15, n - 1))
-    k = n_neighbors or k_default
+    k_default = max(5, min(15, max(n - 1, 1)))
+    k = max(2, min(n, n_neighbors or k_default))
 
-    knn_idx = np.full((n, k), -1, dtype=np.int64)
-    knn_dist = np.full((n, k), 1.0, dtype=np.float32)
+    knn_idx = np.zeros((n, k), dtype=np.int32)
+    knn_dist = np.zeros((n, k), dtype=np.float32)
     for row in range(n):
         start = sim_csr.indptr[row]
         end = sim_csr.indptr[row + 1]
         cols = sim_csr.indices[start:end]
         vals = sim_csr.data[start:end]
-        order = np.argsort(-vals)[:k]
-        cols = cols[order]
-        vals = vals[order]
-        # Drop self-loops if present.
+        # Drop self-loops; column 0 is reserved for self below.
         keep = cols != row
         cols = cols[keep]
         vals = vals[keep]
-        knn_idx[row, : cols.size] = cols
-        knn_dist[row, : cols.size] = (1.0 - vals).astype(np.float32)
-        # Pad the rest with self-distance 0 — UMAP expects at least one
-        # neighbour per row; this is harmless when sim row is degenerate.
-        if cols.size == 0:
-            knn_idx[row, 0] = row
-            knn_dist[row, 0] = 0.0
+        order = np.argsort(-vals)[: k - 1]
+        cols = cols[order]
+        dists = np.clip(1.0 - vals[order].astype(np.float32), 0.0, 1.0)
+
+        knn_idx[row, 0] = row
+        knn_dist[row, 0] = 0.0
+        m = cols.size
+        if m:
+            knn_idx[row, 1 : 1 + m] = cols
+            knn_dist[row, 1 : 1 + m] = dists
+        if 1 + m < k:
+            # Pad remaining slots with self/zero (harmless duplicates).
+            knn_idx[row, 1 + m :] = row
+            knn_dist[row, 1 + m :] = 0.0
 
     try:
         reducer = umap_lib.UMAP(
             n_components=2,
-            metric="precomputed",
             random_state=seed,
             n_neighbors=k,
+            precomputed_knn=(knn_idx, knn_dist, None),
         )
-        # When the user-supplied indices/dists are passed via precomputed_knn
-        # parameter, umap-learn uses them directly.
+        # X is unused for KNN when `precomputed_knn` is supplied, but UMAP
+        # still expects an array with n rows for shape bookkeeping.
         coords = reducer.fit_transform(
             np.zeros((n, 1), dtype=np.float32),
             ensure_all_finite=False,
-        )  # placeholder X; UMAP uses `precomputed_knn`
+        )
     except Exception:  # pragma: no cover - upstream API drift
         log.exception("UMAP layout failed; falling back to igraph layout")
         return None

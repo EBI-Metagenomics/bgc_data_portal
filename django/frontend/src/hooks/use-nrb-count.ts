@@ -20,11 +20,20 @@ import {
 export function useNrbCount() {
   const applied = useDiscoveryStore((s) => s.appliedFilters);
   const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
 
+  // A loaded asset is itself an "active scope" — it forces the roster /
+  // maps to render so the user can see their submitted NRBs.
   const hasActiveScope =
-    !isAppliedFiltersEmpty(applied) || resultNrbIds !== null;
+    !isAppliedFiltersEmpty(applied) ||
+    resultNrbIds !== null ||
+    assetToken !== null;
 
-  const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
+  const filterParams = appliedFiltersToApiParams(
+    applied,
+    resultNrbIds,
+    assetToken,
+  );
 
   const query = useQuery({
     queryKey: ["nrb-count", filterParams],

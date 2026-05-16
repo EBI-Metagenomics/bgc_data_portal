@@ -470,3 +470,66 @@ def update_discovery_stats_task(self) -> bool:
         ds = DiscoveryStats.objects.create(stats=stats)
     log.info("DiscoveryStats id=%s created: %s", ds.pk, stats)
     return True
+
+
+# ── Ephemeral asset upload ──────────────────────────────────────────────────
+
+
+@shared_task(name="discovery.tasks.process_asset_upload", bind=True, acks_late=True)
+def process_asset_upload_task(self, token: str, tmp_path: str) -> dict:
+    """Validate, parse, build virtual NRBs and project an uploaded asset.
+
+    ``tmp_path`` points at the tar.gz the upload endpoint wrote to a
+    short-lived MEDIA_ROOT scratch location. The file is removed in
+    ``finally`` so the storage stays clean even on failure.
+    """
+    import os
+
+    from discovery.services.asset_upload import cache as asset_cache
+    from discovery.services.asset_upload.parse import parse_asset_tar
+    from discovery.services.asset_upload.project import project_asset
+    from discovery.services.asset_upload.validate import (
+        AssetValidationError,
+        inspect_tarball,
+    )
+
+    task_id = self.request.id
+    asset_cache.mark_running(token, task_id=task_id, progress={"step": "validate"})
+
+    try:
+        try:
+            with open(tmp_path, "rb") as f:
+                raw = f.read()
+        except OSError as exc:
+            asset_cache.mark_failed(
+                token, task_id=task_id, error=f"Could not read upload: {exc}"
+            )
+            return {"token": token, "state": "FAILED", "error": str(exc)}
+
+        try:
+            validated = inspect_tarball(raw)
+            asset_cache.mark_running(token, task_id=task_id, progress={"step": "parse"})
+            data = parse_asset_tar(validated)
+        except AssetValidationError as exc:
+            asset_cache.mark_failed(token, task_id=task_id, error=str(exc))
+            return {"token": token, "state": "FAILED", "error": str(exc)}
+
+        asset_cache.mark_running(token, task_id=task_id, progress={"step": "project"})
+        try:
+            summary = project_asset(token, data, task_id=task_id)
+        except Exception as exc:  # noqa: BLE001 — surface to caller via cache
+            log.exception("process_asset_upload: projection failed")
+            asset_cache.mark_failed(token, task_id=task_id, error=str(exc))
+            return {"token": token, "state": "FAILED", "error": str(exc)}
+
+        return {"token": token, "state": "SUCCESS", "summary": summary}
+    finally:
+        try:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
+                # Also remove the parent token dir if empty.
+                parent = os.path.dirname(tmp_path)
+                if parent and os.path.isdir(parent) and not os.listdir(parent):
+                    os.rmdir(parent)
+        except OSError:
+            log.warning("process_asset_upload: could not clean up %s", tmp_path)

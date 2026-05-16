@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { AssetSummary } from "@/api/assets";
 import type { NrbScatterAxis, RegionCds } from "@/api/types";
 
 /**
@@ -78,6 +79,13 @@ interface DiscoveryState {
   appliedFilters: AppliedNrbFilters;
   setAppliedFilters: (filters: AppliedNrbFilters) => void;
 
+  // Ephemeral asset (uploaded TGZ). Single-slot — a new upload replaces
+  // the previous token on the server too via DELETE. Survives Run Query
+  // resets so the asset NRBs stay pinned to the dashboard.
+  assetToken: string | null;
+  assetSummary: AssetSummary | null;
+  setAsset: (token: string | null, summary?: AssetSummary | null) => void;
+
   // Convenience: clear all selections (e.g., on a fresh Run Query).
   clearSelections: () => void;
 }
@@ -143,6 +151,7 @@ export function isAppliedFiltersEmpty(applied: AppliedNrbFilters): boolean {
 export function appliedFiltersToApiParams(
   applied: AppliedNrbFilters,
   resultNrbIds: number[] | null = null,
+  assetToken: string | null = null,
 ): Record<string, string> {
   const params: Record<string, string> = {};
   if (applied.sourceNames.length > 0) {
@@ -167,6 +176,9 @@ export function appliedFiltersToApiParams(
   if (applied.organism) params.organism = applied.organism;
   if (resultNrbIds && resultNrbIds.length > 0) {
     params.nrb_ids = resultNrbIds.join(",");
+  }
+  if (assetToken) {
+    params.asset_token = assetToken;
   }
   return params;
 }
@@ -217,6 +229,11 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   appliedFilters: EMPTY_APPLIED_FILTERS,
   setAppliedFilters: (filters) => set({ appliedFilters: filters }),
 
+  assetToken: null,
+  assetSummary: null,
+  setAsset: (token, summary = null) =>
+    set({ assetToken: token, assetSummary: summary }),
+
   clearSelections: () =>
     set({
       referenceNrbId: null,
@@ -229,5 +246,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       resultQcoverageById: null,
       searchSource: null,
       appliedFilters: EMPTY_APPLIED_FILTERS,
+      // Note: ``assetToken`` is intentionally preserved across Run Query
+      // resets — the asset chip stays pinned until the user evicts it.
     }),
 }));

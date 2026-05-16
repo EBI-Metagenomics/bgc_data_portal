@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client";
+import { apiGet, apiGetWithHeaders, apiPost } from "./client";
 import type {
   NrbCountResponse,
   NrbDetail,
@@ -117,7 +117,15 @@ export function fetchNrbSequenceQueryStatus(
   );
 }
 
-export function fetchNrbDetail(nrbId: number) {
+export function fetchNrbDetail(nrbId: number, assetToken?: string | null) {
+  // Negative ids belong to ephemeral asset uploads — the backend resolves
+  // them through the ``X-Asset-Token`` header so the URL path stays clean.
+  if (nrbId < 0 && assetToken) {
+    return apiGetWithHeaders<NrbDetail>(
+      `/nrbs/${nrbId}/`,
+      { "X-Asset-Token": assetToken },
+    );
+  }
   return apiGet<NrbDetail>(`/nrbs/${nrbId}/`);
 }
 
@@ -176,7 +184,16 @@ export interface NrbArchitectureResponse {
 }
 
 /** Pooled positional domain accessions for clipboard / copy actions. */
-export function fetchNrbArchitecture(nrbId: number) {
+export function fetchNrbArchitecture(
+  nrbId: number,
+  assetToken?: string | null,
+) {
+  if (nrbId < 0 && assetToken) {
+    return apiGetWithHeaders<NrbArchitectureResponse>(
+      `/nrbs/${nrbId}/architecture/`,
+      { "X-Asset-Token": assetToken },
+    );
+  }
   return apiGet<NrbArchitectureResponse>(`/nrbs/${nrbId}/architecture/`);
 }
 
