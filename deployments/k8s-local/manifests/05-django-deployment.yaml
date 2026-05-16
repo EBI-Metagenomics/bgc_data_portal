@@ -61,8 +61,15 @@ spec:
           volumeMounts:
             - name: packages
               mountPath: /data/packages
+            - name: clustering-artifacts
+              mountPath: /app/data/clustering_artifacts
       volumes:
         # emptyDir avoids PVC multi-writer complexity for local dev.
         # Data does not survive pod restarts — acceptable in local dev.
         - name: packages
           emptyDir: {}
+        # Shared with the celery worker so the worker-written scoring cache
+        # is visible to the Django pod (single-node Kind, RWO is enough).
+        - name: clustering-artifacts
+          persistentVolumeClaim:
+            claimName: clustering-artifacts

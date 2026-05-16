@@ -1,4 +1,7 @@
-import { useDiscoveryStore } from "@/stores/discovery-store";
+import {
+  isAppliedFiltersEmpty,
+  useDiscoveryStore,
+} from "@/stores/discovery-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { toast } from "sonner";
 import { Pin, Search, Plus, RefreshCw, Clipboard } from "lucide-react";
@@ -81,10 +84,19 @@ export function useNrbActions(
         }
       }
       setQueryResult(ids, similarity, "similar_nrb", null, null, null);
-      toast.success(
-        `Found ${ids.length} similar NRB(s)`,
-        { id: toastId },
+      // Detect filter chips still active in the Top Filters strip — the
+      // roster intersects ``nrb_ids`` with those chips, which can silently
+      // drop the visible row count below ``ids.length``. Surface that in
+      // the toast description so the user knows where the rows went.
+      const chipsActive = !isAppliedFiltersEmpty(
+        useDiscoveryStore.getState().appliedFilters,
       );
+      toast.success(`Found ${ids.length} similar NRB(s)`, {
+        id: toastId,
+        description: chipsActive
+          ? "Top Filters chips still applied — clear them to see the full neighbourhood."
+          : undefined,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(`Find similar failed: ${msg}`, { id: toastId });

@@ -127,7 +127,31 @@ def _umap_layout(
         log.exception("UMAP layout failed; falling back to igraph layout")
         return None
 
-    return np.asarray(coords, dtype=np.float64)
+    coords = np.asarray(coords, dtype=np.float64)
+
+    # UMAP can emit NaN/Inf for numerically degenerate rows (e.g. nodes
+    # whose only KNN edges are self-padded). Those values are invalid JSON
+    # and will break every downstream consumer (`json.dumps` emits literal
+    # `NaN`, which Safari/WebKit's `JSON.parse` rejects). Substitute the
+    # mean of the finite rows so the bad nodes land near the layout centre;
+    # if too few rows are finite, defer to the igraph fallback.
+    finite_mask = np.isfinite(coords).all(axis=1)
+    n_bad = int((~finite_mask).sum())
+    if n_bad:
+        if finite_mask.sum() < max(2, n // 2):
+            log.warning(
+                "UMAP produced %d/%d non-finite rows; falling back to igraph",
+                n_bad, n,
+            )
+            return None
+        log.warning(
+            "UMAP produced %d/%d non-finite rows; replacing with layout centre",
+            n_bad, n,
+        )
+        centre = coords[finite_mask].mean(axis=0)
+        coords[~finite_mask] = centre
+
+    return coords
 
 
 def _igraph_layout(graph: "ig.Graph", *, seed: int) -> "np.ndarray":

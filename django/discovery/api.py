@@ -1530,23 +1530,45 @@ def nrb_roster(
         taxonomy_path=taxonomy_path,
     )
 
-    sort_map = {
-        "novelty_score": "novelty_score",
-        "domain_novelty": "domain_novelty",
-        "classification_path": "gene_cluster_family",
-        "id": "id",
-    }
-    if sort_by == "size_kb":
-        qs = qs.annotate(_size=F("end_position") - F("start_position"))
-        order_field = "_size"
+    # Special-case: ``sort_by=similarity`` honours the caller-supplied order
+    # of ``nrb_ids`` (the dashboard passes them in similarity-descending order
+    # after Find Similar NRBs). Postgres ``array_position`` returns the 1-based
+    # index of each row's id in the input array, so ORDER BY that index gives
+    # us the exact rank we want. ``order=asc`` reverses the list to flip the
+    # sense. Falls back to novelty_score when nrb_ids is missing.
+    if sort_by == "similarity" and parsed_ids:
+        from django.db.models import IntegerField
+        from django.db.models.expressions import RawSQL
+        ordered_ids = list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
+        # The roster queryset may join discovery_bgc / discovery_assembly when
+        # a chip filter is active, so qualify the id column to avoid an
+        # ``ambiguous column "id"`` error from Postgres.
+        nrb_id_col = f"{NonRedundantBGC._meta.db_table}.id"
+        qs = qs.annotate(
+            _sim_pos=RawSQL(
+                f"array_position(%s::int[], {nrb_id_col})",
+                [ordered_ids],
+                output_field=IntegerField(),
+            )
+        ).order_by("_sim_pos")
     else:
-        order_field = sort_map.get(sort_by, "novelty_score")
-    descending = order == "desc"
-    # NULLS LAST keeps unscored partials out of the head of the page.
-    qs = qs.order_by(
-        F(order_field).desc(nulls_last=True) if descending
-        else F(order_field).asc(nulls_last=True)
-    )
+        sort_map = {
+            "novelty_score": "novelty_score",
+            "domain_novelty": "domain_novelty",
+            "classification_path": "gene_cluster_family",
+            "id": "id",
+        }
+        if sort_by == "size_kb":
+            qs = qs.annotate(_size=F("end_position") - F("start_position"))
+            order_field = "_size"
+        else:
+            order_field = sort_map.get(sort_by, "novelty_score")
+        descending = order == "desc"
+        # NULLS LAST keeps unscored partials out of the head of the page.
+        qs = qs.order_by(
+            F(order_field).desc(nulls_last=True) if descending
+            else F(order_field).asc(nulls_last=True)
+        )
 
     asset_rows = _get_asset_roster_rows(asset_token)
     asset_items = [_asset_row_to_roster_item(r) for r in asset_rows]

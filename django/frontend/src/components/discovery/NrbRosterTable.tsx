@@ -22,7 +22,12 @@ import {
 import { NrbContextMenu } from "./NrbContextMenu";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
-type SortKey = "novelty_score" | "domain_novelty" | "size_kb" | "id";
+type SortKey =
+  | "novelty_score"
+  | "domain_novelty"
+  | "size_kb"
+  | "id"
+  | "similarity";
 
 type ColumnKey =
   | SortKey
@@ -73,6 +78,18 @@ export function NrbRosterTable() {
   const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
   const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
   const searchSource = useDiscoveryStore((s) => s.searchSource);
+
+  // When a Find-Similar-NRBs query lands the result allow-list is in
+  // similarity-descending order; default the roster sort to "similarity" so
+  // the table mirrors that rank. The user can still click any other column
+  // header to override. We trigger off ``searchSource`` so the same logic
+  // covers any future similarity-emitting source.
+  useEffect(() => {
+    if (searchSource === "similar_nrb") {
+      setSortBy("similarity");
+      setOrder("desc");
+    }
+  }, [searchSource]);
   const resultSimilarityById = useDiscoveryStore(
     (s) => s.resultSimilarityById,
   );
@@ -150,7 +167,12 @@ export function NrbRosterTable() {
             <TableRow>
               {COLUMNS.map((col) => {
                 const sortable = (
-                  ["size_kb", "novelty_score", "domain_novelty"] as const
+                  [
+                    "size_kb",
+                    "novelty_score",
+                    "domain_novelty",
+                    "similarity",
+                  ] as const
                 ).includes(col.key as SortKey);
                 return (
                   <TableHead

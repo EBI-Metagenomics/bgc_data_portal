@@ -82,16 +82,6 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
     );
   }
 
-  if (isLoading || !nrb) {
-    return (
-      <Card
-        className={cn("flex h-full items-center justify-center", accent)}
-      >
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </Card>
-    );
-  }
-
   if (isError) {
     return (
       <Card
@@ -101,6 +91,16 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
         )}
       >
         Failed to load NRB detail
+      </Card>
+    );
+  }
+
+  if (isLoading || !nrb) {
+    return (
+      <Card
+        className={cn("flex h-full items-center justify-center", accent)}
+      >
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </Card>
     );
   }

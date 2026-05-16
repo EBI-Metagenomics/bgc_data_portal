@@ -45,6 +45,8 @@ spec:
               mountPath: /data/packages
             - name: protein-search-index
               mountPath: /data/protein_search
+            - name: clustering-artifacts
+              mountPath: /app/data/clustering_artifacts
       volumes:
         - name: packages
           emptyDir: {}
@@ -52,3 +54,8 @@ spec:
         # Rebuild via `make build-protein-index` after a fresh deploy.
         - name: protein-search-index
           emptyDir: {}
+        # Shared with the Django pod so the scoring cache the pipeline writes
+        # here is visible to the API handlers in the web pod.
+        - name: clustering-artifacts
+          persistentVolumeClaim:
+            claimName: clustering-artifacts

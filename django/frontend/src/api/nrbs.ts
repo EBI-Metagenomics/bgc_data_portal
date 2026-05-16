@@ -39,7 +39,8 @@ export interface NrbRosterParams extends NrbFilterParams {
     | "domain_novelty"
     | "size_kb"
     | "classification_path"
-    | "id";
+    | "id"
+    | "similarity";
   order?: "asc" | "desc";
   page?: number;
   page_size?: number;
