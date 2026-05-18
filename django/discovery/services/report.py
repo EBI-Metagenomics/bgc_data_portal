@@ -64,25 +64,33 @@ def build_report_payload(
     nrb_ids: list[int],
     *,
     extra_nrb_rows: Optional[list[dict]] = None,
+    extra_domain_rows: Optional[list[dict]] = None,
 ) -> dict:
     """Assemble the complete report payload for a shortlist of NRB ids.
 
     ``extra_nrb_rows`` are already-shaped asset roster rows (from
-    ``asset:{token}:nrb:*`` in Redis); they are prepended to ``nrb_rows``
-    and contribute to the simple per-row aggregates (score distributions,
-    completeness pie, length histogram, BGC-class pie, predictor pie).
-    Aggregates requiring DB joins (domain composition, GCF distribution,
-    taxonomy sunburst, assembly stats) ignore them by design — they
-    represent ephemeral data that doesn't fit those persistent rollups.
+    ``asset:{token}:nrbs`` in Redis); ``extra_domain_rows`` is the asset's
+    flat per-NRB-deduped domain-hit list (from
+    ``asset:{token}:domain_hits``). Together they feed every panel that
+    derives from per-NRB or per-domain rows: score distributions,
+    completeness pie, length histogram, BGC-class pie, predictor pie,
+    domain composition (and the GO slim matrix), GCF distribution, and
+    the source distribution (asset NRBs all collapse into a single
+    'Assets' bucket).
+
+    Taxonomy sunburst + assembly stats stay persistent-only — assets have
+    no ``DashboardAssembly`` row to join against.
 
     Returns a JSON-serialisable dict matching the ``ReportPayload`` schema
     (minus ``token`` which the endpoint sets).
     """
-    # Drop negative ids before the ORM filter — they belong to assets.
-    nrb_ids = sorted({nid for nid in nrb_ids if nid >= 0})
+    # Negative ids belong to assets; keep them out of ORM filters but let
+    # the asset rows feed every per-NRB/per-domain aggregate below.
+    db_nrb_ids = sorted({nid for nid in nrb_ids if nid >= 0})
     extra_nrb_rows = list(extra_nrb_rows or [])
+    extra_domain_rows = list(extra_domain_rows or [])
     nrbs = list(
-        NonRedundantBGC.objects.select_related("contig").filter(id__in=nrb_ids)
+        NonRedundantBGC.objects.select_related("contig").filter(id__in=db_nrb_ids)
     )
     n_nrbs = len(nrbs) + len(extra_nrb_rows)
     now = timezone.now()
@@ -94,7 +102,7 @@ def build_report_payload(
     # ── Member BGCs grouped by NRB (single sweep) ─────────────────────────
     members = list(
         DashboardBgc.objects
-        .filter(non_redundant_bgc_id__in=nrb_ids)
+        .filter(non_redundant_bgc_id__in=db_nrb_ids)
         .select_related("assembly", "assembly__source", "contig", "detector")
     )
     members_by_nrb: dict[int, list[DashboardBgc]] = defaultdict(list)
@@ -142,7 +150,7 @@ def build_report_payload(
     domain_goslim_lookup: dict[str, str] = {}
     domain_pairs = (
         BgcDomain.objects
-        .filter(bgc__non_redundant_bgc_id__in=nrb_ids)
+        .filter(bgc__non_redundant_bgc_id__in=db_nrb_ids)
         .values_list(
             "bgc__non_redundant_bgc_id",
             "domain_acc",
@@ -159,6 +167,24 @@ def build_report_payload(
             domain_name_lookup[acc] = name
         if desc and acc not in domain_desc_lookup:
             domain_desc_lookup[acc] = desc
+        if slim and acc not in domain_goslim_lookup:
+            domain_goslim_lookup[acc] = slim
+
+    # Fold in asset domain hits (negative NRB ids); the set keyed by acc
+    # treats them identically to persisted NRBs for the tier denominator.
+    for r in extra_domain_rows:
+        acc = r.get("domain_acc")
+        if not acc:
+            continue
+        nid = int(r["nrb_id"])
+        domain_to_nrbs[acc].add(nid)
+        name = r.get("domain_name") or ""
+        if name and acc not in domain_name_lookup:
+            domain_name_lookup[acc] = name
+        desc = r.get("domain_description") or ""
+        if desc and acc not in domain_desc_lookup:
+            domain_desc_lookup[acc] = desc
+        slim = r.get("go_slim") or ""
         if slim and acc not in domain_goslim_lookup:
             domain_goslim_lookup[acc] = slim
 
@@ -251,6 +277,11 @@ def build_report_payload(
     gcf_counts: dict[str, int] = defaultdict(int)
     for nrb in nrbs:
         gcf_counts[nrb.gene_cluster_family or "(unclassified)"] += 1
+    # Asset NRBs were KNN-projected onto the latest ClusteringRun in
+    # services/asset_upload/project.py:_project_against_run — their
+    # classification_path is the inherited leaf GCF.
+    for r in extra_nrb_rows:
+        gcf_counts[r.get("classification_path") or "(unclassified)"] += 1
     gcf_distribution = sorted(
         [
             {
@@ -373,6 +404,9 @@ def build_report_payload(
                 names.add(src.name)
         for name in names:
             source_counts[name] += 1
+    # Asset NRBs have no AssemblySource row; collapse them into one bucket.
+    if extra_nrb_rows:
+        source_counts["Assets"] += len(extra_nrb_rows)
     source_distribution = sorted(
         [{"name": k, "count": v} for k, v in source_counts.items()],
         key=lambda r: (-r["count"], r["name"]),

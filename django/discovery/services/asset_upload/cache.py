@@ -5,6 +5,9 @@ Key layout (TTL = ``ASSET_TTL_SECONDS``):
 * ``asset:{token}:status``        — ``{state, task_id, progress?, error?, summary?}``
 * ``asset:{token}:manifest``      — summary dict (n_nrbs, n_bgcs, assembly, …)
 * ``asset:{token}:nrbs``          — list of NRB roster rows (negative ids)
+* ``asset:{token}:domain_hits``   — flat list of ``{nrb_id, domain_acc, …, go_slim}``
+  rows (per-NRB dedup on ``domain_acc``); mirrors the SQL ``domain_pairs``
+  shape consumed by ``report.build_report_payload``.
 * ``asset:{token}:nrb:{neg_id}``  — full ``NrbDetail`` payload (dict)
 * ``asset:{token}:region:{neg_id}`` — region (CDS + protein) payload (dict)
 * ``asset:{token}:architecture:{neg_id}`` — ordered domain accessions (list[str])
@@ -43,6 +46,10 @@ def _k_manifest(token: str) -> str:
 
 def _k_nrbs(token: str) -> str:
     return f"asset:{token}:nrbs"
+
+
+def _k_domain_hits(token: str) -> str:
+    return f"asset:{token}:domain_hits"
 
 
 def _k_nrb(token: str, neg_id: int) -> str:
@@ -110,6 +117,20 @@ def read_nrb_list(token: str) -> list[dict[str, Any]] | None:
     return cache.get(_k_nrbs(token))
 
 
+def write_domain_hits(token: str, rows: list[dict[str, Any]]) -> None:
+    """Persist the flat per-NRB-deduped domain-hit list for the asset.
+
+    Each row matches the shape report.build_report_payload expects in
+    ``extra_domain_rows``: ``{nrb_id, domain_acc, domain_name,
+    domain_description, go_slim}``.
+    """
+    cache.set(_k_domain_hits(token), rows, ASSET_TTL_SECONDS)
+
+
+def read_domain_hits(token: str) -> list[dict[str, Any]] | None:
+    return cache.get(_k_domain_hits(token))
+
+
 def write_nrb_detail(token: str, neg_id: int, payload: dict[str, Any]) -> None:
     cache.set(_k_nrb(token, neg_id), payload, ASSET_TTL_SECONDS)
 
@@ -163,6 +184,7 @@ def evict_asset(token: str) -> None:
             cache.delete(_k_region(token, neg_id))
             cache.delete(_k_architecture(token, neg_id))
     cache.delete(_k_nrbs(token))
+    cache.delete(_k_domain_hits(token))
     cache.delete(_k_manifest(token))
     cache.delete(_k_status(token))
     cache.delete(_k_upload(token))

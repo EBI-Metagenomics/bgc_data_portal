@@ -43,6 +43,8 @@ from typing import Any
 
 from django.conf import settings
 
+from discovery.services.go_slim import go_slim_for
+
 from . import cache as asset_cache
 from .matrices import (
     DEFAULT_DOMAIN_SOURCES,
@@ -407,6 +409,7 @@ def _ordered_architecture(vnrb: VirtualNrb, sources: tuple[str, ...]) -> list[di
                     "start": 0,
                     "end": 0,
                     "score": None,
+                    "go_slim": go_slim_for(d.domain_acc),
                 },
             )
         )
@@ -523,6 +526,7 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
     region_length = vnrb.end_position - vnrb.start_position
 
     cds_list = []
+    domain_list: list[dict[str, Any]] = []
     domains_by_cds_pid: dict[tuple[tuple[str, int, int, str], str], list[AssetDomain]] = defaultdict(list)
     for d in vnrb.domains:
         domains_by_cds_pid[(d.bgc_key, d.cds_protein_id)].append(d)
@@ -541,15 +545,39 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
 
         pfam = []
         for d in domains_by_cds_pid.get((cds.bgc_key, cds.protein_id_str), []):
+            slim = go_slim_for(d.domain_acc)
             pfam.append(
                 {
                     "accession": d.domain_acc,
                     "description": d.domain_description or d.domain_name,
-                    "go_slim": "",
+                    "go_slim": slim,
                     "envelope_start": d.start_position,
                     "envelope_end": d.end_position,
                     "e_value": str(d.score) if d.score is not None else None,
                     "url": d.url,
+                }
+            )
+            # RegionPlot.tsx builds the per-CDS dominant-slim colouring map
+            # off `domain_list` only — it never reads cds_list[*].pfam. AA→NT
+            # conversion mirrors _build_bgc_region_data so the strand handling
+            # stays consistent with the persistent path.
+            if cds.strand >= 0:
+                dom_nt_start = cds.start_position + d.start_position * 3
+                dom_nt_end = cds.start_position + d.end_position * 3
+            else:
+                dom_nt_start = cds.end_position - d.end_position * 3
+                dom_nt_end = cds.end_position - d.start_position * 3
+            domain_list.append(
+                {
+                    "accession": d.domain_acc,
+                    "description": d.domain_description or d.domain_name or "",
+                    "start": max(0, dom_nt_start - window_start),
+                    "end": max(0, dom_nt_end - window_start),
+                    "strand": cds.strand,
+                    "score": d.score,
+                    "go_slim": [slim] if slim else [],
+                    "parent_cds_id": cds.protein_id_str,
+                    "url": d.url or "",
                 }
             )
 
@@ -588,7 +616,7 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
         "window_start": 0,
         "window_end": region_length,
         "cds_list": cds_list,
-        "domain_list": [],
+        "domain_list": domain_list,
         "cluster_list": cluster_list,
     }
 
@@ -617,6 +645,24 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
 
     roster_rows = [_roster_row(v) for v in virtual_nrbs]
     asset_cache.write_nrb_list(token, roster_rows)
+
+    # Flat per-NRB-deduped domain-hit list for the report builder. Mirrors
+    # the SQL ``domain_pairs`` set semantics at services/report.py:154.
+    domain_hits: list[dict[str, Any]] = []
+    for vnrb in virtual_nrbs:
+        seen_accs: set[str] = set()
+        for d in vnrb.domains:
+            if not d.domain_acc or d.domain_acc in seen_accs:
+                continue
+            seen_accs.add(d.domain_acc)
+            domain_hits.append({
+                "nrb_id": vnrb.neg_id,
+                "domain_acc": d.domain_acc,
+                "domain_name": d.domain_name,
+                "domain_description": d.domain_description or d.domain_name,
+                "go_slim": go_slim_for(d.domain_acc),
+            })
+    asset_cache.write_domain_hits(token, domain_hits)
 
     for vnrb in virtual_nrbs:
         detail = _nrb_detail(vnrb, sources)

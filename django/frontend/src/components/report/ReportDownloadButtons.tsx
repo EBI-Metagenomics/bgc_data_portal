@@ -25,7 +25,7 @@ export function ReportDownloadButtons({ token }: Props) {
       <Button variant="outline" size="sm" asChild>
         <a href={`${REPORT_API}/${token}/export.json`} download>
           <FileJson className="mr-1 h-4 w-4" />
-          JSON (analyst)
+          JSON
         </a>
       </Button>
       <Button variant="outline" size="sm" asChild>

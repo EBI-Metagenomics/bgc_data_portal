@@ -2190,6 +2190,7 @@ def report_snapshot(request, body: ReportSnapshotRequest):
     # rows from Redis if a token was supplied.
     asset_ids = [i for i in ids if i < 0]
     extra_rows: list[dict] = []
+    extra_domain_rows: list[dict] = []
     if asset_ids:
         if not body.asset_token:
             raise HttpError(
@@ -2210,6 +2211,16 @@ def report_snapshot(request, body: ReportSnapshotRequest):
                 )
             extra_rows.append(row)
 
+        # Domain hits feed the report's domain composition + GO slim matrix
+        # panels for the asset rows. Scope to the shortlisted asset ids so
+        # an upload with many NRBs doesn't drag the rest into the rollup.
+        shortlisted = set(asset_ids)
+        extra_domain_rows = [
+            r
+            for r in (asset_cache.read_domain_hits(body.asset_token) or [])
+            if int(r.get("nrb_id", 0)) in shortlisted
+        ]
+
     # The token covers both ids and asset rows so cached snapshots don't
     # collide across different asset uploads with the same negative ids.
     token_seed = ",".join(str(i) for i in ids)
@@ -2226,7 +2237,11 @@ def report_snapshot(request, body: ReportSnapshotRequest):
             n_nrbs=cached.get("n_nrbs", len(ids)),
         )
 
-    payload = build_report_payload(ids, extra_nrb_rows=extra_rows)
+    payload = build_report_payload(
+        ids,
+        extra_nrb_rows=extra_rows,
+        extra_domain_rows=extra_domain_rows,
+    )
     cache.set(cache_key, payload, REPORT_TTL_SECONDS)
     return ReportSnapshotResponse(
         token=token,

@@ -1,36 +1,17 @@
-import json
-import os
-
 from django.core.management.base import BaseCommand
 
 from discovery.models import BgcDomain
+from discovery.services.go_slim import go_slim_for
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "pfam2goSlim.json")
 BATCH_SIZE = 5000
-
-
-def build_pfam_to_go_slim(pfam2go_dict: dict) -> dict[str, str]:
-    """Return {pfam_acc: first molecular_function GO slim term (capitalized)}."""
-    result = {}
-    for pfam_acc, go_slims in pfam2go_dict.items():
-        mol_func_terms = [
-            desc.capitalize()
-            for desc, go_type in go_slims
-            if go_type == "molecular_function"
-        ]
-        seen = []
-        for t in mol_func_terms:
-            if t not in seen:
-                seen.append(t)
-        if seen:
-            result[pfam_acc] = seen[0]
-    return result
 
 
 class Command(BaseCommand):
     help = (
-        "Populate BgcDomain.go_slim from the bundled pfam2goSlim.json mapping "
-        "(derived from v2 portal; maps Pfam accessions to molecular-function GO slim terms)."
+        "Backfill BgcDomain.go_slim from the bundled pfam2goSlim.json mapping. "
+        "Ingestion and asset projection now populate go_slim inline at write "
+        "time; run this command after a mapping refresh or to repair rows "
+        "ingested before that wiring was in place."
     )
 
     def add_arguments(self, parser):
@@ -50,26 +31,19 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         batch_size = options["batch_size"]
 
-        self.stdout.write(f"Loading pfam2goSlim from {DATA_FILE}")
-        with open(DATA_FILE) as f:
-            pfam2go_dict = json.load(f)
-
-        pfam_to_slim = build_pfam_to_go_slim(pfam2go_dict)
-        self.stdout.write(
-            f"Loaded {len(pfam_to_slim):,} Pfam → GO slim mappings "
-            f"(from {len(pfam2go_dict):,} total entries)"
-        )
-
         total = BgcDomain.objects.count()
         self.stdout.write(f"Total BgcDomain records: {total:,}")
 
         if dry_run:
-            mapped = BgcDomain.objects.filter(
-                domain_acc__in=pfam_to_slim.keys()
-            ).count()
+            mismatched = 0
+            for domain in BgcDomain.objects.only("domain_acc", "go_slim").iterator(
+                chunk_size=batch_size
+            ):
+                if domain.go_slim != go_slim_for(domain.domain_acc):
+                    mismatched += 1
             self.stdout.write(
                 self.style.WARNING(
-                    f"[dry-run] Would update go_slim for {mapped:,} / {total:,} domains"
+                    f"[dry-run] Would update go_slim for {mismatched:,} / {total:,} domains"
                 )
             )
             return
@@ -80,7 +54,7 @@ class Command(BaseCommand):
         for domain in BgcDomain.objects.only("id", "domain_acc", "go_slim").iterator(
             chunk_size=batch_size
         ):
-            slim = pfam_to_slim.get(domain.domain_acc, "")
+            slim = go_slim_for(domain.domain_acc)
             if domain.go_slim != slim:
                 domain.go_slim = slim
                 batch.append(domain)

@@ -50,6 +50,8 @@ from discovery.models import (
     RegionAccessionAlias,
 )
 
+from discovery.services.go_slim import go_slim_for
+
 from .region_assignment import RegionAssigner
 from .tsv_copy import copy_tsv_to_table, truncate_tables
 
@@ -589,11 +591,12 @@ def load_domains(
             protein_id = row.get("protein_id_str", "")
             cds_id = cds_lookup.get((bgc_id, protein_id))
 
+            domain_acc = row["domain_acc"]
             batch.append(
                 BgcDomain(
                     bgc_id=bgc_id,
                     cds_id=cds_id,
-                    domain_acc=row["domain_acc"],
+                    domain_acc=domain_acc,
                     domain_name=row.get("domain_name", ""),
                     domain_description=row.get("domain_description", ""),
                     ref_db=row.get("ref_db", ""),
@@ -601,6 +604,7 @@ def load_domains(
                     end_position=int(row.get("end_position", 0)),
                     score=float(row["score"]) if row.get("score") else None,
                     url=row.get("url", ""),
+                    go_slim=go_slim_for(domain_acc),
                 )
             )
 
@@ -612,7 +616,7 @@ def load_domains(
                     deduped,
                     update_conflicts=True,
                     unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
-                    update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
+                    update_fields=["domain_name", "domain_description", "ref_db", "score", "url", "go_slim"],
                 )
                 total += len(deduped)
                 batch.clear()
@@ -625,7 +629,7 @@ def load_domains(
             deduped,
             update_conflicts=True,
             unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
-            update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
+            update_fields=["domain_name", "domain_description", "ref_db", "score", "url", "go_slim"],
         )
         total += len(deduped)
 
