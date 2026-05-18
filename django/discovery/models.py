@@ -636,6 +636,13 @@ class BgcDomain(models.Model):
     domain_description = models.TextField(blank=True, default="")
     ref_db = models.CharField(max_length=50, blank=True, default="")
     go_slim = models.CharField(max_length=100, blank=True, default="")
+    # InterPro entry the signature maps to (populated when IPS runs with --iprlookup;
+    # blank for signatures that do not map to an InterPro entry).
+    interpro_entry_acc = models.CharField(max_length=20, blank=True, default="")
+    interpro_entry_description = models.CharField(max_length=255, blank=True, default="")
+    # GO term accessions associated with the signature (from IPS --goterms).
+    # Stored as a list of strings, e.g. ["GO:0003824", "GO:0008152"].
+    go_terms = models.JSONField(default=list, blank=True)
     # Positional data on the protein (amino acid coordinates)
     start_position = models.IntegerField(default=0)
     end_position = models.IntegerField(default=0)

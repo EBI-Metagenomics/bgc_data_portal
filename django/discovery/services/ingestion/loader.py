@@ -592,6 +592,10 @@ def load_domains(
             cds_id = cds_lookup.get((bgc_id, protein_id))
 
             domain_acc = row["domain_acc"]
+            # go_terms column from the ETL is pipe-joined (e.g. "GO:0003824|GO:0008152").
+            # The model stores it as a JSON list; split + drop blanks here.
+            go_terms_raw = (row.get("go_terms") or "").strip()
+            go_terms = [t for t in go_terms_raw.split("|") if t] if go_terms_raw else []
             batch.append(
                 BgcDomain(
                     bgc_id=bgc_id,
@@ -605,6 +609,9 @@ def load_domains(
                     score=float(row["score"]) if row.get("score") else None,
                     url=row.get("url", ""),
                     go_slim=go_slim_for(domain_acc),
+                    interpro_entry_acc=row.get("interpro_entry_acc", ""),
+                    interpro_entry_description=row.get("interpro_entry_description", ""),
+                    go_terms=go_terms,
                 )
             )
 
@@ -616,7 +623,10 @@ def load_domains(
                     deduped,
                     update_conflicts=True,
                     unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
-                    update_fields=["domain_name", "domain_description", "ref_db", "score", "url", "go_slim"],
+                    update_fields=[
+                        "domain_name", "domain_description", "ref_db", "score", "url",
+                        "go_slim", "interpro_entry_acc", "interpro_entry_description", "go_terms",
+                    ],
                 )
                 total += len(deduped)
                 batch.clear()
@@ -629,7 +639,10 @@ def load_domains(
             deduped,
             update_conflicts=True,
             unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
-            update_fields=["domain_name", "domain_description", "ref_db", "score", "url", "go_slim"],
+            update_fields=[
+                "domain_name", "domain_description", "ref_db", "score", "url",
+                "go_slim", "interpro_entry_acc", "interpro_entry_description", "go_terms",
+            ],
         )
         total += len(deduped)
 
