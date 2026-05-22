@@ -28,7 +28,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from psycopg2.extras import NumericRange
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 from discovery.models import (
     AccessionAlias,

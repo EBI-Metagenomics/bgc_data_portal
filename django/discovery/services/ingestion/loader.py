@@ -43,7 +43,7 @@ from pathlib import Path
 
 from django.db.models import Avg, Count, Max
 from django.db.models.expressions import RawSQL
-from psycopg2.extras import NumericRange
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 from discovery.models import (
     AssemblySource,

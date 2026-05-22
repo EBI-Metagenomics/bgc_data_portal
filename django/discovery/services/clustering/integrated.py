@@ -38,7 +38,7 @@ from collections import defaultdict
 from typing import Any, Callable, Iterable
 
 from django.db import transaction
-from psycopg2.extras import NumericRange
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 from discovery.models import (
     AccessionEntityType,

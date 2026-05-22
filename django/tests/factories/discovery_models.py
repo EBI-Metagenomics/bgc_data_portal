@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import factory
 from factory.django import DjangoModelFactory
-from psycopg2.extras import NumericRange
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 from discovery.models import (
     AssemblySource,

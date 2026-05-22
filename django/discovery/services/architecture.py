@@ -27,7 +27,7 @@ from typing import Any, Callable, Iterable, Sequence
 
 from django.db.models import F
 from django.db.models.functions import Upper
-from psycopg2.extras import NumericRange
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 from discovery.models import ContigDomain, IntegratedBgc, SourceBgcPrediction
 from discovery.services.clustering.membership import (
