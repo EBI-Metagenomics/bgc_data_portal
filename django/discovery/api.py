@@ -43,7 +43,7 @@ from discovery.models import (
     ContigDomain,
     ClusteringRun,
     SourceBgcPrediction,
-    SourceBgcPredictionClass,
+    DashboardBgcClass,
     ContigCds,
     CdsChemOnt,
     DashboardDetector,
@@ -3383,7 +3383,7 @@ def taxonomy_tree(request):
 def bgc_classes(request):
     return [
         BgcClassOption(name=row.name, count=row.bgc_count)
-        for row in SourceBgcPredictionClass.objects.filter(bgc_count__gt=0).order_by("-bgc_count")
+        for row in DashboardBgcClass.objects.filter(bgc_count__gt=0).order_by("-bgc_count")
     ]
 
 
