@@ -114,6 +114,51 @@ kubectl exec -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
 > **Note:** Integration tests write to the dev database. Run them only on the dev
 > namespace — never against prod.
 
+## Protein Search Index (phmmer)
+
+The Discovery Dashboard "Protein Sequence" search runs `phmmer` against an
+on-disk reference DB at `/data/protein_search` (mounted from the
+`bgc-hf-cache-claim` PVC; that PVC used to hold the HuggingFace/ESM model
+cache and was repurposed once embedding-based search moved to phmmer).
+
+**You only need to build the index once per environment**, after rolling out
+an image that includes the phmmer-based search. The PVC survives Skaffold
+re-deploys; subsequent rollouts reuse the populated FASTA.
+
+### One-time bootstrap
+
+Run on the **celery pod** (that's where the volume is mounted):
+
+```bash
+kubectl exec -n bgc-data-portal-hl-exp deploy/bgc-data-portal-celery \
+  --context <your-ebi-kube-context> -- \
+  python manage.py build_protein_search_index --rebuild
+```
+
+At 10M proteins this takes ~5–10 minutes; tail `kubectl logs` on the celery
+deployment to watch progress. The command is idempotent — re-running with
+`--rebuild` truncates the FASTA and re-emits every protein.
+
+> If the PVC carries leftover `huggingface/` data from before the repurpose,
+> wipe it once: `kubectl exec ... deploy/bgc-data-portal-celery -- rm -rf /data/protein_search/huggingface`.
+
+### Steady state
+
+`load_discovery_data` auto-enqueues an index update at the end of every
+ingest — `--truncate` triggers a rebuild, otherwise the new proteins are
+appended. Celery workers detect the new `VERSION` stamp and reload their
+in-memory block on the next query. **Nothing to wire per-deploy.**
+
+Pass `--skip-protein-index` to defer the update when loading multi-archive
+batches; then run `python manage.py build_protein_search_index --append`
+once at the end.
+
+### Resourcing
+
+Celery workers run `--concurrency=1` so a single phmmer DB is resident per
+pod; scale horizontally via replicas. At the 10M-protein scale, each worker
+pod needs roughly 5 GB requested / 8 GB limit.
+
 ## Post-Deploy Verification
 
 ```bash

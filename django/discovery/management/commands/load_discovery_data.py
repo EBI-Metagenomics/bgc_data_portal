@@ -38,11 +38,18 @@ class Command(BaseCommand):
             default=False,
             help="Skip post-load assembly score and catalog count computation.",
         )
+        parser.add_argument(
+            "--skip-protein-index",
+            action="store_true",
+            default=False,
+            help="Skip enqueueing the protein search index update at the end.",
+        )
 
     def handle(self, *args, **options):
         data_dir = options["data_dir"]
         truncate = options["truncate"]
         skip_stats = options["skip_stats"]
+        skip_protein_index = options["skip_protein_index"]
 
         self.stdout.write(f"Loading discovery data from: {data_dir}")
         if truncate:
@@ -53,3 +60,19 @@ class Command(BaseCommand):
         elapsed = time.perf_counter() - t0
 
         self.stdout.write(self.style.SUCCESS(f"Done in {elapsed:.1f}s"))
+
+        if not skip_protein_index:
+            try:
+                from discovery.tasks import update_protein_search_index_task
+
+                # ``truncate`` means the discovery tables were wiped, so the
+                # protein index must be rebuilt from scratch rather than appended.
+                async_result = update_protein_search_index_task.delay(rebuild=truncate)
+                self.stdout.write(
+                    f"Enqueued protein search index update "
+                    f"(task_id={async_result.id}, rebuild={truncate})"
+                )
+            except Exception as exc:
+                self.stdout.write(self.style.WARNING(
+                    f"Could not enqueue protein search index update: {exc}"
+                ))

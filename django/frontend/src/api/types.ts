@@ -67,8 +67,6 @@ export interface BgcRosterItem {
   novelty_score: number;
   domain_novelty: number;
   is_partial: boolean;
-  nearest_validated_accession: string | null;
-  nearest_validated_distance: number | null;
   assembly_accession: string | null;
 }
 
@@ -87,7 +85,8 @@ export interface DomainArchitectureItem {
 }
 
 export interface ParentAssemblySummary {
-  assembly_id: number;
+  // null for asset-upload virtual assemblies that have no DB row.
+  assembly_id: number | null;
   accession: string;
   organism_name: string | null;
   source_name: string | null;
@@ -100,9 +99,12 @@ export interface ChemOntAnnotationNode {
   name: string;
   depth: number;
   probability: number | null; // null for intermediate (unannotated) ancestors
+  n_cds: number;              // CDSs contributing — propagated up from descendants
   children: ChemOntAnnotationNode[];
 }
 
+// Curated per-BGC compound (SMILES, structure). No longer carries CHAMOIS-derived
+// ChemOnt classes — those are aggregated at BGC / iBGC level in `chemont_tree`.
 export interface NaturalProductSummary {
   id: number;
   name: string;
@@ -110,7 +112,6 @@ export interface NaturalProductSummary {
   smiles_svg: string;
   structure_thumbnail: string;
   np_class_path: string;
-  chemont_classes: ChemOntAnnotationNode[];
 }
 
 export interface BgcDetail {
@@ -121,12 +122,11 @@ export interface BgcDetail {
   novelty_score: number;
   domain_novelty: number;
   is_partial: boolean;
-  nearest_validated_accession: string | null;
-  nearest_validated_distance: number | null;
   is_validated: boolean;
   domain_architecture: DomainArchitectureItem[];
   parent_assembly: ParentAssemblySummary | null;
   natural_products: NaturalProductSummary[];
+  chemont_tree: ChemOntAnnotationNode[];
 }
 
 export interface BgcScatterPoint {
@@ -188,6 +188,19 @@ export interface PaginatedDomainResponse {
   pagination: PaginationMeta;
 }
 
+export interface GcfOption {
+  family_path: string;
+  level: number;
+  member_count: number;
+  validated_count: number;
+  mean_novelty: number;
+}
+
+export interface PaginatedGcfResponse {
+  items: GcfOption[];
+  pagination: PaginationMeta;
+}
+
 export interface SourceOption {
   name: string;
   count: number;
@@ -229,6 +242,10 @@ export interface QueryResultBgc {
   domain_novelty: number;
   is_partial: boolean;
   similarity_score: number;
+  // Populated only by the sequence (phmmer) query mode.
+  best_bitscore?: number | null;
+  best_pident?: number | null;
+  best_qcoverage?: number | null;
   assembly_id: number | null;
   assembly_accession: string | null;
   organism_name: string | null;
@@ -261,10 +278,25 @@ export interface PaginatedAssemblyAggregationResponse {
 export interface PfamAnnotation {
   accession: string;
   description: string;
-  go_slim: string;
+  // Deduplicated slim term names derived from the signature's GO terms.
+  // Per-signature view; collapsed to one row per InterPro entry in
+  // `RegionCds.interpro`.
+  go_slim: string[];
   envelope_start: number;
   envelope_end: number;
   e_value: string | null;
+  url: string;
+}
+
+export interface InterproAnnotation {
+  // InterPro entry accession (e.g. IPR000123) when the signature maps to one,
+  // otherwise the signature accession (PFxxxxx, SMxxxxx, …).
+  accession: string;
+  description: string;
+  go_slim: string[];
+  envelope_start: number; // min start across collapsed signatures
+  envelope_end: number; // max end across collapsed signatures
+  e_value: string | null; // best (smallest) e-value across signatures
   url: string;
 }
 
@@ -279,6 +311,16 @@ export interface RegionCds {
   cluster_representative_url: string | null;
   sequence: string;
   pfam: PfamAnnotation[];
+  // Non-redundant InterPro-entry annotations for the Protein Information card.
+  // Same source data as `pfam` but collapsed by InterPro entry (fallback to
+  // signature accession when no entry is mapped).
+  interpro: InterproAnnotation[];
+  // Deepest CHAMOIS ChemOnt class assigned to this CDS (null when below the
+  // probability / weight thresholds).
+  chemont_id: string | null;
+  chemont_name: string | null;
+  chemont_probability: number | null;
+  chemont_weight: number | null;
 }
 
 export interface RegionDomain {
@@ -527,4 +569,237 @@ export interface BgcAssessmentResult {
   submitted_domains: DomainArchitectureItem[];
   nearest_validated_accession: string | null;
   nearest_validated_bgc_id: number | null;
+}
+
+// ── iBGC (Integrated BGC) schemas ──────────────────────────────────────
+
+export interface IbgcRosterItem {
+  id: number;
+  label: string;
+  classification_path: string;
+  size_kb: number;
+  n_source_bgcs: number;
+  source_tools: string[];
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  is_type_strain: boolean;
+  umap_projected: boolean;
+  parent_assembly_id: number | null;
+  parent_assembly_accession: string | null;
+  organism_name: string | null;
+  contig_accession: string | null;
+  similarity_score: number | null;
+  best_hit_protein_id: string | null;
+  best_pident: number | null;
+  best_qcoverage: number | null;
+  /** Asset iBGC sourced from an ephemeral upload (negative id). */
+  is_asset: boolean;
+}
+
+export interface PaginatedIbgcRosterResponse {
+  items: IbgcRosterItem[];
+  pagination: PaginationMeta;
+}
+
+export interface IbgcMemberBgc {
+  id: number;
+  accession: string;
+  detector_name: string | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  size_kb: number;
+}
+
+export interface IbgcDetail {
+  id: number;
+  label: string;
+  classification_path: string;
+  size_kb: number;
+  start_position: number;
+  end_position: number;
+  contig_accession: string | null;
+  source_tools: string[];
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  is_type_strain: boolean;
+  umap_projected: boolean;
+  umap_x: number | null;
+  umap_y: number | null;
+  parent_assembly: ParentAssemblySummary | null;
+  representative_bgc_id: number | null;
+  member_bgcs: IbgcMemberBgc[];
+  domain_architecture: DomainArchitectureItem[];
+  natural_products: NaturalProductSummary[];
+  chemont_tree: ChemOntAnnotationNode[];
+}
+
+export interface IbgcScatterPoint {
+  id: number;
+  x: number;
+  y: number;
+  classification_path: string;
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  is_type_strain: boolean;
+  umap_projected: boolean;
+  similarity_score: number | null;
+  /** Asset iBGC sourced from an ephemeral upload (negative id). */
+  is_asset?: boolean;
+}
+
+export interface IbgcUmapPoint {
+  id: number;
+  label: string;
+  umap_x: number;
+  umap_y: number;
+  classification_path: string;
+  novelty_score: number | null;
+  is_partial: boolean;
+  is_validated: boolean;
+  is_type_strain: boolean;
+  umap_projected: boolean;
+  /** Asset iBGC sourced from an ephemeral upload (negative id). */
+  is_asset?: boolean;
+}
+
+export interface IbgcCountResponse {
+  exact_count: number;
+  cap: number;
+  will_sample: boolean;
+}
+
+export type IbgcScatterAxis =
+  | "size_kb"
+  | "n_cds"
+  | "novelty_score"
+  | "domain_novelty"
+  | "similarity_score"
+  | "best_pident"
+  | "best_qcoverage";
+
+// ── Shortlist Report schemas ─────────────────────────────────────────────
+
+export interface ReportSnapshotResponse {
+  token: string;
+  expires_at: string;
+  n_ibgcs: number;
+}
+
+export interface DomainCompositionEntry {
+  domain_acc: string;
+  domain_name: string;
+  domain_description: string;
+  go_slim: string;
+  ibgc_count: number;
+  fraction: number;
+  tier: "core" | "variable" | "rare";
+}
+
+export interface DomainCompositionSummary {
+  core_count: number;
+  variable_count: number;
+  rare_count: number;
+  total_unique: number;
+  rows: DomainCompositionEntry[];
+}
+
+export interface DomainGoslimDomain {
+  domain_acc: string;
+  domain_name: string;
+  domain_description: string;
+}
+
+export interface DomainGoslimCell {
+  category: string;
+  tier: "core" | "variable" | "rare";
+  count: number;
+  domains: DomainGoslimDomain[];
+}
+
+export interface DomainGoslimMatrix {
+  categories: string[];
+  tiers: ("core" | "variable" | "rare")[];
+  cells: DomainGoslimCell[];
+}
+
+export interface GcfDistributionEntry {
+  classification_path: string;
+  ibgc_count: number;
+  fraction: number;
+}
+
+export interface CategoryCount {
+  name: string;
+  count: number;
+}
+
+export interface LengthBucket {
+  label: string;
+  count: number;
+}
+
+export interface ReportIbgcRow {
+  id: number;
+  label: string;
+  classification_path: string;
+  size_kb: number;
+  novelty_score: number | null;
+  domain_novelty: number | null;
+  n_source_bgcs: number;
+  source_tools: string[];
+  is_partial: boolean;
+  is_validated: boolean;
+  is_type_strain: boolean;
+  parent_assembly_accession: string | null;
+  parent_assembly_id: number | null;
+  organism_name: string | null;
+  biome_path: string;
+  taxonomy_phylum: string | null;
+  contig_accession: string | null;
+}
+
+export interface ReportAssemblyRow {
+  id: number;
+  accession: string;
+  organism_name: string | null;
+  source_name: string | null;
+  biome_path: string;
+  taxonomy_path: string;
+  taxonomy_phylum: string | null;
+  assembly_size_mb: number | null;
+  total_bgcs_in_assembly: number;
+  ibgcs_in_shortlist: number;
+  is_type_strain: boolean;
+}
+
+export interface ReportScoreDistribution {
+  label: string;
+  values: number[];
+}
+
+export interface ReportPayload {
+  token: string;
+  generated_at: string;
+  expires_at: string;
+  n_ibgcs: number;
+  n_assemblies: number;
+  ibgc_rows: ReportIbgcRow[];
+  domain_composition: DomainCompositionSummary;
+  gcf_distribution: GcfDistributionEntry[];
+  score_distributions: ReportScoreDistribution[];
+  completeness_pie: CategoryCount[];
+  bgc_class_pie: CategoryCount[];
+  length_histogram: LengthBucket[];
+  predictor_distribution: CategoryCount[];
+  source_distribution: CategoryCount[];
+  assembly_rows: ReportAssemblyRow[];
+  assembly_stats: Record<string, unknown>;
+  taxonomy_sunburst: SunburstNode[];
+  domain_goslim_matrix: DomainGoslimMatrix;
 }

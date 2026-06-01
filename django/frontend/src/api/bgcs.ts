@@ -1,4 +1,4 @@
-import { apiGet } from "./client";
+import { apiGet, apiGetWithHeaders } from "./client";
 import type {
   BgcDetail,
   BgcRegionData,
@@ -11,7 +11,15 @@ export function fetchBgcDetail(bgcId: number) {
   return apiGet<BgcDetail>(`/bgcs/${bgcId}/`);
 }
 
-export function fetchBgcRegion(bgcId: number) {
+export function fetchBgcRegion(bgcId: number, assetToken?: string | null) {
+  // Negative ids belong to ephemeral asset uploads — pass the token through
+  // ``X-Asset-Token`` so the backend resolves the region payload from Redis.
+  if (bgcId < 0 && assetToken) {
+    return apiGetWithHeaders<BgcRegionData>(
+      `/bgcs/${bgcId}/region/`,
+      { "X-Asset-Token": assetToken },
+    );
+  }
   return apiGet<BgcRegionData>(`/bgcs/${bgcId}/region/`);
 }
 

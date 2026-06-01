@@ -13,12 +13,6 @@ hierarchical queries (``<@``, ``@>``, ``subpath``, ``nlevel``) when cast to ``lt
 import zlib
 
 from django.db import models
-from pgvector.django import HalfVectorField, HnswIndex
-
-
-# Single source of truth for the BGC/protein embedding dimension.
-# Reflects the esmc_300m model (layer 26); must match the halfvec column size.
-EMBEDDING_DIM = 960
 
 
 # ── Assembly source lookup ─────────────────────────────────────────────────────
@@ -289,6 +283,124 @@ class RegionAccessionAlias(models.Model):
         return f"{self.alias_accession} → {self.region.accession}"
 
 
+# ── Integrated BGC ─────────────────────────────────────────────────────────
+
+
+class IntegratedBGC(models.Model):
+    """Consolidated BGC region (iBGC). Complete registry of latest-version
+    BGCs and input table for the clustering pipeline (which filters down to
+    the clusterable subset).
+
+    Built from latest-version ``DashboardBgc`` rows:
+      * Validated BGCs (``is_validated=True``) become standalone iBGCs
+        regardless of tool or ``is_partial`` — ground truth, never merged
+        with predictions, never tagged with overlapping antiSMASH, never
+        absorbed.
+      * Non-validated GECCO and SanntiS predictions on the same contig are
+        merged via transitive interval overlap (any positive intersection
+        joins a component), **regardless of ``is_partial``**. The merged
+        interval spans ``min(starts) → max(ends)``.
+      * For each chain iBGC above, if any non-validated antiSMASH BGC on the
+        same contig overlaps it, ``'antiSMASH'`` is added to that chain's
+        ``source_tools``. AntiSMASH coordinates are never used to widen a
+        chain interval.
+      * Non-validated antiSMASH predictions (regardless of ``is_partial``)
+        are admitted as their own iBGC iff they do not overlap any
+        already-built iBGC on the same contig (validated standalones and
+        chain iBGCs alike). Overlapping antiSMASH calls are absorbed — their
+        source ``DashboardBgc.integrated_bgc`` stays NULL and they are
+        reclassified later via KNN.
+
+    Source ``DashboardBgc`` rows point here via ``DashboardBgc.integrated_bgc``.
+    Clustering writes ``gene_cluster_family`` and ``umap_x``/``umap_y`` here
+    on the clusterable subset (iBGCs with at least one ``is_partial=False``
+    or ``is_validated=True`` source); source BGCs inherit those values via
+    back-propagation. iBGCs composed entirely of partial, non-validated
+    sources are skipped by the clustering pipeline; their source BGCs
+    receive paths via ``reclassify_bgcs``.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    contig = models.ForeignKey(
+        DashboardContig,
+        on_delete=models.CASCADE,
+        related_name="integrated_bgcs",
+        db_index=True,
+    )
+    start_position = models.IntegerField()
+    end_position = models.IntegerField()
+
+    source_tools = models.JSONField(
+        default=list,
+        help_text="Sorted, deduped tool names that contributed, e.g. ['GECCO','SanntiS']",
+    )
+
+    gene_cluster_family = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="ltree dot-path, e.g. cluster.0042.0007.0003 (leaf of the hierarchy)",
+    )
+    umap_x = models.FloatField(null=True, blank=True)
+    umap_y = models.FloatField(null=True, blank=True)
+    umap_projected = models.BooleanField(
+        default=False,
+        help_text=(
+            "True when umap_x/y were derived by averaging top-K nearest primary "
+            "iBGC coordinates (partials reclassified via KNN) rather than by the "
+            "main UMAP layout. False for iBGCs included in the clustering pass."
+        ),
+    )
+    novelty_score = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=(
+            "1 − max composite-Dice similarity to the nearest validated iBGC. "
+            "NULL when there are no validated iBGCs in this run."
+        ),
+    )
+    domain_novelty = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Fraction of this iBGC's domains not shared by any other iBGC of the "
+            "same leaf GCF. NULL for singleton GCFs and for iBGCs without any "
+            "domains of the selected sources."
+        ),
+    )
+    classification_run = models.ForeignKey(
+        "ClusteringRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="integrated_bgcs",
+    )
+    classified_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "discovery_integrated_bgc"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contig", "start_position", "end_position"],
+                name="uniq_ibgc_contig_pos",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["contig", "start_position", "end_position"],
+                name="idx_ibgc_contig_pos",
+            ),
+            models.Index(fields=["gene_cluster_family"], name="idx_ibgc_gcf"),
+        ]
+
+    def __str__(self):
+        return f"iBGC#{self.pk} contig={self.contig_id} {self.start_position}-{self.end_position}"
+
+
 # ── BGC ─────────────────────────────────────────────────────────────────────────
 
 
@@ -330,8 +442,6 @@ class DashboardBgc(models.Model):
     novelty_score = models.FloatField(default=0.0)
     domain_novelty = models.FloatField(default=0.0)
     size_kb = models.FloatField(default=0.0)
-    nearest_validated_accession = models.CharField(max_length=50, blank=True, default="")
-    nearest_validated_distance = models.FloatField(null=True, blank=True)
 
     # Flags
     is_partial = models.BooleanField(default=False)
@@ -341,12 +451,38 @@ class DashboardBgc(models.Model):
     umap_x = models.FloatField(default=0.0)
     umap_y = models.FloatField(default=0.0)
 
-    # Gene Cluster Family — ltree dot-path
+    # Gene Cluster Family — leaf ltree dot-path, e.g. cluster.0042.0007.0003
     gene_cluster_family = models.CharField(
         max_length=512,
         blank=True,
         default="",
-        help_text="ltree dot-path, e.g. GCF_001.SubFamily_A",
+        help_text="ltree dot-path, e.g. cluster.0042.0007.0003 (leaf of the hierarchy)",
+    )
+
+    # ── Classification provenance (set by the clustering pipeline) ──────
+    # ``primary``      — source BGC of an IntegratedBGC that drove community detection
+    # ``merged``       — source BGC of an IntegratedBGC (set at iBGC-build time, before clustering)
+    # ``knn``          — assigned post-hoc via KNN reclassification (partials, stale BGCs)
+    # ``unclassified`` — never matched any community (default for new rows)
+    CLASSIFICATION_SOURCE_CHOICES = [
+        ("primary", "primary"),
+        ("merged", "merged"),
+        ("knn", "knn"),
+        ("unclassified", "unclassified"),
+    ]
+    classification_source = models.CharField(
+        max_length=16,
+        choices=CLASSIFICATION_SOURCE_CHOICES,
+        default="unclassified",
+        db_index=True,
+    )
+    classified_at = models.DateTimeField(null=True, blank=True)
+    classification_run = models.ForeignKey(
+        "ClusteringRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="classified_bgcs",
     )
 
     # Detector info
@@ -373,6 +509,16 @@ class DashboardBgc(models.Model):
         help_text="2-digit incremental within region + detector",
     )
 
+    # Integrated BGC (set during iBGC build; NULL for partials and absorbed antiSMASH calls)
+    integrated_bgc = models.ForeignKey(
+        IntegratedBGC,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_bgcs",
+        db_index=True,
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -394,60 +540,6 @@ class DashboardBgc(models.Model):
 
     def __str__(self):
         return self.bgc_accession
-
-
-# ── Embeddings (separate tables, half precision) ───────────────────────────────
-
-
-class BgcEmbedding(models.Model):
-    """BGC embedding vector in a dedicated table (halfvec for storage efficiency)."""
-
-    bgc = models.OneToOneField(
-        DashboardBgc,
-        on_delete=models.CASCADE,
-        primary_key=True,
-        related_name="embedding",
-    )
-    vector = HalfVectorField(dimensions=EMBEDDING_DIM)
-
-    class Meta:
-        db_table = "discovery_bgc_embedding"
-        indexes = [
-            HnswIndex(
-                fields=["vector"],
-                name="idx_bgc_emb_hnsw",
-                opclasses=["halfvec_cosine_ops"],
-                m=16,
-                ef_construction=512,
-            ),
-        ]
-
-    def __str__(self):
-        return f"Embedding for {self.bgc_id}"
-
-
-class ProteinEmbedding(models.Model):
-    """Protein embedding vector in a dedicated table (halfvec)."""
-
-    id = models.BigAutoField(primary_key=True)
-    source_protein_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
-    protein_sha256 = models.CharField(max_length=64, unique=True)
-    vector = HalfVectorField(dimensions=EMBEDDING_DIM)
-
-    class Meta:
-        db_table = "discovery_protein_embedding"
-        indexes = [
-            HnswIndex(
-                fields=["vector"],
-                name="idx_prot_emb_hnsw",
-                opclasses=["halfvec_cosine_ops"],
-                m=16,
-                ef_construction=512,
-            ),
-        ]
-
-    def __str__(self):
-        return f"Embedding for protein {self.source_protein_id}"
 
 
 # ── BGC–Domain association (denormalized) ───────────────────────────────────────
@@ -477,7 +569,7 @@ class DashboardCds(models.Model):
         blank=True,
         default="",
         db_index=True,
-        help_text="SHA-256 hash of the amino acid sequence (links to ProteinEmbedding)",
+        help_text="SHA-256 hash of the amino acid sequence (used by the pyhmmer search index)",
     )
 
     class Meta:
@@ -543,7 +635,17 @@ class BgcDomain(models.Model):
     domain_name = models.CharField(max_length=255)
     domain_description = models.TextField(blank=True, default="")
     ref_db = models.CharField(max_length=50, blank=True, default="")
-    go_slim = models.CharField(max_length=100, blank=True, default="")
+    # Deduplicated, sorted list of GO-slim term names derived from go_terms
+    # via discovery.services.go_slim.go_slim_for_terms. Populated inline at
+    # ingestion / asset projection time.
+    go_slim = models.JSONField(default=list, blank=True)
+    # InterPro entry the signature maps to (populated when IPS runs with --iprlookup;
+    # blank for signatures that do not map to an InterPro entry).
+    interpro_entry_acc = models.CharField(max_length=20, blank=True, default="")
+    interpro_entry_description = models.CharField(max_length=255, blank=True, default="")
+    # GO term accessions associated with the signature (from IPS --goterms).
+    # Stored as a list of strings, e.g. ["GO:0003824", "GO:0008152"].
+    go_terms = models.JSONField(default=list, blank=True)
     # Positional data on the protein (amino acid coordinates)
     start_position = models.IntegerField(default=0)
     end_position = models.IntegerField(default=0)
@@ -555,6 +657,10 @@ class BgcDomain(models.Model):
         indexes = [
             models.Index(fields=["domain_acc", "bgc"], name="idx_bgcdom_acc_bgc"),
             models.Index(fields=["bgc", "domain_acc"], name="idx_bgcdom_bgc_acc"),
+            models.Index(
+                fields=["bgc", "ref_db", "domain_acc"],
+                name="idx_bgcdom_bgc_ref_acc",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -570,65 +676,46 @@ class BgcDomain(models.Model):
 # ── Gene Cluster Family ─────────────────────────────────────────────────────────
 
 
-class DashboardGCF(models.Model):
-    """Gene Cluster Family — materialized from DashboardBgc.gene_cluster_family ltree."""
-
-    id = models.AutoField(primary_key=True)
-    family_id = models.CharField(max_length=255, unique=True, db_index=True)
-    representative_bgc = models.ForeignKey(
-        DashboardBgc,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="represented_gcf",
-    )
-    member_count = models.IntegerField(default=0)
-    known_chemistry_annotation = models.CharField(max_length=255, blank=True, default="")
-    validated_accession = models.CharField(max_length=255, blank=True, default="")
-    mean_novelty = models.FloatField(default=0.0)
-    validated_count = models.IntegerField(default=0)
-
-    class Meta:
-        db_table = "discovery_gcf"
-        verbose_name = "GCF"
-        verbose_name_plural = "GCFs"
-
-    def __str__(self):
-        return self.family_id
-
-
-# ── BGC Clustering ───────────────────────────────────────────────────────────────
-
-
 class ClusteringRun(models.Model):
-    """Versioned record of a full PCA → UMAP-20d → HDBSCAN → KNN → UMAP-2d run."""
+    """One iBGC-domain/adjacency-Dice → KNN-graph → hierarchical-CPM-Leiden run.
+
+    Stores parameters and counts only. The hierarchy itself lives in DashboardGCF
+    rows (one per node), on IntegratedBGC.gene_cluster_family (leaf path per iBGC),
+    and on DashboardBgc.gene_cluster_family (back-propagated to source BGCs).
+    Re-running with identical inputs yields the same ``sha256`` and therefore the
+    same ``pk`` (idempotent via update_or_create).
+    """
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    n_samples = models.PositiveIntegerField()
-    pca_components = models.PositiveSmallIntegerField()
-    umap_n_neighbors = models.PositiveSmallIntegerField()
-    umap_min_dist = models.FloatField()
-    umap_n_components = models.PositiveSmallIntegerField()
-    umap_metric = models.CharField(max_length=50)
-    hdbscan_min_cluster_size = models.PositiveSmallIntegerField()
-    hdbscan_min_samples = models.PositiveSmallIntegerField()
+    # Pipeline parameters
+    domain_sources = models.JSONField(
+        default=list,
+        help_text="Domain ref_db sources used (upper-case), e.g. ['PFAM','NCBIFAM']",
+    )
+    score_weights = models.JSONField(
+        default=list,
+        help_text="(w_domain, w_adjacency) used for the composite Dice score, e.g. [0.5, 0.5]",
+    )
     knn_k = models.PositiveSmallIntegerField()
+    leiden_resolutions = models.JSONField(
+        default=list,
+        help_text="CPM resolution_parameter values (one per nesting level, coarsest first)",
+    )
+    seed = models.PositiveIntegerField(default=42)
 
-    sklearn_version = models.CharField(max_length=50)
-    umap_version = models.CharField(max_length=50)
-    hdbscan_version = models.CharField(max_length=50)
+    # Counts
+    n_proteins = models.PositiveIntegerField(default=0)
+    n_ibgcs = models.PositiveIntegerField(default=0)
+    n_levels = models.PositiveSmallIntegerField(default=0)
+    n_root_communities = models.PositiveIntegerField(default=0)
+    n_leaf_communities = models.PositiveIntegerField(default=0)
 
-    n_bgcs_sampled = models.PositiveIntegerField(default=0)
-    n_clusters_found = models.PositiveIntegerField(default=0)
-    n_noise_points = models.PositiveIntegerField(default=0)
-    n_bgcs_classified = models.PositiveIntegerField(default=0)
-
-    pca_blob = models.BinaryField()
-    umap_blob = models.BinaryField()
-    hdbscan_blob = models.BinaryField()
-    knn_blob = models.BinaryField()
-    umap2d_blob = models.BinaryField()
+    # Library versions used for this run
+    igraph_version = models.CharField(max_length=50, blank=True, default="")
+    leidenalg_version = models.CharField(max_length=50, blank=True, default="")
+    umap_version = models.CharField(max_length=50, blank=True, default="")
+    scipy_version = models.CharField(max_length=50, blank=True, default="")
 
     sha256 = models.CharField(max_length=64, unique=True)
 
@@ -640,74 +727,119 @@ class ClusteringRun(models.Model):
         return f"ClusteringRun {self.pk} ({self.created_at:%Y-%m-%d})"
 
 
-class BgcCluster(models.Model):
-    """One HDBSCAN cluster from a ClusteringRun."""
+# ── Gene Cluster Family ─────────────────────────────────────────────────────────
 
+
+class DashboardGCF(models.Model):
+    """A node in the hierarchical Leiden tree for a ClusteringRun.
+
+    One row per node at every level: roots, internal, and leaves. The full
+    ``family_path`` ltree string identifies the node uniquely; ``parent_path``
+    points at the immediate parent (empty string for level-0 roots).
+    """
+
+    id = models.AutoField(primary_key=True)
     clustering_run = models.ForeignKey(
         ClusteringRun,
         on_delete=models.CASCADE,
-        related_name="clusters",
+        related_name="gcfs",
+        db_index=True,
     )
-    cluster_id = models.IntegerField(help_text="Raw HDBSCAN label (-1 = noise)")
-    label = models.CharField(
-        max_length=255,
-        help_text="ltree-safe label, e.g. 'cluster.0042' or 'cluster.noise'",
+    family_path = models.CharField(
+        max_length=512,
+        db_index=True,
+        help_text="ltree dot-path identifying this node, e.g. cluster.0042.0007.0003",
     )
-    n_bgcs = models.PositiveIntegerField(default=0)
-    n_validated = models.PositiveIntegerField(default=0)
+    parent_path = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Immediate parent's family_path; empty string for level-0 roots",
+    )
+    level = models.PositiveSmallIntegerField(
+        help_text="Depth in the hierarchy (0 = coarsest root level)",
+    )
     representative_bgc = models.ForeignKey(
         DashboardBgc,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="representative_of_clusters",
+        related_name="represented_gcfs",
+    )
+
+    # Aggregates
+    member_count = models.IntegerField(
+        default=0,
+        help_text="Total BGCs whose leaf path is a descendant of this node (or equal at leaves)",
+    )
+    validated_count = models.IntegerField(default=0)
+    mean_novelty = models.FloatField(default=0.0)
+    descendant_count = models.IntegerField(
+        default=0,
+        help_text="Number of immediate child nodes (0 for leaves)",
     )
 
     class Meta:
-        db_table = "discovery_bgc_cluster"
-        unique_together = [("clustering_run", "cluster_id")]
-        indexes = [
-            models.Index(
-                fields=["clustering_run", "cluster_id"],
-                name="idx_bgccluster_run_id",
+        db_table = "discovery_gcf"
+        verbose_name = "GCF"
+        verbose_name_plural = "GCFs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clustering_run", "family_path"],
+                name="uniq_gcf_run_path",
             ),
+        ]
+        indexes = [
+            models.Index(fields=["clustering_run", "level"], name="idx_gcf_run_level"),
+            models.Index(fields=["clustering_run", "parent_path"], name="idx_gcf_run_parent"),
         ]
 
     def __str__(self):
-        return f"Cluster {self.cluster_id} (run {self.clustering_run_id})"
+        return self.family_path
 
 
-class ClusterAssignment(models.Model):
-    """Assignment of a single DashboardBgc to a BgcCluster."""
+class IntegratedBGCClusteringSnapshot(models.Model):
+    """Frozen per-iBGC classification at import time, for rollback.
 
-    run = models.ForeignKey(
+    The HPC importer (``import_clustering_results``) writes one row per
+    primary or partial iBGC before overwriting the live columns on
+    ``IntegratedBGC``. ``set_active_clustering_run`` reads these to
+    restore a previous run's state without recomputing.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    clustering_run = models.ForeignKey(
         ClusteringRun,
         on_delete=models.CASCADE,
-        related_name="assignments",
+        related_name="ibgc_snapshots",
     )
-    bgc = models.ForeignKey(
-        DashboardBgc,
+    ibgc = models.ForeignKey(
+        "IntegratedBGC",
         on_delete=models.CASCADE,
-        related_name="cluster_assignments",
+        related_name="clustering_snapshots",
     )
-    cluster = models.ForeignKey(
-        BgcCluster,
-        on_delete=models.CASCADE,
-        related_name="assignments",
-    )
-    is_noise = models.BooleanField(default=False)
-    assigned_by_knn = models.BooleanField(
-        default=False,
-        help_text="True if assigned via KNN (not in training sample)",
-    )
+    umap_x = models.FloatField(null=True, blank=True)
+    umap_y = models.FloatField(null=True, blank=True)
+    umap_projected = models.BooleanField(default=False)
+    gene_cluster_family = models.CharField(max_length=512, blank=True, default="")
+    novelty_score = models.FloatField(null=True, blank=True)
+    domain_novelty = models.FloatField(null=True, blank=True)
 
     class Meta:
-        db_table = "discovery_cluster_assignment"
-        unique_together = [("run", "bgc")]
-        indexes = [
-            models.Index(fields=["run", "bgc"], name="idx_ca_run_bgc"),
-            models.Index(fields=["run", "cluster"], name="idx_ca_run_cluster"),
+        db_table = "discovery_ibgc_clustering_snapshot"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clustering_run", "ibgc"],
+                name="uniq_snapshot_run_ibgc",
+            ),
         ]
+        indexes = [
+            models.Index(fields=["clustering_run"], name="idx_snapshot_run"),
+        ]
+
+    def __str__(self):
+        return f"snapshot(run={self.clustering_run_id}, ibgc={self.ibgc_id})"
 
 
 # ── Natural Product ──────────────────────────────────────────────────────────────
@@ -749,32 +881,49 @@ class DashboardNaturalProduct(models.Model):
         return self.name
 
 
-class NaturalProductChemOntClass(models.Model):
-    """ChemOnt ontology classification for a natural product.
+class DashboardCdsChemOnt(models.Model):
+    """Deepest ChemOnt class predicted by CHAMOIS for a single CDS.
 
-    Each natural product can have multiple ChemOnt nodes, each with a
-    probability score assigned by the ETL pipeline.
+    The class is chosen with **cross-BGC** evidence: per-BGC ``chamois explain
+    --cds`` TSVs are conceptually concatenated and, for each protein, the
+    (class, BGC) cell with the largest gene weight is the *argmax*. The protein
+    is kept only if ``argmax_weight > 1.0`` AND the BGC-level probability of the
+    argmax cell is ``> 0.5``. The reported class is then the **globally
+    deepest** descendant of the argmax class whose cross-BGC max gene weight is
+    also ``> 1.0`` (ties broken by higher weight); if no descendant qualifies,
+    the argmax class itself is reported.
+
+    The same selected class is written to every CDS row of the protein —
+    one ``DashboardCdsChemOnt`` per (BGC, protein), since each
+    ``DashboardCds`` is scoped to a single BGC.
     """
 
     id = models.BigAutoField(primary_key=True)
-    natural_product = models.ForeignKey(
-        DashboardNaturalProduct,
+    cds = models.ForeignKey(
+        DashboardCds,
         on_delete=models.CASCADE,
-        related_name="chemont_classes",
+        related_name="chemont",
     )
     chemont_id = models.CharField(
         max_length=30,
         help_text="ChemOnt ontology term ID, e.g. CHEMONTID:0000147",
     )
     chemont_name = models.CharField(max_length=255)
-    probability = models.FloatField(default=1.0)
+    probability = models.FloatField(
+        default=0.0,
+        help_text="BGC-level probability of the argmax class for this CDS.",
+    )
+    weight = models.FloatField(
+        default=0.0,
+        help_text="Gene-specific weight of the deepest selected class.",
+    )
 
     class Meta:
-        db_table = "discovery_np_chemont_class"
-        unique_together = [("natural_product", "chemont_id")]
+        db_table = "discovery_cds_chemont"
+        unique_together = [("cds", "chemont_id")]
         indexes = [
-            models.Index(fields=["chemont_id"], name="idx_npchemont_cid"),
-            models.Index(fields=["natural_product"], name="idx_npchemont_np"),
+            models.Index(fields=["chemont_id"], name="idx_cdschemont_cid"),
+            models.Index(fields=["cds"], name="idx_cdschemont_cds"),
         ]
 
     def __str__(self):

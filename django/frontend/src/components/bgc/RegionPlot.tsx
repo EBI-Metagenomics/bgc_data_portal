@@ -9,6 +9,12 @@ import type {
   BgcRegionData,
   RegionCds,
 } from "@/api/types";
+import {
+  GO_SLIM_COLOR_MAP,
+  UNANNOTATED_COLOR,
+  UNANNOTATED_LABEL,
+  getGoSlimColor,
+} from "./goSlimPalette";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -23,6 +29,10 @@ const SVG_PADDING_X = 10;
 const ARROW_PROP = 0.15;
 const ARROW_CAP_PX = 12; // max arrow head in SVG units
 
+// Above this CDS count, rendering ~one tooltip-wrapped <polygon> per CDS
+// stalls the browser and arrows collapse to sub-pixel width anyway.
+const CDS_RENDER_CAP = 800;
+
 const DETECTOR_COLORS: Record<string, string> = {
   mibig: "#b3de69",
   sanntis: "#8dd3c7",
@@ -30,40 +40,6 @@ const DETECTOR_COLORS: Record<string, string> = {
   antismash: "#bebada",
 };
 const DEFAULT_CLUSTER_COLOR = "#c8c8c8";
-
-// ── Color generation (port of make_distinct_color_map) ───────────────────────
-
-function hlsToRgb(h: number, l: number, s: number): [number, number, number] {
-  if (s === 0) return [l, l, l];
-  const hue2rgb = (p: number, q: number, t: number) => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  return [hue2rgb(p, q, h + 1 / 3), hue2rgb(p, q, h), hue2rgb(p, q, h - 1 / 3)];
-}
-
-function makeDistinctColorMap(keys: string[]): Record<string, string> {
-  const PHI = 0.618033988749895;
-  const SEED = 0.12;
-  const L0 = 0.6, L1 = 0.66;
-  const S0 = 0.78, S1 = 0.86;
-  const unique = [...new Set(keys)].sort();
-  const out: Record<string, string> = {};
-  for (let i = 0; i < unique.length; i++) {
-    const h = (SEED + i * PHI) % 1.0;
-    const l = i % 2 === 0 ? L0 : L1;
-    const s = Math.floor(i / 2) % 2 === 0 ? S0 : S1;
-    const [r, g, b] = hlsToRgb(h, l, s);
-    out[unique[i]!] = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
-  }
-  return out;
-}
 
 // ── Lane assignment (port of _assign_nonoverlap_lanes) ───────────────────────
 
@@ -142,12 +118,6 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
   );
   const maxLane = clusterLanes.length > 0 ? Math.max(...clusterLanes) : 0;
 
-  // GO Slim color map keyed on all GO slim terms in this region
-  const goSlimColorMap = useMemo(() => {
-    const allSlims = data.domain_list.flatMap((d) => d.go_slim);
-    return makeDistinctColorMap(allSlims);
-  }, [data.domain_list]);
-
   // Per-CDS dominant GO slim (most frequent across its domains)
   const cdsGoSlimMap = useMemo(() => {
     const cdsDomainSlims: Record<string, string[]> = {};
@@ -191,14 +161,28 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
           seen.add(gs);
           entries.push({
             label: gs,
-            color: goSlimColorMap[gs] || "#cfcfcf",
+            color: GO_SLIM_COLOR_MAP[gs] ?? UNANNOTATED_COLOR,
             group: "Pfam GO Slim",
           });
         }
       }
     }
+
+    // "Unannotated" swatch — only when at least one CDS in the plot has no
+    // dominant GO slim term and so renders in grey.
+    const hasUnannotated = data.cds_list.some(
+      (cds) => !cdsGoSlimMap[cds.protein_id],
+    );
+    if (hasUnannotated) {
+      entries.push({
+        label: UNANNOTATED_LABEL,
+        color: UNANNOTATED_COLOR,
+        group: "Pfam GO Slim",
+      });
+    }
+
     return entries;
-  }, [data.cluster_list, data.domain_list, goSlimColorMap]);
+  }, [data.cluster_list, data.cds_list, data.domain_list, cdsGoSlimMap]);
 
   // Dynamic SVG height based on cluster lane count
   const svgHeight = CLUSTER_TRACK_Y + (maxLane + 1) * CLUSTER_LANE_GAP + 30;
@@ -218,6 +202,21 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
       <p className="py-4 text-center text-xs text-muted-foreground">
         No CDS found in this region
       </p>
+    );
+  }
+
+  // Oversized regions (a handful of MIBiG entries that span the entire
+  // contig) would mount thousands of tooltip-wrapped <polygon>s and freeze
+  // the main thread; render a summary instead.
+  if (data.cds_list.length > CDS_RENDER_CAP) {
+    return (
+      <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+        Region too large to plot ({(data.region_length / 1000).toFixed(0)} kb,{" "}
+        {data.cds_list.length.toLocaleString()} CDS,{" "}
+        {data.cluster_list.length} cluster
+        {data.cluster_list.length === 1 ? "" : "s"}). Open the BGC detail page
+        to inspect individual CDSs.
+      </div>
     );
   }
 
@@ -295,7 +294,7 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
             const isSelected = selectedCdsId === cds.protein_id;
             const isHovered = hoveredCdsId === cds.protein_id;
             const dominantSlim = cdsGoSlimMap[cds.protein_id];
-            const fill = dominantSlim ? (goSlimColorMap[dominantSlim] ?? "#e8e8e8") : "#e8e8e8";
+            const fill = getGoSlimColor(dominantSlim);
             return (
               <Tooltip key={`cds-${cds.protein_id}`}>
                 <TooltipTrigger asChild>
@@ -326,6 +325,20 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
                     <p>{cds.protein_length} aa</p>
                     {dominantSlim && (
                       <p className="text-muted-foreground">{dominantSlim}</p>
+                    )}
+                    {cds.chemont_id && (
+                      <p
+                        className="mt-1 border-t pt-1 text-muted-foreground"
+                        title={cds.chemont_id}
+                      >
+                        <span className="font-medium">ChemOnt:</span>{" "}
+                        {cds.chemont_name}
+                        {cds.chemont_probability != null && (
+                          <span className="ml-1 text-muted-foreground">
+                            ({(cds.chemont_probability * 100).toFixed(0)}%)
+                          </span>
+                        )}
+                      </p>
                     )}
                     {cds.pfam.length > 0 && (
                       <div className="mt-1 border-t pt-1 space-y-0.5">

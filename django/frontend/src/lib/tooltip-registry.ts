@@ -69,13 +69,25 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     text: "S\u00F8rensen-Dice coefficient: fraction of query domains matched vs. total domains in the union (0\u20131). Used for domain query similarity scoring.",
     docsUrl: "/docs/similarity-scores.html#sorensen-dice",
   },
+  architecture_search: {
+    text: "Composite-Dice over a positional domain architecture. Each iBGC is scored as w\u00B7Dice(domain set) + (1\u2212w)\u00B7Dice(adjacent-pair set). Adjacency rewards matching neighbour pairs in the supplied order; S\u00F8rensen-Dice measures unordered domain overlap. Slide right to favour bag-of-domains; slide left to favour gene-order similarity. Accessions outside the clustering run's vocabulary are silently dropped.",
+    docsUrl: "/docs/similarity-scores.html#architecture-search",
+  },
   tanimoto: {
     text: "Tanimoto coefficient comparing Morgan fingerprints of predicted natural products (0\u20131). Used in chemical structure (SMILES) search.",
     docsUrl: "/docs/similarity-scores.html#tanimoto",
   },
-  cosine_similarity: {
-    text: "Cosine similarity between protein sequence embeddings (0\u20131). Captures overall functional similarity including arrangement and context.",
-    docsUrl: "/docs/similarity-scores.html#cosine-similarity",
+  phmmer_bitscore: {
+    text: "HMMER bit score for the full target sequence. Higher = more significant. 30 is HMMER's conventional weak-significance cut; \u2265200 indicates a very strong homolog.",
+    docsUrl: "/docs/similarity-scores.html#phmmer",
+  },
+  phmmer_pident: {
+    text: "Aggregate percent identity across all aligned domains of the best phmmer hit (identical residues / aligned columns). 70% is a stringent default; lower for distant homologs.",
+    docsUrl: "/docs/similarity-scores.html#phmmer",
+  },
+  phmmer_qcoverage: {
+    text: "Fraction of the query sequence covered by the union of phmmer domain envelopes in the matched protein. Low values mean only part of your query aligned.",
+    docsUrl: "/docs/similarity-scores.html#phmmer",
   },
 
   // ── Filters ────────────────────────────────────────────────────────

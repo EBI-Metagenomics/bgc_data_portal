@@ -3,12 +3,13 @@ from django.contrib import admin
 from .models import (
     DashboardAssembly,
     DashboardBgc,
-    BgcEmbedding,
     BgcDomain,
+    ClusteringRun,
     DashboardGCF,
     DashboardNaturalProduct,
     DashboardBgcClass,
     DashboardDomain,
+    IntegratedBGC,
     PrecomputedStats,
 )
 
@@ -35,8 +36,42 @@ class DashboardBgcAdmin(admin.ModelAdmin):
 
 @admin.register(DashboardGCF)
 class DashboardGCFAdmin(admin.ModelAdmin):
-    list_display = ("family_id", "member_count", "known_chemistry_annotation", "validated_accession")
-    search_fields = ("family_id", "known_chemistry_annotation")
+    list_display = (
+        "family_path",
+        "level",
+        "member_count",
+        "validated_count",
+        "descendant_count",
+        "clustering_run_id",
+    )
+    list_filter = ("level", "clustering_run")
+    search_fields = ("family_path", "parent_path")
+
+
+@admin.register(ClusteringRun)
+class ClusteringRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "created_at",
+        "knn_k",
+        "n_levels",
+        "n_ibgcs",
+        "n_leaf_communities",
+    )
+    readonly_fields = (
+        "created_at", "sha256", "n_proteins", "n_ibgcs",
+        "n_levels", "n_root_communities", "n_leaf_communities",
+        "igraph_version", "leidenalg_version", "umap_version", "scipy_version",
+    )
+
+
+@admin.register(IntegratedBGC)
+class IntegratedBGCAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "contig_id", "start_position", "end_position",
+        "source_tools", "gene_cluster_family",
+    )
+    search_fields = ("gene_cluster_family",)
 
 
 @admin.register(DashboardNaturalProduct)

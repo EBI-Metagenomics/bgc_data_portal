@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -29,17 +28,11 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
 
   return (
     <div className="mt-3 rounded-md border bg-background p-3 text-xs animate-in fade-in-50 slide-in-from-top-2 duration-200">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h6 className="font-semibold text-sm">
-          Protein Information — {cds.protein_id}
-        </h6>
+      <div className="mb-2 flex justify-end">
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onClose}>
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
-
-      <Separator className="mb-2" />
 
       {/* Summary grid */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-3">
@@ -81,19 +74,49 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
           <span className="text-muted-foreground">End</span>
           <div className="font-medium font-mono">{cds.end}</div>
         </div>
+        {cds.chemont_id && (
+          <>
+            <div className="col-span-2">
+              <span className="text-muted-foreground">ChemOnt Class</span>
+              <div className="font-medium" title={cds.chemont_id}>
+                {cds.chemont_name}{" "}
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  ({cds.chemont_id})
+                </span>
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">ChemOnt Probability</span>
+              <div className="font-medium">
+                {cds.chemont_probability != null
+                  ? `${(cds.chemont_probability * 100).toFixed(0)}%`
+                  : "—"}
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">ChemOnt Weight</span>
+              <div className="font-medium">
+                {cds.chemont_weight != null
+                  ? cds.chemont_weight.toFixed(2)
+                  : "—"}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Pfam annotations table */}
+      {/* InterPro annotations table — deduped by InterPro entry, with fallback
+          to the signature accession for signatures that don't map to an entry. */}
       <div className="mb-3">
-        <h6 className="font-semibold text-xs mb-1">Pfam Annotations</h6>
-        {cds.pfam.length === 0 ? (
-          <p className="text-muted-foreground italic">No Pfam annotations</p>
+        <h6 className="font-semibold text-xs mb-1">InterPro Annotations</h6>
+        {cds.interpro.length === 0 ? (
+          <p className="text-muted-foreground italic">No InterPro annotations</p>
         ) : (
           <div className="max-h-48 overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-[10px] h-7 px-1.5">PFAM</TableHead>
+                  <TableHead className="text-[10px] h-7 px-1.5">Accession</TableHead>
                   <TableHead className="text-[10px] h-7 px-1.5">Description</TableHead>
                   <TableHead className="text-[10px] h-7 px-1.5">GO Slim</TableHead>
                   <TableHead className="text-[10px] h-7 px-1.5">Start</TableHead>
@@ -102,27 +125,29 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cds.pfam.map((pf, i) => (
-                  <TableRow key={`${pf.accession}-${i}`}>
+                {cds.interpro.map((row, i) => (
+                  <TableRow key={`${row.accession}-${i}`}>
                     <TableCell className="text-[10px] px-1.5 py-1">
-                      {pf.url ? (
+                      {row.url ? (
                         <a
-                          href={pf.url}
+                          href={row.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
                         >
-                          {pf.accession}
+                          {row.accession}
                         </a>
                       ) : (
-                        pf.accession
+                        row.accession
                       )}
                     </TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1">{pf.description}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1">{pf.go_slim || "—"}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{pf.envelope_start}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{pf.envelope_end}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{pf.e_value ?? "—"}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1">{row.description}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1">
+                      {row.go_slim.length > 0 ? row.go_slim.join(", ") : "—"}
+                    </TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{row.envelope_start}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{row.envelope_end}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{row.e_value ?? "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

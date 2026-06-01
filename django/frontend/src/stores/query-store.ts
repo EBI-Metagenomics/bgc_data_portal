@@ -1,16 +1,29 @@
 import { create } from "zustand";
 import type { DomainCondition, QueryResultBgc } from "@/api/types";
 
+export type DomainMode = "and" | "or" | "architecture";
+
 interface QueryState {
   domainConditions: DomainCondition[];
-  logic: "and" | "or";
+  /** Combinator for AND/OR sets; "architecture" swaps the chip UI for a
+   *  free-text positional-architecture composite-Dice search. */
+  domainMode: DomainMode;
+  /** Free-text comma/space-separated domain accessions used by the
+   *  "architecture" tab. Ordering is meaningful — adjacency pairs are
+   *  derived from this sequence. */
+  domainArchitectureText: string;
+  /** Sørensen-Dice share in the composite score (0..1). Adjacency share
+   *  is ``1 - architectureWeight``. */
+  architectureWeight: number;
   similarBgcSourceId: number | null;
   resultBgcIds: number[];
   resultBgcData: QueryResultBgc[];
   smilesQuery: string;
   similarityThreshold: number;
   sequenceQuery: string;
-  sequenceThreshold: number;
+  sequenceMinBitscore: number;
+  sequenceMinPident: number;
+  sequenceMinQcov: number;
   sequenceTaskId: string | null;
   domainQueryTriggered: boolean;
   chemicalQueryTriggered: boolean;
@@ -24,14 +37,18 @@ interface QueryState {
   addDomainCondition: (condition: DomainCondition) => void;
   removeDomainCondition: (acc: string) => void;
   toggleDomainRequired: (acc: string) => void;
-  setLogic: (logic: "and" | "or") => void;
+  setDomainMode: (mode: DomainMode) => void;
+  setDomainArchitectureText: (v: string) => void;
+  setArchitectureWeight: (v: number) => void;
   setSimilarBgcSourceId: (id: number | null) => void;
   setResultBgcIds: (ids: number[]) => void;
   setResultBgcData: (data: QueryResultBgc[]) => void;
   setSmilesQuery: (v: string) => void;
   setSimilarityThreshold: (v: number) => void;
   setSequenceQuery: (v: string) => void;
-  setSequenceThreshold: (v: number) => void;
+  setSequenceMinBitscore: (v: number) => void;
+  setSequenceMinPident: (v: number) => void;
+  setSequenceMinQcov: (v: number) => void;
   setSequenceTaskId: (id: string | null) => void;
   setDomainQueryTriggered: (v: boolean) => void;
   setChemicalQueryTriggered: (v: boolean) => void;
@@ -69,14 +86,18 @@ function intersectResults(
 
 export const useQueryStore = create<QueryState>((set, get) => ({
   domainConditions: [],
-  logic: "and",
+  domainMode: "and",
+  domainArchitectureText: "",
+  architectureWeight: 0.5,
   similarBgcSourceId: null,
   resultBgcIds: [],
   resultBgcData: [],
   smilesQuery: "",
   similarityThreshold: 0.5,
   sequenceQuery: "",
-  sequenceThreshold: 0.7,
+  sequenceMinBitscore: 30,
+  sequenceMinPident: 70,
+  sequenceMinQcov: 70,
   sequenceTaskId: null,
   domainQueryTriggered: false,
   chemicalQueryTriggered: false,
@@ -100,14 +121,18 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         d.acc === acc ? { ...d, required: !d.required } : d
       ),
     })),
-  setLogic: (logic) => set({ logic }),
+  setDomainMode: (mode) => set({ domainMode: mode }),
+  setDomainArchitectureText: (v) => set({ domainArchitectureText: v }),
+  setArchitectureWeight: (v) => set({ architectureWeight: v }),
   setSimilarBgcSourceId: (id) => set({ similarBgcSourceId: id }),
   setResultBgcIds: (ids) => set({ resultBgcIds: ids }),
   setResultBgcData: (data) => set({ resultBgcData: data }),
   setSmilesQuery: (v) => set({ smilesQuery: v }),
   setSimilarityThreshold: (v) => set({ similarityThreshold: v }),
   setSequenceQuery: (v) => set({ sequenceQuery: v }),
-  setSequenceThreshold: (v) => set({ sequenceThreshold: v }),
+  setSequenceMinBitscore: (v) => set({ sequenceMinBitscore: v }),
+  setSequenceMinPident: (v) => set({ sequenceMinPident: v }),
+  setSequenceMinQcov: (v) => set({ sequenceMinQcov: v }),
   setSequenceTaskId: (id) => set({ sequenceTaskId: id }),
   setDomainQueryTriggered: (v) => set({ domainQueryTriggered: v }),
   setChemicalQueryTriggered: (v) => set({ chemicalQueryTriggered: v }),
@@ -132,14 +157,18 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   clearQuery: () =>
     set({
       domainConditions: [],
-      logic: "and",
+      domainMode: "and",
+      domainArchitectureText: "",
+      architectureWeight: 0.5,
       similarBgcSourceId: null,
       resultBgcIds: [],
       resultBgcData: [],
       smilesQuery: "",
       similarityThreshold: 0.5,
       sequenceQuery: "",
-      sequenceThreshold: 0.7,
+      sequenceMinBitscore: 30,
+      sequenceMinPident: 70,
+      sequenceMinQcov: 70,
       sequenceTaskId: null,
       domainQueryTriggered: false,
       chemicalQueryTriggered: false,

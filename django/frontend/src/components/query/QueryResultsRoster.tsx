@@ -1,6 +1,7 @@
 import { useDomainQuery } from "@/hooks/use-domain-query";
 import { useSimilarBgcQuery } from "@/hooks/use-similar-bgc-query";
 import { useChemicalQuery } from "@/hooks/use-chemical-query";
+import { useSequenceQuery } from "@/hooks/use-sequence-query";
 import { useQueryStore } from "@/stores/query-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { BgcContextMenu } from "@/components/bgc/BgcContextMenu";
@@ -36,19 +37,25 @@ const SORT_OPTIONS = [
 export function QueryResultsRoster() {
   const similarBgcSourceId = useQueryStore((s) => s.similarBgcSourceId);
   const smilesQuery = useQueryStore((s) => s.smilesQuery);
+  const sequenceQueryText = useQueryStore((s) => s.sequenceQuery);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
 
   const domainQuery = useDomainQuery();
   const similarQuery = useSimilarBgcQuery();
   const chemicalQuery = useChemicalQuery();
+  const sequenceQuery = useSequenceQuery();
 
-  // Pick the active query: similar BGC > chemical > domain
+  // Pick the active query: similar BGC > sequence > chemical > domain
+  const isSequenceMode =
+    !similarBgcSourceId && sequenceQueryText.trim().length > 0;
   const query = similarBgcSourceId
     ? similarQuery
-    : smilesQuery.trim()
-      ? chemicalQuery
-      : domainQuery;
+    : isSequenceMode
+      ? sequenceQuery
+      : smilesQuery.trim()
+        ? chemicalQuery
+        : domainQuery;
   const { data, isLoading, page, setPage, sortBy, setSortBy, order, setOrder } = query;
 
   if (isLoading) {
@@ -107,7 +114,15 @@ export function QueryResultsRoster() {
               <TableHead className="text-xs">Accession</TableHead>
               <TableHead className="text-xs">Class</TableHead>
               <TableHead className="text-xs">Ref. DB</TableHead>
-              <TableHead className="text-xs text-right">Query Similarity</TableHead>
+              <TableHead className="text-xs text-right">
+                {isSequenceMode ? "Bitscore" : "Query Similarity"}
+              </TableHead>
+              {isSequenceMode && (
+                <>
+                  <TableHead className="text-xs text-right">% Identity</TableHead>
+                  <TableHead className="text-xs text-right">Q. Coverage</TableHead>
+                </>
+              )}
               <TableHead className="text-xs text-right">Domain Novelty</TableHead>
               <TableHead className="text-xs text-right">Novelty</TableHead>
             </TableRow>
@@ -141,8 +156,24 @@ export function QueryResultsRoster() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
-                    {bgc.similarity_score.toFixed(2)}
+                    {isSequenceMode
+                      ? (bgc.best_bitscore ?? bgc.similarity_score).toFixed(1)
+                      : bgc.similarity_score.toFixed(2)}
                   </TableCell>
+                  {isSequenceMode && (
+                    <>
+                      <TableCell className="text-right font-mono text-xs">
+                        {bgc.best_pident != null
+                          ? `${bgc.best_pident.toFixed(1)}%`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {bgc.best_qcoverage != null
+                          ? `${bgc.best_qcoverage.toFixed(1)}%`
+                          : "—"}
+                      </TableCell>
+                    </>
+                  )}
                   <TableCell className="text-right font-mono text-xs">
                     {bgc.domain_novelty.toFixed(2)}
                   </TableCell>

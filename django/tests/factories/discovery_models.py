@@ -215,22 +215,38 @@ class DashboardBgcFactory(DjangoModelFactory):
 # ── Related model factories ──────────────────────────────────────────────────
 
 
+class ClusteringRunFactory(DjangoModelFactory):
+    class Meta:
+        model = "discovery.ClusteringRun"
+        django_get_or_create = ("sha256",)
+
+    sha256 = factory.Sequence(lambda n: f"{n:064x}")
+    domain_sources = factory.LazyFunction(lambda: ["PFAM", "NCBIFAM"])
+    score_weights = factory.LazyFunction(lambda: [0.5, 0.5])
+    knn_k = 5
+    leiden_resolutions = factory.LazyFunction(lambda: [0.03, 0.08, 0.15, 0.25])
+    seed = 42
+    n_proteins = 0
+    n_ibgcs = factory.LazyFunction(lambda: random.randint(10, 1000))
+    n_levels = 4
+    n_root_communities = factory.LazyFunction(lambda: random.randint(1, 20))
+    n_leaf_communities = factory.LazyFunction(lambda: random.randint(20, 200))
+
+
 class DashboardGCFFactory(DjangoModelFactory):
     class Meta:
         model = DashboardGCF
-        django_get_or_create = ("family_id",)
+        django_get_or_create = ("clustering_run", "family_path")
 
-    family_id = factory.Sequence(lambda n: f"GCF_{n:06d}")
+    clustering_run = factory.SubFactory(ClusteringRunFactory)
+    family_path = factory.Sequence(lambda n: f"cluster.{n:04d}")
+    parent_path = ""
+    level = 0
     representative_bgc = factory.SubFactory(DashboardBgcFactory)
     member_count = factory.LazyFunction(lambda: random.randint(3, 50))
-    known_chemistry_annotation = factory.LazyFunction(
-        lambda: random.choice(["", "", "polyketide synthase", "NRPS", "lanthipeptide", "siderophore"])
-    )
-    mibig_accession = factory.LazyFunction(
-        lambda: f"BGC{random.randint(1, 2500):07d}" if random.random() < 0.3 else ""
-    )
+    validated_count = factory.LazyFunction(lambda: random.randint(0, 5))
     mean_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
-    mibig_count = factory.LazyFunction(lambda: random.randint(0, 5))
+    descendant_count = 0
 
 
 class DashboardNaturalProductFactory(DjangoModelFactory):

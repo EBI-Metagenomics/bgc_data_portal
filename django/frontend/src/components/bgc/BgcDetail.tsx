@@ -7,12 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { useModeStore } from "@/stores/mode-store";
-import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useAssessStore } from "@/stores/assess-store";
-import { ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
+import { ExternalLink, ListPlus, Search, Star } from "lucide-react";
 import type { ChemOntAnnotationNode } from "@/api/types";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 
@@ -32,11 +29,8 @@ interface BgcDetailProps {
 export function BgcDetail({ bgcId }: BgcDetailProps) {
   const { data: bgc, isLoading } = useBgcDetail(bgcId);
   const { data: regionData, isLoading: regionLoading } = useBgcRegion(bgcId);
-  const setMode = useModeStore((s) => s.setMode);
-  const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
   const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
   const addBgc = useShortlistStore((s) => s.addBgc);
-  const startAssessment = useAssessStore((s) => s.startAssessment);
   const [selectedCds, setSelectedCds] = useState<RegionCds | null>(null);
 
   // Reset selected CDS when bgcId changes
@@ -80,27 +74,12 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          {bgc.parent_assembly && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs"
-              onClick={() => {
-                setActiveAssemblyId(bgc.parent_assembly!.assembly_id);
-                setMode("explore");
-              }}
-            >
-              <Microscope className="h-3 w-3" />
-              Explore parent assembly
-            </Button>
-          )}
           <Button
             variant="outline"
             size="sm"
             className="gap-1 text-xs"
             onClick={() => {
               setSimilarBgcSourceId(bgc.id);
-              setMode("query");
             }}
           >
             <Search className="h-3 w-3" />
@@ -113,23 +92,11 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
             onClick={() => {
               const ok = addBgc({ id: bgc.id, label: bgc.accession });
               if (ok) toast.success("Added to BGC shortlist");
-              else toast.error("Shortlist full (max 20)");
+              else toast.error("Shortlist full");
             }}
           >
             <ListPlus className="h-3 w-3" />
             Add to BGC Shortlist
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 text-xs"
-            onClick={() => {
-              startAssessment("bgc", bgc.id, bgc.accession);
-              setMode("assess");
-            }}
-          >
-            <Microscope className="h-3 w-3" />
-            Evaluate Asset
           </Button>
         </div>
       </div>
@@ -146,17 +113,6 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
           <h3 className="vf-summary__title flex items-center gap-1" style={{ fontSize: "0.75rem" }}>Domain Novelty <HelpTooltip tooltipKey="domain_novelty" side="bottom" /></h3>
           <p className="vf-summary__text font-mono font-medium">{bgc.domain_novelty.toFixed(3)}</p>
         </article>
-        {bgc.nearest_validated_accession && (
-          <article className="vf-summary">
-            <h3 className="vf-summary__title flex items-center gap-1" style={{ fontSize: "0.75rem" }}>Nearest Validated <HelpTooltip tooltipKey="nearest_validated_distance" side="bottom" /></h3>
-            <p className="vf-summary__text font-mono font-medium">
-              {bgc.nearest_validated_accession}
-            </p>
-            <p className="vf-summary__text text-muted-foreground">
-              dist: {bgc.nearest_validated_distance?.toFixed(3)}
-            </p>
-          </article>
-        )}
       </div>
 
       <Separator />
@@ -194,7 +150,10 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
       )}
 
       {/* Chemical compounds */}
-      {bgc.natural_products && bgc.natural_products.length > 0 && (
+      {(
+        (bgc.natural_products && bgc.natural_products.length > 0) ||
+        (bgc.chemont_tree && bgc.chemont_tree.length > 0)
+      ) && (
         <>
           <div>
             <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>
@@ -205,33 +164,16 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                 <div key={np.id} className="flex items-start gap-3 rounded-md border p-2">
                   <div className="text-xs">
                     <div className="font-medium">{np.name}</div>
-                    {np.chemont_classes && np.chemont_classes.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {np.chemont_classes.flatMap(collectLeaves).map((leaf) => (
-                          <span
-                            key={leaf.chemont_id}
-                            title={leaf.chemont_id}
-                            className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium"
-                          >
-                            {leaf.name}
-                            {leaf.probability != null && (
-                              <span className="ml-1 font-normal text-muted-foreground">
-                                {(leaf.probability * 100).toFixed(0)}%
-                              </span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    ) : np.np_class_path ? (
+                    {np.np_class_path && (
                       <div className="mt-1 text-[10px] text-muted-foreground">
                         {np.np_class_path.replace(/\./g, " > ")}
                       </div>
-                    ) : null}
+                    )}
                     {np.smiles && (
                       <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
                         <span className="max-w-[200px] truncate" title={np.smiles}>{np.smiles}</span>
                         <a
-                          href={`https://molview.org/?smiles=${encodeURIComponent(np.smiles)}`}
+                          href={`https://app.molview.com/?smiles=${encodeURIComponent(np.smiles)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="shrink-0 text-primary hover:underline"
@@ -243,6 +185,30 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                   </div>
                 </div>
               ))}
+
+              {bgc.chemont_tree && bgc.chemont_tree.length > 0 && (
+                <div className="rounded-md border p-2">
+                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                    CHAMOIS ChemOnt classes (aggregated across CDSs)
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {bgc.chemont_tree.flatMap(collectLeaves).map((leaf) => (
+                      <span
+                        key={leaf.chemont_id}
+                        title={leaf.chemont_id}
+                        className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium"
+                      >
+                        {leaf.name}
+                        {leaf.n_cds > 0 && (
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            {leaf.n_cds} CDS
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <Separator />

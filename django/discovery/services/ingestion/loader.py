@@ -17,8 +17,8 @@ Expected directory layout::
       domains.tsv           (optional)
       embeddings_bgc.tsv    (optional)
       embeddings_protein.tsv (optional)
-      natural_products.tsv       (optional)
-      np_chemont_classes.tsv     (optional)
+      natural_products.tsv       (optional, curated compound rows)
+      cds_chemont.tsv            (optional, per-CDS ChemOnt predictions)
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from __future__ import annotations
 import base64
 import csv
 import logging
-import struct
 import sys
 from pathlib import Path
 
@@ -36,22 +35,22 @@ from django.db.models.expressions import RawSQL
 from discovery.models import (
     AssemblySource,
     BgcDomain,
-    BgcEmbedding,
     CdsSequence,
     ContigSequence,
     DashboardAssembly,
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
+    DashboardCdsChemOnt,
     DashboardContig,
     DashboardDetector,
     DashboardDomain,
     DashboardNaturalProduct,
     DashboardRegion,
-    NaturalProductChemOntClass,
-    ProteinEmbedding,
     RegionAccessionAlias,
 )
+
+from discovery.services.go_slim import go_slim_for_terms
 
 from .region_assignment import RegionAssigner
 from .tsv_copy import copy_tsv_to_table, truncate_tables
@@ -64,12 +63,10 @@ SEQUENCE_INSERT_BATCH_SIZE = 500  # smaller SQL batches for large binary sequenc
 # Tables in truncation order (respects FK CASCADE but explicit is safer)
 ALL_DISCOVERY_TABLES = [
     "discovery_region_accession_alias",
-    "discovery_protein_embedding",
-    "discovery_bgc_embedding",
     "discovery_bgc_domain",
+    "discovery_cds_chemont",
     "discovery_cds_sequence",
     "discovery_cds",
-    "discovery_np_chemont_class",
     "discovery_natural_product",
     "discovery_precomputed_stats",
     "discovery_bgc",
@@ -393,16 +390,6 @@ def load_bgcs(
 
             assembly_id = contig_to_assembly.get(contig_id)
 
-            # Support both old (nearest_mibig_*) and new (nearest_validated_*) column names
-            nearest_val_acc = row.get(
-                "nearest_validated_accession",
-                row.get("nearest_mibig_accession", ""),
-            )
-            raw_dist = row.get(
-                "nearest_validated_distance",
-                row.get("nearest_mibig_distance", ""),
-            )
-
             batch.append(
                 DashboardBgc(
                     assembly_id=assembly_id,
@@ -414,8 +401,6 @@ def load_bgcs(
                     novelty_score=float(row.get("novelty_score", 0)),
                     domain_novelty=float(row.get("domain_novelty", 0)),
                     size_kb=float(row.get("size_kb", 0)),
-                    nearest_validated_accession=nearest_val_acc,
-                    nearest_validated_distance=float(raw_dist) if raw_dist else None,
                     is_partial=row.get("is_partial", "").lower() in ("true", "1"),
                     is_validated=row.get("is_validated", "").lower() in ("true", "1"),
                     umap_x=float(row.get("umap_x", 0)),
@@ -434,7 +419,7 @@ def load_bgcs(
                     unique_fields=["contig", "start_position", "end_position", "detector"],
                     update_fields=[
                         "assembly", "classification_path", "novelty_score", "domain_novelty",
-                        "size_kb", "nearest_validated_accession", "nearest_validated_distance",
+                        "size_kb",
                         "is_partial", "is_validated", "umap_x", "umap_y", "gene_cluster_family",
                     ],
                 )
@@ -448,7 +433,7 @@ def load_bgcs(
             unique_fields=["contig", "start_position", "end_position", "detector"],
             update_fields=[
                 "assembly", "classification_path", "novelty_score", "domain_novelty",
-                "size_kb", "nearest_validated_accession", "nearest_validated_distance",
+                "size_kb",
                 "is_partial", "is_validated", "umap_x", "umap_y", "gene_cluster_family",
             ],
         )
@@ -587,7 +572,12 @@ def load_domains(
     bgc_lookup: dict[tuple[str, int, int, str], int],
     cds_lookup: dict[tuple[int, str], int],
 ) -> int:
-    """Load domains.tsv → BgcDomain. Returns row count."""
+    """Load domains.tsv → BgcDomain. Returns row count.
+
+    All ref_db values are ingested unchanged — clustering, similarity, and the
+    pooled domain architecture views apply their own PFAM/NCBIFAM filter
+    downstream (see discovery.services.clustering and discovery.services.architecture).
+    """
     path = data_dir / "domains.tsv"
     if not path.exists():
         logger.info("domains.tsv not found, skipping")
@@ -606,11 +596,16 @@ def load_domains(
             protein_id = row.get("protein_id_str", "")
             cds_id = cds_lookup.get((bgc_id, protein_id))
 
+            domain_acc = row["domain_acc"]
+            # go_terms column from the ETL is pipe-joined (e.g. "GO:0003824|GO:0008152").
+            # The model stores it as a JSON list; split + drop blanks here.
+            go_terms_raw = (row.get("go_terms") or "").strip()
+            go_terms = [t for t in go_terms_raw.split("|") if t] if go_terms_raw else []
             batch.append(
                 BgcDomain(
                     bgc_id=bgc_id,
                     cds_id=cds_id,
-                    domain_acc=row["domain_acc"],
+                    domain_acc=domain_acc,
                     domain_name=row.get("domain_name", ""),
                     domain_description=row.get("domain_description", ""),
                     ref_db=row.get("ref_db", ""),
@@ -618,6 +613,10 @@ def load_domains(
                     end_position=int(row.get("end_position", 0)),
                     score=float(row["score"]) if row.get("score") else None,
                     url=row.get("url", ""),
+                    go_slim=go_slim_for_terms(go_terms),
+                    interpro_entry_acc=row.get("interpro_entry_acc", ""),
+                    interpro_entry_description=row.get("interpro_entry_description", ""),
+                    go_terms=go_terms,
                 )
             )
 
@@ -629,7 +628,10 @@ def load_domains(
                     deduped,
                     update_conflicts=True,
                     unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
-                    update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
+                    update_fields=[
+                        "domain_name", "domain_description", "ref_db", "score", "url",
+                        "go_slim", "interpro_entry_acc", "interpro_entry_description", "go_terms",
+                    ],
                 )
                 total += len(deduped)
                 batch.clear()
@@ -642,100 +644,14 @@ def load_domains(
             deduped,
             update_conflicts=True,
             unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
-            update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
+            update_fields=[
+                "domain_name", "domain_description", "ref_db", "score", "url",
+                "go_slim", "interpro_entry_acc", "interpro_entry_description", "go_terms",
+            ],
         )
         total += len(deduped)
 
     logger.info("Loaded %d domain rows", total)
-    return total
-
-
-def load_embeddings(
-    data_dir: Path,
-    bgc_lookup: dict[tuple[str, int, int, str], int],
-) -> int:
-    """Load embeddings_bgc.tsv → BgcEmbedding. Returns row count."""
-    path = data_dir / "embeddings_bgc.tsv"
-    if not path.exists():
-        logger.info("embeddings_bgc.tsv not found, skipping")
-        return 0
-
-    batch: list[BgcEmbedding] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            bgc_id = _resolve_bgc_key(row, bgc_lookup)
-            if bgc_id is None:
-                continue
-
-            raw = base64.b64decode(row["vector_base64"])
-            vector = list(struct.unpack(f"<{len(raw)//4}f", raw))
-
-            batch.append(BgcEmbedding(bgc_id=bgc_id, vector=vector))
-
-            if len(batch) >= BATCH_SIZE:
-                BgcEmbedding.objects.bulk_create(
-                    batch, update_conflicts=True, unique_fields=["bgc"], update_fields=["vector"],
-                )
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        BgcEmbedding.objects.bulk_create(
-            batch, update_conflicts=True, unique_fields=["bgc"], update_fields=["vector"],
-        )
-        total += len(batch)
-
-    logger.info("Loaded %d BGC embeddings", total)
-    return total
-
-
-def load_protein_embeddings(data_dir: Path) -> int:
-    """Load embeddings_protein.tsv → ProteinEmbedding. Returns row count."""
-    path = data_dir / "embeddings_protein.tsv"
-    if not path.exists():
-        logger.info("embeddings_protein.tsv not found, skipping")
-        return 0
-
-    batch: list[ProteinEmbedding] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            raw = base64.b64decode(row["vector_base64"])
-            vector = list(struct.unpack(f"<{len(raw)//4}f", raw))
-
-            batch.append(
-                ProteinEmbedding(
-                    protein_sha256=row["protein_sha256"],
-                    vector=vector,
-                    source_protein_id=None,
-                )
-            )
-
-            if len(batch) >= BATCH_SIZE:
-                ProteinEmbedding.objects.bulk_create(
-                    batch,
-                    update_conflicts=True,
-                    unique_fields=["protein_sha256"],
-                    update_fields=["vector"],
-                )
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        ProteinEmbedding.objects.bulk_create(
-            batch,
-            update_conflicts=True,
-            unique_fields=["protein_sha256"],
-            update_fields=["vector"],
-        )
-        total += len(batch)
-
-    logger.info("Loaded %d protein embeddings", total)
     return total
 
 
@@ -787,26 +703,24 @@ def load_natural_products(
     return total
 
 
-def load_np_chemont_classes(
+def load_cds_chemont(
     data_dir: Path,
     bgc_lookup: dict[tuple[str, int, int, str], int],
+    cds_lookup: dict[tuple[int, str], int],
 ) -> int:
-    """Load np_chemont_classes.tsv → NaturalProductChemOntClass.
+    """Load cds_chemont.tsv → DashboardCdsChemOnt.
 
-    Each row maps a natural product (identified by BGC key + name) to a
-    ChemOnt ontology term with a probability score.
+    Each row identifies a single CDS via
+    ``(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)``
+    and carries the deepest ChemOnt class chosen by CHAMOIS plus its
+    BGC-level probability and gene-specific weight.
     """
-    path = data_dir / "np_chemont_classes.tsv"
+    path = data_dir / "cds_chemont.tsv"
     if not path.exists():
-        logger.info("np_chemont_classes.tsv not found, skipping")
+        logger.info("cds_chemont.tsv not found, skipping")
         return 0
 
-    # Build NP lookup: (bgc_id, np_name) → np_id
-    np_lookup: dict[tuple[int, str], int] = {}
-    for np_obj in DashboardNaturalProduct.objects.values_list("id", "bgc_id", "name"):
-        np_lookup[(np_obj[1], np_obj[2])] = np_obj[0]
-
-    batch: list[NaturalProductChemOntClass] = []
+    batch: list[DashboardCdsChemOnt] = []
     total = 0
     skipped = 0
 
@@ -818,45 +732,53 @@ def load_np_chemont_classes(
                 skipped += 1
                 continue
 
-            np_name = row.get("natural_product_name", "")
-            np_id = np_lookup.get((bgc_id, np_name))
-            if np_id is None:
+            protein_id_str = row.get("protein_id_str", "")
+            cds_id = cds_lookup.get((bgc_id, protein_id_str))
+            if cds_id is None:
                 skipped += 1
                 continue
 
-            probability = float(row.get("probability", "1.0"))
+            try:
+                probability = float(row.get("probability", "0.0"))
+            except ValueError:
+                probability = 0.0
+            try:
+                weight = float(row.get("weight", "0.0"))
+            except ValueError:
+                weight = 0.0
 
             batch.append(
-                NaturalProductChemOntClass(
-                    natural_product_id=np_id,
+                DashboardCdsChemOnt(
+                    cds_id=cds_id,
                     chemont_id=row["chemont_id"],
                     chemont_name=row["chemont_name"],
                     probability=probability,
+                    weight=weight,
                 )
             )
 
             if len(batch) >= BATCH_SIZE:
-                NaturalProductChemOntClass.objects.bulk_create(
+                DashboardCdsChemOnt.objects.bulk_create(
                     batch,
                     update_conflicts=True,
-                    unique_fields=["natural_product", "chemont_id"],
-                    update_fields=["chemont_name", "probability"],
+                    unique_fields=["cds", "chemont_id"],
+                    update_fields=["chemont_name", "probability", "weight"],
                 )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        NaturalProductChemOntClass.objects.bulk_create(
+        DashboardCdsChemOnt.objects.bulk_create(
             batch,
             update_conflicts=True,
-            unique_fields=["natural_product", "chemont_id"],
-            update_fields=["chemont_name", "probability"],
+            unique_fields=["cds", "chemont_id"],
+            update_fields=["chemont_name", "probability", "weight"],
         )
         total += len(batch)
 
     if skipped:
-        logger.warning("Skipped %d ChemOnt class rows (unresolved NP)", skipped)
-    logger.info("Loaded %d NP ChemOnt classifications", total)
+        logger.warning("Skipped %d CDS ChemOnt rows (unresolved BGC/CDS)", skipped)
+    logger.info("Loaded %d CDS ChemOnt classifications", total)
     return total
 
 
@@ -990,17 +912,15 @@ def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bo
     # 6. Domains
     load_domains(data_dir, bgc_lookup, cds_lookup)
 
-    # 7. BGC embeddings
-    load_embeddings(data_dir, bgc_lookup)
+    # ESM embedding loaders removed in v2 (P1.4b) — discovery no longer
+    # ingests embeddings; similarity is computed via composite-Dice over
+    # the domain + adjacency matrices in the clustering pipeline.
 
-    # 7.5. Protein embeddings
-    load_protein_embeddings(data_dir)
-
-    # 8. Natural products
+    # 8. Natural products (curated only — CHAMOIS no longer feeds this table)
     load_natural_products(data_dir, bgc_lookup)
 
-    # 8.5. NP ChemOnt classifications
-    load_np_chemont_classes(data_dir, bgc_lookup)
+    # 8.5. Per-CDS ChemOnt classifications from CHAMOIS
+    load_cds_chemont(data_dir, bgc_lookup, cds_lookup)
 
     # 9–10. Post-load computations
     if not skip_stats:

@@ -97,8 +97,6 @@ class BgcRosterItem(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
-    nearest_validated_accession: Optional[str] = None
-    nearest_validated_distance: Optional[float] = None
     assembly_accession: Optional[str] = None
     detector: Optional[DetectorOut] = None
     region_accession: Optional[str] = None
@@ -120,7 +118,8 @@ class DomainArchitectureItem(Schema):
 
 
 class ParentAssemblySummary(Schema):
-    assembly_id: int
+    # ``None`` for ephemeral asset-upload assemblies that have no DB row.
+    assembly_id: Optional[int] = None
     accession: str
     organism_name: Optional[str] = None
     source_name: Optional[str] = None
@@ -129,28 +128,33 @@ class ParentAssemblySummary(Schema):
 
 
 class ChemOntAnnotationNode(Schema):
-    """A node in a ChemOnt classification tree for a natural product.
+    """A node in an aggregated ChemOnt classification tree.
 
-    Each node is a directly-annotated ChemOnt term with its probability.
-    ``children`` holds more specific sub-classifications that were also
-    annotated on the same natural product.
+    Built from per-CDS CHAMOIS predictions: each CDS contributes its deepest
+    ChemOnt class; identical classes are unified across CDSs (max probability,
+    sum of CDS counts). Intermediate ancestors get a row whenever they sit on
+    the lineage between annotated leaves; ``probability`` is ``None`` for those
+    and ``n_cds`` is the sum of annotated descendants.
     """
 
     chemont_id: str
     name: str
     depth: int = 0
     probability: float | None = None
+    n_cds: int = 0
     children: list["ChemOntAnnotationNode"] = []
 
 
 class NaturalProductSummary(Schema):
+    """Curated per-BGC natural product (SMILES, structure). No longer carries
+    CHAMOIS-derived ChemOnt classes — those live at the BGC / iBGC level."""
+
     id: int
     name: str
     smiles: str
     smiles_svg: str = ""
     structure_thumbnail: str = ""
     np_class_path: str = ""
-    chemont_classes: list[ChemOntAnnotationNode] = []
 
 
 class BgcDetail(Schema):
@@ -161,12 +165,11 @@ class BgcDetail(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
-    nearest_validated_accession: Optional[str] = None
-    nearest_validated_distance: Optional[float] = None
     is_validated: bool = False
     domain_architecture: list[DomainArchitectureItem] = []
     parent_assembly: Optional[ParentAssemblySummary] = None
     natural_products: list[NaturalProductSummary] = []
+    chemont_tree: list[ChemOntAnnotationNode] = []
     detector: Optional[DetectorOut] = None
     region_accession: Optional[str] = None
 
@@ -188,6 +191,293 @@ class ValidatedReferencePoint(Schema):
     classification_path: str = ""
     umap_x: float
     umap_y: float
+
+
+# ── iBGC (Integrated BGC) schemas ──────────────────────────────────────────
+
+
+class IbgcRosterItem(Schema):
+    """Row in the iBGC-level results table.
+
+    iBGCs are the primary unit in the v2 Discovery dashboard. Each iBGC
+    consolidates one or more source ``DashboardBgc`` rows; the table here
+    flattens metadata that the UI needs in the roster view.
+    """
+
+    id: int
+    label: str  # human-facing identifier (e.g. "iBGC-12345")
+    classification_path: str = ""  # leaf GCF path (gene_cluster_family)
+    size_kb: float = 0.0  # (end - start) / 1000
+    n_source_bgcs: int = 0
+    source_tools: list[str] = []
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    is_type_strain: bool = False  # any source BGC sits on a type-strain assembly
+    umap_projected: bool = False
+    parent_assembly_id: Optional[int] = None
+    parent_assembly_accession: Optional[str] = None
+    organism_name: Optional[str] = None
+    contig_accession: Optional[str] = None
+    similarity_score: Optional[float] = None  # filled by similar-ibgc / query
+    # Populated only by sequence-protein search responses — the protein_id
+    # of the highest-bitscore CDS within the iBGC, and that CDS's aggregate
+    # alignment stats. Percent identity and query coverage are 0–100.
+    best_hit_protein_id: Optional[str] = None
+    best_pident: Optional[float] = None
+    best_qcoverage: Optional[float] = None
+    # True for iBGCs sourced from an uploaded asset (negative id, ephemeral).
+    is_asset: bool = False
+
+
+class PaginatedIbgcRosterResponse(Schema):
+    items: list[IbgcRosterItem]
+    pagination: PaginationMeta
+
+
+class IbgcMemberBgc(Schema):
+    """Source DashboardBgc contributing to an iBGC (drill-down list)."""
+
+    id: int
+    accession: str
+    detector_name: Optional[str] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    size_kb: float = 0.0
+
+
+class IbgcDetail(Schema):
+    id: int
+    label: str
+    classification_path: str = ""
+    size_kb: float = 0.0
+    start_position: int = 0
+    end_position: int = 0
+    contig_accession: Optional[str] = None
+    source_tools: list[str] = []
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    is_type_strain: bool = False
+    umap_projected: bool = False
+    umap_x: Optional[float] = None
+    umap_y: Optional[float] = None
+    parent_assembly: Optional[ParentAssemblySummary] = None
+    representative_bgc_id: Optional[int] = None  # for region/CDS rendering
+    member_bgcs: list[IbgcMemberBgc] = []
+    domain_architecture: list[DomainArchitectureItem] = []
+    natural_products: list[NaturalProductSummary] = []
+    chemont_tree: list[ChemOntAnnotationNode] = []
+
+
+class IbgcScatterPoint(Schema):
+    """Point for the Variables Map (axes chosen from numeric iBGC columns)."""
+
+    id: int
+    x: float
+    y: float
+    classification_path: str = ""
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    is_type_strain: bool = False
+    umap_projected: bool = False
+    similarity_score: Optional[float] = None
+    is_asset: bool = False
+
+
+class IbgcUmapPoint(Schema):
+    """Point for the UMAP tab; ``umap_projected`` flags partial-iBGC inferred coords."""
+
+    id: int
+    label: str
+    umap_x: float
+    umap_y: float
+    classification_path: str = ""
+    novelty_score: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    is_type_strain: bool = False
+    umap_projected: bool = False
+    is_asset: bool = False
+
+
+class IbgcCountResponse(Schema):
+    """Filter-surface count + capping metadata for the dashboard.
+
+    Used by the v2 Discovery dashboard to drive the empty-state guard and
+    the "showing X of Y, sampled" banner *before* firing the expensive
+    roster / UMAP / Variables-map requests. Same filter surface as
+    ``/ibgcs/roster/``.
+    """
+
+    exact_count: int
+    cap: int
+    will_sample: bool
+
+
+class SimilarIbgcRequest(Schema):
+    ibgc_id: int
+    k: int = 25
+
+
+class IbgcArchitectureResponse(Schema):
+    """Pooled positional domain accessions for an iBGC.
+
+    Lightweight payload for the "copy domain architecture" action — avoids
+    pulling the full IbgcDetail. ``ordered_accs`` mirrors the ordering rule
+    used by the clustering pipeline (CDS start, then domain start).
+    """
+
+    id: int
+    label: str
+    ordered_accs: list[str]
+
+
+class IbgcArchitectureQueryRequest(Schema):
+    """Composite-Dice query over a user-supplied domain architecture.
+
+    ``architecture`` is the ordered list of domain accessions; ``weight`` is
+    the Sørensen-Dice share (``1.0`` = pure Dice, ``0.0`` = pure adjacency).
+    Unknown accessions (not in the latest ClusteringRun's scoring cache)
+    are silently dropped.
+    """
+
+    architecture: list[str]
+    weight: float = 0.5
+    k: int = 100
+
+
+# ── Shortlist Report schemas ─────────────────────────────────────────────────
+
+
+class ReportSnapshotRequest(Schema):
+    ibgc_ids: list[int]
+    # When negative ids are present in ``ibgc_ids`` the snapshot endpoint
+    # resolves them out of the asset cache identified by ``asset_token``.
+    asset_token: Optional[str] = None
+
+
+class ReportSnapshotResponse(Schema):
+    token: str
+    expires_at: str
+    n_ibgcs: int
+
+
+class DomainCompositionEntry(Schema):
+    domain_acc: str
+    domain_name: str = ""
+    domain_description: str = ""
+    go_slim: str = ""
+    ibgc_count: int
+    fraction: float
+    tier: str  # "core" | "variable" | "rare"
+
+
+class DomainGoslimDomain(Schema):
+    domain_acc: str
+    domain_name: str = ""
+    domain_description: str = ""
+
+
+class DomainGoslimCell(Schema):
+    category: str
+    tier: str  # "core" | "variable" | "rare"
+    count: int = 0
+    domains: list[DomainGoslimDomain] = []
+
+
+class DomainGoslimMatrix(Schema):
+    categories: list[str] = []
+    tiers: list[str] = []
+    cells: list[DomainGoslimCell] = []
+
+
+class DomainCompositionSummary(Schema):
+    core_count: int = 0
+    variable_count: int = 0
+    rare_count: int = 0
+    total_unique: int = 0
+    rows: list[DomainCompositionEntry] = []
+
+
+class GcfDistributionEntry(Schema):
+    classification_path: str
+    ibgc_count: int
+    fraction: float
+
+
+class CategoryCount(Schema):
+    name: str
+    count: int
+
+
+class LengthBucket(Schema):
+    label: str
+    count: int
+
+
+class ReportIbgcRow(Schema):
+    id: int
+    label: str
+    classification_path: str = ""
+    size_kb: float = 0.0
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    n_source_bgcs: int = 0
+    source_tools: list[str] = []
+    is_partial: bool = False
+    is_validated: bool = False
+    parent_assembly_accession: Optional[str] = None
+    parent_assembly_id: Optional[int] = None
+    organism_name: Optional[str] = None
+    biome_path: str = ""
+    taxonomy_phylum: Optional[str] = None
+    contig_accession: Optional[str] = None
+
+
+class ReportAssemblyRow(Schema):
+    id: int
+    accession: str
+    organism_name: Optional[str] = None
+    source_name: Optional[str] = None
+    biome_path: str = ""
+    taxonomy_path: str = ""
+    taxonomy_phylum: Optional[str] = None
+    assembly_size_mb: Optional[float] = None
+    total_bgcs_in_assembly: int = 0
+    ibgcs_in_shortlist: int = 0
+    is_type_strain: bool = False
+
+
+class ReportPayload(Schema):
+    token: str
+    generated_at: str
+    expires_at: str
+    n_ibgcs: int
+    n_assemblies: int
+    ibgc_rows: list[ReportIbgcRow] = []
+    domain_composition: DomainCompositionSummary = DomainCompositionSummary()
+    gcf_distribution: list[GcfDistributionEntry] = []
+    score_distributions: list[dict] = []
+    completeness_pie: list[CategoryCount] = []
+    bgc_class_pie: list[CategoryCount] = []
+    length_histogram: list[LengthBucket] = []
+    predictor_distribution: list[CategoryCount] = []
+    source_distribution: list[CategoryCount] = []
+    assembly_rows: list[ReportAssemblyRow] = []
+    assembly_stats: dict = {}
+    # iBGC-derived taxonomy sunburst (one count per iBGC). Items follow the
+    # ``SunburstNode`` shape ({id, label, parent, count}); typed as ``dict``
+    # because SunburstNode is defined further down in this module.
+    taxonomy_sunburst: list[dict] = []
+    domain_goslim_matrix: DomainGoslimMatrix = DomainGoslimMatrix()
+
+    # Inner shape is {label: str, values: list[float]} — kept as raw dict to
+    # avoid a forward reference to ScoreDistribution defined further down.
 
 
 # ── Filter schemas ────────────────────────────────────────────────────────────
@@ -230,6 +520,19 @@ class PaginatedDomainResponse(Schema):
     pagination: PaginationMeta
 
 
+class GcfOption(Schema):
+    family_path: str
+    level: int
+    member_count: int
+    validated_count: int
+    mean_novelty: float
+
+
+class PaginatedGcfResponse(Schema):
+    items: list[GcfOption]
+    pagination: PaginationMeta
+
+
 class SourceOption(Schema):
     name: str
     count: int
@@ -260,7 +563,11 @@ class ChemicalQueryRequest(Schema):
 
 class SequenceQueryRequest(Schema):
     sequence: str
-    similarity_threshold: float = 0.7
+    # phmmer hit must pass all three thresholds. Defaults are tuned for
+    # "clearly a close homolog" (bitscore ≥ 30, ≥70% identity, ≥70% query coverage).
+    min_bitscore: float = 30.0
+    min_pident: float = 70.0   # percent, 0..100
+    min_qcov: float = 70.0     # percent, 0..100
 
 
 class DomainCondition(Schema):
@@ -281,7 +588,13 @@ class QueryResultBgc(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
+    # For sequence queries `similarity_score` carries the best bitscore; for
+    # other modes it keeps the mode-specific score (Dice, Tanimoto, etc.).
     similarity_score: float = 0.0
+    # Sequence-query-specific metrics (populated only by the protein search).
+    best_bitscore: Optional[float] = None
+    best_pident: Optional[float] = None     # percent, 0..100
+    best_qcoverage: Optional[float] = None  # percent, 0..100
     # Parent assembly summary
     assembly_id: Optional[int] = None
     assembly_accession: Optional[str] = None
@@ -355,6 +668,8 @@ class AssemblyStatsResponse(Schema):
     mean_bgc_per_assembly: float = 0.0
     mean_l1_class_per_assembly: float = 0.0
     total_assemblies: int = 0
+    biome_distribution: list[CategoryCount] = []
+    source_distribution: list[CategoryCount] = []
 
 
 class BgcStatsResponse(Schema):
@@ -379,12 +694,37 @@ class ShortlistExportRequest(Schema):
 
 
 class PfamAnnotationOut(Schema):
+    """Per-signature domain hit. One row per BgcDomain. ``go_slim`` is the
+    deduplicated list of slim names derived from the signature's GO terms.
+
+    Deprecated by ``InterproAnnotationOut`` (collapsed by IPS entry) — kept
+    for one release while the frontend migrates.
+    """
+
     accession: str
     description: str = ""
-    go_slim: str = ""
+    go_slim: list[str] = []
     envelope_start: int = 0
     envelope_end: int = 0
     e_value: Optional[str] = None
+    url: str = ""
+
+
+class InterproAnnotationOut(Schema):
+    """Non-redundant CDS annotation row, deduplicated by InterPro entry.
+
+    When the signature maps to an InterPro entry (``interpro_entry_acc`` set
+    on the BgcDomain row), all signatures sharing that entry collapse into
+    one row carrying the entry accession and description. Signatures with no
+    entry mapping fall back to the signature accession.
+    """
+
+    accession: str
+    description: str = ""
+    go_slim: list[str] = []
+    envelope_start: int = 0  # min start across collapsed signatures
+    envelope_end: int = 0  # max end across collapsed signatures
+    e_value: Optional[str] = None  # best (smallest) e-value across signatures
     url: str = ""
 
 
@@ -399,6 +739,16 @@ class RegionCdsOut(Schema):
     cluster_representative_url: Optional[str] = None
     sequence: str = ""
     pfam: list[PfamAnnotationOut] = []
+    # Non-redundant InterPro-entry annotations for the protein info card.
+    # Same source data as ``pfam`` but collapsed by interpro_entry_acc
+    # (falling back to signature accession when no entry is mapped).
+    interpro: list[InterproAnnotationOut] = []
+    # Deepest ChemOnt class predicted by CHAMOIS for this CDS (null when no
+    # confident classification — see DashboardCdsChemOnt).
+    chemont_id: Optional[str] = None
+    chemont_name: Optional[str] = None
+    chemont_probability: Optional[float] = None
+    chemont_weight: Optional[float] = None
 
 
 class RegionDomainOut(Schema):
@@ -430,194 +780,8 @@ class BgcRegionOut(Schema):
     cluster_list: list[RegionClusterOut] = []
 
 
-# ── Assessment schemas ──────────────────────────────────────────────────────
-
-
-class AssessmentAccepted(Schema):
-    task_id: str
-    asset_type: str  # "assembly" | "bgc"
-
-
-class AssessmentStatusResponse(Schema):
-    status: str  # "PENDING" | "SUCCESS" | "FAILURE"
-    result: Optional[dict] = None
-
-
-# -- Assembly assessment --
-
-
-class PercentileRank(Schema):
-    dimension: str
-    label: str
-    value: float
-    percentile_all: float
-    percentile_type_strain: float
-
-
-class BgcNoveltyItem(Schema):
-    bgc_id: int
-    accession: str
-    classification_path: str = ""
-    novelty_vs_validated: float = 0.0
-    novelty_vs_db: float = 0.0
-    domain_novelty: float = 0.0
-    is_partial: bool = False
-    size_kb: float = 0.0
-    nearest_validated_accession: Optional[str] = None
-    nearest_validated_distance: Optional[float] = None
-
-
-class RedundancyCell(Schema):
-    bgc_id: int
-    accession: str
-    classification_path: str = ""
-    gcf_family_id: Optional[str] = None
-    gcf_member_count: int = 0
-    gcf_has_validated: bool = False
-    gcf_has_type_strain: bool = False
-    status: str = "novel_gcf"  # "novel_gcf" | "known_gcf_no_type_strain" | "known_gcf_type_strain"
-
-
-class AssessChemicalSpacePoint(Schema):
-    bgc_id: int
-    accession: str
-    umap_x: float
-    umap_y: float
-    classification_path: str = ""
-    nearest_validated_distance: float = 0.0
-    is_sparse: bool = False
-
-
-class RadarReference(Schema):
-    """DB mean and 90th percentile for each AssemblyScore dimension."""
-
-    dimension: str
-    label: str
-    db_mean: float
-    db_p90: float
-
-
-class AssemblyAssessmentResponse(Schema):
-    assembly_id: int
-    accession: str
-    organism_name: Optional[str] = None
-    is_type_strain: bool = False
-    # Percentile ranks
-    percentile_ranks: list[PercentileRank] = []
-    # DB rank
-    db_rank: int = 0
-    db_total: int = 0
-    # Per-BGC novelty
-    bgc_novelty_breakdown: list[BgcNoveltyItem] = []
-    # Redundancy matrix
-    redundancy_matrix: list[RedundancyCell] = []
-    # Chemical space
-    chemical_space_points: list[AssessChemicalSpacePoint] = []
-    validated_reference_points: list[ValidatedReferencePoint] = []
-    mean_nearest_validated_distance: float = 0.0
-    sparse_fraction: float = 0.0
-    # Radar chart reference data
-    radar_references: list[RadarReference] = []
-
-
-# -- BGC assessment --
-
-
-class GcfDomainFrequency(Schema):
-    domain_acc: str
-    domain_name: str
-    description: Optional[str] = None
-    frequency: float = 0.0
-    category: str = ""  # "core" | "variable" | "rare"
-
-
-class GcfTaxonomyCount(Schema):
-    taxonomy_label: str
-    count: int = 0
-
-
-class GcfTaxonomyNode(Schema):
-    """One node in the hierarchical taxonomy sunburst for a GCF.
-
-    ``id`` is the full dot-path (e.g. ``Bacteria.Actinomycetota``), ``parent``
-    is the dot-path of the parent (empty string for root nodes), ``count`` is
-    the number of GCF members whose lineage passes through this node.
-    Ready-to-feed into Plotly sunburst with ``branchvalues: 'total'``.
-    """
-
-    id: str
-    label: str
-    parent: str = ""
-    count: int = 0
-    rank: str = ""
-
-
-class GcfMemberPoint(Schema):
-    bgc_id: int
-    umap_x: float
-    umap_y: float
-    is_type_strain: bool = False
-    accession: str = ""
-
-
-class GcfContext(Schema):
-    gcf_id: int
-    family_id: str
-    member_count: int = 0
-    validated_count: int = 0
-    mean_novelty: float = 0.0
-    known_chemistry_annotation: Optional[str] = None
-    validated_accession: Optional[str] = None
-    domain_frequency: list[GcfDomainFrequency] = []
-    taxonomy_distribution: list[GcfTaxonomyCount] = []
-    taxonomy_hierarchy: list[GcfTaxonomyNode] = []
-    member_points: list[GcfMemberPoint] = []
-
-
-class DomainDifferential(Schema):
-    domain_acc: str
-    domain_name: str
-    in_submitted: bool = True
-    gcf_frequency: float = 0.0
-    category: str = ""  # "core" | "variable" | "absent"
-
-
-class NoveltyDecomposition(Schema):
-    sequence_novelty: float = 0.0
-    chemistry_novelty: float = 0.0
-    architecture_novelty: float = 0.0
-
-
-class AssessNearestNeighborPoint(Schema):
-    bgc_id: Optional[int] = None
-    validated_accession: Optional[str] = None
-    umap_x: float = 0.0
-    umap_y: float = 0.0
-    distance: float = 0.0
-    label: str = ""
-    is_validated: bool = False
-
-
-class BgcAssessmentResponse(Schema):
-    bgc_id: int
-    accession: str
-    classification_path: str = ""
-    # GCF placement
-    gcf_context: Optional[GcfContext] = None
-    distance_to_gcf_representative: Optional[float] = None
-    is_novel_singleton: bool = False
-    # Domain differential
-    domain_differential: list[DomainDifferential] = []
-    # Novelty decomposition
-    novelty: NoveltyDecomposition = NoveltyDecomposition()
-    # Chemical space
-    submitted_point: Optional[AssessChemicalSpacePoint] = None
-    nearest_neighbors: list[AssessNearestNeighborPoint] = []
-    validated_reference_points: list[ValidatedReferencePoint] = []
-    # Domain architecture for comparison
-    submitted_domains: list[DomainArchitectureItem] = []
-    nearest_validated_accession: Optional[str] = None
-    nearest_validated_bgc_id: Optional[int] = None
+# Assessment schemas removed in v2 — the Evaluate Asset feature was
+# replaced by the Shortlist Report endpoints (ReportPayload above).
 
 
 # ── Platform overview ─────────────────────────────────────────────────────────
@@ -627,6 +791,30 @@ class DiscoveryStatsResponse(Schema):
     genomes: int = 0
     metagenomes: int = 0
     validated_bgcs: int = 0
-    regions: int = 0
+    ibgcs: int = 0
     total_bgc_predictions: int = 0
     updated_at: Optional[datetime] = None
+
+
+# ── Ephemeral asset upload schemas ──────────────────────────────────────────
+
+
+class AssetUploadAccepted(Schema):
+    """Response for ``POST /assets/upload/`` — async processing started."""
+
+    token: str
+    task_id: str
+
+
+class AssetStatusResponse(Schema):
+    """Polling response for ``GET /assets/{token}/status/``.
+
+    ``state`` is one of ``PENDING``, ``RUNNING``, ``SUCCESS``, ``FAILED``,
+    ``UNKNOWN`` (when the token has expired or never existed).
+    """
+
+    state: str
+    task_id: Optional[str] = None
+    progress: Optional[dict] = None
+    error: Optional[str] = None
+    summary: Optional[dict] = None

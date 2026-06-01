@@ -143,7 +143,33 @@ CELERY_TASK_ROUTES = {
 # Must match ref_db_allowlist in mgnify-bgcs-etl/config/load/merge_staged_tsvs.yaml
 # so uploaded assets are compared against the same subset of domains that is
 # actually loaded into the Discovery DB.
-ALLOWED_DOMAIN_REF_DBS: tuple[str, ...] = ("PFAM", "TIGRFAM")
+ALLOWED_DOMAIN_REF_DBS: tuple[str, ...] = ("PFAM", "TIGRFAM", "NCBIFAM")
+
+# Filesystem destination for post-clustering analysis artifacts (TSV + Plotly HTMLs).
+# Each ClusteringRun writes to <CLUSTERING_ARTIFACTS_DIR>/<run_sha[:12]>/.
+CLUSTERING_ARTIFACTS_DIR: Path = Path(
+    os.environ.get(
+        "CLUSTERING_ARTIFACTS_DIR",
+        BASE_DIR / "data" / "clustering_artifacts",
+    )
+)
+
+# When True, the in-portal clustering pipeline (run_bgc_clustering) is refused
+# — clustering must run on HPC via the bgc-cluster CLI and be imported back
+# with import_clustering_results. Default off so local compose / dev still
+# works against a small seeded DB.
+CLUSTERING_HPC_MODE: bool = (
+    os.environ.get("CLUSTERING_HPC_MODE", "false").lower() in ("1", "true", "yes")
+)
+
+# On-disk phmmer protein search DB (FASTA + .ssi + VERSION).
+# Lives on the shared ML PVC so every Celery worker can read it.
+PROTEIN_SEARCH_INDEX_DIR: Path = Path(
+    os.environ.get(
+        "PROTEIN_SEARCH_INDEX_DIR",
+        BASE_DIR / "data" / "protein_search",
+    )
+)
 
 
 # REST Framework
@@ -264,6 +290,15 @@ LOGGING = {
         "django": {
             "handlers": ["console"],
             "level": DJANGO_MANAGED_LOG_LEVEL,
+            "propagate": False,
+        },
+        # django-debug-toolbar 5.0.1's history_sidebar view renders
+        # panel_content.html without `toolbar` in context, producing noisy
+        # VariableDoesNotExist DEBUG traces on every page reload. Harmless —
+        # the template falls back to the lazy-load branch as intended.
+        "django.template": {
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
     },

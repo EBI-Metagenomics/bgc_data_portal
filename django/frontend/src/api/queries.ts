@@ -36,28 +36,8 @@ export function postDomainQuery(
   );
 }
 
-export interface SimilarBgcParams {
-  max_distance?: number;
-  page?: number;
-  page_size?: number;
-  sort_by?: string;
-  order?: "asc" | "desc";
-}
-
-export function postSimilarBgcQuery(
-  bgcId: number,
-  params: SimilarBgcParams = {}
-) {
-  const queryString = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) queryString.set(key, String(value));
-  }
-  const qs = queryString.toString();
-  return apiPost<PaginatedQueryResultResponse>(
-    `/query/similar-bgc/${bgcId}/${qs ? `?${qs}` : ""}`,
-    {}
-  );
-}
+// Composite-Dice "find similar iBGCs" replaces the retired embedding-based
+// similar-BGC endpoint. See `src/api/ibgcs.ts` → `postSimilarIbgcQuery`.
 
 export interface ChemicalQueryRequest {
   smiles: string;
@@ -98,7 +78,9 @@ export function postChemicalQuery(
 
 export interface SequenceQueryRequest {
   sequence: string;
-  similarity_threshold: number;
+  min_bitscore: number;
+  min_pident: number;
+  min_qcov: number;
 }
 
 export interface SequenceQueryParams {
