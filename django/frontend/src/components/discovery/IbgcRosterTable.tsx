@@ -340,7 +340,7 @@ function IbgcRosterRow({
   return (
     <IbgcContextMenu
       ibgcId={ibgc.id}
-      ibgcLabel={ibgc.label}
+      ibgcLabel={ibgc.accession || ibgc.label}
       isPartial={ibgc.umap_projected}
       isAsset={ibgc.is_asset}
     >
@@ -358,7 +358,7 @@ function IbgcRosterRow({
         }
       >
         <TableCell className="font-mono text-xs">
-          {ibgc.label}
+          {ibgc.accession || ibgc.label}
           {ibgc.is_asset && (
             <Badge
               className="ml-2 h-4 px-1 text-[10px] text-white border-transparent"

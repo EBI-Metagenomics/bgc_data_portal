@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchIbgcDetail } from "@/api/ibgcs";
-import { fetchBgcRegion } from "@/api/bgcs";
+import { fetchIbgcDetail, fetchIbgcRegion } from "@/api/ibgcs";
 import { RegionPlot } from "@/components/bgc/RegionPlot";
 import { IbgcActionsMenu } from "./IbgcActionsMenu";
 import { useDiscoveryStore } from "@/stores/discovery-store";
@@ -113,7 +112,19 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           >
             {variantLabel}
           </Badge>
-          <h3 className="font-mono text-sm font-semibold">{ibgc.label}</h3>
+          <div className="flex flex-col leading-tight">
+            <h3 className="font-mono text-sm font-semibold">
+              {ibgc.accession || ibgc.label}
+            </h3>
+            {ibgc.cbgc_accession && (
+              <span
+                className="font-mono text-[10px] text-muted-foreground"
+                title="Parent consensus BGC"
+              >
+                {ibgc.cbgc_accession}
+              </span>
+            )}
+          </div>
           {ibgc.is_validated && (
             <Badge variant="default" className="text-[10px]">
               Validated
@@ -135,7 +146,7 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
         </div>
         <IbgcActionsMenu
           ibgcId={ibgc.id}
-          ibgcLabel={ibgc.label}
+          ibgcLabel={ibgc.accession || ibgc.label}
           variant={variant}
           isPartial={ibgc.umap_projected}
           isAsset={ibgc.id < 0}
@@ -163,9 +174,7 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           </div>
         </div>
 
-        <RegionStrip
-          representativeBgcId={ibgc.representative_bgc_id}
-        />
+        <RegionStrip ibgcId={ibgc.id} />
 
         <MemberBgcStrip memberBgcs={ibgc.member_bgcs} />
       </CardContent>
@@ -173,28 +182,18 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
   );
 }
 
-function RegionStrip({
-  representativeBgcId,
-}: {
-  representativeBgcId: number | null;
-}) {
+function RegionStrip({ ibgcId }: { ibgcId: number | null }) {
   const setSelectedCds = useDiscoveryStore((s) => s.setSelectedCds);
   const selectedCds = useDiscoveryStore((s) => s.selectedCds);
   const assetToken = useDiscoveryStore((s) => s.assetToken);
-  const isAssetBgc =
-    representativeBgcId !== null && representativeBgcId < 0;
+  const isAssetIbgc = ibgcId !== null && ibgcId < 0;
   const { data, isLoading } = useQuery({
-    queryKey: [
-      "bgc-region",
-      representativeBgcId,
-      isAssetBgc ? assetToken : null,
-    ],
-    queryFn: () =>
-      fetchBgcRegion(representativeBgcId as number, assetToken),
-    enabled: representativeBgcId !== null,
+    queryKey: ["ibgc-region", ibgcId, isAssetIbgc ? assetToken : null],
+    queryFn: () => fetchIbgcRegion(ibgcId as number, assetToken),
+    enabled: ibgcId !== null,
   });
 
-  if (representativeBgcId === null) return null;
+  if (ibgcId === null) return null;
   if (isLoading) {
     return (
       <div className="flex h-12 items-center justify-center rounded border bg-muted/20 text-xs text-muted-foreground">

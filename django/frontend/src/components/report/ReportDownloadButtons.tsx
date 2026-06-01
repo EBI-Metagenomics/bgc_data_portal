@@ -12,7 +12,7 @@ const basePath =
   (typeof document !== "undefined" &&
     document.querySelector('meta[name="base-path"]')?.getAttribute("content")) ||
   "";
-const REPORT_API = `${basePath}/api/dashboard/report`;
+const REPORT_API = `${basePath}/api/discovery/report`;
 
 /**
  * Server-side export buttons for the Shortlist Report: analyst JSON,

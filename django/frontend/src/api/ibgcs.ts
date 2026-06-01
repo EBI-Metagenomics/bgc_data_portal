@@ -3,6 +3,7 @@ import type {
   IbgcCountResponse,
   IbgcDetail,
   IbgcIdsResponse,
+  IbgcRegionData,
   IbgcScatterAxis,
   IbgcScatterPoint,
   IbgcUmapPoint,
@@ -146,6 +147,22 @@ export function fetchIbgcDetail(ibgcId: number, assetToken?: string | null) {
     );
   }
   return apiGet<IbgcDetail>(`/ibgcs/${ibgcId}/`);
+}
+
+/**
+ * Merged region payload for an iBGC — the union of every CDS overlapping the
+ * iBGC's genomic span, each carrying ``claimed_by_tools`` attribution. This
+ * is the single round-trip that backs the region plot (replaces the old
+ * per-representative-prediction ``/bgcs/{id}/region/`` call).
+ */
+export function fetchIbgcRegion(ibgcId: number, assetToken?: string | null) {
+  if (ibgcId < 0 && assetToken) {
+    return apiGetWithHeaders<IbgcRegionData>(
+      `/ibgcs/${ibgcId}/region/`,
+      { "X-Asset-Token": assetToken },
+    );
+  }
+  return apiGet<IbgcRegionData>(`/ibgcs/${ibgcId}/region/`);
 }
 
 export interface IbgcUmapParams extends IbgcFilterParams {

@@ -321,6 +321,10 @@ export interface RegionCds {
   chemont_name: string | null;
   chemont_probability: number | null;
   chemont_weight: number | null;
+  // Source tools whose prediction range covers this CDS within the owning
+  // iBGC (range-overlap attribution). Populated by the iBGC region endpoint;
+  // empty for the per-prediction BGC region endpoint.
+  claimed_by_tools: string[];
 }
 
 export interface RegionDomain {
@@ -349,6 +353,19 @@ export interface BgcRegionData {
   cds_list: RegionCds[];
   domain_list: RegionDomain[];
   cluster_list: RegionCluster[];
+}
+
+/**
+ * Merged region payload for an iBGC (``GET /ibgcs/{id}/region/``): the union
+ * of every CDS overlapping the iBGC's genomic span, with per-CDS
+ * ``claimed_by_tools`` attribution. Superset of {@link BgcRegionData} so it
+ * drops straight into ``RegionPlot``.
+ */
+export interface IbgcRegionData extends BgcRegionData {
+  ibgc_id: number;
+  ibgc_accession: string;
+  cbgc_accession: string;
+  contig_accession: string | null;
 }
 
 // ── Stats schemas ─────────────────────────────────────────────────────────
@@ -575,7 +592,11 @@ export interface BgcAssessmentResult {
 
 export interface IbgcRosterItem {
   id: number;
+  /** Stable iBGC accession (MGYB-XXXXXX-YY); "" for ephemeral asset iBGCs. */
+  accession: string;
   label: string;
+  /** Parent cBGC accession (MGYB-XXXXXX). */
+  cbgc_accession: string | null;
   classification_path: string;
   size_kb: number;
   n_source_bgcs: number;
@@ -614,6 +635,10 @@ export interface IbgcMemberBgc {
 
 export interface IbgcDetail {
   id: number;
+  /** Stable iBGC accession (MGYB-XXXXXX-YY); "" for ephemeral asset iBGCs. */
+  accession: string;
+  /** Parent cBGC accession (MGYB-XXXXXX). */
+  cbgc_accession: string | null;
   label: string;
   classification_path: string;
   size_kb: number;
@@ -630,7 +655,8 @@ export interface IbgcDetail {
   umap_x: number | null;
   umap_y: number | null;
   parent_assembly: ParentAssemblySummary | null;
-  representative_bgc_id: number | null;
+  /** Relative URL of the merged region payload (GET /ibgcs/{id}/region/). */
+  region_endpoint_url: string | null;
   member_bgcs: IbgcMemberBgc[];
   domain_architecture: DomainArchitectureItem[];
   natural_products: NaturalProductSummary[];
