@@ -102,7 +102,7 @@ def build_ibgc_domain_matrix(
                cd.domain_acc     AS domain_acc,
                cd.interpro_entry_acc AS ipr_acc,
                lower(cc.cds_range)   AS cds_start
-        FROM discovery_contig_domain cd
+        FROM discovery_domain_hit cd
         JOIN discovery_cds cc ON cc.id = cd.cds_id
         JOIN discovery_ibgc i
           ON i.contig_id = cc.contig_id

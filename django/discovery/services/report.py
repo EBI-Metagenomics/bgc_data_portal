@@ -78,7 +78,7 @@ def _fetch_domain_rows_for_ibgcs(ibgc_ids: list[int]) -> list[tuple]:
                cd.domain_name    AS domain_name,
                cd.domain_description AS domain_description,
                cd.go_slim        AS go_slim
-        FROM discovery_contig_domain cd
+        FROM discovery_domain_hit cd
         JOIN discovery_cds cc ON cc.id = cd.cds_id
         JOIN discovery_ibgc i
           ON i.contig_id = cc.contig_id

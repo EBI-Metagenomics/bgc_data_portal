@@ -70,7 +70,7 @@ def build_ibgc_adjacency_pair_matrix(
                cd.start_position AS dom_start,
                cd.domain_acc     AS domain_acc,
                cd.interpro_entry_acc AS ipr_acc
-        FROM discovery_contig_domain cd
+        FROM discovery_domain_hit cd
         JOIN discovery_cds cc ON cc.id = cd.cds_id
         JOIN discovery_ibgc i
           ON i.contig_id = cc.contig_id
