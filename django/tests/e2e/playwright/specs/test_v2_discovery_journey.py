@@ -24,6 +24,11 @@ import re
 
 import pytest
 
+# Crockford base32 (no I/L/O/U). cBGC = MGYB-XXXXXX, iBGC = MGYB-XXXXXX-YY.
+_C = r"[0-9A-HJKMNP-TV-Z]"
+ACCESSION_RE = re.compile(rf"MGYB-{_C}{{6}}(?:-{_C}{{2}})?")
+IBGC_ACCESSION_RE = re.compile(rf"MGYB-{_C}{{6}}-{_C}{{2}}")
+
 
 @pytest.mark.e2e
 def test_v2_dashboard_shell_renders(page, e2e_v2_base_url):
@@ -67,6 +72,32 @@ def test_v2_results_tabs_switch(page, e2e_v2_base_url):
     # Back to roster.
     page.locator('[data-testid="results-tab-roster"]').click()
     page.wait_for_selector('[data-testid="ibgc-roster"]')
+
+
+@pytest.mark.e2e
+def test_v2_roster_surfaces_ibgc_accessions(page, e2e_v2_base_url):
+    """Roster rows display stable MGYB iBGC accessions (``MGYB-XXXXXX-YY``).
+
+    The accession — not the numeric id — is the primary identifier in v2, so
+    it must be visible in the roster. Skips cleanly on an empty dataset.
+    """
+    page.set_default_timeout(60_000)
+    page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="ibgc-roster"]', timeout=30_000)
+
+    rows = page.locator('[data-testid="ibgc-roster-row"]')
+    if rows.count() == 0:
+        pytest.skip("No iBGCs in the dataset — skipping accession test")
+
+    row_text = rows.first.inner_text()
+    assert ACCESSION_RE.search(row_text), (
+        f"No MGYB accession visible in roster row: {row_text!r}"
+    )
+    # iBGCs carry the two-char per-cBGC suffix; a bare cBGC accession here
+    # would mean the roster is rendering the wrong entity.
+    assert IBGC_ACCESSION_RE.search(row_text), (
+        f"Expected a suffixed iBGC accession in roster row: {row_text!r}"
+    )
 
 
 @pytest.mark.e2e
