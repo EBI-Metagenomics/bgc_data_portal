@@ -60,7 +60,11 @@ interface BgcScatterProps {
 
 export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId, markerSymbol }: BgcScatterProps = {}) {
   const [showValidated, setShowValidated] = useState(true);
-  const mode = "query";
+  // Typed as `string` (not the inferred "query" literal) so the legacy
+  // `mode === "explore"` branches below don't trip TS2367 no-overlap. Runtime
+  // value is unchanged. This component is legacy (only reachable via the
+  // retired /legacy route) and is slated for removal with the old dashboard.
+  const mode: string = "query";
   const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
