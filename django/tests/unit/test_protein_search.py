@@ -9,6 +9,12 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+
+# pyhmmer is a worker/ml-image dependency; skip the whole module where the
+# binding isn't installed (e.g. the django web image) rather than erroring out
+# during collection.
+pytest.importorskip("pyhmmer")
+
 from pyhmmer.easel import Alphabet, SequenceFile
 
 from discovery.services.protein_search.build import (

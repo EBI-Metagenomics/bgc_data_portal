@@ -148,7 +148,7 @@ class TestLookupOrMintCbgc:
 @pytest.mark.django_db
 class TestLookupOrMintIbgc:
     def test_accession_is_cbgc_dash_two_chars(self):
-        cbgc = ConsensusBgcFactory(_start=1000, _end=11_000)
+        cbgc = ConsensusBgcFactory(start_pos=1000, end_pos=11_000)
         ibgc = IntegratedBgc.objects.create(
             cbgc=cbgc, contig=cbgc.contig,
             bgc_range=(1500, 4500), accession="MGYB-PENDING-PENDING",
@@ -166,15 +166,15 @@ class TestLookupOrMintIbgc:
         assert len(result.accession) == len(cbgc.accession) + 3
 
     def test_suffix_increments_within_cbgc(self):
-        cbgc = ConsensusBgcFactory(_start=1000, _end=20_000)
-        first = IntegratedBgcFactory(cbgc=cbgc, _start=1100, _end=4_000)
-        second = IntegratedBgcFactory(cbgc=cbgc, _start=5_000, _end=8_000)
+        cbgc = ConsensusBgcFactory(start_pos=1000, end_pos=20_000)
+        first = IntegratedBgcFactory(cbgc=cbgc, start_pos=1100, end_pos=4_000)
+        second = IntegratedBgcFactory(cbgc=cbgc, start_pos=5_000, end_pos=8_000)
         assert first.accession != second.accession
         assert first.accession.startswith(f"{cbgc.accession}-")
         assert second.accession.startswith(f"{cbgc.accession}-")
 
     def test_identity_tuple_reuses_existing(self):
-        cbgc = ConsensusBgcFactory(_start=1000, _end=11_000)
+        cbgc = ConsensusBgcFactory(start_pos=1000, end_pos=11_000)
         first = lookup_or_mint_ibgc(
             cbgc=cbgc,
             contig_accession=cbgc.contig.accession,
@@ -212,7 +212,7 @@ class TestTombstoneUnused:
     def test_nulls_current_ibgc_for_stale_registry_rows(self):
         # Build an iBGC, then manually null its current_ibgc and re-attach
         # via raw SQL to simulate a stale registry pointer.
-        ibgc = IntegratedBgcFactory(_start=1100, _end=4_000)
+        ibgc = IntegratedBgcFactory(start_pos=1100, end_pos=4_000)
         registry = AccessionRegistry.objects.get(accession=ibgc.accession)
         ibgc_id = ibgc.id
         ibgc.delete()
@@ -243,7 +243,7 @@ class TestResolve:
         assert result.alias_of is None
 
     def test_canonical_ibgc(self):
-        ibgc = IntegratedBgcFactory(_start=1100, _end=4_000)
+        ibgc = IntegratedBgcFactory(start_pos=1100, end_pos=4_000)
         result = resolve(ibgc.accession)
         assert result is not None
         assert result.kind == AccessionEntityType.IBGC

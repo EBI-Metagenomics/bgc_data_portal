@@ -101,12 +101,14 @@ class ConsensusBgcFactory(DjangoModelFactory):
 
     contig = factory.SubFactory(DashboardContigFactory)
     accession = "MGYB-PENDING"  # overwritten post-build
-    bgc_range = factory.LazyAttribute(lambda obj: _range(obj._start, obj._end))
+    bgc_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
 
     class Params:
         # Tests override these; defaults give a 10 kb window starting at 1000.
-        _start = 1000
-        _end = 11_000
+        # Names must not start with "_" — factory_boy drops leading-underscore
+        # declarations, so they never reach the LazyAttribute resolver.
+        start_pos = 1000
+        end_pos = 11_000
 
     @factory.post_generation
     def _mint(self, create, extracted, **kwargs):
@@ -133,15 +135,15 @@ class IntegratedBgcFactory(DjangoModelFactory):
     cbgc = factory.SubFactory(ConsensusBgcFactory)
     contig = factory.LazyAttribute(lambda obj: obj.cbgc.contig)
     accession = "MGYB-PENDING-PENDING"
-    bgc_range = factory.LazyAttribute(lambda obj: _range(obj._start, obj._end))
+    bgc_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
     source_tools = factory.LazyFunction(lambda: ["antiSMASH"])
 
     class Params:
-        # By default land inside the parent cBGC's range; override for custom layouts.
-        _start = factory.LazyAttribute(lambda obj: obj.factory_parent.cbgc.bgc_range.lower)
-        _end = factory.LazyAttribute(
-            lambda obj: obj.factory_parent.cbgc.bgc_range.upper - 1
-        )
+        # Defaults land inside the default cBGC window (1000–11000); tests
+        # override for custom layouts. Names avoid the leading underscore that
+        # factory_boy would strip before resolution.
+        start_pos = 1100
+        end_pos = 4_000
 
     @factory.post_generation
     def _mint(self, create, extracted, **kwargs):
@@ -169,14 +171,14 @@ class SourceBgcPredictionFactory(DjangoModelFactory):
     assembly = factory.LazyAttribute(lambda obj: obj.contig.assembly)
     contig = factory.SubFactory(DashboardContigFactory)
     prediction_accession = factory.Sequence(lambda n: f"MGYB-AAAAAA.ANT.{n:02}")
-    bgc_range = factory.LazyAttribute(lambda obj: _range(obj._start, obj._end))
+    bgc_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
     is_partial = False
     is_validated = False
     detector = factory.SubFactory(DashboardDetectorFactory)
 
     class Params:
-        _start = 1000
-        _end = 11_000
+        start_pos = 1000
+        end_pos = 11_000
 
 
 # ── CDS / domains (contig-anchored) ───────────────────────────────────────────
@@ -187,14 +189,14 @@ class ContigCdsFactory(DjangoModelFactory):
         model = ContigCds
 
     contig = factory.SubFactory(DashboardContigFactory)
-    cds_range = factory.LazyAttribute(lambda obj: _range(obj._start, obj._end))
+    cds_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
     strand = 1
     protein_id_str = factory.Sequence(lambda n: f"protein_{n}")
     protein_length = 300
 
     class Params:
-        _start = 1000
-        _end = 1900
+        start_pos = 1000
+        end_pos = 1900
 
 
 class ContigDomainFactory(DjangoModelFactory):
