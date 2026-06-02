@@ -435,7 +435,7 @@ class IntegratedBgc(models.Model):
         blank=True,
         default="",
         db_index=True,
-        help_text="ltree dot-path, e.g. cluster.0042.0007.0003 (leaf of the hierarchy)",
+        help_text="ltree dot-path, e.g. 42.7.3 (leaf of the hierarchy)",
     )
     umap_x = models.FloatField(null=True, blank=True)
     umap_y = models.FloatField(null=True, blank=True)
@@ -894,7 +894,7 @@ class DashboardGCF(models.Model):
     family_path = models.CharField(
         max_length=512,
         db_index=True,
-        help_text="ltree dot-path identifying this node, e.g. cluster.0042.0007.0003",
+        help_text="ltree dot-path identifying this node, e.g. 42.7.3",
     )
     parent_path = models.CharField(
         max_length=512,

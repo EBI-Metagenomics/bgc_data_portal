@@ -42,7 +42,7 @@ export function GcfFilter() {
     >
       <Command className="rounded-md border" shouldFilter={false}>
         <CommandInput
-          placeholder="Search GCFs (path, e.g. cluster.0042)..."
+          placeholder="Search GCFs (path, e.g. 42.7)..."
           value={search}
           onValueChange={setSearch}
         />

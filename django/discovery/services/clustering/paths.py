@@ -1,8 +1,9 @@
 """Convert per-level community labels into ltree dot-paths.
 
-A leaf path looks like ``cluster.0042.0007.0003`` — one segment per level.
-Each segment is the *parent-scoped* index of the community at that level
-(stable-sorted by descending size; ties broken by smallest member index).
+A leaf path looks like ``42.7.3`` — one segment per level. Each segment is
+the *parent-scoped* index of the community at that level (stable-sorted by
+descending size; ties broken by smallest member index). No ``cluster``
+prefix and no zero-padding; numeric labels are valid ltree labels.
 
 Because Leiden labels are globally unique within a level (see ``leiden.py``)
 *and* nesting is enforced top-down, we can derive the parent of every level-d
@@ -20,9 +21,6 @@ if TYPE_CHECKING:
     import numpy as np
 
 log = logging.getLogger(__name__)
-
-
-CLUSTER_SEGMENT = "cluster"
 
 
 @dataclass
@@ -94,7 +92,7 @@ def build_ltree_paths(
         ),
     )
     for idx, lbl in enumerate(level0):
-        path = f"{CLUSTER_SEGMENT}.{idx:04d}"
+        path = f"{idx}"
         label_parent_path[(0, lbl)] = ""
         label_path[(0, lbl)] = path
         parent_children[(0, "")].append((idx, lbl))
@@ -116,7 +114,7 @@ def build_ltree_paths(
                 ),
             )
             for idx, lbl in enumerate(ordered):
-                path = f"{parent_path}.{idx:04d}"
+                path = f"{parent_path}.{idx}"
                 label_parent_path[(d, lbl)] = parent_path
                 label_path[(d, lbl)] = path
                 parent_children[(d, parent_path)].append((idx, lbl))

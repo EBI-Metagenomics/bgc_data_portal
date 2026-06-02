@@ -1367,7 +1367,7 @@ def _apply_ibgc_filters(
             ).distinct()
     if leaf_path_prefix:
         # leaf_path_prefix targets the cluster-family ltree on the iBGC
-        # itself (e.g. "cluster.0042"); see ``ClusteringRun`` outputs.
+        # itself (e.g. "42"); see ``ClusteringRun`` outputs.
         qs = qs.filter(
             Q(gene_cluster_family__istartswith=leaf_path_prefix + ".")
             | Q(gene_cluster_family__iexact=leaf_path_prefix)
@@ -3644,6 +3644,8 @@ def gcf_list(
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
+    from django.db.models.expressions import RawSQL
+
     qs = DashboardGCF.objects.filter(clustering_run=run, member_count__gt=0)
     if search:
         qs = qs.filter(family_path__icontains=search)
@@ -3653,6 +3655,12 @@ def gcf_list(
     total_count = qs.count()
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
 
+    # Paths are unpadded (e.g. "42.7.3"), so a plain string sort would order
+    # "10" before "2". Cast the dot-path to an int[] for hierarchical numeric
+    # ordering as the final tiebreaker.
+    qs = qs.annotate(
+        _path_key=RawSQL("string_to_array(family_path, '.')::int[]", [])
+    )
     items = [
         GcfOption(
             family_path=g.family_path,
@@ -3661,7 +3669,7 @@ def gcf_list(
             validated_count=g.validated_count,
             mean_novelty=g.mean_novelty,
         )
-        for g in qs.order_by("-member_count", "level", "family_path")[offset: offset + ps]
+        for g in qs.order_by("-member_count", "level", "_path_key")[offset: offset + ps]
     ]
 
     return PaginatedGcfResponse(

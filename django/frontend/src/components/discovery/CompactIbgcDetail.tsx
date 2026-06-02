@@ -3,6 +3,7 @@ import { fetchIbgcDetail, fetchIbgcRegion } from "@/api/ibgcs";
 import { RegionPlot } from "@/components/bgc/RegionPlot";
 import { IbgcActionsMenu } from "./IbgcActionsMenu";
 import { useDiscoveryStore } from "@/stores/discovery-store";
+import { useFilterStore } from "@/stores/filter-store";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -158,6 +159,7 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           naturalProducts={ibgc.natural_products}
           chemontTree={ibgc.chemont_tree}
           parentAssembly={ibgc.parent_assembly}
+          gcfPath={ibgc.classification_path}
           novelty={ibgc.novelty_score}
           domainNovelty={ibgc.domain_novelty}
         />
@@ -219,6 +221,7 @@ interface KpiStripProps {
   naturalProducts: NaturalProductSummary[];
   chemontTree: ChemOntAnnotationNode[];
   parentAssembly: ParentAssemblySummary | null;
+  gcfPath: string;
   novelty: number | null;
   domainNovelty: number | null;
 }
@@ -231,6 +234,7 @@ function KpiStrip({
   naturalProducts,
   chemontTree,
   parentAssembly,
+  gcfPath,
   novelty,
   domainNovelty,
 }: KpiStripProps) {
@@ -241,17 +245,11 @@ function KpiStrip({
   const compoundsCount = naturalProducts.length + leaves.length;
   const firstSmiles = naturalProducts.find((np) => np.smiles)?.smiles;
   const parentAcc = parentAssembly?.accession ?? "—";
+  const setGcfPath = useFilterStore((s) => s.setGcfPath);
 
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <CompoundsChip
-          count={compoundsCount}
-          naturalProducts={naturalProducts}
-          chemontTree={chemontTree}
-          molviewSmiles={firstSmiles}
-        />
-
         {parentAssembly?.url ? (
           <a
             href={parentAssembly.url}
@@ -270,6 +268,25 @@ function KpiStrip({
           </span>
         )}
 
+        {/* Group = the iBGC's GCF lineage (e.g. 42.7.3). Click to filter the
+            dashboard to this exact family and its descendants. */}
+        {gcfPath ? (
+          <button
+            type="button"
+            onClick={() => setGcfPath(gcfPath)}
+            title={`Filter by GCF ${gcfPath}`}
+            className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
+          >
+            <span className="text-muted-foreground">group</span>
+            <span className="font-semibold">{gcfPath}</span>
+          </button>
+        ) : (
+          <span className={CHIP_BASE}>
+            <span className="text-muted-foreground">group</span>
+            <span className="font-semibold">—</span>
+          </span>
+        )}
+
         <span className={CHIP_BASE}>
           <span className="text-muted-foreground">Novelty</span>
           <span className="font-semibold">{fmt(novelty, 2)}</span>
@@ -279,6 +296,13 @@ function KpiStrip({
           <span className="text-muted-foreground">Domain Novelty</span>
           <span className="font-semibold">{fmt(domainNovelty, 2)}</span>
         </span>
+
+        <CompoundsChip
+          count={compoundsCount}
+          naturalProducts={naturalProducts}
+          chemontTree={chemontTree}
+          molviewSmiles={firstSmiles}
+        />
       </div>
     </TooltipProvider>
   );

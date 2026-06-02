@@ -23,12 +23,11 @@ def test_two_level_paths_produce_expected_format():
     leaves = set(paths_per_bgc.values())
     # 4 BGCs but two share level-1 → 3 distinct leaf paths.
     assert len(leaves) == 3
-    # Each leaf path has the form cluster.NNNN.NNNN
+    # Each leaf path has the form N.N (no prefix, no zero-padding).
     for path in leaves:
         parts = path.split(".")
-        assert parts[0] == "cluster"
-        assert len(parts) == 3
-        assert all(p.isdigit() and len(p) == 4 for p in parts[1:])
+        assert len(parts) == 2
+        assert all(p.isdigit() and str(int(p)) == p for p in parts)
 
 
 def test_parent_path_consistency():
@@ -44,7 +43,7 @@ def test_parent_path_consistency():
     for n in nodes:
         if n.parent_path:
             assert n.parent_path in paths
-            # Path is the parent's path plus a 4-digit segment.
+            # Path is the parent's path plus one more segment.
             assert n.family_path.startswith(n.parent_path + ".")
 
 
@@ -64,8 +63,8 @@ def test_descending_size_numbering():
     levels = [[0, 0, 0, 1]]
     bgc_ids = [1, 2, 3, 4]
     paths_per_bgc, _ = build_ltree_paths(levels, bgc_ids)
-    assert paths_per_bgc[1] == "cluster.0000"
-    assert paths_per_bgc[4] == "cluster.0001"
+    assert paths_per_bgc[1] == "0"
+    assert paths_per_bgc[4] == "1"
 
 
 def test_empty_input():

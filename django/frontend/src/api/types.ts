@@ -640,6 +640,8 @@ export interface IbgcDetail {
   /** Parent cBGC accession (MGYB-XXXXXX). */
   cbgc_accession: string | null;
   label: string;
+  /** GCF lineage / leaf path, e.g. "42.7.3" ("" when unclassified). The
+   *  first segment is the coarsest group; copy-paste matches the GCF filter. */
   classification_path: string;
   size_kb: number;
   start_position: number;
