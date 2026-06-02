@@ -13,6 +13,18 @@ def browser_context_args(browser_context_args):
     }
 
 
+@pytest.fixture(autouse=True)
+def _suppress_welcome_tour(page):
+    """Pre-set the onboarding flag so the first-visit welcome dialog never
+    opens — its modal overlay otherwise swallows clicks. Mirrors
+    ``onboarding-store``'s ``bgc-discovery-welcome-seen`` localStorage key.
+    Runs on every navigation, before the app's scripts read it."""
+    page.add_init_script(
+        "window.localStorage.setItem('bgc-discovery-welcome-seen', 'true');"
+    )
+    return page
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--e2e-v2-base-url",
