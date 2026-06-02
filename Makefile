@@ -92,14 +92,29 @@ deploy-prod:
 	skaffold run -p prod --kube-context $(KUBE_CONTEXT)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+# pytest config (DJANGO_SETTINGS_MODULE, pythonpath) lives in the repo-root
+# pyproject.toml, which isn't copied into the image (/app == django/). Set the
+# settings module inline so in-pod pytest finds Django.
+#
+# Heavy clustering libs (igraph/leidenalg/umap) and pyhmmer live only in the
+# worker image, so the clustering + protein-search tests importorskip in the
+# django pod. Run TEST_POD=bgc-data-portal-celery to exercise those too.
+TEST_POD ?= bgc-data-portal-django
+
 test-unit:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- pytest tests/unit/ -q
+	kubectl exec -n bgc-local deploy/$(TEST_POD) -- \
+	  env DJANGO_SETTINGS_MODULE=bgc_data_portal.settings pytest tests/unit/ -q
 
 test-integration:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- pytest tests/integration/ -q
+	kubectl exec -n bgc-local deploy/$(TEST_POD) -- \
+	  env DJANGO_SETTINGS_MODULE=bgc_data_portal.settings pytest tests/integration/ -q
 
+# E2E runs from the host (needs `pip install pytest-playwright && playwright
+# install chromium`) against the Skaffold port-forward (django:80 -> :8080).
+# The SPA mounts at /dashboard/. Override with E2E_URL=... for a remote deploy.
+E2E_URL ?= http://localhost:8080/dashboard
 test-e2e:
-	pytest django/tests/e2e/playwright --e2e-base-url http://localhost:8080 -q
+	pytest django/tests/e2e/playwright --e2e-v2-base-url $(E2E_URL) -q
 
 # ── Observability ─────────────────────────────────────────────────────────────
 logs-django:
