@@ -5,6 +5,12 @@ Usage::
     python manage.py load_discovery_data --data-dir /path/to/tsvs/
     python manage.py load_discovery_data --data-dir /path/to/tsvs/ --truncate
     python manage.py load_discovery_data --data-dir /path/to/tsvs/ --truncate --skip-stats
+    python manage.py load_discovery_data --data-dir /path/to/tsvs/ --skip-discovery-stats
+
+By default a platform-overview ``DiscoveryStats`` refresh is enqueued after the
+load — chained onto the protein-index task so it only runs on its success.
+Suppress with ``--skip-discovery-stats``. (Distinct from ``--skip-stats``, which
+skips the in-process assembly-score / catalog computation inside the pipeline.)
 """
 
 import logging
@@ -44,12 +50,19 @@ class Command(BaseCommand):
             default=False,
             help="Skip enqueueing the protein search index update at the end.",
         )
+        parser.add_argument(
+            "--skip-discovery-stats",
+            action="store_true",
+            default=False,
+            help="Skip enqueueing the platform-overview DiscoveryStats refresh at the end.",
+        )
 
     def handle(self, *args, **options):
         data_dir = options["data_dir"]
         truncate = options["truncate"]
         skip_stats = options["skip_stats"]
         skip_protein_index = options["skip_protein_index"]
+        skip_discovery_stats = options["skip_discovery_stats"]
 
         self.stdout.write(f"Loading discovery data from: {data_dir}")
         if truncate:
@@ -61,18 +74,49 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Done in {elapsed:.1f}s"))
 
+        # Chain the DiscoveryStats refresh onto the protein-index task so it
+        # only fires once that succeeds. If the protein index is skipped, the
+        # stats refresh is dispatched directly after the (already-succeeded)
+        # synchronous load. Both run on the default ``celery`` queue.
         if not skip_protein_index:
             try:
-                from discovery.tasks import update_protein_search_index_task
+                from discovery.tasks import (
+                    update_discovery_stats_task,
+                    update_protein_search_index_task,
+                )
+
+                stats_link = None
+                if not skip_discovery_stats:
+                    stats_link = update_discovery_stats_task.si().set(queue="celery")
 
                 # ``truncate`` means the discovery tables were wiped, so the
                 # protein index must be rebuilt from scratch rather than appended.
-                async_result = update_protein_search_index_task.delay(rebuild=truncate)
+                async_result = update_protein_search_index_task.apply_async(
+                    kwargs={"rebuild": truncate},
+                    queue="celery",
+                    link=stats_link,
+                )
                 self.stdout.write(
                     f"Enqueued protein search index update "
                     f"(task_id={async_result.id}, rebuild={truncate})"
                 )
+                if stats_link is not None:
+                    self.stdout.write(
+                        "Chained DiscoveryStats refresh (runs on protein-index success)"
+                    )
             except Exception as exc:
                 self.stdout.write(self.style.WARNING(
                     f"Could not enqueue protein search index update: {exc}"
+                ))
+        elif not skip_discovery_stats:
+            try:
+                from discovery.tasks import update_discovery_stats_task
+
+                async_result = update_discovery_stats_task.apply_async(queue="celery")
+                self.stdout.write(
+                    f"Enqueued DiscoveryStats refresh (task_id={async_result.id})"
+                )
+            except Exception as exc:
+                self.stdout.write(self.style.WARNING(
+                    f"Could not enqueue DiscoveryStats refresh: {exc}"
                 ))

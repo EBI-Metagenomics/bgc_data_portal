@@ -60,6 +60,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Overwrite an existing ClusteringRun with the same sha256.",
         )
+        parser.add_argument(
+            "--skip-discovery-stats",
+            action="store_true",
+            help="Skip enqueueing the platform-overview DiscoveryStats refresh afterwards.",
+        )
 
     def handle(self, *args, **options):
         from common_core.clustering.io import read_outputs_tarball
@@ -92,6 +97,23 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(f"Imported ClusteringRun pk={run.pk} sha256={sha[:12]}…")
         )
+
+        # The import is synchronous and transaction-wrapped: reaching here means
+        # it committed, so refresh the platform-overview DiscoveryStats async.
+        # Routed to the ``scores`` queue alongside the rest of the clustering
+        # task family. Skipped above for ``--dry-run`` (early return).
+        if not options["skip_discovery_stats"]:
+            try:
+                from discovery.tasks import update_discovery_stats_task
+
+                res = update_discovery_stats_task.apply_async(queue="scores")
+                self.stdout.write(
+                    self.style.SUCCESS(f"Enqueued DiscoveryStats refresh: {res.id}")
+                )
+            except Exception as exc:
+                self.stdout.write(self.style.WARNING(
+                    f"Could not enqueue DiscoveryStats refresh: {exc}"
+                ))
 
     @transaction.atomic
     def _apply(self, payload: dict, *, force: bool):
