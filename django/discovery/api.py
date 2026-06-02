@@ -1300,6 +1300,7 @@ def _apply_ibgc_filters(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,  # free-text over the iBGC's domain annotations
     ibgc_ids: Optional[list[int]] = None,
 ):
     """Apply iBGC-level filters to a ``IntegratedBgc`` queryset.
@@ -1434,6 +1435,20 @@ def _apply_ibgc_filters(
         qs = qs.filter(
             contig__in=filter_contigs_by_taxonomy(taxonomy_path)
         ).distinct()
+    if domain_text:
+        # Free-text fallback for landing-page keyword search: match iBGCs
+        # whose contig domains carry the term in their name / description /
+        # InterPro description. Scopes to the iBGC's contig (denormalised
+        # ``ContigDomain.contig`` FK, single join); like ``chemont_ids`` it
+        # does NOT yet clip to the iBGC's ``bgc_range`` so a hit elsewhere on
+        # the same contig can match. See the chemont TODO(v2-range-overlap).
+        term = domain_text.strip()
+        if term:
+            qs = qs.filter(
+                Q(contig__domains__domain_name__icontains=term)
+                | Q(contig__domains__domain_description__icontains=term)
+                | Q(contig__domains__interpro_entry_description__icontains=term)
+            ).distinct()
     return qs
 
 
@@ -1461,6 +1476,7 @@ def ibgc_count(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
     ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
@@ -1505,6 +1521,7 @@ def ibgc_count(
             organism=organism,
             biome_lineage=biome_lineage,
             taxonomy_path=taxonomy_path,
+            domain_text=domain_text,
         )
         total = qs.count() + len(asset_rows)
     return IbgcCountResponse(
@@ -1542,6 +1559,7 @@ def ibgc_roster(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
     ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
@@ -1586,6 +1604,7 @@ def ibgc_roster(
             organism=organism,
             biome_lineage=biome_lineage,
             taxonomy_path=taxonomy_path,
+            domain_text=domain_text,
         )
 
     # Special-case: ``sort_by=similarity`` honours the caller-supplied order
@@ -1702,6 +1721,7 @@ def ibgc_ids(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
     ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
@@ -1747,6 +1767,7 @@ def ibgc_ids(
             organism=organism,
             biome_lineage=biome_lineage,
             taxonomy_path=taxonomy_path,
+            domain_text=domain_text,
         )
 
     if sort_by == "similarity" and parsed_ids:
@@ -1816,6 +1837,7 @@ def ibgc_umap(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
     ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
@@ -1855,6 +1877,7 @@ def ibgc_umap(
             organism=organism,
             biome_lineage=biome_lineage,
             taxonomy_path=taxonomy_path,
+            domain_text=domain_text,
         )
 
         # Deterministic SQL-side stride: at multi-million-row scale we can't
@@ -1912,6 +1935,7 @@ def ibgc_scatter(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
     ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
@@ -1955,6 +1979,7 @@ def ibgc_scatter(
             organism=organism,
             biome_lineage=biome_lineage,
             taxonomy_path=taxonomy_path,
+            domain_text=domain_text,
         )
 
         n_cds_subq = (
@@ -2797,6 +2822,7 @@ def ibgc_domain_query(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
 ):
     """iBGC-collapsed domain query.
 
@@ -2860,6 +2886,7 @@ def ibgc_domain_query(
         organism=organism,
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
     )
     # Domain match is binary → similarity_score = 1.0 for every iBGC.
     similarity_lookup = {nid: 1.0 for nid in ibgc_ids}
@@ -2906,6 +2933,7 @@ def ibgc_sequence_query_status(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
 ):
     """Poll a ``sequence_similarity_search`` Celery task and return results
     collapsed to iBGC level.
@@ -3006,6 +3034,7 @@ def ibgc_sequence_query_status(
         organism=organism,
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
     )
     return _ibgc_roster_page_response(
         qs,

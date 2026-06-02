@@ -1,8 +1,8 @@
 import {
   isAppliedFiltersEmpty,
+  snapshotFiltersToApplied,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
-import { useFilterStore } from "@/stores/filter-store";
 import { MAX_SHORTLIST, useShortlistStore } from "@/stores/shortlist-store";
 import { toast } from "sonner";
 import { Pin, Search, Plus, RefreshCw, Clipboard } from "lucide-react";
@@ -75,25 +75,9 @@ export function useIbgcActions(
     // before the result lands. The roster/maps intersect ``ibgc_ids`` with
     // ``appliedFilters``, and that snapshot is otherwise only updated by
     // the Run Query button — so without this step, clearing chips in the
-    // UI would not affect a subsequent Find Similar run. Mirrors the
-    // snapshot block in ``useRunIbgcQuery.run``.
-    const f = useFilterStore.getState();
-    setAppliedFilters({
-      sourceNames: f.sourceNames,
-      detectorTools: f.detectorTools,
-      assemblyType: f.assemblyType,
-      taxonomyPath: f.taxonomyPath,
-      bgcClass: f.bgcClass,
-      gcfPath: f.gcfPath,
-      chemontIds: f.chemontIds,
-      biomeLineage: f.biomeLineage,
-      bgcAccession: f.bgcAccession,
-      assemblyAccession: f.assemblyAccession,
-      assemblyIds: f.assemblyIds,
-      organism: f.search,
-      minLengthKb: f.minLengthKb,
-      maxLengthKb: f.maxLengthKb,
-    });
+    // UI would not affect a subsequent Find Similar run. Shares the
+    // ``snapshotFiltersToApplied`` helper with ``useRunIbgcQuery.run``.
+    setAppliedFilters(snapshotFiltersToApplied());
     const toastId = toast.loading(`Finding iBGCs similar to ${ibgcLabel}…`);
     try {
       const resp = await postSimilarIbgcQuery(

@@ -129,3 +129,42 @@ def test_filter_chemont_classes_endpoint(client, seeded_ibgc):
     assert resp.status_code == 200, resp.content
     ids = {node["chemont_id"] for node in resp.json()}
     assert "CHEMONTID:0001" in ids
+
+
+@pytest.fixture
+def polyketide_ibgc(db):
+    """An iBGC whose contig carries a domain annotated as a polyketide
+    synthase — the data target for the landing-page free-text keyword
+    fallback (``domain_text``)."""
+    ibgc = IntegratedBgcFactory(start_pos=1000, end_pos=5000)
+    cds = ContigCdsFactory(contig=ibgc.contig, start_pos=1100, end_pos=1400)
+    ContigDomainFactory(
+        cds=cds,
+        domain_acc="PF00109",
+        domain_name="ketoacyl-synt",
+        domain_description="Beta-ketoacyl synthase, polyketide synthase domain",
+    )
+    return ibgc
+
+
+@pytest.mark.django_db
+def test_roster_domain_text_matches_domain_annotations(client, polyketide_ibgc):
+    # Free-text keyword like "Polyketide" must match via the iBGC's domain
+    # annotations (name / description / InterPro), not just organism name.
+    resp = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {"page": 1, "page_size": 50, "domain_text": "polyketide"},
+    )
+    assert resp.status_code == 200, resp.content
+    ids = {it["id"] for it in resp.json()["items"]}
+    assert polyketide_ibgc.id in ids
+
+
+@pytest.mark.django_db
+def test_roster_domain_text_excludes_non_matching(client, polyketide_ibgc):
+    resp = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {"page": 1, "page_size": 50, "domain_text": "nonexistent-term-xyz"},
+    )
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["items"] == []

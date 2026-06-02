@@ -2,7 +2,10 @@ import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useFilterStore } from "@/stores/filter-store";
 import { useSelectionStore } from "@/stores/selection-store";
-import { useQueryStore } from "@/stores/query-store";
+import {
+  snapshotFiltersToApplied,
+  useDiscoveryStore,
+} from "@/stores/discovery-store";
 
 export function useUrlSync() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -29,6 +32,9 @@ export function useUrlSync() {
     const search = searchParams.get("search");
     if (search) useFilterStore.getState().setSearch(search);
 
+    const domainText = searchParams.get("domain_text");
+    if (domainText) useFilterStore.getState().setDomainText(domainText);
+
     const taxonomyPath = searchParams.get("taxonomy_path");
     if (taxonomyPath) useFilterStore.getState().setTaxonomyPath(taxonomyPath);
 
@@ -43,10 +49,14 @@ export function useUrlSync() {
       useSelectionStore.getState().setActiveAssemblyId(Number(assemblyId));
     }
 
-    // Auto-run query when redirected from landing page keyword search
+    // Auto-run query when redirected from landing page keyword search.
+    // The v2 dashboard's roster + maps key off ``discovery-store``'s
+    // ``appliedFilters`` (populated by the Run Query button), NOT the
+    // filter-chip store we just hydrated above. So commit the same snapshot
+    // here — otherwise the chips show the term but nothing ever fetches.
     const autoRun = searchParams.get("auto_run");
     if (autoRun === "true") {
-      useQueryStore.getState().setDomainQueryTriggered(true);
+      useDiscoveryStore.getState().setAppliedFilters(snapshotFiltersToApplied());
       // Remove auto_run from URL so refreshing doesn't re-trigger
       setSearchParams(
         (prev) => {

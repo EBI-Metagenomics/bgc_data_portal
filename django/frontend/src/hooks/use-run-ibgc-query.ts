@@ -6,8 +6,10 @@ import {
 } from "@/api/ibgcs";
 import { postSequenceQuery } from "@/api/queries";
 import { useQueryStore } from "@/stores/query-store";
-import { useDiscoveryStore } from "@/stores/discovery-store";
-import { useFilterStore } from "@/stores/filter-store";
+import {
+  snapshotFiltersToApplied,
+  useDiscoveryStore,
+} from "@/stores/discovery-store";
 import { ApiError } from "@/api/client";
 import { toast } from "sonner";
 
@@ -53,25 +55,9 @@ export function useRunIbgcQuery() {
 
     // Snapshot chip values → applied filters every time Run Query is
     // pressed, regardless of whether an advanced query is also active.
-    // Every chip in FilterPanel must be represented here, otherwise its
-    // value is silently discarded between presses.
-    const f = useFilterStore.getState();
-    setAppliedFilters({
-      sourceNames: f.sourceNames,
-      detectorTools: f.detectorTools,
-      assemblyType: f.assemblyType,
-      taxonomyPath: f.taxonomyPath,
-      bgcClass: f.bgcClass,
-      gcfPath: f.gcfPath,
-      chemontIds: f.chemontIds,
-      biomeLineage: f.biomeLineage,
-      bgcAccession: f.bgcAccession,
-      assemblyAccession: f.assemblyAccession,
-      assemblyIds: f.assemblyIds,
-      organism: f.search,
-      minLengthKb: f.minLengthKb,
-      maxLengthKb: f.maxLengthKb,
-    });
+    // Shared with the landing-page keyword redirect via
+    // ``snapshotFiltersToApplied`` so both paths stay in lockstep.
+    setAppliedFilters(snapshotFiltersToApplied());
 
     // Active "domain" surface depends on which mode the user picked.
     // In architecture mode we treat the textarea as the active input,

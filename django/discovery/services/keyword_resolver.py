@@ -47,7 +47,7 @@ def resolve_keyword(keyword: str) -> dict:
     """
     keyword = (keyword or "").strip()
     if not keyword:
-        return _build_result("search", "", "fallback")
+        return _build_result("domain_text", "", "fallback")
 
     # Try each resolver in priority order; first match wins.
     for resolver in _RESOLVERS:
@@ -55,8 +55,12 @@ def resolve_keyword(keyword: str) -> dict:
         if result is not None:
             return result
 
-    # Fallback: pass the raw keyword to the dashboard search box.
-    return _build_result("search", keyword, "fallback")
+    # Fallback: a free-text biology term (e.g. "Polyketide") that matched no
+    # accession/class/biome. Route it to the dashboard's ``domain_text``
+    # filter, which searches the iBGC's domain annotations (name /
+    # description / InterPro description) — the ``search`` param only matches
+    # organism + assembly accession, so chemistry/product terms found nothing.
+    return _build_result("domain_text", keyword, "fallback")
 
 
 # ── Individual resolvers (private) ───────────────────────────────────────────

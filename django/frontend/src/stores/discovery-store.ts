@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AssetSummary } from "@/api/assets";
 import type { IbgcScatterAxis, RegionCds } from "@/api/types";
+import { useFilterStore } from "@/stores/filter-store";
 
 /**
  * Session state for the v2 Discovery dashboard.
@@ -103,6 +104,9 @@ export interface AppliedIbgcFilters {
   assemblyAccession: string;
   assemblyIds: string;
   organism: string;
+  // Free-text term matched against the iBGC's domain annotations. Drives
+  // the landing-page keyword-search fallback (e.g. "Polyketide").
+  domainText: string;
   // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
   minLengthKb: number | null;
   maxLengthKb: number | null;
@@ -121,6 +125,7 @@ export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   assemblyAccession: "",
   assemblyIds: "",
   organism: "",
+  domainText: "",
   minLengthKb: null,
   maxLengthKb: null,
 };
@@ -142,6 +147,7 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
     applied.assemblyAccession === "" &&
     applied.assemblyIds === "" &&
     applied.organism === "" &&
+    applied.domainText === "" &&
     applied.minLengthKb == null &&
     applied.maxLengthKb == null
   );
@@ -181,6 +187,7 @@ export function appliedFiltersToApiParams(
   }
   if (applied.assemblyIds) params.assembly_ids = applied.assemblyIds;
   if (applied.organism) params.organism = applied.organism;
+  if (applied.domainText) params.domain_text = applied.domainText;
   if (applied.minLengthKb != null) {
     params.min_length_kb = String(applied.minLengthKb);
   }
@@ -194,6 +201,36 @@ export function appliedFiltersToApiParams(
     params.asset_token = assetToken;
   }
   return params;
+}
+
+/**
+ * Snapshot the live filter-chip store into an ``AppliedIbgcFilters`` object.
+ *
+ * Single source of truth for the filterStore → appliedFilters mapping so the
+ * Run Query button (``use-run-ibgc-query``) and the landing-page keyword
+ * redirect (``use-url-sync`` auto-run) stay in lockstep. Every chip in
+ * ``FilterPanel`` must be represented here, otherwise its value is silently
+ * discarded when a query runs.
+ */
+export function snapshotFiltersToApplied(): AppliedIbgcFilters {
+  const f = useFilterStore.getState();
+  return {
+    sourceNames: f.sourceNames,
+    detectorTools: f.detectorTools,
+    assemblyType: f.assemblyType,
+    taxonomyPath: f.taxonomyPath,
+    bgcClass: f.bgcClass,
+    gcfPath: f.gcfPath,
+    chemontIds: f.chemontIds,
+    biomeLineage: f.biomeLineage,
+    bgcAccession: f.bgcAccession,
+    assemblyAccession: f.assemblyAccession,
+    assemblyIds: f.assemblyIds,
+    organism: f.search,
+    domainText: f.domainText,
+    minLengthKb: f.minLengthKb,
+    maxLengthKb: f.maxLengthKb,
+  };
 }
 
 export const useDiscoveryStore = create<DiscoveryState>((set) => ({
