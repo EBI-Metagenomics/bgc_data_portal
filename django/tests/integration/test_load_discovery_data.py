@@ -151,6 +151,30 @@ def test_build_integrated_bgcs_mints_and_wires_ibgcs(ingested):
 
 
 @pytest.mark.django_db
+def test_loader_dedups_duplicate_cds_chemont(tmp_path):
+    """Duplicate ``(cds, chemont_id)`` rows must not crash the upsert.
+
+    Regression for ``ProgrammingError: ON CONFLICT DO UPDATE command cannot
+    affect row a second time`` — the loader now dedups the batch (last wins).
+    """
+    from discovery.models import CdsChemOnt
+
+    _write_tsvs(tmp_path)
+    (tmp_path / "cds_chemont.tsv").write_text(
+        "contig_sha256\tprotein_id_str\tchemont_id\tchemont_name\t"
+        "probability\tweight\n"
+        f"{CONTIG_SHA}\tcontig_1_1\tCHEMONTID:0001\tTerpenes\t0.9\t0.5\n"
+        f"{CONTIG_SHA}\tcontig_1_1\tCHEMONTID:0001\tTerpenes\t0.7\t0.4\n"
+    )
+
+    run_pipeline(tmp_path, truncate=False, skip_stats=True)
+
+    rows = CdsChemOnt.objects.filter(chemont_id="CHEMONTID:0001")
+    assert rows.count() == 1  # collapsed to one row
+    assert rows.first().probability == pytest.approx(0.7)  # last occurrence wins
+
+
+@pytest.mark.django_db
 def test_registry_resolves_minted_accessions(ingested):
     build_integrated_bgcs()
 

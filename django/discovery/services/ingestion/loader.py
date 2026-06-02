@@ -164,6 +164,12 @@ def load_detectors(data_dir: Path) -> dict[str, tuple[int, str]]:
                 )
             )
 
+    # Dedup on the (tool, version) conflict key — a duplicate within one
+    # bulk_create makes ON CONFLICT DO UPDATE touch a row twice (Postgres
+    # rejects it). Last occurrence wins, matching the upsert.
+    rows_to_create = list(
+        {(o.tool, o.version): o for o in rows_to_create}.values()
+    )
     DashboardDetector.objects.bulk_create(
         rows_to_create,
         batch_size=BATCH_SIZE,
@@ -215,6 +221,7 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
                 )
             )
 
+    rows = list({o.assembly_accession: o for o in rows}.values())
     DashboardAssembly.objects.bulk_create(
         rows,
         batch_size=BATCH_SIZE,
@@ -262,6 +269,7 @@ def load_contigs(
                 )
             )
 
+    rows = list({o.sequence_sha256: o for o in rows}.values())
     DashboardContig.objects.bulk_create(
         rows,
         batch_size=BATCH_SIZE,
@@ -298,21 +306,26 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
             batch.append(ContigSequence(contig_id=contig_id, data=raw_zlib))
 
             if len(batch) >= BATCH_SIZE:
+                # Dedup on the ``contig`` conflict key so a doubly-listed
+                # contig doesn't make ON CONFLICT DO UPDATE touch a row twice
+                # in one statement (mirrors load_cds_sequences).
+                deduped = list({obj.contig_id: obj for obj in batch}.values())
                 ContigSequence.objects.bulk_create(
-                    batch,
+                    deduped,
                     update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
                     batch_size=SEQUENCE_INSERT_BATCH_SIZE,
                 )
-                total += len(batch)
+                total += len(deduped)
                 batch.clear()
 
     if batch:
+        deduped = list({obj.contig_id: obj for obj in batch}.values())
         ContigSequence.objects.bulk_create(
-            batch,
+            deduped,
             update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
             batch_size=SEQUENCE_INSERT_BATCH_SIZE,
         )
-        total += len(batch)
+        total += len(deduped)
 
     logger.info("Loaded %d contig sequences", total)
     return total
@@ -630,6 +643,25 @@ def load_domains(
     return total
 
 
+def _flush_cds_chemont(batch: list["CdsChemOnt"]) -> int:
+    """Upsert a CdsChemOnt batch, deduped on the ``(cds, chemont_id)`` conflict
+    key. Without the dedup, a tarball that lists the same ChemOnt class twice
+    for one CDS makes ``ON CONFLICT DO UPDATE`` touch a row twice in a single
+    statement, which Postgres rejects ("cannot affect row a second time").
+    Last occurrence wins, matching the upsert's update semantics.
+    """
+    deduped = list(
+        {(obj.cds_id, obj.chemont_id): obj for obj in batch}.values()
+    )
+    CdsChemOnt.objects.bulk_create(
+        deduped,
+        update_conflicts=True,
+        unique_fields=["cds", "chemont_id"],
+        update_fields=["chemont_name", "probability", "weight"],
+    )
+    return len(deduped)
+
+
 def load_cds_chemont(
     data_dir: Path,
     contig_lookup: dict[str, int],
@@ -684,23 +716,11 @@ def load_cds_chemont(
             )
 
             if len(batch) >= BATCH_SIZE:
-                CdsChemOnt.objects.bulk_create(
-                    batch,
-                    update_conflicts=True,
-                    unique_fields=["cds", "chemont_id"],
-                    update_fields=["chemont_name", "probability", "weight"],
-                )
-                total += len(batch)
+                total += _flush_cds_chemont(batch)
                 batch.clear()
 
     if batch:
-        CdsChemOnt.objects.bulk_create(
-            batch,
-            update_conflicts=True,
-            unique_fields=["cds", "chemont_id"],
-            update_fields=["chemont_name", "probability", "weight"],
-        )
-        total += len(batch)
+        total += _flush_cds_chemont(batch)
 
     if skipped:
         logger.warning("Skipped %d CDS ChemOnt rows (unresolved CDS)", skipped)
