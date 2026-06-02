@@ -8,9 +8,13 @@ management command after rehydrating the cached matrices from disk
 Score definitions (locked in the v2 redesign):
 
 * ``novelty_score`` = ``1 − max(composite_dice_sim(this, v))`` for ``v`` in
-  the set of validated iBGCs in the same clustering run. Validated iBGCs are
-  scored against the other validated iBGCs (their own self-similarity is
-  zero on the diagonal, so this falls out naturally). When the run has no
+  the set of validated iBGCs in the same clustering run. A validated iBGC is
+  itself in that set, so its self-similarity of 1.0 makes its novelty 0 — it
+  is, by definition, not novel. This is computed against a freshly-built,
+  unpruned, diagonal-intact composite-Dice block (see
+  :func:`compute_novelty_against_validated`), **not** the clustering ``sim``
+  matrix, whose zeroed diagonal and ``prune_below`` would otherwise drop the
+  self-match and inflate near-threshold novelty. When the run has no
   validated iBGCs the value is NULL.
 
 * ``domain_novelty`` = ``|domains unique within leaf GCF| / |domains(this)|``
@@ -112,15 +116,71 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
     }
 
 
+def compute_novelty_against_validated(
+    M_domains: sp.csr_matrix,
+    M_pairs: sp.csr_matrix,
+    validated_cols: list[int],
+    *,
+    weights: tuple[float, float] = (0.5, 0.5),
+) -> np.ndarray:
+    """Return novelty per row: ``1 − max(composite_dice_sim_to_validated)``.
+
+    Computed against a freshly-built composite-Dice block of every row
+    against the validated columns — **unpruned and with the diagonal
+    intact** — rather than the clustering ``sim`` matrix. The clustering
+    matrix zeroes its diagonal and prunes below a threshold so KNN / Leiden
+    see clean edges; reusing it for novelty would (a) drop a validated row's
+    self-match (sim 1.0), scoring it against *other* validated iBGCs and
+    yielding a spurious ``> 0``, and (b) truncate near-threshold
+    similarities to 0, inflating non-validated novelty.
+
+    Here a validated row's self-Dice of 1.0 yields novelty 0 by
+    construction; validated rows are additionally clamped to 0.0 to cover the
+    degenerate empty-signature case (self-Dice undefined → 0). Rows for which
+    ``validated_cols`` is empty receive NaN (caller persists as NULL).
+    """
+    n_rows = M_domains.shape[0]
+    if not validated_cols:
+        return np.full(n_rows, np.nan, dtype=np.float32)
+
+    w_d, w_a = weights
+    total = float(w_d) + float(w_a)
+    if total <= 0:
+        raise ValueError(f"weights must sum > 0, got {weights}")
+    w_d, w_a = w_d / total, w_a / total
+
+    val = np.asarray(sorted(validated_cols), dtype=np.int64)
+
+    block: np.ndarray | None = None
+    for M, w in ((M_domains, w_d), (M_pairs, w_a)):
+        if w <= 0:
+            continue
+        Mf = M.astype(np.float32)
+        sizes = np.asarray(Mf.sum(axis=1), dtype=np.float32).ravel()
+        # rows × |validated| intersection counts (validated set is small).
+        inter = np.asarray((Mf @ Mf[val].T).todense(), dtype=np.float32)
+        denom = sizes[:, None] + sizes[val][None, :]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            dice = np.where(denom > 0.0, 2.0 * inter / denom, 0.0).astype(np.float32)
+        block = w * dice if block is None else block + w * dice
+
+    max_sim = block.max(axis=1)
+    novelty = (1.0 - max_sim).astype(np.float32)
+    novelty[val] = 0.0
+    return novelty
+
+
 def compute_novelty_array(
     sim: sp.csr_matrix,
     validated_cols: list[int],
 ) -> np.ndarray:
     """Return novelty per row: ``1 − max(sim_to_validated)``.
 
-    Rows for which ``validated_cols`` is empty receive NaN (caller persists
-    as NULL). Self-similarity is zero on the diagonal so validated iBGCs are
-    scored against the *other* validated iBGCs naturally.
+    .. deprecated::
+        Reuses the clustering similarity matrix (diagonal zeroed + pruned),
+        which mis-scores validated rows (self-match dropped → spurious
+        ``> 0``) and near-threshold non-validated rows. Use
+        :func:`compute_novelty_against_validated`. Retained for tests only.
     """
     n_rows = sim.shape[0]
     if not validated_cols:
@@ -181,32 +241,41 @@ def _validated_ibgc_ids() -> set[int]:
 
 def score_primary_ibgcs(
     *,
-    sim: sp.csr_matrix,
     M_domains: sp.csr_matrix,
+    M_pairs: sp.csr_matrix,
     ibgc_ids: np.ndarray,
     leaf_paths: list[str],
     run: ClusteringRun,
+    weights: tuple[float, float] = (0.5, 0.5),
+    sim: sp.csr_matrix | None = None,
 ) -> dict:
     """Write ``novelty_score`` and ``domain_novelty`` on the primary iBGCs of ``run``.
 
     Parameters
     ----------
-    sim:
-        Symmetric composite-Dice similarity over the primary iBGC set. Row /
-        column order matches ``ibgc_ids``.
     M_domains:
-        Binary iBGC × domain matrix used to count domain occurrences within
-        leaf-GCF groups. Row order matches ``ibgc_ids``.
+        Binary iBGC × domain matrix. Used both to count domain occurrences
+        within leaf-GCF groups and to build the composite-Dice novelty block.
+        Row order matches ``ibgc_ids``.
+    M_pairs:
+        Binary iBGC × adjacency-pair matrix; the second component of the
+        composite-Dice novelty block. Row order matches ``ibgc_ids``.
     ibgc_ids:
-        Ordering of iBGC primary-key ids for rows of ``sim`` / ``M_domains``.
+        Ordering of iBGC primary-key ids for rows of ``M_domains`` / ``M_pairs``.
     leaf_paths:
         Per-row ``gene_cluster_family`` leaf path (length matches ``ibgc_ids``).
     run:
         The ``ClusteringRun`` whose primary iBGCs are being scored.
+    weights:
+        ``(w_domain, w_adjacency)`` composite-Dice weights for novelty.
+    sim:
+        Unused for scoring (kept for backward compatibility). Novelty is now
+        computed from a dedicated block via
+        :func:`compute_novelty_against_validated`, not this matrix.
     """
     from discovery.models import IntegratedBgc
 
-    n_rows = sim.shape[0]
+    n_rows = M_domains.shape[0]
     if n_rows == 0:
         return {"scored": 0, "validated_count": 0}
 
@@ -224,7 +293,9 @@ def score_primary_ibgcs(
             run.pk,
         )
 
-    novelty = compute_novelty_array(sim, validated_cols)
+    novelty = compute_novelty_against_validated(
+        M_domains, M_pairs, validated_cols, weights=weights,
+    )
     domain_novelty = compute_domain_novelty_array(M_domains, leaf_paths)
 
     ibgc_rows = list(IntegratedBgc.objects.filter(id__in=ids_list))
@@ -279,7 +350,8 @@ def project_partial_ibgcs(
         neighbours' coordinates (similarity-weighted).
       * ``gene_cluster_family`` — leaf path of the weighted-majority primary
         neighbour vote.
-      * ``novelty_score`` — ``1 − max(sim to validated primary iBGC)``.
+      * ``novelty_score`` — ``1 − max(sim to validated primary iBGC)``; forced
+        to 0 when the partial is itself validated (it matches itself).
       * ``domain_novelty`` — fraction of this iBGC's domains not present in any
         primary member of the inherited leaf GCF. NULL when the iBGC carries
         no source-vocabulary domains.
@@ -446,7 +518,10 @@ def project_partial_ibgcs(
                 continue
             best_leaf, _ = votes.most_common(1)[0]
 
-            if validated_col_set:
+            if int(q_ibgc_id) in validated_ids:
+                # A validated iBGC matches itself — by definition not novel.
+                novelty = 0.0
+            elif validated_col_set:
                 max_sim_validated = 0.0
                 for col, val in zip(cols.tolist(), vals.tolist()):
                     if col in validated_col_set and val > max_sim_validated:

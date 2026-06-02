@@ -297,11 +297,12 @@ def run_clustering_pipeline(
 
             try:
                 scoring_result = score_primary_ibgcs(
-                    sim=sim,
                     M_domains=M_domains,
+                    M_pairs=M_pairs,
                     ibgc_ids=ibgc_ids,
                     leaf_paths=leaf_paths,
                     run=run,
+                    weights=weights,
                 )
                 result_extra_scoring = scoring_result
             except Exception:  # noqa: BLE001 — never block apply on scoring

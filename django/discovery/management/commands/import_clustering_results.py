@@ -241,6 +241,9 @@ class Command(BaseCommand):
         leaf_paths = list(h["leaf_path"])
         rows = list(IntegratedBgc.objects.filter(id__in=_bigint_array_in(ibgc_ids)))
         leaf_by_id = dict(zip(ibgc_ids, leaf_paths))
+        # Backstop: a validated iBGC matches itself, so it is not novel.
+        # Clamp to 0 in case the HPC bundle predates the novelty fix.
+        validated = _validated_ibgc_ids_subset(ibgc_ids)
         for ibgc in rows:
             x, y = coords_by_id.get(ibgc.id, (None, None))
             nv, dn = scores_by_id.get(ibgc.id, (None, None))
@@ -248,7 +251,7 @@ class Command(BaseCommand):
             ibgc.umap_y = y
             ibgc.umap_projected = False
             ibgc.gene_cluster_family = leaf_by_id[ibgc.id]
-            ibgc.novelty_score = nv
+            ibgc.novelty_score = 0.0 if ibgc.id in validated else nv
             ibgc.domain_novelty = dn
             ibgc.classification_run = run
             ibgc.classified_at = now
@@ -275,13 +278,15 @@ class Command(BaseCommand):
         by_id = {ids[i]: (leaf[i], ux[i], uy[i], nv[i], dn[i]) for i in range(n)}
 
         rows = list(IntegratedBgc.objects.filter(id__in=_bigint_array_in(ids)))
+        # Backstop: clamp validated partials to novelty 0 (see primary path).
+        validated = _validated_ibgc_ids_subset(ids)
         for ibgc in rows:
             leaf_p, x, y, novelty, dom = by_id[ibgc.id]
             ibgc.umap_x = x
             ibgc.umap_y = y
             ibgc.umap_projected = True
             ibgc.gene_cluster_family = leaf_p or ""
-            ibgc.novelty_score = novelty
+            ibgc.novelty_score = 0.0 if ibgc.id in validated else novelty
             ibgc.domain_novelty = dom
             ibgc.classification_run = run
             ibgc.classified_at = now
@@ -297,6 +302,18 @@ class Command(BaseCommand):
 def _bigint_array_in(ids):
     """Send an id list as one bigint[] parameter to dodge Postgres' 65535-param cap."""
     return RawSQL("SELECT unnest(%s::bigint[])", [list(ids)])
+
+
+def _validated_ibgc_ids_subset(ibgc_ids) -> set[int]:
+    """Return the subset of ``ibgc_ids`` that have at least one validated source."""
+    from discovery.models import SourceBgcPrediction
+
+    return set(
+        SourceBgcPrediction.objects.filter(
+            is_validated=True,
+            integrated_bgc_id__in=_bigint_array_in(list(ibgc_ids)),
+        ).values_list("integrated_bgc_id", flat=True)
+    )
 
 
 def _maybe_float(x) -> float | None:
