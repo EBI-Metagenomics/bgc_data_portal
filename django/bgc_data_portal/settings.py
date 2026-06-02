@@ -56,7 +56,22 @@ INTERNAL_IPS = [
     "0.0.0.0",
 ]
 
-DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": lambda _request: DEBUG}
+def _show_debug_toolbar(request):
+    """Gate the debug toolbar so it never interferes with automation.
+
+    Off entirely under pytest (the toolbar middleware crashes the Django test
+    client while rendering) and whenever a request opts out via the
+    ``X-No-Debug-Toolbar`` header — the e2e browser context sends it so the
+    toolbar's fixed overlay doesn't swallow Playwright clicks.
+    """
+    if not DEBUG or "pytest" in sys.modules:
+        return False
+    if request.headers.get("X-No-Debug-Toolbar"):
+        return False
+    return True
+
+
+DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": _show_debug_toolbar}
 
 # Application definition
 INSTALLED_APPS = [

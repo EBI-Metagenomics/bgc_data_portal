@@ -700,8 +700,16 @@ def bgc_detail(request, bgc_id: int):
             )
         )
 
-    # ChemOnt tree aggregated across all CDSs of this BGC.
-    chemont_rows = CdsChemOnt.objects.filter(cds__bgc=bgc).only(
+    # ChemOnt tree aggregated across all CDSs overlapping this BGC's range
+    # (CDS are contig-anchored in v2 — membership is range-overlap).
+    _bgc_cds_ids = (
+        ContigCds.objects.filter(
+            contig_id=bgc.contig_id, cds_range__overlap=bgc.bgc_range,
+        ).values_list("id", flat=True)
+        if bgc.bgc_range is not None
+        else ContigCds.objects.none()
+    )
+    chemont_rows = CdsChemOnt.objects.filter(cds_id__in=_bgc_cds_ids).only(
         "chemont_id", "chemont_name", "probability"
     )
     chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
@@ -1161,6 +1169,7 @@ def _ibgc_to_roster_item(
     is_validated: bool = False,
     is_type_strain: bool = False,
     contig_accession: Optional[str] = None,
+    cbgc_accession: Optional[str] = None,
     similarity_score: Optional[float] = None,
     best_hit_protein_id: Optional[str] = None,
     best_pident: Optional[float] = None,
@@ -1168,7 +1177,9 @@ def _ibgc_to_roster_item(
 ) -> IbgcRosterItem:
     return IbgcRosterItem(
         id=ibgc.id,
+        accession=ibgc.accession or "",
         label=_ibgc_label(ibgc.id),
+        cbgc_accession=cbgc_accession,
         classification_path=ibgc.gene_cluster_family or "",
         size_kb=round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
         n_source_bgcs=n_source_bgcs,
@@ -1217,9 +1228,19 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
             "is_type_strain": False,
             "parent_assembly": None,
             "contig_accession": None,
+            "cbgc_accession": None,
         }
         for nid in ibgc_ids
     }
+    # Parent cBGC accession per iBGC (one chunked query, no N+1).
+    for i in range(0, len(ibgc_ids), _MEMBER_FACTS_CHUNK):
+        chunk = ibgc_ids[i: i + _MEMBER_FACTS_CHUNK]
+        for iid, cbgc_acc in IntegratedBgc.objects.filter(
+            id__in=chunk
+        ).values_list("id", "cbgc__accession"):
+            f = facts.get(iid)
+            if f is not None:
+                f["cbgc_accession"] = cbgc_acc
     for i in range(0, len(ibgc_ids), _MEMBER_FACTS_CHUNK):
         chunk = ibgc_ids[i: i + _MEMBER_FACTS_CHUNK]
         rows = (
@@ -1638,6 +1659,7 @@ def ibgc_roster(
             is_validated=facts[ibgc.id]["is_validated"],
             is_type_strain=facts[ibgc.id]["is_type_strain"],
             contig_accession=facts[ibgc.id]["contig_accession"],
+            cbgc_accession=facts[ibgc.id]["cbgc_accession"],
         )
         for ibgc in page_qs
     ]
@@ -2010,7 +2032,7 @@ def ibgc_detail(request, ibgc_id: int):
         return IbgcDetail(**payload)
 
     try:
-        ibgc = IntegratedBgc.objects.select_related("contig").get(id=ibgc_id)
+        ibgc = IntegratedBgc.objects.select_related("contig", "cbgc").get(id=ibgc_id)
     except IntegratedBgc.DoesNotExist:
         raise HttpError(404, "iBGC not found")
 
@@ -2040,11 +2062,9 @@ def ibgc_detail(request, ibgc_id: int):
                 url=asm.url or "",
             )
 
-    representative_id = _pick_representative_ibgc_id(ibgc_id)
-
-    # Pooled positional domain architecture across all member BGCs of the
-    # iBGC. Mirrors the ordering rule the adjacency builder uses so the
-    # surfaced sequence is exactly what the clustering pipeline scored.
+    # Pooled positional domain architecture over all CDS overlapping the
+    # iBGC's range (range-overlap membership — the same rule the clustering
+    # pipeline scored). ``ibgc_architecture`` takes the single iBGC id.
     domain_arch = [
         DomainArchitectureItem(
             domain_acc=r["domain_acc"],
@@ -2055,13 +2075,12 @@ def ibgc_detail(request, ibgc_id: int):
             score=None,
             url=r["url"] or "",
         )
-        for r in ibgc_architecture([m.id for m in members])
+        for r in ibgc_architecture(ibgc_id)
     ]
 
-    # Natural products: union over members (each curated NP attaches to one BGC).
-    member_ids = [m.id for m in members]
+    # Natural products are iBGC-level in v2 (FK on IbgcNaturalProduct.ibgc).
     np_items: list[NaturalProductSummary] = []
-    for np_obj in IbgcNaturalProduct.objects.filter(bgc_id__in=member_ids):
+    for np_obj in IbgcNaturalProduct.objects.filter(ibgc_id=ibgc_id):
         np_items.append(
             NaturalProductSummary(
                 id=np_obj.id,
@@ -2073,9 +2092,17 @@ def ibgc_detail(request, ibgc_id: int):
             )
         )
 
-    # ChemOnt tree aggregated across all CDSs of all member BGCs of the iBGC.
+    # ChemOnt tree across CDS overlapping the iBGC's range (CDS are
+    # contig-anchored in v2; membership is range-overlap, not a FK).
+    _ibgc_cds_ids = (
+        ContigCds.objects.filter(
+            contig_id=ibgc.contig_id, cds_range__overlap=ibgc.bgc_range,
+        ).values_list("id", flat=True)
+        if ibgc.bgc_range is not None
+        else ContigCds.objects.none()
+    )
     chemont_rows = CdsChemOnt.objects.filter(
-        cds__bgc_id__in=member_ids
+        cds_id__in=_ibgc_cds_ids
     ).only("chemont_id", "chemont_name", "probability")
     chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
 
@@ -2093,6 +2120,8 @@ def ibgc_detail(request, ibgc_id: int):
 
     return IbgcDetail(
         id=ibgc.id,
+        accession=ibgc.accession or "",
+        cbgc_accession=ibgc.cbgc.accession if ibgc.cbgc_id else None,
         label=_ibgc_label(ibgc.id),
         classification_path=ibgc.gene_cluster_family or "",
         size_kb=round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
@@ -2109,7 +2138,7 @@ def ibgc_detail(request, ibgc_id: int):
         umap_x=ibgc.umap_x,
         umap_y=ibgc.umap_y,
         parent_assembly=parent,
-        representative_ibgc_id=representative_id,
+        region_endpoint_url=f"/api/discovery/ibgcs/{ibgc.id}/region/",
         member_bgcs=member_items,
         domain_architecture=domain_arch,
         natural_products=np_items,
@@ -2236,6 +2265,7 @@ def similar_ibgc_query(
             is_validated=facts[nid]["is_validated"],
             is_type_strain=facts[nid]["is_type_strain"],
             contig_accession=facts[nid]["contig_accession"],
+            cbgc_accession=facts[nid]["cbgc_accession"],
             similarity_score=round(sim_lookup[nid], 4),
         )
         for nid in page_ids
@@ -2319,6 +2349,7 @@ def ibgc_architecture_query(
             is_validated=facts[nid]["is_validated"],
             is_type_strain=facts[nid]["is_type_strain"],
             contig_accession=facts[nid]["contig_accession"],
+            cbgc_accession=facts[nid]["cbgc_accession"],
             similarity_score=round(sim_lookup[nid], 4),
         )
         for nid in page_ids
@@ -2665,6 +2696,7 @@ def _ibgc_roster_page_response(
                 is_validated=facts[n.id]["is_validated"],
                 is_type_strain=facts[n.id]["is_type_strain"],
                 contig_accession=facts[n.id]["contig_accession"],
+                cbgc_accession=facts[n.id]["cbgc_accession"],
                 similarity_score=similarity_lookup.get(n.id),
                 best_hit_protein_id=(
                     best_hit_protein_lookup.get(n.id)
@@ -2707,6 +2739,7 @@ def _ibgc_roster_page_response(
             is_validated=facts[n.id]["is_validated"],
             is_type_strain=facts[n.id]["is_type_strain"],
             contig_accession=facts[n.id]["contig_accession"],
+            cbgc_accession=facts[n.id]["cbgc_accession"],
             similarity_score=(
                 similarity_lookup.get(n.id) if similarity_lookup else None
             ),
@@ -3439,12 +3472,14 @@ def chemont_classes(request):
     (since each CDS only carries its deepest class, hierarchy can only be
     reconstructed via the ontology).
     """
-    # Direct annotation counts: BGCs that have at least one CDS classified to
-    # each chemont_id.
+    # Popularity counts for the filter dropdown: distinct CDS classified to
+    # each chemont_id. CDS are contig-anchored in v2 (no BGC FK), and the
+    # per-iBGC count would need a range-overlap aggregation; distinct-CDS is a
+    # cheap, stable proxy for relative class frequency.
     rows = list(
         CdsChemOnt.objects
         .values("chemont_id", "chemont_name")
-        .annotate(cnt=Count("cds__bgc", distinct=True))
+        .annotate(cnt=Count("cds", distinct=True))
     )
 
     if not rows:
@@ -3640,7 +3675,7 @@ def detector_list(
     qs = (
         DashboardDetector.objects
         .values("tool")
-        .annotate(count=Count("bgcs"))
+        .annotate(count=Count("source_bgcs"))
         .filter(count__gt=0)
     )
     if search:

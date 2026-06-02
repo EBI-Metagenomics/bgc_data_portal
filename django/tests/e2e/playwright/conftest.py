@@ -2,6 +2,17 @@ import os
 import pytest
 
 
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    """Send ``X-No-Debug-Toolbar`` on every request so the dev debug-toolbar's
+    fixed overlay never intercepts Playwright clicks (see settings
+    ``_show_debug_toolbar``)."""
+    return {
+        **browser_context_args,
+        "extra_http_headers": {"X-No-Debug-Toolbar": "1"},
+    }
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--e2e-v2-base-url",
