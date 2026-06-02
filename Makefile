@@ -28,6 +28,10 @@ validate-secrets:
 # ── Cluster lifecycle ──────────────────────────────────────────────────────────
 cluster-create:
 	kind create cluster --config deployments/k8s-local/kind-cluster.yaml
+	# Pin the namespace onto the context so `kubectl --context kind-bgc-local`
+	# (and the runbooks' `--context "$${KUBE_CONTEXT}"` commands) target bgc-local
+	# instead of the empty `default` ns — matching how the remote contexts behave.
+	kubectl config set-context kind-bgc-local --namespace=bgc-local
 
 cluster-delete:
 	kind delete cluster --name bgc-local
