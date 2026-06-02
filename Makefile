@@ -2,7 +2,7 @@
         dev dev-full dev-clean dev-preflight deploy-local delete-local deploy-dev deploy-prod \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
-        seed-real-data \
+        seed-real-data reset-db e2e-seed \
         build-protein-index update-protein-index \
         clean-images tidy nuke \
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
@@ -115,6 +115,31 @@ test-integration:
 E2E_URL ?= http://localhost:8080/dashboard
 test-e2e:
 	pytest django/tests/e2e/playwright --e2e-v2-base-url $(E2E_URL) -q
+
+# ── Local DB reset + e2e seeding ──────────────────────────────────────────────
+# DESTRUCTIVE. The squashed `discovery.0001_initial` won't apply to a DB that
+# already recorded an older `discovery.0001_initial`, so an upgraded-in-place
+# dev DB ends up on the stale schema (no `discovery_ibgc`). Drop the public
+# schema and let the django migrate init-container rebuild the v2 schema from
+# scratch. The v2 schema needs only ltree + btree_gist (created by the
+# migration); pgvector was dropped, so nothing else to recreate.
+reset-db:
+	@echo ">> DROP + recreate public schema in mgnify_bgcs (DEV — destroys ALL data)"
+	kubectl exec -n bgc-local postgres-0 -- \
+	  psql -U bgc_dp_pg_user -d mgnify_bgcs -v ON_ERROR_STOP=1 \
+	  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+	@echo ">> Restart django so the migrate init-container rebuilds the schema"
+	kubectl rollout restart -n bgc-local deploy/bgc-data-portal-django
+	kubectl rollout status -n bgc-local deploy/bgc-data-portal-django --timeout=300s
+
+# Post-load steps that materialise the iBGC table and a clustering run so the
+# dashboard (and the e2e suite) have something to render. Run AFTER loading raw
+# data with `make seed-real-data`. Executes in the celery pod, which has the
+# clustering libs (igraph/leidenalg/umap); --sync runs in-process.
+e2e-seed:
+	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	  env DJANGO_SETTINGS_MODULE=bgc_data_portal.settings \
+	  python manage.py run_bgc_clustering --rebuild-ibgc --apply --sync
 
 # ── Observability ─────────────────────────────────────────────────────────────
 logs-django:
