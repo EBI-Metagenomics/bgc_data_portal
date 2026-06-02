@@ -25,7 +25,7 @@ import os
 
 from django.conf import settings
 from django.http import FileResponse, Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.generic import TemplateView
 
 log = logging.getLogger(__name__)
@@ -44,6 +44,23 @@ class DocsView(TemplateView):
 def landing_page(request):
     """Render the landing page."""
     return render(request, "landing_page.html")
+
+
+def keyword_search(request):
+    """Resolve a landing-page keyword and redirect into the dashboard.
+
+    Replaces the legacy ``search`` view retired in the v2 refactor. The
+    discovery keyword resolver maps the term to the best-matching filter
+    (BGC/assembly/domain accession, BGC class, detector, biome, taxonomy,
+    organism, natural product) and falls back to the free-text ``search``
+    param. The resulting ``/dashboard/?…&auto_run=true`` URL is consumed by
+    the SPA's URL-sync hook, which hydrates the filter store and runs the
+    query on arrival.
+    """
+    from discovery.services.keyword_resolver import resolve_keyword
+
+    result = resolve_keyword(request.GET.get("keyword", ""))
+    return redirect(result["redirect_url"])
 
 
 def about(request):

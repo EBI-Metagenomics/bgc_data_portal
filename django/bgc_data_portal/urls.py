@@ -26,6 +26,7 @@ handler404 = "bgc_data_portal.views.custom_404_view"
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("about/", views.about, name="about"),
+    path("search/", views.keyword_search, name="keyword_search"),
     path("docs/", views.DocsView.as_view(), {"path": "index.html"}, name="docs_index"),
     path("docs/<path:path>", views.DocsView.as_view(), name="docs_file"),
     path("docs/<path:path>/", views.DocsView.as_view(), name="docs"),
