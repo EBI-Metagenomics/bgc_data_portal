@@ -109,12 +109,16 @@ test-integration:
 	kubectl exec -n bgc-local deploy/$(TEST_POD) -- \
 	  env DJANGO_SETTINGS_MODULE=bgc_data_portal.settings pytest tests/integration/ -q
 
-# E2E runs from the host (needs `pip install pytest-playwright && playwright
-# install chromium`) against the Skaffold port-forward (django:80 -> :8080).
-# The SPA mounts at /dashboard/. Override with E2E_URL=... for a remote deploy.
+# E2E runs from the host (needs pytest-playwright + `playwright install
+# chromium`) against the Skaffold port-forward (django:80 -> :8080). The SPA
+# mounts at /dashboard/. PYTEST defaults to bare `pytest` (works when the
+# project venv is activated); point it at the venv directly otherwise, e.g.
+#   make test-e2e PYTEST=.venv/bin/pytest
+# Override the target with E2E_URL=... for a remote deployment.
+PYTEST  ?= pytest
 E2E_URL ?= http://localhost:8080/dashboard
 test-e2e:
-	pytest django/tests/e2e/playwright --e2e-v2-base-url $(E2E_URL) -q
+	$(PYTEST) django/tests/e2e/playwright --e2e-v2-base-url $(E2E_URL) -q
 
 # ── Local DB reset + e2e seeding ──────────────────────────────────────────────
 # DESTRUCTIVE. The squashed `discovery.0001_initial` won't apply to a DB that

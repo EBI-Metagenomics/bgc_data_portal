@@ -12,11 +12,22 @@ docker compose exec django pytest -q               # Run all tests
 docker compose exec django pytest tests/unit/test_foo.py -q          # Single file
 docker compose exec django pytest tests/unit/test_foo.py::test_name -q  # Single test
 
-# E2E (run outside the container; needs `playwright install chromium` once):
-pytest tests/e2e/playwright/specs/test_bgc_journey.py -q \
-    --e2e-base-url http://localhost:8000              # legacy /mgnify_bgcs surface
+# E2E (run outside the container; needs `playwright install chromium` once).
+# The SPA mounts at /dashboard/; Skaffold forwards django:80 -> :8080.
+make test-e2e                                          # all v2 specs
 pytest tests/e2e/playwright/specs/test_v2_discovery_journey.py -q \
-    --e2e-v2-base-url http://localhost:8000           # v2 iBGC-first dashboard
+    --e2e-v2-base-url http://localhost:8080/dashboard  # v2 iBGC-first dashboard
+```
+
+A fresh dev DB needs the v2 schema + seed data before the e2e suite has
+anything to render (the squashed migration is skipped on an upgraded-in-place
+DB — see `make reset-db`):
+
+```bash
+make reset-db                 # rebuild the v2 schema (DESTRUCTIVE, dev only)
+make seed-real-data           # load raw discovery data (set STAGED_FILES_DIR)
+make e2e-seed                 # build iBGCs + a clustering run
+make test-e2e                 # run the browser suite
 ```
 
 ### Code quality
