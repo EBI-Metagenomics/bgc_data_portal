@@ -16,21 +16,63 @@ interface Slide {
   body: ReactNode;
 }
 
+const bodyClass = "text-sm leading-relaxed text-muted-foreground";
+
 const slides: Slide[] = [
   {
     icon: Compass,
-    headline: "Find promising organisms for your bioprospecting effort, faster.",
-    body: "The Discovery Platform helps you search thousands of sequenced assemblies — from isolated bacteria to environmental metagenomes — for integrated BGCs (iBGCs) worth testing, ranked by novelty and diversity.",
+    headline: "From a catalogue of thousands to a tested shortlist.",
+    body: (
+      <p className={bodyClass}>
+        The Discovery Platform helps you mine thousands of{" "}
+        <strong>sequenced assemblies</strong> — from isolate genomes to
+        environmental metagenomes — for <strong>integrated BGCs (iBGCs)</strong>:
+        overlapping biosynthetic gene cluster predictions consolidated into
+        single candidates.
+      </p>
+    ),
   },
   {
     icon: Search,
-    headline: "Search BGCs.",
-    body: "Filter and query the catalogue by protein domain, sequence similarity, chemical structure, or taxonomy. Build a hypothesis, run a query, and refine your shortlist.",
+    headline: "Query and triage.",
+    body: (
+      <>
+        <p className={bodyClass}>
+          Narrow the catalogue by <strong>metadata</strong> (taxonomy, biome, BGC
+          class…) or by <strong>similarity</strong> in domain function, protein
+          sequence, and predicted chemistry — or <strong>Load Asset</strong> to
+          project your own assembly and compare it against the database. Then{" "}
+          <strong>Run Query</strong> and browse the matches as a{" "}
+          <strong>roster</strong> or a <strong>map</strong>, sorting by{" "}
+          <strong>novelty</strong> (how unlike known validated clusters a
+          candidate is), length, or other attributes to surface what's worth
+          exploring.
+        </p>
+        <a
+          href="/docs/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+        >
+          Full documentation →
+        </a>
+      </>
+    ),
   },
   {
     icon: Pin,
-    headline: "Pin iBGCs as you explore. Export when ready.",
-    body: "Use the iBGC Shortlist (up to 20) to collect specific clusters — export as GenBank (.gbk) files ready for downstream workflows.",
+    headline: "Compare, shortlist, then export.",
+    body: (
+      <p className={bodyClass}>
+        <strong>Right-click</strong> any iBGC to set it as a{" "}
+        <strong>reference</strong> or to <strong>find similar</strong> clusters;{" "}
+        <strong>left-click</strong> another to compare it against that reference.
+        Add the interesting ones to your <strong>shortlist</strong>. When ready,{" "}
+        <strong>Generate Report</strong> — summarising core domains and taxonomy
+        and biome distribution — and download <strong>GenBank (.gbk)</strong>{" "}
+        files, assembly tables, or JSON for your downstream workflows.
+      </p>
+    ),
   },
 ];
 

@@ -75,6 +75,7 @@ export function ShortlistDropdown() {
           size="sm"
           className="gap-2"
           data-testid="shortlist-trigger"
+          data-tour="shortlist"
         >
           <ListChecks className="h-4 w-4" />
           iBGC Shortlist

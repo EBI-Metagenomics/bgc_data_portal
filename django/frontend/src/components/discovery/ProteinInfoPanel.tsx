@@ -65,7 +65,7 @@ export function ProteinInfoPanel() {
       >
         {selectedCds === null ? (
           <span className="text-muted-foreground">
-            Click a CDS in either detail card to load its Pfam annotations
+            Click a CDS in either detail card to load its protein details
             here.
           </span>
         ) : (

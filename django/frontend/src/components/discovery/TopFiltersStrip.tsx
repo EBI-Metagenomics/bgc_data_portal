@@ -71,7 +71,7 @@ export function TopFiltersStrip() {
           </Button>
         </div>
       </div>
-      <div className="max-h-[20vh] overflow-y-auto px-3 py-2">
+      <div className="max-h-[20vh] overflow-y-auto px-3 py-2" data-tour="filters">
         <FilterPanel />
       </div>
       <ResultScopeBanner />
