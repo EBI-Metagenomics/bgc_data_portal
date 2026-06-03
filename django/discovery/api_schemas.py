@@ -89,25 +89,6 @@ class CbgcOut(Schema):
 # ── Source BGC prediction (per-tool drill-down) ────────────────────────────
 
 
-class BgcRosterItem(Schema):
-    """Source BGC prediction row (per-tool drill-down). Deprecated — iBGC is the primary unit."""
-
-    id: int
-    accession: str  # prediction_accession, e.g. MGYB-ABC123.ANT.01
-    size_kb: float = 0.0
-    is_partial: bool = False
-    is_validated: bool = False
-    assembly_accession: Optional[str] = None
-    detector: Optional[DetectorOut] = None
-    cbgc_accession: Optional[str] = None
-    integrated_bgc_id: Optional[int] = None
-
-
-class PaginatedBgcRosterResponse(Schema):
-    items: list[BgcRosterItem]
-    pagination: PaginationMeta
-
-
 class DomainArchitectureItem(Schema):
     domain_acc: str
     domain_name: str
@@ -155,32 +136,6 @@ class NaturalProductSummary(Schema):
     smiles_svg: str = ""
     structure_thumbnail: str = ""
     np_class_path: str = ""
-
-
-class BgcDetail(Schema):
-    """Per-tool prediction detail (deprecated; iBGC is the primary unit)."""
-
-    id: int
-    accession: str  # prediction_accession
-    size_kb: float = 0.0
-    is_partial: bool = False
-    is_validated: bool = False
-    parent_assembly: Optional[ParentAssemblySummary] = None
-    detector: Optional[DetectorOut] = None
-    cbgc_accession: Optional[str] = None
-    integrated_bgc_id: Optional[int] = None
-
-
-class BgcScatterPoint(Schema):
-    id: int
-    x: float
-    y: float
-    bgc_class: str = ""
-    is_validated: bool = False
-    compound_name: Optional[str] = None
-    novelty_score: float = 0.0
-    domain_novelty: float = 0.0
-    similarity_score: Optional[float] = None
 
 
 class ValidatedReferencePoint(Schema):
@@ -626,12 +581,6 @@ class PaginatedQueryResultResponse(Schema):
 
 class SequenceQueryAccepted(Schema):
     task_id: str
-
-
-class SequenceQueryStatusResponse(Schema):
-    status: str  # "PENDING" | "SUCCESS" | "FAILURE"
-    items: list[QueryResultBgc] = []
-    pagination: Optional[PaginationMeta] = None
 
 
 class QueryResultAssemblyAggregation(Schema):
