@@ -295,6 +295,12 @@ items:
                   value: /data/huggingface
                 - name: NUMBA_CACHE_DIR
                   value: /tmp/numba_cache
+                # Persistent (hf-cache PVC) so the similarity scoring cache —
+                # written by import_clustering_results, read here by the sync
+                # /query/similar-ibgc/ + /query/ibgc-architecture/ endpoints —
+                # survives pod restarts instead of defaulting to ephemeral fs.
+                - name: CLUSTERING_ARTIFACTS_DIR
+                  value: /data/huggingface/clustering_artifacts
               envFrom:
                 - secretRef:
                     name: bgc-data-portal-secret
@@ -384,6 +390,10 @@ items:
                   value: /tmp/numba_cache
                 - name: PROTEIN_SEARCH_INDEX_DIR
                   value: /data/huggingface/protein_search
+                # Same persistent path as the django deployment so a cache
+                # written on either side is read by the other.
+                - name: CLUSTERING_ARTIFACTS_DIR
+                  value: /data/huggingface/clustering_artifacts
               envFrom:
                 - secretRef:
                     name: bgc-data-portal-secret

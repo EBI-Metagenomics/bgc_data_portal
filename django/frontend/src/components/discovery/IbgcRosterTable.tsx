@@ -381,9 +381,12 @@ function IbgcRosterRow({
               Type Strain
             </Badge>
           )}
-          {ibgc.umap_projected && (
-            <Badge variant="outline" className="ml-2 h-4 px-1 text-[10px]">
-              projected
+          {ibgc.is_partial && (
+            <Badge
+              variant="outline"
+              className="ml-2 h-4 px-1 text-[10px] border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              Partial
             </Badge>
           )}
         </TableCell>

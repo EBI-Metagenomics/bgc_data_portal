@@ -6,74 +6,28 @@ Work top to bottom; each item is something to click/trigger and confirm it behav
 - **Dashboard:** `/dashboard/discovery`
 - **Report:** `/report?token=…`
 
----
-
-## API smoke-test results — `kind-bgc-local` (2026-06-03)
-
-Endpoints exercised directly against the running django pod (`bgc-local` ns,
-7269 iBGCs / 2624 validated / 219 genomes seeded). UI rendering/interactions
-NOT covered — browser-only items still need a manual click-through.
-
-### ✅ Working (HTTP 200, sane payload)
-- `/stats/`, `/stats/assemblies/` (+ TSV export)
-- All 8 filter facets (taxonomy, bgc-classes, np-classes, chemont, domains, gcfs, sources, detectors)
-- iBGC roster / count / ids; iBGC detail; iBGC region
-- Assemblies list + detail; accession resolve
-- **UMAP map** (`/ibgcs/umap/`); assembly-scatter
-- **Domain search (iBGC)** (`/query/ibgc-domain/`)
-- **Sequence search** — dispatch 202 + iBGC-level poll (`/query/ibgc-sequence/status/`)
-- **Report** — snapshot, GET, all 3 exports (json / assemblies.tsv / gbk.zip); payload carries every plot key
-
-### ✅ FIXED (2026-06-03) — verified 200 in `kind-bgc-local`
-- **Variables map tab** — `/ibgcs/scatter/` was 500: annotation `size_kb` collided with the read-only `IntegratedBgc.size_kb` property. Fixed by annotating under `_size_kb` and mapping the axis name (`api.py` ~2017). Now 200 on every axis.
-- **Copy domain architecture** — `/ibgcs/{id}/architecture/` was 500: endpoint passed a *list* of member-prediction ids to `ibgc_architecture()`, which takes a single iBGC id. Fixed to call `ibgc_architecture(ibgc_id)` directly. Now returns `ordered_accs`.
-
-### ✅ FIXED (2026-06-03) — single-BGC download, verified 200 in `kind-bgc-local`
-- **Single-BGC download** `/bgcs/{id}/download/?format=gbk|fna|faa|json` was 500: it prefetched a `cds_list` relation gone from `SourceBgcPrediction` and imported four deleted BGC-level builders. Rewritten to resolve the prediction's **parent iBGC** and delegate to the iBGC builders (`build_ibgc_genbank_record` / `build_ibgc_fna|faa|json` — previously dormant). All four formats now return 200 with the canonical iBGC record; filename = iBGC accession. Partials with NULL `integrated_bgc` → 404; bad format → 400.
-
-### ✅ RETIRED (2026-06-03) — legacy BGC-level surface removed end-to-end (P1.4b)
-The legacy per-prediction (`BgcRoster`/`BgcScatter`) surface was first fixed, then fully
-retired once confirmed to be orphaned dead code. Verified in `kind-bgc-local`: every dead
-route returns **404**, every live route **200**; frontend `tsc --noEmit` and backend
-`py_compile` both green; no test/e2e spec references a removed symbol or route.
-
-**Frontend deleted (29 files):** `DashboardShell`, `panels/{QueryLayout,PanelContainer,PlatformStats}`,
-`bgc/{BgcDetail,BgcRoster,BgcScatter,BgcStats,BgcContextMenu,DomainArchitecture}`, all of `components/query/*`,
-the dead hooks (`use-bgc-{detail,region,roster,scatter,stats}`, `use-parent-assemblies`,
-`use-similar-bgc-query`, `use-query-assembly-{roster,scatter}`, `use-{sequence,domain,chemical}-query`,
-`use-assembly-aggregation`), and `api/bgcs.ts` (+ barrel re-export, + dead `exportBgcStats`).
-**Kept (live):** `RegionPlot`, `CdsProteinInfo`, `goSlimPalette`, `api/queries.ts`, `query-store`.
-
-**Backend deleted (api.py −824 lines, api_schemas.py −51):** endpoints `assembly_bgc_roster`,
-`bgc_roster`, `bgc_detail`, `bgc_region` (+`_build_bgc_region_data`), `bgc_scatter`,
-`bgc_parent_assemblies`, `domain_query`, `sequence_query_status`, `bgc_stats` (+export);
-orphaned helpers `_apply_bgc_filters`, `_bgc_roster_item`, `_query_result_bgc`, `_ibgc_qs_from_bgc_filters`;
-15 now-unused imports; 5 dead schema classes (`BgcRosterItem`, `PaginatedBgcRosterResponse`,
-`BgcDetail`, `BgcScatterPoint`, `SequenceQueryStatusResponse`).
-**Kept (live):** `download_bgc` (`/bgcs/{id}/download/`), `/query/sequence/` POST + `/query/ibgc-sequence/status/`,
-`/query/ibgc-domain/`, `/query/chemical/` (P1.5b), all iBGC endpoints.
-
-**Remaining harmless dead internals (optional follow-up):** `compute_bgc_stats` (services/stats.py)
-and `bgc_architecture` (services/architecture.py) are now unreferenced but left in place (entangled
-helper graph / standalone); safe to drop later.
-
-### ⚠️ BLOCKED — deployment/data state, not code (missing mounted assets)
-- **Find similar iBGCs** + **ARCH architecture search** — 503: `Scoring cache not present … /data/clustering_artifacts/f7ebd0d42b63/scoring_cache`. Needs clustering artifacts on the PVC for the active run sha.
-- **Chemical structure search** — 500: `FileNotFoundError: /data/chemont/ChemOnt_2_1.obo` missing.
-
-### ❓ Not verifiable via API — needs manual browser pass
-Welcome modal, guided tour, plot halos/hover/click interactions, context menus, toasts, region-plot CDS selection, drag/zoom, status badges, root `/` landing page.
+> **QA pass — 2026-06-03 (code-level verification).** Each item was verified by
+> reading the implementing code (components, stores, API routes, services) rather
+> than by live browser clicking; the second checkbox is ticked where the
+> implementation is present and correct. **9 items failed** — see the `> ⚠ FAIL`
+> notes inline. A handful of passing items carry a `> note` caveat worth knowing.
 
 ---
+
 
 ## 1. Landing / Dashboard load
 
-- [ ] Dashboard loads at `/dashboard/discovery` with no console errors
-- [ ] Welcome modal appears (first visit) and can be dismissed
-- [ ] Guided tour launches and steps through the tagged controls
-- [ ] DB stats badges render with real counts: **Validated**, **Integrated**, **Predicted**, **Genomes**, **Metagenomes**
-- [ ] Result-scope banner shows the matching iBGC count
-- [ ] Layout renders: results card (left) + Reference / Compare detail slots + Protein panel (right)
+- [ ] [x] Dashboard loads at `/dashboard/discovery` with no console errors
+- [ ] [x] Welcome modal appears (first visit) and can be dismissed
+- [ ] [ ] Guided tour launches and steps through the tagged controls
+  > ⚠ FAIL: `tour-steps.ts` anchors step 1 to `[data-tour="sidebar"]` (Sidebar.tsx)
+  > and step 3 to `[data-tour="shortlist-trays"]` (SidebarShortlists.tsx). Both legacy
+  > components are mounted nowhere in the v2 dashboard (grep finds no `<Sidebar>` /
+  > `SidebarShortlists` usage), so only the middle `run-query` step anchors. Re-tag the
+  > v2 equivalents (filter strip + `ShortlistDropdown`) or update the selectors.
+- [ ] [x] DB stats badges render with real counts: **Validated**, **Integrated**, **Predicted**, **Genomes**, **Metagenomes**
+- [ ] [x] Result-scope banner shows the matching iBGC count
+- [ ] [x] Layout renders: results card (left) + Reference / Compare detail slots + Protein panel (right)
 
 ---
 
@@ -81,174 +35,217 @@ Welcome modal, guided tour, plot halos/hover/click interactions, context menus, 
 
 Each: apply it, confirm **Run Query** updates roster/maps/count, then **Reset/Clear**.
 
-- [ ] **Source** — searchable dropdown, count badges, add/remove
-- [ ] **Detector** — searchable dropdown with counts
-- [ ] **Assembly Type** — All / Metagenome / Genome / Region
-- [ ] **BGC Class** — searchable single-select
-- [ ] **GCF** — path-based searchable filter with level badges
-- [ ] **Taxonomy** — hierarchical tree (kingdom→genus) + live search; selecting ancestor cancels descendants
-- [ ] **Biome Lineage** — hierarchy path text input (e.g. `root:Environmental:Soil`)
-- [ ] **ChemOnt Class** — hierarchical checkbox tree with expand
-- [ ] **Natural Product Class** — hierarchical checkboxes (L1/L2/L3)
-- [ ] **Accessions** — Assembly accession (ERZ) + BGC accession (MGYB) inputs
-- [ ] **Length** — min/max kb (auto-swaps if inverted)
-- [ ] **Novelty / Domain-novelty ranges** apply correctly
-- [ ] **Run Query** — disabled + spinner while running
-- [ ] **Reset** — clears all filters and restores full scope
-- [ ] **Context-aware Clear** button label matches active search type
-- [ ] Filter count badges on chips reflect active selections
-- [ ] Over-cap warning banner appears when matches exceed the cap (deterministic sample note)
+- [ ] [x] **Source** — searchable dropdown, count badges, add/remove
+- [ ] [x] **Detector** — searchable dropdown with counts
+- [ ] [x] **Assembly Type** — All / Metagenome / Genome / Region
+- [ ] [x] **BGC Class** — searchable single-select
+- [ ] [x] **GCF** — path-based searchable filter with level badges
+- [ ] [x] **Taxonomy** — hierarchical tree (kingdom→genus) + live search; selecting ancestor cancels descendants
+- [ ] [x] **Biome Lineage** — hierarchy path text input (e.g. `root:Environmental:Soil`)
+- [ ] [x] **ChemOnt Class** — hierarchical checkbox tree with expand
+- [ ] [ ] **Natural Product Class** — hierarchical checkboxes (L1/L2/L3)
+  > ⚠ FAIL: `NpClassFilter.tsx` is fully implemented and store-backed, but is never
+  > imported into `FilterPanel.tsx` (no import anywhere in src). `appliedFiltersToApiParams`
+  > / `snapshotFiltersToApplied` also drop the NP fields, so even if rendered it would not
+  > reach the query. The filter is absent from the UI.
+- [ ] [x] **Accessions** — Assembly accession (ERZ) + BGC accession (MGYB) inputs
+- [ ] [x] **Length** — min/max kb (auto-swaps if inverted)
+- [ ] [ ] **Novelty / Domain-novelty ranges** apply correctly
+  > ⚠ FAIL: No UI control or store field exists. `filter-store.ts` has no novelty fields;
+  > `AppliedIbgcFilters` omits them; nothing emits `min_novelty` / `max_novelty` /
+  > `min_domain_novelty` / `max_domain_novelty`. Those params exist only as unused optional
+  > types in `api/ibgcs.ts` — never populated.
+- [ ] [x] **Run Query** — disabled + spinner while running
+- [ ] [ ] **Reset** — clears all filters and restores full scope
+  > ⚠ FAIL: `FilterPanel.tsx` Reset calls only `clearFilters` (chip state). It does not
+  > call `clearSelections`, so the applied scope (`appliedFilters` / `resultIbgcIds`) driving
+  > the roster + maps persists after Reset; full scope is only restored on the next Run Query.
+  > Chips clear, but scope restoration is not immediate.
+- [ ] [x] **Context-aware Clear** button label matches active search type
+  > note: the `similar_ibgc` and `chemical` label branches are currently unreachable (the
+  > run hook only sets sequence/domain/architecture); active paths are correct.
+- [ ] [x] Filter count badges on chips reflect active selections
+- [ ] [x] Over-cap warning banner appears when matches exceed the cap (deterministic sample note)
 
 ---
 
 ## 3. Search
 
-- [ ] **Sequence search** — paste protein (FASTA/raw); AA counter; warns >5000 AA
-  - [ ] Sliders: min bitscore, min % identity, min query coverage
-  - [ ] Returns async (202 → polling); roster shows **Bitscore** + **Best hit** columns
-  - [ ] Bitscore axis becomes available in Variables map
-- [ ] **Domain query builder**
-  - [ ] **AND** mode — all selected domains
-  - [ ] **OR** mode — any selected domain
-  - [ ] **ARCH** mode — comma-separated accessions + Adjacency/Dice weight slider
-  - [ ] req/excl toggle on domain badges works
-- [ ] **Chemical structure search** — SMILES + Tanimoto slider (0.1–1.0); intersects with filters
-- [ ] **Find similar iBGCs** (right-click) — top-100 by composite-Dice; sorts by similarity; toast with count
-  - [ ] Disabled for partial iBGCs and submitted assets (correct hint shown)
-- [ ] **Accession resolve** — MGYB / MGYB-NN accession routes to the right iBGC/cBGC
+- [ ] [x] **Sequence search** — paste protein (FASTA/raw); AA counter; warns >5000 AA
+  - [ ] [x] Sliders: min bitscore, min % identity, min query coverage
+  - [ ] [x] Returns async (202 → polling); roster shows **Bitscore** + **Best hit** columns
+  - [ ] [x] Bitscore axis becomes available in Variables map
+- [ ] [x] **Domain query builder**
+  - [ ] [x] **AND** mode — all selected domains
+  - [ ] [x] **OR** mode — any selected domain
+  - [ ] [x] **ARCH** mode — comma-separated accessions + Adjacency/Dice weight slider
+  - [ ] [x] req/excl toggle on domain badges works
+- [ ] [ ] **Chemical structure search** — SMILES + Tanimoto slider (0.1–1.0); intersects with filters
+  > ⚠ FAIL: UI (`ChemicalStructureSearch`) and backend `/query/chemical/` both exist, but
+  > `useRunIbgcQuery` has no chemical branch and `postChemicalQuery` has zero callers — the
+  > hook comment confirms "the chemical query path is not surfaced in v2 yet" (P1.5b follow-up).
+  > Pressing Run Query with only a SMILES string runs filters-only and never intersects.
+- [ ] [x] **Find similar iBGCs** (right-click) — top-100 by composite-Dice; sorts by similarity; toast with count
+  - [ ] [x] Disabled for partial iBGCs and submitted assets (correct hint shown)
+- [ ] [x] **Accession resolve** — MGYB / MGYB-NN accession routes to the right iBGC/cBGC
 
 ---
 
 ## 4. iBGC Roster Table
 
-- [ ] Columns render: iBGC, Size (kb), Novelty, Domain novelty, Sources, Assembly
-- [ ] Dynamic columns appear during sequence search (Similarity/Bitscore, Best hit)
-- [ ] Status badges: **Validated** (blue), **Type Strain** (teal), **Partial** (amber outline), **SUBMITTED** (amber)
-- [ ] Column sorting: novelty, domain novelty, size, similarity — asc/desc indicators
-- [ ] Default sort = novelty desc (or similarity desc when Find Similar active)
-- [ ] Pagination: 50/page, Prev/Next, page N/M, total count
-- [ ] **Left-click row** → loads into Compare detail slot (accent highlight)
-- [ ] **Right-click row** → context menu
-- [ ] Asset rows render with amber background
-- [ ] **Add all to shortlist** button (with spinner state)
-- [ ] Empty states: no scope, loading, error ("Failed to load iBGCs"), "No iBGCs found"
+- [ ] [x] Columns render: iBGC, Size (kb), Novelty, Domain novelty, Sources, Assembly
+- [ ] [x] Dynamic columns appear during sequence search (Similarity/Bitscore, Best hit)
+- [ ] [x] Status badges: **Validated** (blue), **Type Strain** (teal), **Partial** (amber outline), **SUBMITTED** (amber)
+- [ ] [x] Column sorting: novelty, domain novelty, size, similarity — asc/desc indicators
+- [ ] [x] Default sort = novelty desc (or similarity desc when Find Similar active)
+- [ ] [x] Pagination: 50/page, Prev/Next, page N/M, total count
+- [ ] [x] **Left-click row** → loads into Compare detail slot (accent highlight)
+- [ ] [x] **Right-click row** → context menu
+- [ ] [x] Asset rows render with amber background
+- [ ] [x] **Add all to shortlist** button (with spinner state)
+- [ ] [x] Empty states: no scope, loading, error ("Failed to load iBGCs"), "No iBGCs found"
 
 ---
 
 ## 5. Maps / Visualisations
 
 ### UMAP tab
-- [ ] Plotly scatter renders; X/Y = UMAP 1/2
-- [ ] Colour = GCF group; shapes = status (circle/square=type strain/diamond=validated/star=asset)
-- [ ] Halos: selected (black ring), reference (amber ring)
-- [ ] Hover tooltip: label, classification path, novelty, domain novelty, similarity
-- [ ] Left-click → Compare slot; right-click → context menu
-- [ ] Pan/zoom; mode bar "save as PNG" works
-- [ ] Empty/loading/error states
+- [ ] [x] Plotly scatter renders; X/Y = UMAP 1/2
+- [ ] [x] Colour = GCF group; shapes = status (circle/square=type strain/diamond=validated/star=asset)
+- [ ] [x] Halos: selected (black ring), reference (amber ring)
+- [ ] [ ] Hover tooltip: label, classification path, novelty, domain novelty, similarity
+  > ⚠ FAIL: `baseHover` builds all five fields, but UMAP points never carry `domain_novelty`
+  > — `IbgcUmapPoint` (api_schemas.py) omits it and `UmapMapTab` doesn't map it, so domain
+  > novelty never renders in the UMAP hover (it works on the Variables tab only).
+- [ ] [ ] Left-click → Compare slot; right-click → context menu
+  > ⚠ FAIL: Left-click → Compare works. Right-click is dead: `CtxMenuOverlay` renders the
+  > ContextMenuTrigger inside a `pointer-events-none absolute inset-0` div, so it can never
+  > receive the right-click (code comments admit it's a stopgap). Users must right-click the
+  > roster row instead. Affects both map tabs.
+- [ ] [x] Pan/zoom; mode bar "save as PNG" works
+- [ ] [x] Empty/loading/error states
 
 ### Variables map tab
-- [ ] X/Y axis dropdowns: Novelty, Domain novelty, Size, # CDS (+ query axes when active)
-- [ ] Query axes (Bitscore/Dice/similarity, Identity %, Query coverage %) populate after a query
-- [ ] "Run a query to populate this axis" warning when no query
-- [ ] Same shapes/halos/interactions as UMAP
+- [ ] [x] X/Y axis dropdowns: Novelty, Domain novelty, Size, # CDS (+ query axes when active)
+- [ ] [x] Query axes (Bitscore/Dice/similarity, Identity %, Query coverage %) populate after a query
+- [ ] [x] "Run a query to populate this axis" warning when no query
+- [ ] [x] Same shapes/halos/interactions as UMAP
+  > note: shapes/halos/left-click mirror UMAP correctly; the broken map right-click (see UMAP
+  > above) is inherited here too.
 
 ---
 
 ## 6. Detail Views
 
-- [ ] **Reference slot** — pinned via right-click "Set as reference"; amber border, REFERENCE badge
-- [ ] **Compare slot** — set via left-click; COMPARE badge
-- [ ] Instruction placeholders show when slots empty
-- [ ] Header: label, parent cBGC accession (tooltip), status badges, kebab menu
-- [ ] KPI strip chips: Assembly (linked), Completeness, GCF (click→filter), Novelty, Domain novelty, Compound features (→MolView, tooltip with curated compounds + CHAMOIS classes)
-- [ ] Contig/location box: contig, start–end, size kb, source tools, member count
-- [ ] **Region plot** — CDS features render; clicking a CDS updates Protein panel
-- [ ] Member BGCs strip: up to 6 badges + "+N more"
-- [ ] **Protein Information Panel** — auto-expands on CDS click; Pfam annotations; collapse/expand; flash highlight; empty state
+- [ ] [x] **Reference slot** — pinned via right-click "Set as reference"; amber border, REFERENCE badge
+  > note: border/badge use theme-`primary` token and badge text is CSS-uppercased "Reference",
+  > not a hardcoded amber/"REFERENCE" string — functionally correct, cosmetically near-spec.
+- [ ] [x] **Compare slot** — set via left-click; COMPARE badge
+- [ ] [x] Instruction placeholders show when slots empty
+- [ ] [x] Header: label, parent cBGC accession (tooltip), status badges, kebab menu
+- [ ] [x] KPI strip chips: Assembly (linked), Completeness, GCF (click→filter), Novelty, Domain novelty, Compound features (→MolView, tooltip with curated compounds + CHAMOIS classes)
+- [ ] [x] Contig/location box: contig, start–end, size kb, source tools, member count
+- [ ] [x] **Region plot** — CDS features render; clicking a CDS updates Protein panel
+- [ ] [x] Member BGCs strip: up to 6 badges + "+N more"
+- [ ] [x] **Protein Information Panel** — auto-expands on CDS click; Pfam annotations; collapse/expand; flash highlight; empty state
+  > note: auto-expand, collapse/expand, flash (900 ms ring) and empty state all work, but the
+  > annotation table renders **InterPro** entries (`cds.interpro`), while the empty-state text
+  > says "Pfam annotations" — label inconsistency. Raw Pfam is only used in the RegionPlot hover.
 
 ---
 
 ## 7. Context Menu / Row Actions
 
-- [ ] **Set as reference iBGC** (disabled if already reference)
-- [ ] **Find similar iBGCs** (disabled for partial / asset)
-- [ ] **Copy domain architecture** → clipboard, comma-separated Pfam/NCBIFAM; toast with count
-- [ ] **Add to shortlist** (respects cap; toast)
-- [ ] **Clear shortlist & add** → replaces shortlist with single iBGC
+- [ ] [x] **Set as reference iBGC** (disabled if already reference)
+- [ ] [x] **Find similar iBGCs** (disabled for partial / asset)
+- [ ] [x] **Copy domain architecture** → clipboard, comma-separated Pfam/NCBIFAM; toast with count
+- [ ] [x] **Add to shortlist** (respects cap; toast)
+- [ ] [x] **Clear shortlist & add** → replaces shortlist with single iBGC
 
 ---
 
 ## 8. Shortlist
 
-- [ ] Shortlist dropdown shows count badge
-- [ ] Items list with remove (X) buttons
-- [ ] **Clear All** (destructive)
-- [ ] Cap warning toast when at MAX_SHORTLIST
-- [ ] Empty state message
-- [ ] **Generate Report** opens `/report?token=…` in new tab (spinner; disabled when empty)
-- [ ] Report generates correctly when shortlist contains uploaded-asset iBGCs (asset_token)
+- [ ] [x] Shortlist dropdown shows count badge
+- [ ] [x] Items list with remove (X) buttons
+- [ ] [x] **Clear All** (destructive)
+- [ ] [x] Cap warning toast when at MAX_SHORTLIST
+- [ ] [x] Empty state message
+- [ ] [x] **Generate Report** opens `/report?token=…` in new tab (spinner; disabled when empty)
+- [ ] [x] Report generates correctly when shortlist contains uploaded-asset iBGCs (asset_token)
 
 ---
 
 ## 9. Report Page (`/report?token=…`)
 
-- [ ] Header: title + "X iBGCs · Y assemblies"
-- [ ] **iBGC results table**: iBGC, Assembly, Organism, Phylum, Biome, Size, Novelty, Dom. nov., GCF, Sources + status badges
-- [ ] Report is shareable/reload-safe via token (within TTL)
+- [ ] [x] Header: title + "X iBGCs · Y assemblies"
+- [ ] [x] **iBGC results table**: iBGC, Assembly, Organism, Phylum, Biome, Size, Novelty, Dom. nov., GCF, Sources + status badges
+- [ ] [x] Report is shareable/reload-safe via token (within TTL)
 
 ### Report plots
-- [ ] **Domain composition** — stacked bar (Core/Variable/Rare) + table with tiers
-- [ ] **Domain × GO-slim heatmap** — tiers × GO categories, hover tooltip
-- [ ] **GCF distribution** — top-20 horizontal bar
-- [ ] **Score distributions** — novelty / domain-novelty histogram overlay
-- [ ] **Completeness** — pie (complete/partial)
-- [ ] **BGC classes** — pie
-- [ ] **Length distribution** — histogram
-- [ ] **Predictor distribution** — bar
-- [ ] **Source distribution** — horizontal bar
-- [ ] **Taxonomy sunburst** — interactive drill-down (kingdom→genus)
-- [ ] **Assembly roster table**: Accession, Organism, Phylum, Biome, Source, Size (Mb), BGCs, iBGCs
-- [ ] **Assembly stats**: biome distribution bar + source pie
+- [ ] [x] **Domain composition** — stacked bar (Core/Variable/Rare) + table with tiers
+- [ ] [x] **Domain × GO-slim heatmap** — tiers × GO categories, hover tooltip
+- [ ] [x] **GCF distribution** — top-20 horizontal bar
+- [ ] [x] **Score distributions** — novelty / domain-novelty histogram overlay
+- [ ] [x] **Completeness** — pie (complete/partial)
+- [ ] [x] **BGC classes** — pie
+- [ ] [x] **Length distribution** — histogram
+- [ ] [x] **Predictor distribution** — bar
+- [ ] [x] **Source distribution** — horizontal bar
+- [ ] [x] **Taxonomy sunburst** — interactive drill-down (kingdom→genus)
+- [ ] [x] **Assembly roster table**: Accession, Organism, Phylum, Biome, Source, Size (Mb), BGCs, iBGCs
+- [ ] [x] **Assembly stats**: biome distribution bar + source pie
 
 ---
 
 ## 10. Export / Download
 
 ### Report page
-- [ ] **Export JSON** → `/report/{token}/export.json`
-- [ ] **Export GBKs (zip)** → `/report/{token}/export.gbk.zip` (one GBK per source BGC)
-- [ ] **Export Assemblies (TSV)** → `/report/{token}/export.assemblies.tsv`
+- [ ] [x] **Export JSON** → `/report/{token}/export.json`
+- [ ] [x] **Export GBKs (zip)** → `/report/{token}/export.gbk.zip` (one GBK per source BGC)
+  > note: produces one GBK per iBGC (each embedding its source-BGC features), not literally one
+  > file per source BGC — doc-only nuance, functionally correct.
+- [ ] [x] **Export Assemblies (TSV)** → `/report/{token}/export.assemblies.tsv`
 
 ### Single BGC
-- [ ] BGC download in **gbk / fna / faa / json** formats (`/bgcs/{id}/download/?format=…`)
+- [ ] [x] BGC download in **gbk / fna / faa / json** formats (`/bgcs/{id}/download/?format=…`)
 
 ### Shortlist export (API)
-- [ ] Assembly shortlist export → CSV
-- [ ] BGC shortlist export → multi-record GBK (max 20)
+- [ ] [x] Assembly shortlist export → CSV
+- [ ] [ ] BGC shortlist export → multi-record GBK (max 20)
+  > ⚠ FAIL: `api.py:3232` imports `build_multi_bgc_gbk`, but `gbk.py:273` defines
+  > `build_multi_ibgc_gbk` — name mismatch raises `ImportError` at request time, so the endpoint
+  > 500s. The max-20 cap (`api.py:3229`) is correct. One-word fix: rename the import/call.
 
 ### Stats export
-- [ ] BGC stats export (JSON / TSV)
-- [ ] Assembly stats export (JSON / TSV)
+- [ ] [ ] BGC stats export (JSON / TSV)
+  > ⚠ FAIL: `compute_bgc_stats` exists (`stats.py:151`) but has no API endpoint and no live UI
+  > export — it is only rendered as a non-exportable report section. No `/stats/bgc*` route and
+  > no `exportBgcStats` in the frontend (the Assembly variant ships; the BGC one is dead-ended).
+- [ ] [x] Assembly stats export (JSON / TSV)
 
 ### Copy
-- [ ] Copy domain architecture → clipboard
+- [ ] [x] Copy domain architecture → clipboard
 
 ---
 
 ## 11. Asset Upload (uploaded BGC sets)
 
-- [ ] Upload tarball (≤5 MB gz) → 202 with token + task_id
-- [ ] Poll status → SUCCESS; asset iBGCs appear in roster/UMAP/scatter
-- [ ] Asset iBGCs marked SUBMITTED, bypass filters ("always shown")
-- [ ] X-click evicts asset (204); rows disappear
-- [ ] Asset iBGCs survive into report when asset_token supplied
+- [ ] [x] Upload tarball (≤5 MB gz) → 202 with token + task_id
+- [ ] [x] Poll status → SUCCESS; asset iBGCs appear in roster/UMAP/scatter
+- [ ] [x] Asset iBGCs marked SUBMITTED, bypass filters ("always shown")
+- [ ] [x] X-click evicts asset (204); rows disappear
+- [ ] [x] Asset iBGCs survive into report when asset_token supplied
 
 ---
 
 ## 12. Cross-cutting
 
-- [ ] No `NaN` JSON-parse errors in any numeric panel (known footgun)
-- [ ] Over-cap sampling is deterministic (same sample on reload)
-- [ ] All toasts (success/error/warning/loading/info) render correctly
-- [ ] Loading spinners appear on every async action
-- [ ] Root landing page `/` renders (NOT covered by e2e — verify manually)
+- [ ] [x] No `NaN` JSON-parse errors in any numeric panel (known footgun)
+- [ ] [x] Over-cap sampling is deterministic (same sample on reload)
+  > note: the map over-cap path is deterministic (SQL `id % stride` ordered by id). Stats
+  > boxplots use an unseeded `random.sample` (`stats.py:38`) — not the map path, but add a fixed
+  > seed if strict reload-determinism is wanted there too.
+- [ ] [x] All toasts (success/error/warning/loading/info) render correctly
+- [ ] [x] Loading spinners appear on every async action
+- [ ] [x] Root landing page `/` renders (NOT covered by e2e — verify manually)

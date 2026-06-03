@@ -52,10 +52,13 @@ spec:
       volumes:
         - name: packages
           emptyDir: {}
-        # Local-only: emptyDir survives pod restarts but not pod recreation.
-        # Rebuild via `make build-protein-index` after a fresh deploy.
+        # Shared PVC (not emptyDir): the index the celery worker builds here —
+        # via load_discovery_data's chained task or `make build-protein-index` —
+        # must survive pod recreation on Skaffold rebuilds and be visible to the
+        # Django pod. Single-node Kind, so RWO mounts on both pods.
         - name: protein-search-index
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: protein-search-index
         # Shared with the Django pod so the scoring cache the pipeline writes
         # here is visible to the API handlers in the web pod.
         - name: clustering-artifacts

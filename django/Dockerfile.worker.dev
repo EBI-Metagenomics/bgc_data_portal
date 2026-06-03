@@ -1,12 +1,22 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc build-essential python3-dev libffi-dev libssl-dev git \
+    gcc build-essential python3-dev libffi-dev libssl-dev git curl unzip \
     libxrender1 libxext6 libsm6 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# ChemOnt ontology for chemical-structure similarity search (chemical query +
+# IC precompute run in this worker). Baked in before the code layer so it stays
+# cached across Skaffold code syncs. ``/data/<subdir>`` mounts don't shadow it.
+RUN mkdir -p /data/chemont \
+ && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip \
+      "http://classyfire.wishartlab.com/system/downloads/1_0/chemont/ChemOnt_2_1.obo.zip" \
+ && unzip /tmp/ChemOnt_2_1.obo.zip -d /data/chemont/ \
+ && rm /tmp/ChemOnt_2_1.obo.zip
+ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
 
 WORKDIR /app
 

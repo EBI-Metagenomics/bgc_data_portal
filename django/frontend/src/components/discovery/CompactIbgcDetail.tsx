@@ -139,11 +139,6 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
               Type Strain
             </Badge>
           )}
-          {ibgc.umap_projected && (
-            <Badge variant="outline" className="text-[10px]">
-              projected
-            </Badge>
-          )}
         </div>
         <IbgcActionsMenu
           ibgcId={ibgc.id}
@@ -159,6 +154,7 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           naturalProducts={ibgc.natural_products}
           chemontTree={ibgc.chemont_tree}
           parentAssembly={ibgc.parent_assembly}
+          isPartial={ibgc.is_partial}
           gcfPath={ibgc.classification_path}
           novelty={ibgc.novelty_score}
           domainNovelty={ibgc.domain_novelty}
@@ -221,6 +217,7 @@ interface KpiStripProps {
   naturalProducts: NaturalProductSummary[];
   chemontTree: ChemOntAnnotationNode[];
   parentAssembly: ParentAssemblySummary | null;
+  isPartial: boolean;
   gcfPath: string;
   novelty: number | null;
   domainNovelty: number | null;
@@ -234,6 +231,7 @@ function KpiStrip({
   naturalProducts,
   chemontTree,
   parentAssembly,
+  isPartial,
   gcfPath,
   novelty,
   domainNovelty,
@@ -258,15 +256,24 @@ function KpiStrip({
             title={parentAssembly.organism_name ?? parentAssembly.accession}
             className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
           >
-            <span className="text-muted-foreground">parent</span>
+            <span className="text-muted-foreground">assembly</span>
             <span className="font-semibold">{parentAcc}</span>
           </a>
         ) : (
           <span className={CHIP_BASE}>
-            <span className="text-muted-foreground">parent</span>
+            <span className="text-muted-foreground">assembly</span>
             <span className="font-semibold">{parentAcc}</span>
           </span>
         )}
+
+        {/* Completeness: partial iBGCs are incomplete clusters (e.g. at a
+            contig edge) projected into the map via nearest neighbours. */}
+        <span className={CHIP_BASE}>
+          <span className="text-muted-foreground">completeness</span>
+          <span className="font-semibold">
+            {isPartial ? "partial" : "complete"}
+          </span>
+        </span>
 
         {/* Group = the iBGC's GCF lineage (e.g. 42.7.3). Click to filter the
             dashboard to this exact family and its descendants. */}
@@ -277,12 +284,12 @@ function KpiStrip({
             title={`Filter by GCF ${gcfPath}`}
             className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
           >
-            <span className="text-muted-foreground">group</span>
+            <span className="text-muted-foreground">GCF</span>
             <span className="font-semibold">{gcfPath}</span>
           </button>
         ) : (
           <span className={CHIP_BASE}>
-            <span className="text-muted-foreground">group</span>
+            <span className="text-muted-foreground">GCF</span>
             <span className="font-semibold">—</span>
           </span>
         )}

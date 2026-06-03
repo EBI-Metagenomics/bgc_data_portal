@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     make \
     git \
+    curl \
+    unzip \
     libxrender1 \
     libxext6 \
     libsm6 \
@@ -15,6 +17,18 @@ RUN apt-get update && apt-get install -y \
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# ChemOnt ontology for chemical-structure similarity search. The chemical
+# query task and the ChemOnt IC precompute both run in this worker. Baked in
+# at build time (same source as the ETL image) at the default path expected by
+# common_core.chemont.ontology. ``/data/<subdir>`` volume mounts don't shadow
+# this, so no PVC/mount is needed.
+RUN mkdir -p /data/chemont \
+ && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip \
+      "http://classyfire.wishartlab.com/system/downloads/1_0/chemont/ChemOnt_2_1.obo.zip" \
+ && unzip /tmp/ChemOnt_2_1.obo.zip -d /data/chemont/ \
+ && rm /tmp/ChemOnt_2_1.obo.zip
+ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
 
 WORKDIR /app
 

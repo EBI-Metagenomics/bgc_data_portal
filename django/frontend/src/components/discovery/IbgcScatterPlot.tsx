@@ -94,6 +94,14 @@ export function IbgcScatterPlot({ points, xLabel, yLabel }: Props) {
         data={traces}
         layout={{
           autosize: true,
+          // Preserve the user's zoom/pan across re-renders. Without this,
+          // selecting a point (which sets compareIbgcId → rebuilds traces and
+          // recreates this layout object) makes Plotly treat the layout as new
+          // and snap back to autorange. Keying on the axis labels means
+          // switching variables in the Variables Map still resets the view —
+          // it's a genuinely different plot — while a click only refreshes the
+          // halos. Double-click still resets via Plotly's default doubleClick.
+          uirevision: `${xLabel}|${yLabel}`,
           margin: { l: 50, r: 20, t: 12, b: 40 },
           xaxis: { title: { text: xLabel }, zeroline: false },
           yaxis: { title: { text: yLabel }, zeroline: false },

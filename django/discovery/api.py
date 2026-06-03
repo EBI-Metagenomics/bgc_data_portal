@@ -1400,6 +1400,7 @@ def ibgc_umap(
     source_tools: Optional[str] = None,  # deprecated alias for detector_tools
     source_names: Optional[str] = None,
     assembly_type: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     bgc_accession: Optional[str] = None,
@@ -1440,6 +1441,7 @@ def ibgc_umap(
             source_tools=source_tools,
             source_names=source_names,
             assembly_type=assembly_type,
+            leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
             bgc_accession=bgc_accession,
@@ -1498,6 +1500,7 @@ def ibgc_scatter(
     source_tools: Optional[str] = None,  # deprecated alias for detector_tools
     source_names: Optional[str] = None,
     assembly_type: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     bgc_accession: Optional[str] = None,
@@ -1542,6 +1545,7 @@ def ibgc_scatter(
             source_tools=source_tools,
             source_names=source_names,
             assembly_type=assembly_type,
+            leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
             bgc_accession=bgc_accession,

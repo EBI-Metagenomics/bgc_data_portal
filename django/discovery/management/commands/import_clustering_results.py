@@ -98,6 +98,33 @@ class Command(BaseCommand):
             self.style.SUCCESS(f"Imported ClusteringRun pk={run.pk} sha256={sha[:12]}…")
         )
 
+        # HPC clustering doesn't ship the on-demand scoring cache, and the
+        # in-portal pipeline (which normally writes it) never runs in this path.
+        # Reconstruct it from the just-committed DB state so the Find-similar
+        # and architecture-search endpoints don't 503 on the imported run.
+        try:
+            from discovery.services.clustering.pipeline import (
+                rebuild_scoring_cache_from_db,
+            )
+
+            cache_dir = rebuild_scoring_cache_from_db(run)
+            if cache_dir is not None:
+                self.stdout.write(
+                    self.style.SUCCESS(f"Rebuilt scoring cache: {cache_dir}")
+                )
+            else:
+                self.stdout.write(self.style.WARNING(
+                    "No clusterable iBGCs — scoring cache not written."
+                ))
+        except Exception as exc:
+            # Non-fatal: the import (DB state) succeeded. Surface a clear hint;
+            # the cache can be regenerated with `rebuild_scoring_cache`.
+            self.stdout.write(self.style.WARNING(
+                f"Scoring cache rebuild failed ({exc}). Find-similar / architecture "
+                f"search will 503 until you run: manage.py rebuild_scoring_cache"
+            ))
+            log.exception("Scoring cache rebuild failed after import")
+
         # The import is synchronous and transaction-wrapped: reaching here means
         # it committed, so refresh the platform-overview DiscoveryStats async.
         # Routed to the ``scores`` queue alongside the rest of the clustering

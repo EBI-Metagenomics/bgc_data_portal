@@ -430,3 +430,80 @@ def _compute_run_sha(
         f"domain_etag={domain_etag}",
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def rebuild_scoring_cache_from_db(run) -> "Path | None":
+    """Rebuild and persist the on-demand scoring cache for ``run`` from DB state.
+
+    ``run_clustering_pipeline(apply=True)`` writes ``scoring_cache/`` as a side
+    effect. When clustering runs on HPC and is folded back via
+    ``import_clustering_results`` that side effect never happens, so
+    ``get_active_scoring_cache`` raises ``FileNotFoundError`` (surfaced as a 503
+    by ``/query/similar-ibgc/`` and ``/query/ibgc-architecture/``).
+
+    The signature matrices are fully derivable from the post-import DB — iBGC
+    domain membership, adjacency pairs, and each iBGC's ``gene_cluster_family``
+    leaf path — so reconstruct them here and persist under
+    ``<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/``. Returns the cache
+    directory, or ``None`` when there is nothing clusterable to score.
+    """
+    from django.conf import settings
+    from django.db.models import Q
+
+    from discovery.models import IntegratedBgc, SourceBgcPrediction
+    from discovery.services.clustering.adjacency import (
+        build_ibgc_adjacency_pair_matrix,
+    )
+    from discovery.services.clustering.ibgc_scoring import persist_scoring_cache
+    from discovery.services.clustering.membership import build_ibgc_domain_matrix
+
+    upper_sources = tuple(
+        sorted({s.upper() for s in (run.domain_sources or DEFAULT_DOMAIN_SOURCES)})
+    )
+
+    # Same clusterable subset the pipeline scores: iBGCs with at least one
+    # non-partial-or-validated source prediction.
+    clusterable_ibgc_ids = list(
+        SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
+        .filter(Q(is_partial=False) | Q(is_validated=True))
+        .values_list("integrated_bgc_id", flat=True)
+        .distinct()
+    )
+    if not clusterable_ibgc_ids:
+        return None
+
+    M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
+        sources=upper_sources, ibgc_ids_subset=clusterable_ibgc_ids,
+    )
+    if M_domains.shape[0] == 0:
+        return None
+
+    M_pairs, ibgc_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
+        sources=upper_sources, ibgc_ids_subset=ibgc_ids.tolist(),
+    )
+    M_pairs = _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids)
+
+    # Leaf GCF paths come straight from the imported iBGC rows, aligned to the
+    # matrix row order.
+    gcf_by_id = dict(
+        IntegratedBgc.objects
+        .filter(id__in=[int(x) for x in ibgc_ids.tolist()])
+        .values_list("id", "gene_cluster_family")
+    )
+    leaf_paths = [gcf_by_id.get(int(i)) or "" for i in ibgc_ids.tolist()]
+
+    sig_to_ipr = _build_sig_to_ipr_lookup(
+        sources=upper_sources, vocab_set=set(domain_accs.tolist()),
+    )
+
+    artifacts_dir = Path(settings.CLUSTERING_ARTIFACTS_DIR) / run.sha256[:12]
+    return persist_scoring_cache(
+        artifacts_dir=artifacts_dir,
+        M_domains=M_domains,
+        M_pairs=M_pairs,
+        ibgc_ids=ibgc_ids,
+        domain_accs=domain_accs,
+        pair_vocab=pair_vocab,
+        leaf_paths=leaf_paths,
+        sig_to_ipr=sig_to_ipr,
+    )
