@@ -19,7 +19,7 @@ Work top to bottom; each item is something to click/trigger and confirm it behav
 
 - [ ] [x] Dashboard loads at `/dashboard/discovery` with no console errors
 - [ ] [x] Welcome modal appears (first visit) and can be dismissed
-- [ ] [ ] Guided tour launches and steps through the tagged controls
+- [ ] [X] Guided tour launches and steps through the tagged controls
   > ⚠ FAIL: `tour-steps.ts` anchors step 1 to `[data-tour="sidebar"]` (Sidebar.tsx)
   > and step 3 to `[data-tour="shortlist-trays"]` (SidebarShortlists.tsx). Both legacy
   > components are mounted nowhere in the v2 dashboard (grep finds no `<Sidebar>` /
@@ -28,6 +28,9 @@ Work top to bottom; each item is something to click/trigger and confirm it behav
 - [ ] [x] DB stats badges render with real counts: **Validated**, **Integrated**, **Predicted**, **Genomes**, **Metagenomes**
 - [ ] [x] Result-scope banner shows the matching iBGC count
 - [ ] [x] Layout renders: results card (left) + Reference / Compare detail slots + Protein panel (right)
+  - [X] Investigate why on my deployment some BGC have overlaping CDS. 
+    EG. in the bacdive marine dataset, in assembly GCA_000940995.1_ASM94099v1 contig CP005973.1 the positions of the CDS CP005973.1_491 and CP005973.1_492 overlap. The staged files for loading to DB are in 
+
 
 ---
 

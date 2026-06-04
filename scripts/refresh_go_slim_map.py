@@ -46,6 +46,19 @@ ASPECT_TO_NAMESPACE = {
     "cellular_component": "cellular_component",
 }
 
+# The three GO namespace roots. A term whose only slim ancestor is its
+# namespace root carries no useful information — `mapslim` rolled it all the
+# way up because no intermediate slim term lies on its lineage. We drop those
+# so the CDS renders without a misleading top-level "Molecular_function" label
+# rather than colouring it as if a real slim hit was found.
+NAMESPACE_ROOTS = frozenset(
+    {
+        "GO:0003674",  # molecular_function
+        "GO:0008150",  # biological_process
+        "GO:0005575",  # cellular_component
+    }
+)
+
 
 def _capitalise(name: str) -> str:
     if not name:
@@ -157,6 +170,11 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001
             log.warning("mapslim failed for %s: %s", go_id, exc)
             continue
+        if not direct:
+            continue
+        # Skip rollups that resolve only to the namespace root — these add no
+        # signal beyond "this is a molecular function" (see NAMESPACE_ROOTS).
+        direct = {d for d in direct if d not in NAMESPACE_ROOTS}
         if not direct:
             continue
         names = sorted({_capitalise(goslim[s].name) for s in direct if s in goslim})
