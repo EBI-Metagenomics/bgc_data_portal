@@ -40,6 +40,52 @@ def _interpro_url(entry_acc: str) -> str:
     return f"https://www.ebi.ac.uk/interpro/entry/InterPro/{entry_acc}/"
 
 
+# Maps a domain's ``ref_db`` (case-insensitive) to the InterPro member-database
+# URL slug used in ``/interpro/entry/{slug}/{accession}/``. Every member-DB
+# signature has a canonical InterPro page regardless of whether it is integrated
+# into an InterPro entry, so this lets unintegrated signatures (no
+# ``interpro_entry_acc``) still link out. Slugs verified against the live
+# InterPro API (``/api/entry/``). Unmapped / blank ref_dbs yield no link.
+_REFDB_TO_INTERPRO_SLUG = {
+    "PFAM": "pfam",
+    "GENE3D": "cathgene3d",
+    "CATH-GENE3D": "cathgene3d",
+    "CATHGENE3D": "cathgene3d",
+    "NCBIFAM": "ncbifam",
+    "TIGRFAM": "ncbifam",
+    "TIGRFAMS": "ncbifam",
+    "PANTHER": "panther",
+    "CDD": "cdd",
+    "SMART": "smart",
+    "SUPERFAMILY": "ssf",
+    "SSF": "ssf",
+    "PROSITE_PATTERNS": "prosite",
+    "PROSITEPATTERNS": "prosite",
+    "PROSITE": "prosite",
+    "PROSITE_PROFILES": "profile",
+    "PROSITEPROFILES": "profile",
+    "PROFILE": "profile",
+    "HAMAP": "hamap",
+    "PIRSF": "pirsf",
+    "PRINTS": "prints",
+    "SFLD": "sfld",
+    "ANTIFAM": "antifam",
+}
+
+
+def _signature_url(ref_db: str, domain_acc: str) -> str:
+    """Canonical InterPro member-database page for a raw signature accession.
+
+    Returns ``""`` when the ref_db has no known InterPro slug or the accession
+    is empty, so the caller renders the accession unlinked rather than risk a
+    404.
+    """
+    slug = _REFDB_TO_INTERPRO_SLUG.get((ref_db or "").strip().upper())
+    if not slug or not domain_acc:
+        return ""
+    return f"https://www.ebi.ac.uk/interpro/entry/{slug}/{domain_acc}/"
+
+
 def collapse_to_interpro_rows(
     domains: Iterable[Any],
     slim_for: Callable[[Any], Iterable[str]] | None = None,
@@ -88,7 +134,11 @@ def collapse_to_interpro_rows(
                 "envelope_start": d.start_position,
                 "envelope_end": d.end_position,
                 "_best_score": d.score,
-                "url": _interpro_url(d.interpro_entry_acc) if has_entry else (d.url or ""),
+                "url": (
+                    _interpro_url(d.interpro_entry_acc)
+                    if has_entry
+                    else _signature_url(d.ref_db, d.domain_acc)
+                ),
                 "_has_entry": has_entry,
             }
             groups[key] = bucket

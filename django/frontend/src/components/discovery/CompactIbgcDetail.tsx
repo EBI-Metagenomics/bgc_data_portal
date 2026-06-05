@@ -113,19 +113,14 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           >
             {variantLabel}
           </Badge>
-          <div className="flex flex-col leading-tight">
-            <h3 className="font-mono text-sm font-semibold">
-              {ibgc.accession || ibgc.label}
-            </h3>
-            {ibgc.cbgc_accession && (
-              <span
-                className="font-mono text-[10px] text-muted-foreground"
-                title="Parent consensus BGC"
-              >
-                {ibgc.cbgc_accession}
-              </span>
-            )}
-          </div>
+          <h3 className="font-mono text-sm font-semibold leading-tight">
+            {ibgc.accession || ibgc.label}
+          </h3>
+          {ibgc.bgc_class && (
+            <Badge variant="secondary" className="text-[10px]">
+              {ibgc.bgc_class}
+            </Badge>
+          )}
           {ibgc.is_validated && (
             <Badge variant="default" className="text-[10px]">
               Validated
@@ -162,7 +157,7 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
 
         <div className="rounded border bg-muted/20 p-2 text-xs text-muted-foreground">
           <div className="font-mono">
-            {ibgc.contig_accession ?? "no contig"} ·{" "}
+            contig: {ibgc.contig_accession ?? "—"} · location:{" "}
             {ibgc.start_position.toLocaleString()}–
             {ibgc.end_position.toLocaleString()} ({ibgc.size_kb.toFixed(1)} kb)
           </div>
@@ -173,8 +168,6 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
         </div>
 
         <RegionStrip ibgcId={ibgc.id} />
-
-        <MemberBgcStrip memberBgcs={ibgc.member_bgcs} />
       </CardContent>
     </Card>
   );
@@ -440,28 +433,6 @@ function ChemontGroup({
       {node.children.map((child) => (
         <ChemontGroup key={child.chemont_id} node={child} indent={indent + 1} />
       ))}
-    </div>
-  );
-}
-
-function MemberBgcStrip({
-  memberBgcs,
-}: {
-  memberBgcs: { id: number; accession: string }[];
-}) {
-  if (memberBgcs.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1 overflow-hidden">
-      {memberBgcs.slice(0, 6).map((m) => (
-        <Badge key={m.id} variant="outline" className="font-mono text-[10px]">
-          {m.accession}
-        </Badge>
-      ))}
-      {memberBgcs.length > 6 && (
-        <Badge variant="outline" className="text-[10px]">
-          +{memberBgcs.length - 6}
-        </Badge>
-      )}
     </div>
   );
 }

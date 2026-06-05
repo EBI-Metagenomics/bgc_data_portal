@@ -161,6 +161,7 @@ class IbgcRosterItem(Schema):
     label: str  # human-facing identifier (e.g. "iBGC-12345")
     cbgc_accession: Optional[str] = None
     classification_path: str = ""  # leaf GCF path (gene_cluster_family)
+    bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     size_kb: float = 0.0  # (end - start) / 1000
     n_source_bgcs: int = 0
     source_tools: list[str] = []
@@ -220,6 +221,7 @@ class IbgcDetail(Schema):
     cbgc_accession: Optional[str] = None
     label: str
     classification_path: str = ""
+    bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     size_kb: float = 0.0
     start_position: int = 0
     end_position: int = 0
@@ -248,6 +250,7 @@ class IbgcScatterPoint(Schema):
     x: float
     y: float
     classification_path: str = ""
+    bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     novelty_score: Optional[float] = None
     domain_novelty: Optional[float] = None
     is_partial: bool = False
@@ -433,18 +436,20 @@ class ReportPayload(Schema):
     ibgc_rows: list[ReportIbgcRow] = []
     domain_composition: DomainCompositionSummary = DomainCompositionSummary()
     gcf_distribution: list[GcfDistributionEntry] = []
+    gcf_sunburst: list[dict] = []
     score_distributions: list[dict] = []
-    completeness_pie: list[CategoryCount] = []
+    completeness_bar: list[CategoryCount] = []
     bgc_class_pie: list[CategoryCount] = []
     length_histogram: list[LengthBucket] = []
     predictor_distribution: list[CategoryCount] = []
     source_distribution: list[CategoryCount] = []
     assembly_rows: list[ReportAssemblyRow] = []
     assembly_stats: dict = {}
-    # iBGC-derived taxonomy sunburst (one count per iBGC). Items follow the
+    # iBGC-derived sunbursts (one count per iBGC). Items follow the
     # ``SunburstNode`` shape ({id, label, parent, count}); typed as ``dict``
     # because SunburstNode is defined further down in this module.
     taxonomy_sunburst: list[dict] = []
+    biome_sunburst: list[dict] = []
     domain_goslim_matrix: DomainGoslimMatrix = DomainGoslimMatrix()
 
     # Inner shape is {label: str, values: list[float]} — kept as raw dict to
@@ -634,6 +639,7 @@ class AssemblyStatsResponse(Schema):
     mean_l1_class_per_assembly: float = 0.0
     total_assemblies: int = 0
     biome_distribution: list[CategoryCount] = []
+    biome_sunburst: list[SunburstNode] = []
     source_distribution: list[CategoryCount] = []
 
 

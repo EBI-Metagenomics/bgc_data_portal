@@ -108,7 +108,7 @@ export function IbgcScatterPlot({ points, xLabel, yLabel }: Props) {
           legend: {
             orientation: "h",
             y: -0.15,
-            title: { text: "Shape = status · Colour = GCF group", side: "top" },
+            title: { text: "Coloured by GCF", side: "top" },
           },
           hovermode: "closest",
         }}

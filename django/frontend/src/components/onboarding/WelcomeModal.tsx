@@ -25,7 +25,7 @@ const slides: Slide[] = [
     body: (
       <p className={bodyClass}>
         The Discovery Platform helps you mine thousands of{" "}
-        <strong>sequenced assemblies</strong> — from isolate genomes to
+        <strong>(meta)genomic assemblies</strong> — from isolate genomes to
         environmental metagenomes — for <strong>integrated BGCs (iBGCs)</strong>:
         overlapping biosynthetic gene cluster predictions consolidated into
         single candidates.

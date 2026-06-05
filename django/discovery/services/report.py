@@ -15,6 +15,7 @@ via ``contig`` + ``bgc_range && cds_range`` overlap.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections import defaultdict
 from datetime import timedelta
@@ -172,12 +173,31 @@ def build_report_payload(
     domain_desc_lookup: dict[str, str] = {}
     domain_goslim_lookup: dict[str, str] = {}
 
-    # ContigDomain.go_slim is a list of slim term names; the heatmap categories
-    # are keyed by a single string, so collapse to the first term (sorted).
-    def _slim_str(value) -> str:
+    # ContigDomain.go_slim is a JSONField list of slim term names (already
+    # sorted/deduped by go_slim_for_terms). The heatmap keys each column by a
+    # single string, so we collapse to the first term. Be defensive about the
+    # raw value: depending on the read path it can arrive as a real list, as a
+    # JSON-encoded string (e.g. a double-encoded jsonb cell decoded by psycopg
+    # to ``'["…"]'`` / ``'[]'``), or as a plain string. Normalise all of them
+    # to a clean list so the column label is a term, never list syntax.
+    def _slim_terms(value) -> list[str]:
         if isinstance(value, list):
-            return value[0] if value else ""
-        return value or ""
+            return [str(t) for t in value if t]
+        if isinstance(value, str):
+            s = value.strip()
+            if s.startswith("["):
+                try:
+                    parsed = json.loads(s)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return [str(t) for t in parsed if t]
+            return [s] if s else []
+        return []
+
+    def _slim_str(value) -> str:
+        terms = _slim_terms(value)
+        return terms[0] if terms else ""
 
     for nid, acc, name, desc, slim in _fetch_domain_rows_for_ibgcs(db_ibgc_ids):
         if not acc:
@@ -267,9 +287,10 @@ def build_report_payload(
     category_totals: dict[str, int] = defaultdict(int)
     for (slim, _tier), domains in matrix_buckets.items():
         category_totals[slim] += len(domains)
+    # "No GO slim" always leads; the rest follow by descending count then name.
     categories = sorted(
         category_totals.keys(),
-        key=lambda c: (-category_totals[c], c),
+        key=lambda c: (c != NO_GOSLIM, -category_totals[c], c),
     )
     tiers = ["core", "variable", "rare"]
     cells = []
@@ -294,6 +315,15 @@ def build_report_payload(
         gcf_counts[ibgc.gene_cluster_family or "(unclassified)"] += 1
     for r in extra_ibgc_rows:
         gcf_counts[r.get("classification_path") or "(unclassified)"] += 1
+    # iBGC-derived GCF sunburst over the full classification path (e.g.
+    # 42 → 42.7 → 42.7.3). Unclassified iBGCs (empty path) are omitted.
+    from discovery.services.stats import build_sunburst_from_paths
+    gcf_paths = [ibgc.gene_cluster_family for ibgc in ibgcs if ibgc.gene_cluster_family]
+    gcf_paths += [
+        r.get("classification_path") for r in extra_ibgc_rows
+        if r.get("classification_path")
+    ]
+    gcf_sunburst = build_sunburst_from_paths(gcf_paths)
     gcf_distribution = sorted(
         [
             {
@@ -326,22 +356,26 @@ def build_report_payload(
         {"label": "Domain Novelty", "values": dn_vals},
     ]
 
-    # ── Completeness pie ──────────────────────────────────────────────────
-    projected_n = sum(1 for n in ibgcs if n.umap_projected)
-    unclustered_n = sum(
-        1 for n in ibgcs
-        if not n.umap_projected and n.classification_run_id is None
-    )
+    # ── Completeness bar (complete vs partial) ────────────────────────────
+    # An iBGC is "complete" iff none of its source predictions are partial
+    # (contig-edge truncation) — the same definition compute_bgc_stats uses.
+    if db_ibgc_ids:
+        partial_ibgc_ids = set(
+            SourceBgcPrediction.objects
+            .filter(integrated_bgc_id__in=db_ibgc_ids, is_partial=True)
+            .values_list("integrated_bgc_id", flat=True)
+            .distinct()
+        )
+    else:
+        partial_ibgc_ids = set()
+    partial_n = len(partial_ibgc_ids)
     for r in extra_ibgc_rows:
-        if r.get("umap_projected"):
-            projected_n += 1
-        else:
-            unclustered_n += 1
-    primary_n = n_ibgcs - projected_n - unclustered_n
-    completeness_pie = [
-        {"name": "Clustered (primary)", "count": primary_n},
-        {"name": "Projected partial", "count": projected_n},
-        {"name": "Unclustered", "count": unclustered_n},
+        if r.get("is_partial"):
+            partial_n += 1
+    complete_n = n_ibgcs - partial_n
+    completeness_bar = [
+        {"name": "Complete", "count": complete_n},
+        {"name": "Partial", "count": partial_n},
     ]
 
     # ── BGC class pie ─────────────────────────────────────────────────────
@@ -465,6 +499,13 @@ def build_report_payload(
     ]
     taxonomy_sunburst = build_taxonomy_sunburst_from_paths(ibgc_taxonomy_paths)
 
+    # ── iBGC-derived biome sunburst (one count per iBGC) ───────────────────
+    biome_paths = [r.get("biome_path") for r in ibgc_rows if r.get("biome_path")]
+    biome_paths += [
+        r.get("biome_path") for r in extra_ibgc_rows if r.get("biome_path")
+    ]
+    biome_sunburst = build_sunburst_from_paths(biome_paths)
+
     if extra_ibgc_rows:
         ibgc_rows = list(extra_ibgc_rows) + ibgc_rows
 
@@ -476,8 +517,9 @@ def build_report_payload(
         "ibgc_rows": ibgc_rows,
         "domain_composition": domain_composition,
         "gcf_distribution": gcf_distribution,
+        "gcf_sunburst": gcf_sunburst,
         "score_distributions": score_distributions,
-        "completeness_pie": completeness_pie,
+        "completeness_bar": completeness_bar,
         "bgc_class_pie": bgc_class_pie,
         "length_histogram": length_histogram,
         "predictor_distribution": predictor_distribution,
@@ -485,6 +527,7 @@ def build_report_payload(
         "assembly_rows": assembly_rows,
         "assembly_stats": assembly_stats,
         "taxonomy_sunburst": taxonomy_sunburst,
+        "biome_sunburst": biome_sunburst,
         "domain_goslim_matrix": domain_goslim_matrix,
         "_domains_long": domains_long,
     }
@@ -508,7 +551,7 @@ def build_report_analyst_export(token: str, payload: dict) -> dict:
         "assemblies": payload.get("assembly_rows", []),
         "domains_long": payload.get("_domains_long", []),
         "bgc_class_counts": payload.get("bgc_class_pie", []),
-        "completeness_counts": payload.get("completeness_pie", []),
+        "completeness_counts": payload.get("completeness_bar", []),
         "length_histogram": payload.get("length_histogram", []),
         "predictor_distribution": payload.get("predictor_distribution", []),
         "source_distribution": payload.get("source_distribution", []),
@@ -530,11 +573,12 @@ def _empty_payload(now, expires_at) -> dict:
             "total_unique": 0, "rows": [],
         },
         "gcf_distribution": [],
+        "gcf_sunburst": [],
         "score_distributions": [
             {"label": "Novelty", "values": []},
             {"label": "Domain Novelty", "values": []},
         ],
-        "completeness_pie": [],
+        "completeness_bar": [],
         "bgc_class_pie": [],
         "length_histogram": [],
         "predictor_distribution": [],
@@ -542,6 +586,7 @@ def _empty_payload(now, expires_at) -> dict:
         "assembly_rows": [],
         "assembly_stats": {},
         "taxonomy_sunburst": [],
+        "biome_sunburst": [],
         "domain_goslim_matrix": {"categories": [], "tiers": [], "cells": []},
         "_domains_long": [],
     }

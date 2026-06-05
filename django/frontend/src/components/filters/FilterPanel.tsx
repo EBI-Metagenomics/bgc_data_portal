@@ -8,6 +8,7 @@ import { BiomeLineageFilter } from "./BiomeLineageFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
 import { GcfFilter } from "./GcfFilter";
 import { ChemOntClassFilter } from "./ChemOntClassFilter";
+import { NpClassFilter } from "./NpClassFilter";
 import { AccessionsFilter } from "./AccessionsFilter";
 import { DomainsFilter } from "./DomainsFilter";
 import { LengthFilter } from "./LengthFilter";
@@ -29,6 +30,7 @@ export function FilterPanel() {
       <BgcClassFilter />
       <GcfFilter />
       <ChemOntClassFilter />
+      <NpClassFilter />
       <AccessionsFilter />
       <LengthFilter />
       <DomainsFilter />
@@ -44,7 +46,7 @@ export function FilterPanel() {
         onClick={clearFilters}
       >
         <RotateCcw className="h-3 w-3" />
-        Reset
+        Reset filters
       </Button>
     </div>
   );

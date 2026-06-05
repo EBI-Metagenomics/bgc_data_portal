@@ -80,6 +80,9 @@ def compute_assembly_stats(assembly_qs) -> dict:
             .order_by("-c", "biome_path")
         )
     ]
+    biome_sunburst = build_sunburst_from_paths(
+        assembly_qs.exclude(biome_path="").values_list("biome_path", flat=True)
+    )
     source_distribution = [
         {"name": row["source__name"] or "(unknown)", "count": row["c"]}
         for row in (
@@ -98,6 +101,7 @@ def compute_assembly_stats(assembly_qs) -> dict:
         "mean_l1_class_per_assembly": round(avg_agg["mean_l1"] or 0.0, 2),
         "total_assemblies": assembly_qs.count(),
         "biome_distribution": biome_distribution,
+        "biome_sunburst": biome_sunburst,
         "source_distribution": source_distribution,
     }
 
@@ -105,6 +109,34 @@ def compute_assembly_stats(assembly_qs) -> dict:
 TAXONOMY_RANK_NAMES = [
     "kingdom", "phylum", "class", "order", "family", "genus", "species",
 ]
+
+
+def build_sunburst_from_paths(paths, *, sep: str = ".") -> list[dict]:
+    """Flat sunburst nodes from dot-separated ltree paths.
+
+    Generic builder for biome / GCF hierarchies. Nodes are keyed by their
+    *cumulative* path prefix (``42`` → ``42.7`` → ``42.7.3``) so the same
+    label under different parents stays distinct — unlike the taxonomy
+    builder, which intentionally collapses by ``rank:label``. ``count`` on a
+    node is the number of input paths that pass through it; with Plotly's
+    ``branchvalues:"total"`` the leaf counts roll up to their ancestors.
+    """
+    nodes: dict[str, dict] = {}
+    for path in paths:
+        if not path:
+            continue
+        parts = [p for p in path.split(sep) if p != ""]
+        prefix = ""
+        parent_id = ""
+        for label in parts:
+            prefix = f"{prefix}{sep}{label}" if prefix else label
+            node = nodes.get(prefix)
+            if node is None:
+                node = {"id": prefix, "label": label, "parent": parent_id, "count": 0}
+                nodes[prefix] = node
+            node["count"] += 1
+            parent_id = prefix
+    return list(nodes.values())
 
 
 def build_taxonomy_sunburst_from_paths(paths) -> list[dict]:
@@ -188,17 +220,16 @@ def compute_bgc_stats(ibgc_qs) -> dict:
     np_class_sunburst = _build_np_class_sunburst(ibgc_qs)
     chemont_sunburst = _build_chemont_sunburst(ibgc_qs)
 
-    from django.db.models.expressions import RawSQL
-
+    # Distribution over the normalised product class (IntegratedBgc.bgc_class),
+    # the same field the "BGC Class" filter targets.
     bgc_class_dist = list(
-        ibgc_qs.exclude(gene_cluster_family="")
-        .annotate(class_l1=RawSQL("SPLIT_PART(gene_cluster_family, '.', 1)", []))
-        .values("class_l1")
+        ibgc_qs.exclude(bgc_class="")
+        .values("bgc_class")
         .annotate(count=Count("id"))
         .order_by("-count")
     )
     bgc_class_distribution = [
-        {"name": row["class_l1"], "count": row["count"]}
+        {"name": row["bgc_class"], "count": row["count"]}
         for row in bgc_class_dist
     ]
 

@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc build-essential python3-dev libffi-dev libssl-dev git curl \
+    gcc build-essential python3-dev libffi-dev libssl-dev git curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 20 LTS for frontend build
@@ -11,6 +11,17 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# ChemOnt ontology. The web pod needs it to build the hierarchical ChemOnt
+# filter tree (/filters/chemont-classes/) and to expand a selected parent class
+# to its descendants; without it both fall back to flat leaves. Baked in at
+# build time at the default path expected by common_core.chemont.ontology.
+RUN mkdir -p /data/chemont \
+ && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip  \
+      "http://classyfire.wishartlab.com/system/downloads/1_0/chemont/ChemOnt_2_1.obo.zip" \
+ && unzip /tmp/ChemOnt_2_1.obo.zip -d /data/chemont/ \
+ && rm /tmp/ChemOnt_2_1.obo.zip
+ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
 
 WORKDIR /app
 

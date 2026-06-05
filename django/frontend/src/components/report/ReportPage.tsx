@@ -20,7 +20,6 @@ import type {
   CategoryCount,
   DomainCompositionSummary,
   DomainGoslimMatrix,
-  GcfDistributionEntry,
   LengthBucket,
   ReportAssemblyRow,
   ReportIbgcRow,
@@ -28,6 +27,7 @@ import type {
   ReportScoreDistribution,
   SunburstNode,
 } from "@/api/types";
+import { colorByAncestorDepth } from "@/lib/sunburst-colors";
 import {
   Tooltip,
   TooltipContent,
@@ -132,43 +132,93 @@ function ReportBody({ payload }: { payload: ReportPayload }) {
       <ReportHeader payload={payload} />
       <IbgcResultsSection rows={payload.ibgc_rows} />
       <BgcStatsSection payload={payload} />
-      <TaxonomySunburstSection nodes={payload.taxonomy_sunburst} />
+      <BiomeTaxonomySection
+        biome={payload.biome_sunburst}
+        taxonomy={payload.taxonomy_sunburst}
+      />
       <AssemblyRosterSection rows={payload.assembly_rows} />
       <AssemblyStatsSection stats={payload.assembly_stats} />
     </div>
   );
 }
 
-function TaxonomySunburstSection({ nodes }: { nodes: SunburstNode[] }) {
-  if (!nodes || nodes.length === 0) return null;
+/** A coloured iBGC sunburst. ``colorDepth`` picks the ancestor ring whose
+ *  hue is inherited by descendants (taxonomy → 1 = phylum, biome → 3). */
+function ColoredSunburst({
+  nodes,
+  colorDepth,
+  unit = "iBGC(s)",
+  height = 420,
+}: {
+  nodes: SunburstNode[];
+  colorDepth: number;
+  unit?: string;
+  height?: number;
+}) {
+  const colors = useMemo(
+    () => colorByAncestorDepth(nodes, colorDepth),
+    [nodes, colorDepth],
+  );
+  return (
+    <Plot
+      data={[
+        {
+          type: "sunburst",
+          ids: nodes.map((n) => n.id),
+          labels: nodes.map((n) => n.label),
+          parents: nodes.map((n) => n.parent),
+          values: nodes.map((n) => n.count),
+          branchvalues: "total",
+          marker: { colors },
+          hovertemplate: `<b>%{label}</b><br>%{value} ${unit}<extra></extra>`,
+        },
+      ]}
+      layout={{
+        autosize: true,
+        height,
+        margin: { l: 8, r: 8, t: 8, b: 8 },
+      }}
+      useResizeHandler
+      style={{ width: "100%" }}
+      config={{ displayModeBar: false }}
+    />
+  );
+}
+
+/** Biome (left, half width, coloured by depth 3) beside taxonomy (right,
+ *  coloured by phylum). */
+function BiomeTaxonomySection({
+  biome,
+  taxonomy,
+}: {
+  biome: SunburstNode[];
+  taxonomy: SunburstNode[];
+}) {
+  if ((!biome || biome.length === 0) && (!taxonomy || taxonomy.length === 0))
+    return null;
   return (
     <Card>
       <CardHeader className="p-4">
-        <CardTitle className="text-base">Taxonomy</CardTitle>
+        <CardTitle className="text-base">Biome &amp; Taxonomy</CardTitle>
       </CardHeader>
-      <CardContent className="p-4">
-        <Plot
-          data={[
-            {
-              type: "sunburst",
-              ids: nodes.map((n) => n.id),
-              labels: nodes.map((n) => n.label),
-              parents: nodes.map((n) => n.parent),
-              values: nodes.map((n) => n.count),
-              branchvalues: "total",
-              hovertemplate:
-                "<b>%{label}</b><br>%{value} iBGC(s)<extra></extra>",
-            },
-          ]}
-          layout={{
-            autosize: true,
-            height: 420,
-            margin: { l: 8, r: 8, t: 8, b: 8 },
-          }}
-          useResizeHandler
-          style={{ width: "100%" }}
-          config={{ displayModeBar: false }}
-        />
+      <CardContent
+        className="grid gap-4 p-4"
+        style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2fr)" }}
+      >
+        <PanelCard title="Biome (coloured by depth 3)">
+          {biome && biome.length > 0 ? (
+            <ColoredSunburst nodes={biome} colorDepth={3} />
+          ) : (
+            <p className="text-xs text-muted-foreground">No biome data.</p>
+          )}
+        </PanelCard>
+        <PanelCard title="Taxonomy (coloured by phylum)">
+          {taxonomy && taxonomy.length > 0 ? (
+            <ColoredSunburst nodes={taxonomy} colorDepth={1} />
+          ) : (
+            <p className="text-xs text-muted-foreground">No taxonomy data.</p>
+          )}
+        </PanelCard>
       </CardContent>
     </Card>
   );
@@ -288,9 +338,9 @@ function BgcStatsSection({ payload }: { payload: ReportPayload }) {
       <CardContent className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
         <DomainCompositionPanel composition={payload.domain_composition} />
         <DomainGoslimHeatmapPanel matrix={payload.domain_goslim_matrix} />
-        <GcfDistributionPanel rows={payload.gcf_distribution} />
+        <GcfDistributionPanel nodes={payload.gcf_sunburst} />
         <ScoreDistributionPanel distributions={payload.score_distributions} />
-        <CompletenessPanel rows={payload.completeness_pie} />
+        <CompletenessPanel rows={payload.completeness_bar} />
         <BgcClassPanel rows={payload.bgc_class_pie} />
         <LengthHistogramPanel rows={payload.length_histogram} />
         <PredictorPanel rows={payload.predictor_distribution} />
@@ -389,14 +439,12 @@ function DomainCompositionPanel({
                 </TableCell>
                 <TableCell>
                   <Badge
-                    variant={
-                      d.tier === "core"
-                        ? "default"
-                        : d.tier === "variable"
-                        ? "secondary"
-                        : "outline"
-                    }
-                    className="text-[10px]"
+                    className="text-[10px] border-transparent text-white"
+                    style={{
+                      backgroundColor: `rgb(${(
+                        TIER_COLOR[d.tier] ?? [148, 163, 184]
+                      ).join(", ")})`,
+                    }}
                   >
                     {d.tier}
                   </Badge>
@@ -557,26 +605,35 @@ function DomainGoslimHeatmapPanel({ matrix }: { matrix: DomainGoslimMatrix }) {
   );
 }
 
-function GcfDistributionPanel({ rows }: { rows: GcfDistributionEntry[] }) {
-  const top = rows.slice(0, 20);
+function GcfDistributionPanel({ nodes }: { nodes: SunburstNode[] }) {
+  if (!nodes || nodes.length === 0) {
+    return (
+      <PanelCard title="GCF distribution">
+        <p className="text-xs text-muted-foreground">
+          No classified iBGCs in this shortlist.
+        </p>
+      </PanelCard>
+    );
+  }
   return (
-    <PanelCard title="GCF distribution (top 20)">
+    <PanelCard title="GCF distribution">
       <Plot
         data={[
           {
-            type: "bar",
-            orientation: "h",
-            x: top.map((r) => r.ibgc_count),
-            y: top.map((r) => r.classification_path || "(unclassified)"),
-            marker: { color: "#3b82f6" },
+            type: "sunburst",
+            ids: nodes.map((n) => n.id),
+            labels: nodes.map((n) => n.label),
+            parents: nodes.map((n) => n.parent),
+            values: nodes.map((n) => n.count),
+            branchvalues: "total",
+            hovertemplate:
+              "<b>GCF %{id}</b><br>%{value} iBGC(s)<extra></extra>",
           },
         ]}
         layout={{
           autosize: true,
           height: 280,
-          margin: { l: 160, r: 16, t: 8, b: 30 },
-          xaxis: { title: { text: "iBGCs" } },
-          yaxis: { automargin: true, tickfont: { size: 10 } },
+          margin: { l: 8, r: 8, t: 8, b: 8 },
         }}
         useResizeHandler
         style={{ width: "100%" }}
@@ -619,23 +676,29 @@ function ScoreDistributionPanel({
 }
 
 function CompletenessPanel({ rows }: { rows: CategoryCount[] }) {
+  // Complete vs partial (contig-edge truncation). Green = complete, grey =
+  // partial, matching the "is this iBGC whole?" reading.
+  const COMPLETE_COLOR: Record<string, string> = {
+    Complete: "#10b981", // emerald-500
+    Partial: "#94a3b8", // slate-400
+  };
   return (
     <PanelCard title="Completeness">
       <Plot
         data={[
           {
-            type: "pie",
-            labels: rows.map((r) => r.name),
-            values: rows.map((r) => r.count),
-            hole: 0.4,
-            textinfo: "label+percent",
+            type: "bar",
+            x: rows.map((r) => r.name),
+            y: rows.map((r) => r.count),
+            marker: { color: rows.map((r) => COMPLETE_COLOR[r.name] ?? "#94a3b8") },
+            hovertemplate: "<b>%{x}</b><br>%{y} iBGC(s)<extra></extra>",
           },
         ]}
         layout={{
           autosize: true,
           height: 240,
-          margin: { l: 16, r: 16, t: 16, b: 16 },
-          showlegend: false,
+          margin: { l: 40, r: 16, t: 8, b: 30 },
+          yaxis: { title: { text: "iBGCs" } },
         }}
         useResizeHandler
         style={{ width: "100%" }}
@@ -812,17 +875,24 @@ function AssemblyStatsSection({
 }: {
   stats: Record<string, unknown>;
 }) {
-  // Taxonomy lives in its own iBGC-derived TaxonomySunburstSection card; here
-  // we only surface biome + per-assembly source distributions.
-  const biomeDistribution = useMemo(
-    () => (stats?.biome_distribution as CategoryCount[]) ?? [],
+  // Assembly-derived biome + taxonomy sunbursts and per-assembly source mix.
+  const biomeSunburst = useMemo(
+    () => (stats?.biome_sunburst as SunburstNode[]) ?? [],
+    [stats],
+  );
+  const taxonomySunburst = useMemo(
+    () => (stats?.taxonomy_sunburst as SunburstNode[]) ?? [],
     [stats],
   );
   const sourceDistribution = useMemo(
     () => (stats?.source_distribution as CategoryCount[]) ?? [],
     [stats],
   );
-  if (!biomeDistribution.length && !sourceDistribution.length) {
+  if (
+    !biomeSunburst.length &&
+    !taxonomySunburst.length &&
+    !sourceDistribution.length
+  ) {
     return null;
   }
   return (
@@ -831,28 +901,23 @@ function AssemblyStatsSection({
         <CardTitle className="text-base">Assembly Stats</CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
-        {biomeDistribution.length > 0 && (
-          <PanelCard title="Biome distribution">
-            <Plot
-              data={[
-                {
-                  type: "bar",
-                  orientation: "h",
-                  x: biomeDistribution.map((r) => r.count),
-                  y: biomeDistribution.map((r) => r.name),
-                  marker: { color: "#f97316" },
-                },
-              ]}
-              layout={{
-                autosize: true,
-                height: 240,
-                margin: { l: 160, r: 16, t: 8, b: 30 },
-                xaxis: { title: { text: "Assemblies" } },
-                yaxis: { automargin: true, tickfont: { size: 10 } },
-              }}
-              useResizeHandler
-              style={{ width: "100%" }}
-              config={{ displayModeBar: false }}
+        {biomeSunburst.length > 0 && (
+          <PanelCard title="Biome distribution (coloured by depth 3)">
+            <ColoredSunburst
+              nodes={biomeSunburst}
+              colorDepth={3}
+              unit="assembly(ies)"
+              height={320}
+            />
+          </PanelCard>
+        )}
+        {taxonomySunburst.length > 0 && (
+          <PanelCard title="Taxonomy distribution (coloured by phylum)">
+            <ColoredSunburst
+              nodes={taxonomySunburst}
+              colorDepth={1}
+              unit="assembly(ies)"
+              height={320}
             />
           </PanelCard>
         )}

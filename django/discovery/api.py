@@ -127,6 +127,28 @@ discovery_router = Router(tags=["Discovery Platform"])
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
+def _expand_chemont_ids(ids: list[str]) -> list[str]:
+    """Expand selected ChemOnt class ids to include all descendant classes.
+
+    Each CDS carries only its *deepest* ChemOnt class, so selecting a parent
+    node in the filter tree must match anything in that subtree. We expand each
+    selected id to its ontology descendants. If the OBO ontology is missing or
+    unloadable, we fall back to the literal ids (exact match) so the filter
+    degrades gracefully rather than 500ing. The expanded list is bounded by the
+    ontology size (~4.8k terms), well under psycopg's parameter cap.
+    """
+    expanded = set(ids)
+    try:
+        from common_core.chemont.ontology import get_ontology
+        ont = get_ontology()
+    except (FileNotFoundError, ImportError):
+        return list(expanded)
+    for cid in ids:
+        for term in ont.get_descendants(cid):
+            expanded.add(term.id)
+    return list(expanded)
+
+
 def _build_chemont_tree_from_cds(cds_chemont_rows) -> list[ChemOntAnnotationNode]:
     """Aggregate per-CDS ChemOnt rows into a hierarchical tree.
 
@@ -750,6 +772,7 @@ def _ibgc_to_roster_item(
         label=_ibgc_label(ibgc.id),
         cbgc_accession=cbgc_accession,
         classification_path=ibgc.gene_cluster_family or "",
+        bgc_class=ibgc.bgc_class or "",
         size_kb=round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
         n_source_bgcs=n_source_bgcs,
         source_tools=list(ibgc.source_tools or []),
@@ -863,6 +886,7 @@ def _apply_ibgc_filters(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,     # CSV of ChemOnt class ids
+    np_classes: Optional[str] = None,      # CSV of NP-class names (any level)
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,    # CSV of DashboardAssembly ids
@@ -944,21 +968,42 @@ def _apply_ibgc_filters(
             | Q(gene_cluster_family__iexact=leaf_path_prefix)
         )
     if bgc_class:
-        # ``bgc_class`` is the chemical class (e.g. "Polyketide") served
-        # by /filters/bgc-classes/ and stored on each source BGC's
-        # ``classification_path`` ltree — NOT on the iBGC's
-        # ``gene_cluster_family`` (which is the cluster path). Join
-        # through ``source_bgcs`` so the filter actually matches.
-        qs = qs.filter(
-            Q(gene_cluster_family__istartswith=bgc_class + ".")
-            | Q(gene_cluster_family__iexact=bgc_class)
-        ).distinct()
+        # ``bgc_class`` is the normalised product class served by
+        # /filters/bgc-classes/ and stored on ``IntegratedBgc.bgc_class``
+        # (derived from source predictions' classification_path). Selecting
+        # "Hybrid" subsumes "Hybrid(P+N)" (prefix match); everything else is
+        # an exact match.
+        if bgc_class == "Hybrid":
+            qs = qs.filter(bgc_class__startswith="Hybrid")
+        else:
+            qs = qs.filter(bgc_class__iexact=bgc_class)
     if chemont_ids:
         ids = [c.strip() for c in chemont_ids.split(",") if c.strip()]
         if ids:
+            # Selecting a parent class matches its whole subtree: CDS carry only
+            # their deepest class, so expand to descendant ids via the ontology.
+            ids = _expand_chemont_ids(ids)
             qs = qs.filter(
                 source_predictions__integrated_bgc__contig__cds_list__chemont__chemont_id__in=ids  # TODO(v2-range-overlap): scope by bgc_range && cds_range
             ).distinct()
+    if np_classes:
+        names = [n.strip() for n in np_classes.split(",") if n.strip()]
+        if names:
+            # NP-class names are segments of the dot-delimited ``np_class_path``
+            # ltree on each iBGC natural product (e.g.
+            # "Polyketide.Macrolide.Erythromycin"). The L1/L2/L3 checkbox tree
+            # sends a flat CSV of selected names; match an iBGC if any of its
+            # natural products carries a selected name as a path segment at any
+            # level (OR semantics, mirroring the chemont filter).
+            np_q = Q()
+            for name in names:
+                np_q |= (
+                    Q(natural_products__np_class_path__iexact=name)
+                    | Q(natural_products__np_class_path__istartswith=name + ".")
+                    | Q(natural_products__np_class_path__icontains="." + name + ".")
+                    | Q(natural_products__np_class_path__iendswith="." + name)
+                )
+            qs = qs.filter(np_q).distinct()
     if bgc_accession:
         # Reuse the assembly-side MGYB-aware semantics: structured accession
         # → exact match; bare MGYBxxx region accession → match by region id
@@ -1041,6 +1086,7 @@ def ibgc_count(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1086,6 +1132,7 @@ def ibgc_count(
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
+            np_classes=np_classes,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1124,6 +1171,7 @@ def ibgc_roster(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1169,6 +1217,7 @@ def ibgc_roster(
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
+            np_classes=np_classes,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1286,6 +1335,7 @@ def ibgc_ids(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1332,6 +1382,7 @@ def ibgc_ids(
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
+            np_classes=np_classes,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1403,6 +1454,7 @@ def ibgc_umap(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1444,6 +1496,7 @@ def ibgc_umap(
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
+            np_classes=np_classes,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1503,6 +1556,7 @@ def ibgc_scatter(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1548,6 +1602,7 @@ def ibgc_scatter(
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
+            np_classes=np_classes,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1607,6 +1662,7 @@ def ibgc_scatter(
                     x=float(x_val),
                     y=float(y_val),
                     classification_path=ibgc.gene_cluster_family or "",
+                    bgc_class=ibgc.bgc_class or "",
                     novelty_score=ibgc.novelty_score,
                     domain_novelty=ibgc.domain_novelty,
                     is_partial=not facts[ibgc.id]["is_validated"]
@@ -1741,6 +1797,7 @@ def ibgc_detail(request, ibgc_id: int):
         cbgc_accession=ibgc.cbgc.accession if ibgc.cbgc_id else None,
         label=_ibgc_label(ibgc.id),
         classification_path=ibgc.gene_cluster_family or "",
+        bgc_class=ibgc.bgc_class or "",
         size_kb=round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
         start_position=ibgc.start_position,
         end_position=ibgc.end_position,
@@ -2301,6 +2358,7 @@ def ibgc_domain_query(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -2365,6 +2423,7 @@ def ibgc_domain_query(
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
+        np_classes=np_classes,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -2412,6 +2471,7 @@ def ibgc_sequence_query_status(
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -2513,6 +2573,7 @@ def ibgc_sequence_query_status(
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
+        np_classes=np_classes,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -2551,6 +2612,7 @@ def chemical_query(
     assembly_accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
 ):
     if not body.smiles or not body.smiles.strip():
         raise HttpError(400, "SMILES string is required")
@@ -2611,6 +2673,20 @@ def chemical_query(
             qs = qs.filter(
                 cds_list__chemont__chemont_id__in=cid_list
             ).distinct()
+    if np_classes:
+        names = [n.strip() for n in np_classes.split(",") if n.strip()]
+        if names:
+            # NP-class names are segments of the iBGC natural product's
+            # dot-delimited ``np_class_path`` — join through ``integrated_bgc``.
+            np_q = Q()
+            for name in names:
+                np_q |= (
+                    Q(integrated_bgc__natural_products__np_class_path__iexact=name)
+                    | Q(integrated_bgc__natural_products__np_class_path__istartswith=name + ".")
+                    | Q(integrated_bgc__natural_products__np_class_path__icontains="." + name + ".")
+                    | Q(integrated_bgc__natural_products__np_class_path__iendswith="." + name)
+                )
+            qs = qs.filter(np_q).distinct()
 
     results = []
     for bgc in qs:
@@ -3233,9 +3309,9 @@ def export_bgc_shortlist(request, body: ShortlistExportRequest):
     if len(body.ids) > 20:
         raise HttpError(400, "Maximum 20 BGCs per export")
 
-    from discovery.services.gbk import build_multi_bgc_gbk
+    from discovery.services.gbk import build_multi_ibgc_gbk
 
-    gbk_content = build_multi_bgc_gbk(body.ids)
+    gbk_content = build_multi_ibgc_gbk(body.ids)
 
     response = HttpResponse(gbk_content, content_type="application/octet-stream")
     response["Content-Disposition"] = 'attachment; filename="bgc_shortlist.gbk"'
@@ -3480,7 +3556,8 @@ def ibgc_region(request, ibgc_id: int):
             start=max(0, pred.bgc_range.lower - window_start),
             end=max(0, pred.bgc_range.upper - 1 - window_start),
             source=pred.detector.tool if pred.detector_id else "",
-            bgc_classes=[],
+            # Raw per-tool product class, shown verbatim on prediction hover.
+            bgc_classes=[pred.classification_path] if pred.classification_path else [],
         ))
 
     return IbgcRegionOut(

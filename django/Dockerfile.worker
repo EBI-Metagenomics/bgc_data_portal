@@ -24,7 +24,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # common_core.chemont.ontology. ``/data/<subdir>`` volume mounts don't shadow
 # this, so no PVC/mount is needed.
 RUN mkdir -p /data/chemont \
- && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip \
+ && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip  \
       "http://classyfire.wishartlab.com/system/downloads/1_0/chemont/ChemOnt_2_1.obo.zip" \
  && unzip /tmp/ChemOnt_2_1.obo.zip -d /data/chemont/ \
  && rm /tmp/ChemOnt_2_1.obo.zip
@@ -36,7 +36,7 @@ WORKDIR /app
 COPY requirements-ml.txt .
 RUN pip install --upgrade pip && pip install -r requirements-ml.txt
 
-# ── Layer B: remaining deps ──────────────────────────────────────────────────
+# ── Layer B: remaining deps ─-─────────────────────────────────────────────────
 COPY requirements-web.txt requirements-worker.txt ./
 RUN pip install -r requirements-worker.txt
 

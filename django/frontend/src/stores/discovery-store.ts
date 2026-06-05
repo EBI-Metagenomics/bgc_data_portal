@@ -99,6 +99,8 @@ export interface AppliedIbgcFilters {
   bgcClass: string;
   gcfPath: string;
   chemontIds: string[];
+  // Flattened NP-class names selected across the L1/L2/L3 tree.
+  npClasses: string[];
   biomeLineage: string;
   bgcAccession: string;
   assemblyAccession: string;
@@ -120,6 +122,7 @@ export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   bgcClass: "",
   gcfPath: "",
   chemontIds: [],
+  npClasses: [],
   biomeLineage: "",
   bgcAccession: "",
   assemblyAccession: "",
@@ -138,6 +141,7 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
     applied.sourceNames.length === 0 &&
     applied.detectorTools.length === 0 &&
     applied.chemontIds.length === 0 &&
+    applied.npClasses.length === 0 &&
     applied.assemblyType === "" &&
     applied.taxonomyPath === "" &&
     applied.bgcClass === "" &&
@@ -179,6 +183,9 @@ export function appliedFiltersToApiParams(
   if (applied.gcfPath) params.leaf_path_prefix = applied.gcfPath;
   if (applied.chemontIds.length > 0) {
     params.chemont_ids = applied.chemontIds.join(",");
+  }
+  if (applied.npClasses.length > 0) {
+    params.np_classes = applied.npClasses.join(",");
   }
   if (applied.biomeLineage) params.biome_lineage = applied.biomeLineage;
   if (applied.bgcAccession) params.bgc_accession = applied.bgcAccession;
@@ -222,6 +229,7 @@ export function snapshotFiltersToApplied(): AppliedIbgcFilters {
     bgcClass: f.bgcClass,
     gcfPath: f.gcfPath,
     chemontIds: f.chemontIds,
+    npClasses: [...f.npClassL1, ...f.npClassL2, ...f.npClassL3],
     biomeLineage: f.biomeLineage,
     bgcAccession: f.bgcAccession,
     assemblyAccession: f.assemblyAccession,

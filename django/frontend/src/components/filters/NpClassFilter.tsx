@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useNpClasses } from "@/hooks/use-filter-data";
 import { useFilterStore } from "@/stores/filter-store";
 import type { NpClassLevel } from "@/api/types";
+import { FilterChip } from "./FilterChip";
 
 function NpNode({
   node,
@@ -91,27 +92,36 @@ export function NpClassFilter() {
     setNpClass(level, next);
   }
 
-  if (isLoading) {
-    return <Skeleton className="h-20 w-full" />;
-  }
-
   const allSelected = [...npClassL1, ...npClassL2, ...npClassL3];
 
   return (
-    <div className="space-y-2">
-      <span className="text-sm font-medium">NP Chemical Class</span>
-      <div className="max-h-48 overflow-auto">
-        {(npClasses ?? []).map((node) => (
-          <NpNode
-            key={node.name}
-            node={node}
-            depth={0}
-            level="l1"
-            selected={allSelected}
-            onToggle={handleToggle}
-          />
-        ))}
-      </div>
-    </div>
+    <FilterChip
+      label="NP Class"
+      count={allSelected.length}
+      onClear={() => {
+        setNpClass("l1", []);
+        setNpClass("l2", []);
+        setNpClass("l3", []);
+      }}
+      dataTour="np-class-filter"
+      width="md"
+    >
+      {isLoading ? (
+        <Skeleton className="h-20 w-full" />
+      ) : (
+        <div className="max-h-64 overflow-auto min-w-0">
+          {(npClasses ?? []).map((node) => (
+            <NpNode
+              key={node.name}
+              node={node}
+              depth={0}
+              level="l1"
+              selected={allSelected}
+              onToggle={handleToggle}
+            />
+          ))}
+        </div>
+      )}
+    </FilterChip>
   );
 }

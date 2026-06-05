@@ -5,6 +5,7 @@ import { useFilterStore } from "@/stores/filter-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatsExportMenu } from "@/components/stats/StatsExportMenu";
 import { exportAssemblyStats } from "@/api/exports";
+import { colorByAncestorDepth } from "@/lib/sunburst-colors";
 
 export function AssemblyStats({ assemblyIds, enabled = true }: { assemblyIds?: string; enabled?: boolean }) {
   const { data, isLoading } = useAssemblyStats(assemblyIds, enabled);
@@ -23,24 +24,32 @@ export function AssemblyStats({ assemblyIds, enabled = true }: { assemblyIds?: s
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Row 1: Taxonomy Sunburst + Score Boxplots */}
+      {/* Row 1: Taxonomy Sunburst + Biome Sunburst */}
       <div className="grid grid-cols-2 gap-2">
         <div className="flex flex-col items-center">
           <TaxonomySunburst nodes={data.taxonomy_sunburst} />
         </div>
         <div className="flex flex-col items-center">
-          <ScoreBoxplots distributions={data.score_distributions} />
+          <BiomeSunburst nodes={data.biome_sunburst ?? []} />
         </div>
       </div>
 
-      {/* Row 2: Type Strain Pie + Averages */}
+      {/* Row 2: Score Boxplots + Type Strain Pie */}
       <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col items-center">
+          <ScoreBoxplots distributions={data.score_distributions} />
+        </div>
         <div className="flex flex-col items-center">
           <TypeStrainPie
             typeStrain={data.type_strain_count}
             nonTypeStrain={data.non_type_strain_count}
           />
         </div>
+      </div>
+
+      {/* Row 3: Averages */}
+      <div className="grid grid-cols-2 gap-2">
+        <div />
         <div className="flex flex-col items-center justify-center gap-2">
           <div className="text-center">
             <div className="text-2xl font-bold">{data.mean_bgc_per_assembly}</div>
@@ -92,13 +101,12 @@ const PLOTLY_CONFIG: Partial<Plotly.Config> = {
   responsive: true,
 };
 
-function TaxonomySunburst({
-  nodes,
-}: {
-  nodes: { id: string; label: string; parent: string; count: number }[];
-}) {
+type SunNode = { id: string; label: string; parent: string; count: number };
+
+function TaxonomySunburst({ nodes }: { nodes: SunNode[] }) {
   if (nodes.length === 0) return <EmptyPlaceholder label="No taxonomy data" />;
 
+  const colors = colorByAncestorDepth(nodes, 1); // phylum
   return (
     <Plot
       data={[
@@ -109,6 +117,7 @@ function TaxonomySunburst({
           parents: nodes.map((n) => n.parent),
           values: nodes.map((n) => n.count),
           branchvalues: "total",
+          marker: { colors },
           hovertemplate: "<b>%{label}</b><br>Count: %{value}<extra></extra>",
         } as Plotly.Data,
       ]}
@@ -117,6 +126,35 @@ function TaxonomySunburst({
         width: 200,
         height: 200,
         title: { text: "Taxonomy", font: { size: 11 } },
+      }}
+      config={PLOTLY_CONFIG}
+    />
+  );
+}
+
+function BiomeSunburst({ nodes }: { nodes: SunNode[] }) {
+  if (nodes.length === 0) return <EmptyPlaceholder label="No biome data" />;
+
+  const colors = colorByAncestorDepth(nodes, 3); // depth 3
+  return (
+    <Plot
+      data={[
+        {
+          type: "sunburst",
+          ids: nodes.map((n) => n.id),
+          labels: nodes.map((n) => n.label),
+          parents: nodes.map((n) => n.parent),
+          values: nodes.map((n) => n.count),
+          branchvalues: "total",
+          marker: { colors },
+          hovertemplate: "<b>%{label}</b><br>Count: %{value}<extra></extra>",
+        } as Plotly.Data,
+      ]}
+      layout={{
+        ...PLOTLY_LAYOUT_BASE,
+        width: 200,
+        height: 200,
+        title: { text: "Biome", font: { size: 11 } },
       }}
       config={PLOTLY_CONFIG}
     />

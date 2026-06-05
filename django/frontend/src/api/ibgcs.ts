@@ -27,6 +27,8 @@ export interface IbgcFilterParams {
   leaf_path_prefix?: string;
   bgc_class?: string;
   chemont_ids?: string;
+  /** CSV of selected NP-class names (any of L1/L2/L3). */
+  np_classes?: string;
   bgc_accession?: string;
   assembly_accession?: string;
   assembly_ids?: string;

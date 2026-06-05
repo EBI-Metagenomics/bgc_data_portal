@@ -402,6 +402,7 @@ export interface AssemblyStatsResponse {
   mean_bgc_per_assembly: number;
   mean_l1_class_per_assembly: number;
   total_assemblies: number;
+  biome_sunburst: SunburstNode[];
 }
 
 export interface BgcStatsResponse {
@@ -598,6 +599,8 @@ export interface IbgcRosterItem {
   /** Parent cBGC accession (MGYB-XXXXXX). */
   cbgc_accession: string | null;
   classification_path: string;
+  /** Normalised product class (Polyketide, NRP, RiPP, …, Hybrid(P+N), Hybrid). */
+  bgc_class: string;
   size_kb: number;
   n_source_bgcs: number;
   source_tools: string[];
@@ -643,6 +646,8 @@ export interface IbgcDetail {
   /** GCF lineage / leaf path, e.g. "42.7.3" ("" when unclassified). The
    *  first segment is the coarsest group; copy-paste matches the GCF filter. */
   classification_path: string;
+  /** Normalised product class (Polyketide, NRP, RiPP, …, Hybrid(P+N), Hybrid). */
+  bgc_class: string;
   size_kb: number;
   start_position: number;
   end_position: number;
@@ -670,6 +675,8 @@ export interface IbgcScatterPoint {
   x: number;
   y: number;
   classification_path: string;
+  /** Normalised product class (Polyketide, NRP, RiPP, …, Hybrid(P+N), Hybrid). */
+  bgc_class: string;
   novelty_score: number | null;
   domain_novelty: number | null;
   is_partial: boolean;
@@ -826,8 +833,9 @@ export interface ReportPayload {
   ibgc_rows: ReportIbgcRow[];
   domain_composition: DomainCompositionSummary;
   gcf_distribution: GcfDistributionEntry[];
+  gcf_sunburst: SunburstNode[];
   score_distributions: ReportScoreDistribution[];
-  completeness_pie: CategoryCount[];
+  completeness_bar: CategoryCount[];
   bgc_class_pie: CategoryCount[];
   length_histogram: LengthBucket[];
   predictor_distribution: CategoryCount[];
@@ -835,5 +843,6 @@ export interface ReportPayload {
   assembly_rows: ReportAssemblyRow[];
   assembly_stats: Record<string, unknown>;
   taxonomy_sunburst: SunburstNode[];
+  biome_sunburst: SunburstNode[];
   domain_goslim_matrix: DomainGoslimMatrix;
 }
