@@ -279,7 +279,7 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
                     <p className="font-medium">{cluster.accession}</p>
                     <p>Source: {cluster.source || "Unknown"}</p>
                     {cluster.bgc_classes.length > 0 && (
-                      <p>Classes: {cluster.bgc_classes.join(", ")}</p>
+                      <p>Class: {cluster.bgc_classes.join(", ")}</p>
                     )}
                   </div>
                 </TooltipContent>

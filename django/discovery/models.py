@@ -430,6 +430,19 @@ class IntegratedBgc(models.Model):
         help_text="Sorted, deduped tool names contributing, e.g. ['GECCO','SanntiS']",
     )
 
+    bgc_class = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "Normalised product class — one of Polyketide / NRP / RiPP / "
+            "Terpene / Saccharide / Alkaloid / Other / Hybrid(P+N) / Hybrid. "
+            "Derived by unioning the classification_path of all source "
+            "predictions (common_core.bgc_class.classify_ibgc)."
+        ),
+    )
+
     gene_cluster_family = models.CharField(
         max_length=512,
         blank=True,
@@ -541,6 +554,18 @@ class SourceBgcPrediction(models.Model):
 
     prediction_accession = models.CharField(max_length=50, db_index=True)
     bgc_range = IntegerRangeField(help_text="Half-open [start, end) genomic span on the contig")
+
+    classification_path = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "Raw per-tool product class as staged (e.g. 'NRPS_T1PKS', "
+            "'RiPP_like', 'NRP_Polyketide'). Shown verbatim on prediction "
+            "hover; normalised into IntegratedBgc.bgc_class at iBGC level."
+        ),
+    )
 
     is_partial = models.BooleanField(default=False)
     is_validated = models.BooleanField(default=False)

@@ -31,6 +31,7 @@ from discovery.models import (
     DashboardGCF,
     IntegratedBgc,
     PrecomputedStats,
+    SourceBgcPrediction,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,10 +45,52 @@ def recompute_all_scores() -> None:
     _compute_assembly_aggregates()
     _compute_percentile_ranks()
     _rebuild_gcf_table()
+    recompute_ibgc_classes()
     _rebuild_catalog_tables()
     _compute_chemont_ic()
     _recompute_umap()
     logger.info("Score recomputation complete.")
+
+
+def recompute_ibgc_classes() -> None:
+    """Derive ``IntegratedBgc.bgc_class`` from each iBGC's source predictions.
+
+    Unions the ``classification_path`` of every source prediction attached to
+    an iBGC and reduces it to one normalised label via
+    ``common_core.bgc_class.classify_ibgc`` (P+N-wins hybrid rule). iBGCs with
+    no class-bearing prediction are set to "" so the "BGC Class" filter skips
+    them.
+    """
+    from common_core.bgc_class import classify_ibgc
+
+    logger.info("Recomputing iBGC product classes ...")
+
+    preds_by_ibgc: dict[int, list[tuple[str, str]]] = {}
+    rows = (
+        SourceBgcPrediction.objects.filter(integrated_bgc_id__isnull=False)
+        .exclude(classification_path="")
+        .values_list("integrated_bgc_id", "detector__tool", "classification_path")
+        .iterator()
+    )
+    for ibgc_id, tool, raw in rows:
+        preds_by_ibgc.setdefault(ibgc_id, []).append((tool or "", raw or ""))
+
+    batch = []
+    updated = 0
+    for ibgc in IntegratedBgc.objects.only("id", "bgc_class").iterator():
+        label = classify_ibgc(preds_by_ibgc.get(ibgc.id, []))
+        if ibgc.bgc_class != label:
+            ibgc.bgc_class = label
+            batch.append(ibgc)
+        if len(batch) >= BATCH_SIZE:
+            IntegratedBgc.objects.bulk_update(batch, ["bgc_class"], batch_size=BATCH_SIZE)
+            updated += len(batch)
+            batch.clear()
+    if batch:
+        IntegratedBgc.objects.bulk_update(batch, ["bgc_class"], batch_size=BATCH_SIZE)
+        updated += len(batch)
+
+    logger.info("iBGC product classes recomputed (%d rows updated)", updated)
 
 
 # ── Assembly-level scores ────────────────────────────────────────────────────
@@ -181,16 +224,16 @@ def _rebuild_catalog_tables() -> None:
     """Recompute iBGC class and domain catalog counts."""
     logger.info("Rebuilding catalog tables ...")
 
-    # iBGC classes from first segment of gene_cluster_family.
+    # iBGC product classes — the normalised label on IntegratedBgc.bgc_class
+    # (populated by recompute_ibgc_classes, which must run first).
     class_counts = (
-        IntegratedBgc.objects.exclude(gene_cluster_family="")
-        .annotate(class_l1=RawSQL("SPLIT_PART(gene_cluster_family, '.', 1)", []))
-        .values("class_l1")
+        IntegratedBgc.objects.exclude(bgc_class="")
+        .values("bgc_class")
         .annotate(cnt=Count("id"))
     )
     DashboardBgcClass.objects.all().delete()
     DashboardBgcClass.objects.bulk_create(
-        [DashboardBgcClass(name=r["class_l1"], bgc_count=r["cnt"]) for r in class_counts],
+        [DashboardBgcClass(name=r["bgc_class"], bgc_count=r["cnt"]) for r in class_counts],
         batch_size=BATCH_SIZE,
     )
 

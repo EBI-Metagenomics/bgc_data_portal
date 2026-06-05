@@ -200,6 +200,17 @@ def build_integrated_bgcs(
     tombstoned = tombstone_unused(AccessionEntityType.IBGC)
     log.info("Tombstoned %d stale iBGC registry rows", tombstoned)
 
+    # Derive the normalised product class for every freshly-built iBGC from its
+    # source predictions' classification_path, then rebuild the catalog tables
+    # (DashboardBgcClass / DashboardDomain) so the "BGC Class" + "Domains"
+    # filters reflect the new iBGCs immediately. The build/cluster flow only
+    # triggers a DiscoveryStats refresh otherwise, so without this the catalog
+    # counts go stale until a separate recompute_all_scores run.
+    from discovery.services.scores import _rebuild_catalog_tables, recompute_ibgc_classes
+
+    recompute_ibgc_classes()
+    _rebuild_catalog_tables()
+
     log.info("iBGC build complete: %s", counts)
     return counts
 

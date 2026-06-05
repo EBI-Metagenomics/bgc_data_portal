@@ -418,6 +418,7 @@ def load_source_bgcs(
                     contig_id=contig_id,
                     prediction_accession=prediction_accession,
                     bgc_range=_range(start, end),
+                    classification_path=(row.get("classification_path") or "").strip()[:255],
                     is_partial=row.get("is_partial", "").lower() in ("true", "1"),
                     is_validated=row.get("is_validated", "").lower() in ("true", "1"),
                     detector_id=detector_id,
@@ -772,18 +773,21 @@ def compute_assembly_scores() -> None:
 
 def compute_catalog_counts() -> None:
     """Recompute BGC class and domain catalog counts (iBGC-derived)."""
+    from discovery.services.scores import recompute_ibgc_classes
+
     logger.info("Computing catalog counts ...")
 
-    # iBGC classes from first segment of gene_cluster_family.
+    # iBGC product classes — derive the normalised IntegratedBgc.bgc_class
+    # from each iBGC's source predictions, then count distinct iBGCs per label.
+    recompute_ibgc_classes()
     class_counts = (
-        IntegratedBgc.objects.exclude(gene_cluster_family="")
-        .annotate(class_l1=RawSQL("SPLIT_PART(gene_cluster_family, '.', 1)", []))
-        .values("class_l1")
+        IntegratedBgc.objects.exclude(bgc_class="")
+        .values("bgc_class")
         .annotate(cnt=Count("id"))
     )
     DashboardBgcClass.objects.all().delete()
     DashboardBgcClass.objects.bulk_create(
-        [DashboardBgcClass(name=r["class_l1"], bgc_count=r["cnt"]) for r in class_counts],
+        [DashboardBgcClass(name=r["bgc_class"], bgc_count=r["cnt"]) for r in class_counts],
         batch_size=BATCH_SIZE,
     )
 
