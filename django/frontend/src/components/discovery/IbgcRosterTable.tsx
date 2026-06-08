@@ -38,7 +38,6 @@ type ColumnKey =
   | "assembly"
   | "collection"
   | "similarity"
-  | "bitscore"
   | "best_hit";
 
 const BASE_TAIL_COLUMNS: { key: ColumnKey; label: string }[] = [
@@ -53,11 +52,15 @@ const BASE_TAIL_COLUMNS: { key: ColumnKey; label: string }[] = [
 
 function columnsFor(searchSource: string | null) {
   // Sequence-search swaps the Sim. column for a Bitscore column and adds
-  // a Best hit column showing the protein_id of the winning CDS.
+  // a Best hit column showing the protein_id of the winning CDS. The
+  // Bitscore column sorts via the shared "similarity" key: the result
+  // allow-list (``ibgc_ids``) is already in bitscore-descending order, and
+  // the server's ``sort_by=similarity`` orders rows by their position in
+  // that list — so it reproduces the bitscore ranking (asc flips it).
   if (searchSource === "sequence") {
     return [
       { key: "label" as ColumnKey, label: "iBGC" },
-      { key: "bitscore" as ColumnKey, label: "Bitscore" },
+      { key: "similarity" as ColumnKey, label: "Bitscore" },
       { key: "best_hit" as ColumnKey, label: "Best hit" },
       ...BASE_TAIL_COLUMNS,
     ];
@@ -84,13 +87,13 @@ export function IbgcRosterTable() {
   const resultIbgcIds = useDiscoveryStore((s) => s.resultIbgcIds);
   const searchSource = useDiscoveryStore((s) => s.searchSource);
 
-  // When a Find-Similar-iBGCs query lands the result allow-list is in
-  // similarity-descending order; default the roster sort to "similarity" so
-  // the table mirrors that rank. The user can still click any other column
-  // header to override. We trigger off ``searchSource`` so the same logic
-  // covers any future similarity-emitting source.
+  // When a Find-Similar-iBGCs or Sequence query lands, the result allow-list
+  // is in score-descending order (Dice / bitscore); default the roster sort
+  // to "similarity" so the table mirrors that rank. The user can still click
+  // any other column header to override. We trigger off ``searchSource`` so
+  // the same logic covers any score-emitting source.
   useEffect(() => {
-    if (searchSource === "similar_ibgc") {
+    if (searchSource === "similar_ibgc" || searchSource === "sequence") {
       setSortBy("similarity");
       setOrder("desc");
     }
