@@ -2676,10 +2676,10 @@ def ibgc_sequence_query_status(
     """Poll a ``sequence_similarity_search`` Celery task and return results
     collapsed to iBGC level.
 
-    The task itself is the same one ``POST /query/sequence/`` dispatches —
-    only the result shape differs. Each iBGC keeps the best-bitscore hit
-    among its source BGCs as ``similarity_score``. Tasks still PENDING raise
-    503 so the client can poll on a fixed interval; FAILURE raises 500.
+    The task itself is the same one ``POST /query/sequence/`` dispatches; it
+    returns results already keyed by iBGC id (best-bitscore protein per iBGC)
+    as ``similarity_score``. Tasks still PENDING raise 503 so the client can
+    poll on a fixed interval; FAILURE raises 500.
     """
     from celery.result import AsyncResult
 
@@ -2700,11 +2700,17 @@ def ibgc_sequence_query_status(
     if not res.ready():
         raise HttpError(503, "Sequence search still running")
 
+    # ``sequence_similarity_search`` already collapses matched CDS to their
+    # owning iBGC (contig + genomic-range-overlap join) and keeps the
+    # best-bitscore protein per iBGC, so the result is keyed by iBGC id.
+    # We consume it directly — re-collapsing through ``SourceBgcPrediction``
+    # here would feed iBGC PKs into the source-BGC id space and drop every
+    # hit.
     raw_result = res.result or {}
-    bgc_metrics: dict[int, dict[str, float | str]] = {
+    ibgc_metrics: dict[int, dict[str, float | str]] = {
         int(k): v for k, v in raw_result.items()
     }
-    if not bgc_metrics:
+    if not ibgc_metrics:
         return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(
@@ -2712,41 +2718,27 @@ def ibgc_sequence_query_status(
             ),
         )
 
-    # Collapse BGC hits → iBGC id with best bitscore. Also carry the
-    # ``protein_id`` of the winning CDS plus its aggregate alignment stats
-    # (pident, qcov) so the Variables Map can plot those metrics.
-    bgc_to_ibgc = dict(
-        SourceBgcPrediction.objects.filter(id__in=bgc_metrics.keys())
-        .values_list("id", "integrated_bgc_id")
-    )
-    ibgc_best: dict[int, float] = {}
-    ibgc_best_protein: dict[int, str] = {}
-    ibgc_best_pident: dict[int, float] = {}
-    ibgc_best_qcov: dict[int, float] = {}
-    for bgc_id, ibgc_id in bgc_to_ibgc.items():
-        if ibgc_id is None:
-            continue
-        m = bgc_metrics[bgc_id]
-        bs = float(m.get("bitscore", 0.0))
-        if bs > ibgc_best.get(ibgc_id, float("-inf")):
-            ibgc_best[ibgc_id] = bs
-            pid = m.get("protein_id")
-            if pid:
-                ibgc_best_protein[ibgc_id] = str(pid)
-            pident = m.get("pident")
-            if pident is not None:
-                ibgc_best_pident[ibgc_id] = float(pident)
-            qcov = m.get("qcoverage")
-            if qcov is not None:
-                ibgc_best_qcov[ibgc_id] = float(qcov)
-
-    if not ibgc_best:
-        return PaginatedIbgcRosterResponse(
-            items=[],
-            pagination=PaginationMeta(
-                page=1, page_size=page_size, total_count=0, total_pages=0,
-            ),
-        )
+    # ``bitscore`` surfaces as ``similarity_score``; ``protein_id`` plus the
+    # aggregate alignment stats (pident, qcov) feed the roster columns and the
+    # Variables Map.
+    ibgc_best: dict[int, float] = {
+        ibgc_id: float(m.get("bitscore", 0.0)) for ibgc_id, m in ibgc_metrics.items()
+    }
+    ibgc_best_protein: dict[int, str] = {
+        ibgc_id: str(m["protein_id"])
+        for ibgc_id, m in ibgc_metrics.items()
+        if m.get("protein_id")
+    }
+    ibgc_best_pident: dict[int, float] = {
+        ibgc_id: float(m["pident"])
+        for ibgc_id, m in ibgc_metrics.items()
+        if m.get("pident") is not None
+    }
+    ibgc_best_qcov: dict[int, float] = {
+        ibgc_id: float(m["qcoverage"])
+        for ibgc_id, m in ibgc_metrics.items()
+        if m.get("qcoverage") is not None
+    }
 
     qs = _apply_ibgc_filters(
         IntegratedBgc.objects.all(),
