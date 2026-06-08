@@ -681,6 +681,7 @@ def _ibgc_filters_active(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -722,6 +723,7 @@ def _ibgc_filters_active(
             bgc_class,
             chemont_ids,
             np_classes,
+            accession,
             bgc_accession,
             assembly_accession,
             assembly_ids,
@@ -947,6 +949,81 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
     return facts
 
 
+def _protein_overlap_q(acc: str) -> Q:
+    """``Q`` matching iBGCs that contain a CDS named *acc* within their span.
+
+    Both conditions target the same ``contig__cds_list`` join so the protein
+    id and the range-overlap apply to the *same* CDS row — this clips out
+    proteins that merely share the iBGC's contig but sit outside its
+    ``bgc_range``.
+    """
+    return Q(
+        contig__cds_list__protein_id_str__iexact=acc,
+        contig__cds_list__cds_range__overlap=F("bgc_range"),
+    )
+
+
+def _apply_accession_filter(qs, value: str):
+    """Filter an ``IntegratedBgc`` queryset by a single smart accession value.
+
+    The accession kind is auto-detected (see ``classify_accession``):
+
+    * **iBGC** (``MGYB-XXXXXX-YY``) → exact match on the iBGC accession,
+      resolved through the registry so aliases / tombstones behave.
+    * **prediction** (``MGYB-XXXXXX.TOOL.NN``) → exact source-prediction
+      accession.
+    * **cBGC** (``MGYB-XXXXXX`` / legacy ``MGYBNNNN``) → resolve via the
+      registry, match the parent cBGC.
+    * **assembly** (``ERZ`` / ``GCA_`` / ``GCF_``) → substring on the
+      assembly accession.
+    * **protein** (``MGYP…``) → CDS protein id, clipped to the iBGC span.
+    * **unknown** (free-form) → OR over the contig accession and protein id
+      (covers contig accessions and non-MGYP protein identifiers).
+    """
+    from discovery.services.keyword_resolver import classify_accession
+
+    acc = (value or "").strip()
+    if not acc:
+        return qs
+    kind = classify_accession(acc)
+
+    if kind == "ibgc":
+        from discovery.services.accession_registry import resolve as _acc_resolve
+
+        resolved = _acc_resolve(acc.upper())
+        if resolved is not None and resolved.current_id is not None:
+            return qs.filter(id=resolved.current_id)
+        return qs.filter(accession__iexact=acc)
+
+    if kind == "prediction":
+        return qs.filter(
+            source_predictions__prediction_accession__iexact=acc
+        ).distinct()
+
+    if kind == "cbgc":
+        from discovery.services.accession_registry import resolve as _acc_resolve
+
+        resolved = _acc_resolve(acc.upper())
+        if resolved is not None and resolved.current_id is not None:
+            return qs.filter(cbgc_id=resolved.current_id).distinct()
+        return qs.filter(
+            source_predictions__prediction_accession__icontains=acc
+        ).distinct()
+
+    if kind == "assembly":
+        return qs.filter(
+            source_predictions__assembly__assembly_accession__icontains=acc
+        ).distinct()
+
+    if kind == "protein":
+        return qs.filter(_protein_overlap_q(acc)).distinct()
+
+    # unknown: free-form contig accession OR (non-MGYP) protein identifier.
+    return qs.filter(
+        Q(contig__accession__icontains=acc) | _protein_overlap_q(acc)
+    ).distinct()
+
+
 def _apply_ibgc_filters(
     qs,
     *,
@@ -966,8 +1043,9 @@ def _apply_ibgc_filters(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,     # CSV of ChemOnt class ids
     np_classes: Optional[str] = None,      # CSV of NP-class names (any level)
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
+    accession: Optional[str] = None,       # Smart single-field accession (any kind)
+    bgc_accession: Optional[str] = None,   # Deprecated: legacy BGC-only accession field
+    assembly_accession: Optional[str] = None,  # Deprecated: legacy assembly-only field
     assembly_ids: Optional[str] = None,    # CSV of DashboardAssembly ids
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
@@ -1083,6 +1161,12 @@ def _apply_ibgc_filters(
                     | Q(natural_products__np_class_path__iendswith="." + name)
                 )
             qs = qs.filter(np_q).distinct()
+    if accession:
+        # Single smart accession field: auto-detect iBGC / prediction / cBGC /
+        # assembly / contig / protein and apply the matching join. Supersedes
+        # the legacy ``bgc_accession`` + ``assembly_accession`` pair below
+        # (still accepted for back-compat with saved deep-link URLs).
+        qs = _apply_accession_filter(qs, accession)
     if bgc_accession:
         # Reuse the assembly-side MGYB-aware semantics: structured accession
         # → exact match; bare MGYBxxx region accession → match by region id
@@ -1166,6 +1250,7 @@ def ibgc_count(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1207,6 +1292,7 @@ def ibgc_count(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -1237,6 +1323,7 @@ def ibgc_count(
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
             np_classes=np_classes,
+            accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1276,6 +1363,7 @@ def ibgc_roster(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1316,6 +1404,7 @@ def ibgc_roster(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -1347,6 +1436,7 @@ def ibgc_roster(
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
             np_classes=np_classes,
+            accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1465,6 +1555,7 @@ def ibgc_ids(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1506,6 +1597,7 @@ def ibgc_ids(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -1537,6 +1629,7 @@ def ibgc_ids(
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
             np_classes=np_classes,
+            accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1609,6 +1702,7 @@ def ibgc_umap(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1641,6 +1735,7 @@ def ibgc_umap(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -1670,6 +1765,7 @@ def ibgc_umap(
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
             np_classes=np_classes,
+            accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -1730,6 +1826,7 @@ def ibgc_scatter(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -1773,6 +1870,7 @@ def ibgc_scatter(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -1795,6 +1893,7 @@ def ibgc_scatter(
             bgc_class=bgc_class,
             chemont_ids=chemont_ids,
             np_classes=np_classes,
+            accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
             assembly_ids=assembly_ids,
@@ -2552,6 +2651,7 @@ def ibgc_domain_query(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -2617,6 +2717,7 @@ def ibgc_domain_query(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -2665,6 +2766,7 @@ def ibgc_sequence_query_status(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -2759,6 +2861,7 @@ def ibgc_sequence_query_status(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,
@@ -2844,6 +2947,7 @@ def chemical_query_status(
     bgc_class: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    accession: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -2906,6 +3010,7 @@ def chemical_query_status(
         bgc_class=bgc_class,
         chemont_ids=chemont_ids,
         np_classes=np_classes,
+        accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
         assembly_ids=assembly_ids,

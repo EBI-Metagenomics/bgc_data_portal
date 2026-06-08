@@ -102,8 +102,8 @@ export interface AppliedIbgcFilters {
   // Flattened NP-class names selected across the L1/L2/L3 tree.
   npClasses: string[];
   biomeLineage: string;
-  bgcAccession: string;
-  assemblyAccession: string;
+  // Single smart accession field (assembly / contig / BGC / iBGC / protein).
+  accession: string;
   assemblyIds: string;
   organism: string;
   // Free-text term matched against the iBGC's domain annotations. Drives
@@ -124,8 +124,7 @@ export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   chemontIds: [],
   npClasses: [],
   biomeLineage: "",
-  bgcAccession: "",
-  assemblyAccession: "",
+  accession: "",
   assemblyIds: "",
   organism: "",
   domainText: "",
@@ -147,8 +146,7 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
     applied.bgcClass === "" &&
     applied.gcfPath === "" &&
     applied.biomeLineage === "" &&
-    applied.bgcAccession === "" &&
-    applied.assemblyAccession === "" &&
+    applied.accession === "" &&
     applied.assemblyIds === "" &&
     applied.organism === "" &&
     applied.domainText === "" &&
@@ -188,10 +186,7 @@ export function appliedFiltersToApiParams(
     params.np_classes = applied.npClasses.join(",");
   }
   if (applied.biomeLineage) params.biome_lineage = applied.biomeLineage;
-  if (applied.bgcAccession) params.bgc_accession = applied.bgcAccession;
-  if (applied.assemblyAccession) {
-    params.assembly_accession = applied.assemblyAccession;
-  }
+  if (applied.accession) params.accession = applied.accession;
   if (applied.assemblyIds) params.assembly_ids = applied.assemblyIds;
   if (applied.organism) params.organism = applied.organism;
   if (applied.domainText) params.domain_text = applied.domainText;
@@ -231,8 +226,7 @@ export function snapshotFiltersToApplied(): AppliedIbgcFilters {
     chemontIds: f.chemontIds,
     npClasses: [...f.npClassL1, ...f.npClassL2, ...f.npClassL3],
     biomeLineage: f.biomeLineage,
-    bgcAccession: f.bgcAccession,
-    assemblyAccession: f.assemblyAccession,
+    accession: f.accession,
     assemblyIds: f.assemblyIds,
     organism: f.search,
     domainText: f.domainText,

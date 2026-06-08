@@ -44,6 +44,9 @@ export function useUrlSync() {
     const biomeLineage = searchParams.get("biome_lineage");
     if (biomeLineage) useFilterStore.getState().setBiomeLineage(biomeLineage);
 
+    const accession = searchParams.get("accession");
+    if (accession) useFilterStore.getState().setAccession(accession);
+
     const assemblyId = searchParams.get("assembly");
     if (assemblyId) {
       useSelectionStore.getState().setActiveAssemblyId(Number(assemblyId));
@@ -80,6 +83,7 @@ export function useUrlSync() {
         updateUrl("taxonomy_path", state.taxonomyPath);
         updateUrl("assembly_type", state.assemblyType);
         updateUrl("biome_lineage", state.biomeLineage);
+        updateUrl("accession", state.accession);
       }),
       useSelectionStore.subscribe((state) => {
         updateUrl("assembly", state.activeAssemblyId?.toString() ?? "");

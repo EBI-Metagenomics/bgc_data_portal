@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchAssemblyRoster, type AssemblyRosterParams } from "@/api/assemblies";
+import { classifyAccession } from "@/lib/accession";
 import { useFilterStore } from "@/stores/filter-store";
 import { useState } from "react";
 
@@ -10,6 +11,13 @@ export function useAssemblyRoster() {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
 
   const filters = useFilterStore();
+
+  // The assembly-side endpoints still take the legacy split accession params.
+  // Route the single smart field: assembly-looking accessions go to
+  // ``assembly_accession``; everything else falls through to the MGYB-aware
+  // ``bgc_accession`` slot (which also substring-matches).
+  const acc = filters.accession.trim();
+  const accIsAssembly = acc !== "" && classifyAccession(acc) === "assembly";
 
   const params: AssemblyRosterParams = {
     page,
@@ -23,8 +31,8 @@ export function useAssemblyRoster() {
     assembly_type: filters.assemblyType || undefined,
     bgc_class: filters.bgcClass || undefined,
     biome_lineage: filters.biomeLineage || undefined,
-    bgc_accession: filters.bgcAccession || undefined,
-    assembly_accession: filters.assemblyAccession || undefined,
+    bgc_accession: acc && !accIsAssembly ? acc : undefined,
+    assembly_accession: accIsAssembly ? acc : undefined,
     assembly_ids: filters.assemblyIds || undefined,
   };
 

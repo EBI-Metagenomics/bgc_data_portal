@@ -17,8 +17,9 @@ interface FilterState {
    *  landing-page keyword-search fallback. */
   domainText: string;
   biomeLineage: string;
-  bgcAccession: string;
-  assemblyAccession: string;
+  /** Single smart accession field — accepts assembly, contig, BGC, iBGC /
+   *  region or protein accessions; the backend auto-detects the kind. */
+  accession: string;
   assemblyIds: string;
   // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
   minLengthKb: number | null;
@@ -36,8 +37,7 @@ interface FilterState {
   setSearch: (v: string) => void;
   setDomainText: (v: string) => void;
   setBiomeLineage: (v: string) => void;
-  setBgcAccession: (v: string) => void;
-  setAssemblyAccession: (v: string) => void;
+  setAccession: (v: string) => void;
   setAssemblyIds: (v: string) => void;
   setLengthRangeKb: (min: number | null, max: number | null) => void;
   runExploreQuery: () => void;
@@ -58,8 +58,7 @@ const initialState = {
   search: "",
   domainText: "",
   biomeLineage: "",
-  bgcAccession: "",
-  assemblyAccession: "",
+  accession: "",
   assemblyIds: "",
   minLengthKb: null as number | null,
   maxLengthKb: null as number | null,
@@ -91,8 +90,7 @@ export const useFilterStore = create<FilterState>((set) => ({
   setSearch: (v) => set({ search: v, exploreQueryTriggered: false }),
   setDomainText: (v) => set({ domainText: v, exploreQueryTriggered: false }),
   setBiomeLineage: (v) => set({ biomeLineage: v, exploreQueryTriggered: false }),
-  setBgcAccession: (v) => set({ bgcAccession: v, exploreQueryTriggered: false }),
-  setAssemblyAccession: (v) => set({ assemblyAccession: v, exploreQueryTriggered: false }),
+  setAccession: (v) => set({ accession: v, exploreQueryTriggered: false }),
   setAssemblyIds: (v) => set({ assemblyIds: v, exploreQueryTriggered: false }),
   setLengthRangeKb: (min, max) =>
     set({ minLengthKb: min, maxLengthKb: max, exploreQueryTriggered: false }),

@@ -29,7 +29,12 @@ export interface IbgcFilterParams {
   chemont_ids?: string;
   /** CSV of selected NP-class names (any of L1/L2/L3). */
   np_classes?: string;
+  /** Single smart accession field — backend auto-detects assembly / contig /
+   *  BGC / iBGC / region / protein. */
+  accession?: string;
+  /** @deprecated split BGC-only accession field, kept for saved deep links */
   bgc_accession?: string;
+  /** @deprecated split assembly-only accession field, kept for saved deep links */
   assembly_accession?: string;
   assembly_ids?: string;
   organism?: string;

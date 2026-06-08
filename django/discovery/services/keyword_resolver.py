@@ -18,8 +18,50 @@ from django.conf import settings
 _BGC_ACCESSION_RE = re.compile(r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}(-[0-9A-HJKMNP-TV-Z]{2})?$", re.IGNORECASE)
 # Legacy format: MGYBNNNNNNNN (pre-refactor cBGC; resolved via AccessionAlias).
 _BGC_LEGACY_RE = re.compile(r"^MGYB\d+$", re.IGNORECASE)
-_ASSEMBLY_ACCESSION_RE = re.compile(r"^(ERZ|GCA_|GCF_)\w+$", re.IGNORECASE)
+# Allow a trailing version segment (e.g. ``GCA_000001405.1``) — GCA/GCF
+# accessions are commonly carried with their ``.N`` version.
+_ASSEMBLY_ACCESSION_RE = re.compile(r"^(ERZ|GCA_|GCF_)[\w.]+$", re.IGNORECASE)
 _DOMAIN_ACCESSION_RE = re.compile(r"^(PF\d{5}|TIGR\d{5})$", re.IGNORECASE)
+
+# Narrow variants used by the unified roster "accession" filter, which must
+# distinguish iBGC (MGYB-XXXXXX-YY) from bare cBGC (MGYB-XXXXXX).
+_IBGC_ACCESSION_RE = re.compile(
+    r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}-[0-9A-HJKMNP-TV-Z]{2}$", re.IGNORECASE
+)
+_CBGC_ACCESSION_RE = re.compile(r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}$", re.IGNORECASE)
+# Mgnify protein identifier (ContigCds.protein_id_str may also carry free-form
+# source ids — those fall through to the "unknown" bucket).
+_PROTEIN_ACCESSION_RE = re.compile(r"^MGYP\d+$", re.IGNORECASE)
+
+
+def classify_accession(value: str) -> str:
+    """Classify an accession string into a roster-filter kind.
+
+    Returns one of ``"ibgc"``, ``"prediction"``, ``"cbgc"``, ``"assembly"``,
+    ``"protein"`` or ``"unknown"``. ``"unknown"`` covers free-form contig
+    accessions and non-MGYP protein identifiers, which carry no
+    distinguishing prefix and are matched by substring at the call site.
+
+    Detection mirrors the semantics already used in ``_apply_ibgc_filters``:
+    an MGYB accession carrying a ``.`` is a source-detector *prediction*
+    (e.g. ``MGYB-AB12CD.ANT.01``); the bare form is a cBGC; the ``-YY``
+    suffixed form is an iBGC.
+    """
+    v = (value or "").strip()
+    if not v:
+        return "unknown"
+    if _IBGC_ACCESSION_RE.match(v):
+        return "ibgc"
+    upper = v.upper()
+    if upper.startswith("MGYB") and "." in upper:
+        return "prediction"
+    if _CBGC_ACCESSION_RE.match(v) or _BGC_LEGACY_RE.match(v):
+        return "cbgc"
+    if _ASSEMBLY_ACCESSION_RE.match(v):
+        return "assembly"
+    if _PROTEIN_ACCESSION_RE.match(v):
+        return "protein"
+    return "unknown"
 
 
 def _build_result(

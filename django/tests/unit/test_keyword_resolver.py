@@ -11,7 +11,28 @@ from __future__ import annotations
 
 import pytest
 
-from discovery.services.keyword_resolver import resolve_keyword
+from discovery.services.keyword_resolver import classify_accession, resolve_keyword
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("MGYB-AB12CD-0A", "ibgc"),
+        ("mgyb-ab12cd-0a", "ibgc"),
+        ("MGYB-AB12CD.ANT.01", "prediction"),
+        ("MGYB-AB12CD", "cbgc"),
+        ("MGYB00000123", "cbgc"),  # legacy pre-refactor form
+        ("ERZ123456", "assembly"),
+        ("GCA_000001405.1", "assembly"),
+        ("GCF_000001405", "assembly"),
+        ("MGYP000123456789", "protein"),
+        ("Ga0181741_11_94", "unknown"),  # free-form contig / protein id
+        ("", "unknown"),
+        ("  ", "unknown"),
+    ],
+)
+def test_classify_accession(value, expected):
+    assert classify_accession(value) == expected
 
 
 @pytest.mark.django_db
