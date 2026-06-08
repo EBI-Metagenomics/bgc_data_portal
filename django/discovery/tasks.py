@@ -53,35 +53,62 @@ def recompute_scores_task(self) -> bool:
 def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -> dict[int, float]:
     """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
 
-    Classifies the query SMILES into ChemOnt terms, then computes
-    IC-based (Resnik / Best Match Average) similarity against each iBGC's
-    pooled ChemOnt annotations. iBGC membership is decided by range
+    The query SMILES is classified into ChemOnt terms via ClassyFire (cached
+    by InChIKey so known/repeat compounds skip the network), then compared
+    with IC-based (Resnik / Best Match Average) similarity against each
+    iBGC's pooled ChemOnt annotations. iBGC membership is decided by range
     overlap: each CDS contributes to the iBGC whose ``bgc_range`` overlaps
     its ``cds_range`` on the same contig.
 
-    Returns a dict mapping iBGC id → max similarity score.
+    Returns a dict mapping iBGC id → max similarity score. Raises if the IC
+    cache is missing or ClassyFire is unreachable, so the failure is visible
+    to the operator/user rather than silently returning an empty roster.
     """
     from collections import defaultdict
 
-    from common_core.chemont.classifier import classify_smiles
+    from common_core.chemont import classyfire_client as cf
     from common_core.chemont.ontology import get_ontology
-    from common_core.chemont.similarity import best_match_average, normalize_similarity
+    from common_core.chemont.similarity import semantic_similarity
+    from django.conf import settings
+    from django.core.cache import cache
     from django.db import connection
 
     from discovery.models import PrecomputedStats
 
     ont = get_ontology()
 
-    query_classes = classify_smiles(smiles.strip(), ontology=ont)
-    if not query_classes:
-        log.warning("No ChemOnt matches for SMILES: %s", smiles[:50])
+    # Classify the query SMILES → ChemOnt terms, cached by InChIKey.
+    inchikey = cf.smiles_to_inchikey(smiles)
+    if inchikey is None:
+        log.warning("Invalid SMILES for chemical search: %s", smiles[:50])
         return {}
-    query_term_ids = [c.chemont_id for c in query_classes]
+    cache_key = f"chemont:classify:{inchikey}"
+    query_term_ids: list[str] | None = cache.get(cache_key)
+    if query_term_ids is None:
+        result = cf.classify(
+            smiles,
+            base_url=getattr(settings, "CLASSYFIRE_URL", cf.DEFAULT_BASE_URL),
+            timeout=getattr(settings, "CLASSYFIRE_TIMEOUT", 30.0),
+            poll_timeout=getattr(settings, "CLASSYFIRE_POLL_TIMEOUT", 90.0),
+        )
+        query_term_ids = result.chemont_ids if result else []
+        # Cache even an empty list: a structure ClassyFire can't classify
+        # won't classify on retry either, and this avoids re-submitting.
+        cache.set(
+            cache_key,
+            query_term_ids,
+            getattr(settings, "CHEMONT_CLASSIFY_CACHE_TTL", 60 * 60 * 24 * 30),
+        )
+    if not query_term_ids:
+        log.info("No ChemOnt terms for SMILES %s — no chemical matches", inchikey)
+        return {}
 
     ic_row = PrecomputedStats.objects.filter(key="chemont_ic").first()
     if not ic_row or not ic_row.data:
-        log.warning("No precomputed ChemOnt IC values — run recompute_all_scores first")
-        return {}
+        raise RuntimeError(
+            "ChemOnt IC values not precomputed — run recompute_all_scores "
+            "before chemical search can return results"
+        )
     ic_values: dict[str, float] = ic_row.data
 
     # Join CDS ChemOnt → CDS → owning iBGC via contig + range overlap.
@@ -104,8 +131,7 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
 
     ibgc_similarities: dict[int, float] = {}
     for ibgc_id, np_terms in ibgc_terms.items():
-        raw = best_match_average(query_term_ids, list(np_terms), ic_values, ont)
-        score = normalize_similarity(raw, ic_values)
+        score = semantic_similarity(query_term_ids, list(np_terms), ic_values, ont)
         if score >= similarity_threshold:
             ibgc_similarities[ibgc_id] = round(score, 4)
 

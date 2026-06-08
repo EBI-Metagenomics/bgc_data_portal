@@ -45,7 +45,7 @@ The Assembly Triad answers the question: *"Now that I have found interesting BGC
 
 | Column | Description | How to use it |
 |--------|-------------|---------------|
-| **Similarity** | The score from your search method (Sorensen-Dice, cosine, or Tanimoto). When multiple methods are combined, this shows the minimum score across methods. | Primary ranking criterion. Higher is better. See [Understanding Similarity Scores](similarity-scores.qmd) for interpretation. |
+| **Similarity** | The score from your search method (Sorensen-Dice, sequence, or ChemOnt semantic similarity). When multiple methods are combined, this shows the minimum score across methods. | Primary ranking criterion. Higher is better. See [Understanding Similarity Scores](similarity-scores.qmd) for interpretation. |
 | **Accession** | A unique identifier for the BGC (e.g. `BGC_000123`). | Click to open the BGC Detail panel. Use for cross-referencing with other databases or publications. |
 | **Classification** | The predicted BGC class: NRPS, Type I PKS, Terpene, RiPP, and so on. | Verify that the BGC class matches your expectations. An unexpected class may indicate a false positive or an interesting chimeric cluster. |
 | **Novelty** | A score from 0 to 1 indicating how different the BGC is from any characterised reference in the MIBiG database. 0 means a near-identical match to a known BGC; 1 means completely novel. | High novelty (> 0.7) suggests the BGC may produce an uncharacterised compound. Low novelty (< 0.3) suggests it is closely related to a known product. |

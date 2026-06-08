@@ -69,6 +69,7 @@ from discovery.api_schemas import (
     IbgcRegionOut,
     AccessionResolveOut,
     ChemicalQueryRequest,
+    ChemicalQueryAccepted,
     SequenceQueryRequest,
     AssemblyStatsResponse,
     DomainArchitectureItem,
@@ -105,12 +106,10 @@ from discovery.api_schemas import (
     DetectorOption,
     PaginatedAssemblyAggregationResponse,
     PaginatedAssemblyResponse,
-    PaginatedQueryResultResponse,
     PaginationMeta,
     InterproAnnotationOut,
     ParentAssemblySummary,
     PfamAnnotationOut,
-    QueryResultBgc,
     QueryResultAssemblyAggregation,
     RegionCdsOut,
     RegionClusterOut,
@@ -2602,140 +2601,147 @@ def ibgc_sequence_query_status(
     )
 
 
-@discovery_router.post("/query/chemical/", response=PaginatedQueryResultResponse)
-def chemical_query(
+@discovery_router.post(
+    "/query/chemical/",
+    response={202: ChemicalQueryAccepted},
+    tags=["Query"],
+)
+def chemical_query(request, body: ChemicalQueryRequest):
+    """Dispatch a ChemOnt chemical-similarity search for a SMILES query.
+
+    The query SMILES is classified into ChemOnt terms via ClassyFire (cached
+    by InChIKey) and scored against each iBGC's ChemOnt annotations. Returns
+    ``202`` with a ``task_id``; poll ``GET /query/chemical/status/{task_id}/``
+    for results — novel compounds absent from ClassyFire's cache can take
+    several seconds to classify, hence the async handoff.
+    """
+    smiles = (body.smiles or "").strip()
+    if not smiles:
+        raise HttpError(400, "SMILES string is required")
+    if not (0.0 <= body.similarity_threshold <= 1.0):
+        raise HttpError(400, "similarity_threshold must be between 0 and 1")
+
+    from rdkit import Chem
+
+    if Chem.MolFromSmiles(smiles) is None:
+        raise HttpError(400, "Invalid SMILES string")
+
+    from discovery.tasks import chemical_similarity_search
+
+    try:
+        result = chemical_similarity_search.delay(smiles, body.similarity_threshold)
+    except Exception as e:
+        logger.error("Failed to dispatch chemical search task: %s", e)
+        raise HttpError(503, "Search service temporarily unavailable")
+
+    return 202, ChemicalQueryAccepted(task_id=result.id)
+
+
+@discovery_router.get(
+    "/query/chemical/status/{task_id}/",
+    response=PaginatedIbgcRosterResponse,
+    tags=["Query"],
+)
+def chemical_query_status(
     request,
-    body: ChemicalQueryRequest,
+    task_id: str,
     page: int = 1,
     page_size: int = 25,
     sort_by: str = "similarity_score",
     order: str = "desc",
-    search: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    source_names: Optional[str] = None,
+    include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
     detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
     chemont_ids: Optional[str] = None,
     np_classes: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
 ):
-    if not body.smiles or not body.smiles.strip():
-        raise HttpError(400, "SMILES string is required")
+    """Poll a ``chemical_similarity_search`` task and return results collapsed
+    to iBGC level.
 
-    from discovery.tasks import chemical_similarity_search
+    The task scores at iBGC level (ChemOnt BMA over each iBGC's annotations vs
+    the ClassyFire-classified query); each iBGC keeps that score as
+    ``similarity_score``. Mirrors ``/query/ibgc-sequence/status/`` so the
+    roster shape is identical. PENDING raises 503 so the client can poll on a
+    fixed interval; FAILURE raises 500 (e.g. ClassyFire unreachable, or the
+    ChemOnt IC cache not yet built).
+    """
+    from celery.result import AsyncResult
 
-    # Dispatch ChemOnt similarity computation to Celery worker
-    async_result = chemical_similarity_search.delay(
-        body.smiles.strip(), body.similarity_threshold
-    )
-    try:
-        raw_result = async_result.get(timeout=120)
-        # Celery JSON serialization converts int keys to strings; convert back
-        bgc_similarities: dict[int, float] = {int(k): v for k, v in raw_result.items()}
-    except Exception as e:
-        logger.error("Chemical similarity search failed: %s", e)
-        raise HttpError(500, "Chemical similarity search failed")
+    res = AsyncResult(task_id)
+    if res.failed():
+        raw = res.result
+        detail = (
+            f"{type(raw).__name__}: {raw}"
+            if isinstance(raw, BaseException)
+            else "Chemical search failed"
+        )
+        raise HttpError(500, detail)
+    if not res.ready():
+        raise HttpError(503, "Chemical search still running")
 
-    if not bgc_similarities:
-        return PaginatedQueryResultResponse(
+    raw_result = res.result or {}
+    # Task keys results by iBGC id; Celery JSON-encodes int keys as strings.
+    ibgc_similarities: dict[int, float] = {int(k): v for k, v in raw_result.items()}
+    if not ibgc_similarities:
+        return PaginatedIbgcRosterResponse(
             items=[],
-            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+            pagination=PaginationMeta(
+                page=1, page_size=page_size, total_count=0, total_pages=0,
+            ),
         )
 
-    qs = SourceBgcPrediction.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
-
-    # Sidebar filters
-    if source_names:
-        names = [n.strip() for n in source_names.split(",") if n.strip()]
-        if names:
-            qs = qs.filter(assembly__source__name__in=names)
-    if detector_tools:
-        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
-        if tools:
-            qs = qs.filter(detector__tool__in=tools)
-    if taxonomy_path:
-        from discovery.ltree import filter_contigs_by_taxonomy
-        qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
-    if search:
-        qs = qs.filter(
-            Q(assembly__organism_name__icontains=search)
-            | Q(assembly__assembly_accession__icontains=search)
-        )
-    if bgc_class:
-        qs = qs.filter(
-            Q(classification_path__istartswith=bgc_class + ".")
-            | Q(classification_path__iexact=bgc_class)
-        )
-    if biome_lineage:
-        qs = qs.filter(assembly__biome_path__icontains=biome_lineage)
-    if assembly_accession:
-        qs = qs.filter(assembly__assembly_accession__icontains=assembly_accession)
-    if bgc_accession:
-        qs = qs.filter(bgc_accession__icontains=bgc_accession.strip())
-    if chemont_ids:
-        cid_list = [c.strip() for c in chemont_ids.split(",") if c.strip()]
-        if cid_list:
-            qs = qs.filter(
-                cds_list__chemont__chemont_id__in=cid_list
-            ).distinct()
-    if np_classes:
-        names = [n.strip() for n in np_classes.split(",") if n.strip()]
-        if names:
-            # NP-class names are segments of the iBGC natural product's
-            # dot-delimited ``np_class_path`` — join through ``integrated_bgc``.
-            np_q = Q()
-            for name in names:
-                np_q |= (
-                    Q(integrated_bgc__natural_products__np_class_path__iexact=name)
-                    | Q(integrated_bgc__natural_products__np_class_path__istartswith=name + ".")
-                    | Q(integrated_bgc__natural_products__np_class_path__icontains="." + name + ".")
-                    | Q(integrated_bgc__natural_products__np_class_path__iendswith="." + name)
-                )
-            qs = qs.filter(np_q).distinct()
-
-    results = []
-    for bgc in qs:
-        similarity = round(bgc_similarities.get(bgc.id, 0.0), 4)
-        results.append((bgc, similarity))
-
-    # Sort
-    sort_key_map = {
-        "similarity_score": lambda x: x[1],
-        "novelty_score": lambda x: x[0].novelty_score,
-        "domain_novelty": lambda x: x[0].domain_novelty,
-        "size_kb": lambda x: x[0].size_kb,
-    }
-    key_fn = sort_key_map.get(sort_by, sort_key_map["similarity_score"])
-    results.sort(key=key_fn, reverse=(order == "desc"))
-
-    total_count = len(results)
-    pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_results = results[offset: offset + ps]
-
-    items = [
-        QueryResultBgc(
-            id=bgc.id,
-            accession=bgc.prediction_accession,
-            classification_path=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ),
-            size_kb=bgc.size_kb,
-            novelty_score=bgc.novelty_score,
-            domain_novelty=bgc.domain_novelty,
-            is_partial=bgc.is_partial,
-            similarity_score=similarity,
-            assembly_id=bgc.assembly_id,
-            assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
-            organism_name=bgc.assembly.organism_name if bgc.assembly else None,
-            is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
-            source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
-        )
-        for bgc, similarity in page_results
-    ]
-
-    return PaginatedQueryResultResponse(
-        items=items,
-        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+    qs = _apply_ibgc_filters(
+        IntegratedBgc.objects.all(),
+        ibgc_ids=list(ibgc_similarities.keys()),
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        np_classes=np_classes,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
+    )
+    return _ibgc_roster_page_response(
+        qs,
+        sort_by=sort_by,
+        order=order,
+        page=page,
+        page_size=page_size,
+        similarity_lookup=ibgc_similarities,
     )
 
 

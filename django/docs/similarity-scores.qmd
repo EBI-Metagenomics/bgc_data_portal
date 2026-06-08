@@ -1,6 +1,6 @@
 ---
 title: "Understanding Similarity Scores"
-subtitle: "Sorensen-Dice, Tanimoto, and cosine similarity explained"
+subtitle: "Sorensen-Dice, ChemOnt semantic, and sequence similarity explained"
 ---
 
 ## Goal
@@ -21,7 +21,7 @@ The platform uses three different similarity metrics, one per search method. All
 |---------------|--------|-------------------|-------------|----------------------|
 | [Domain Query](domain-query.qmd) | Sorensen-Dice coefficient | Pfam domain sets | 0--1 | 0.7+ |
 | [Sequence Search](sequence-search.qmd) | Cosine similarity | Protein embeddings (1,152-dimensional vectors) | 0--1 | 0.7+ |
-| [Chemical Search](chemical-search.qmd) | Tanimoto coefficient | Morgan fingerprints of product structures | 0--1 | 0.85+ |
+| [Chemical Search](chemical-search.qmd) | ChemOnt semantic similarity | Predicted ChemOnt chemical classes | 0--1 | 0.5+ |
 
 ## Sorensen-Dice coefficient (domain query)
 
@@ -93,40 +93,38 @@ Cosine similarity measures the angle between two vectors, ignoring their length.
 - The embedding captures global protein properties. Local motifs (e.g. a single active-site residue change) may not dramatically alter the embedding.
 - The search compares your query protein against the **representative embedding** of each BGC, which summarises all proteins in the cluster. This means a BGC will score high if it contains at least one protein very similar to your query, even if the other proteins in the cluster are unrelated.
 
-## Tanimoto coefficient (chemical search)
+## Chemical search
 
 ### What it measures
 
-The Tanimoto coefficient compares Morgan fingerprints --- binary vectors that encode the substructural features present in each molecule. It quantifies how much of each molecule's structural inventory is shared with the other.
+Chemical search does **not** compare molecular fingerprints. Your query SMILES is classified into the **ChemOnt** chemical ontology (via ClassyFire), and each BGC carries ChemOnt classes predicted from its biosynthetic genes (by CHAMOIS). The score is an **information-content–weighted semantic similarity** between the query's ChemOnt terms and the BGC's --- it answers *"how closely does this BGC's predicted chemistry sit, in the chemical taxonomy, to my compound?"*
 
-### Formula
+### How the score is built
+
+For each pair of ChemOnt terms, the similarity is the **Lin** measure over the ontology hierarchy:
 
 $$
-T_c(A, B) = \frac{|A \cap B|}{|A \cup B|}
+\text{Lin}(t_1, t_2) = \frac{2 \cdot \mathrm{IC}(\text{MICA})}{\mathrm{IC}(t_1) + \mathrm{IC}(t_2)}
 $$
 
-- $|A \cap B|$ is the number of fingerprint bits set to 1 in both molecules.
-- $|A \cup B|$ is the number of bits set to 1 in at least one molecule.
+where the *MICA* is the most-informative common ancestor of the two terms and $\mathrm{IC}$ (information content) is higher for rarer, more specific classes. The query and BGC term sets are then combined with a **Best Match Average**: each term takes its best match in the other set, and the score is the mean. Identical chemistry scores **1.0**; sharing only the uninformative root scores **0.0**.
 
-### Plain-language interpretation
-
-The Tanimoto coefficient answers: *"Of all the structural features found in either molecule, what fraction is shared by both?"* Unlike Dice, there is no double-counting of shared features, making Tanimoto slightly more conservative.
+The key consequence: **specific shared classes dominate.** Two BGCs both predicted to make *Macrolides* score far higher than two that merely share *Organic compounds*.
 
 ### Score guide
 
 | Score | Interpretation |
 |-------|---------------|
-| 0.95--1.0 | Near-identical structures. Likely the same compound or a very minor analog (e.g. a single methylation). |
-| 0.85--0.95 | Close analogs. Same core scaffold with different substituents. |
-| 0.70--0.85 | Related scaffolds. Recognisably similar chemical family but meaningful structural differences. |
-| 0.50--0.70 | Loosely related. May share a ring system or functional group but overall different structures. |
-| < 0.50 | Unrelated structures. |
+| 0.7--1.0 | Predicted chemistry coincides closely --- the same specific ChemOnt classes. |
+| 0.5--0.7 (default cut) | The same *kind* of molecule (e.g. matching subclass). |
+| 0.3--0.5 | Broadly related --- a mid-level class in common. |
+| < 0.3 | Loosely related or unrelated chemistry. |
 
 ### Things to keep in mind
 
-- Tanimoto is sensitive to molecule size. A small molecule compared against a much larger one will score lower than expected, because the larger molecule has many "extra" fingerprint bits that the small molecule lacks.
-- Stereochemistry is only partially captured by Morgan fingerprints. Two stereoisomers may have identical or near-identical Tanimoto scores despite having different biological activities.
-- The score reflects the **best-matching product** for each BGC. If a BGC has multiple predicted products, the highest Tanimoto score is reported.
+- This is a **class-level** comparison, not structural identity. BGCs in the same ChemOnt subclass score highly even if exact structures differ --- useful for finding analogous chemistry, but not a measure of being the same molecule.
+- A BGC only participates if it has predicted ChemOnt classes. Clusters with sparse or no chemical predictions (often fragmented metagenomic BGCs) cannot be matched here.
+- The query SMILES is classified by the external ClassyFire service (results are cached by InChIKey); avoid pasting structures that must remain confidential.
 
 ## Combining multiple search methods
 
@@ -149,6 +147,6 @@ You run a domain query (Dice threshold 0.6) and a sequence search (cosine thresh
 
 - [Domain Query Builder](domain-query.qmd) --- uses Sorensen-Dice coefficient
 - [Sequence Search](sequence-search.qmd) --- uses cosine similarity
-- [Chemical Structure Search](chemical-search.qmd) --- uses Tanimoto coefficient
+- [Chemical Structure Search](chemical-search.qmd) --- uses ChemOnt semantic similarity
 - [Reading Search Results](search-results.qmd) --- how scores appear in the results table
 - [Search BGCs Overview](search-overview.qmd) --- the Search interface layout

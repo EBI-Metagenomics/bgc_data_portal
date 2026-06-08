@@ -74,8 +74,8 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     docsUrl: "/docs/similarity-scores.html#architecture-search",
   },
   tanimoto: {
-    text: "Tanimoto coefficient comparing Morgan fingerprints of predicted natural products (0\u20131). Used in chemical structure (SMILES) search.",
-    docsUrl: "/docs/similarity-scores.html#tanimoto",
+    text: "ChemOnt semantic similarity (0\u20131). The query SMILES is classified into ChemOnt chemical-ontology terms (via ClassyFire); each iBGC is scored by how closely its predicted ChemOnt classes match, weighted by class specificity. 1.0 = same chemistry.",
+    docsUrl: "/docs/similarity-scores.html#chemical-search",
   },
   phmmer_bitscore: {
     text: "HMMER bit score for the full target sequence. Higher = more significant. 30 is HMMER's conventional weak-significance cut; \u2265200 indicates a very strong homolog.",

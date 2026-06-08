@@ -3,8 +3,9 @@ import {
   postIbgcDomainQuery,
   postIbgcArchitectureQuery,
   fetchIbgcSequenceQueryStatus,
+  fetchIbgcChemicalQueryStatus,
 } from "@/api/ibgcs";
-import { postSequenceQuery } from "@/api/queries";
+import { postSequenceQuery, postChemicalQuery } from "@/api/queries";
 import { useQueryStore } from "@/stores/query-store";
 import {
   snapshotFiltersToApplied,
@@ -46,6 +47,8 @@ export function useRunIbgcQuery() {
   const sequenceMinBitscore = useQueryStore((s) => s.sequenceMinBitscore);
   const sequenceMinPident = useQueryStore((s) => s.sequenceMinPident);
   const sequenceMinQcov = useQueryStore((s) => s.sequenceMinQcov);
+  const smilesQuery = useQueryStore((s) => s.smilesQuery);
+  const similarityThreshold = useQueryStore((s) => s.similarityThreshold);
 
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
   const setAppliedFilters = useDiscoveryStore((s) => s.setAppliedFilters);
@@ -70,7 +73,12 @@ export function useRunIbgcQuery() {
     const booleanActive =
       domainMode !== "architecture" && domainConditions.length > 0;
 
-    if (!booleanActive && !archActive && !sequenceQuery.trim()) {
+    if (
+      !booleanActive &&
+      !archActive &&
+      !sequenceQuery.trim() &&
+      !smilesQuery.trim()
+    ) {
       // Filters-only run: clear any prior advanced-query allow-list so the
       // roster reflects the new filter snapshot.
       setQueryResult(null, null, null, null, null, null);
@@ -164,6 +172,27 @@ export function useRunIbgcQuery() {
         }
       }
 
+      // ── Chemical branch (ChemOnt via ClassyFire) ──────────────────────
+      if (smilesQuery.trim()) {
+        const accepted = await postChemicalQuery({
+          smiles: smilesQuery,
+          similarity_threshold: similarityThreshold,
+        });
+        // Novel compounds absent from ClassyFire's cache classify slowly, so
+        // reuse the same poll-with-backoff path as sequence search.
+        const chemResp = await pollChemicalTask(
+          accepted.task_id,
+          abortController,
+        );
+        const ids = chemResp.items.map((r) => r.id);
+        idSets.push(new Set(ids));
+        for (const item of chemResp.items) {
+          if (item.similarity_score != null) {
+            similarities[item.id] = item.similarity_score;
+          }
+        }
+      }
+
       // Intersect across active branches; if only one branch ran, that's
       // already the result. (Mirrors legacy intersection semantics.)
       let intersection: number[] = [];
@@ -200,15 +229,18 @@ export function useRunIbgcQuery() {
       // carries the more useful per-iBGC metadata.
       const source:
         | "sequence"
+        | "chemical"
         | "domain"
         | "domain_architecture"
         | null = sequenceQuery.trim()
         ? "sequence"
-        : archActive
-          ? "domain_architecture"
-          : booleanActive
-            ? "domain"
-            : null;
+        : smilesQuery.trim()
+          ? "chemical"
+          : archActive
+            ? "domain_architecture"
+            : booleanActive
+              ? "domain"
+              : null;
       setQueryResult(
         intersection,
         similarities,
@@ -220,7 +252,7 @@ export function useRunIbgcQuery() {
       toast.success(`Query returned ${intersection.length} iBGC(s)`);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        toast.info("Sequence search cancelled");
+        toast.info("Search cancelled");
       } else {
         const err = e as Error;
         setError(err);
@@ -246,14 +278,25 @@ const SEQUENCE_POLL_SLOW_NOTICE_MS = 2 * 60 * 1000;
 const SEQUENCE_POLL_INITIAL_MS = 1000;
 const SEQUENCE_POLL_MAX_MS = 5000;
 
-async function pollSequenceTask(
+type StatusFetcher = (
+  taskId: string,
+) => ReturnType<typeof fetchIbgcSequenceQueryStatus>;
+
+/**
+ * Poll an async iBGC-roster search task with backoff until it's ready.
+ *
+ * The backend returns 503 while the task is PENDING (so the dashboard stays
+ * responsive) and 200 when ready. We back off the poll interval to avoid
+ * hammering the API during multi-minute runs but stay responsive for short
+ * ones — the first hit lands at 1s. Past the slow-notice threshold (~2 min) a
+ * cancellable "still searching" toast lets the user let go.
+ */
+async function pollRosterTask(
   taskId: string,
   abortController: AbortController,
+  fetchStatus: StatusFetcher,
+  messages: { slow: string; timeout: string },
 ) {
-  // The backend returns 503 while the task is PENDING (so the
-  // dashboard stays responsive) and 200 when ready. We back off the
-  // poll interval to avoid hammering the API during multi-minute runs
-  // but stay responsive for short ones — the first hit lands at 1s.
   const start = Date.now();
   let waitMs = SEQUENCE_POLL_INITIAL_MS;
   let slowNoticeShown = false;
@@ -269,10 +312,10 @@ async function pollSequenceTask(
   while (Date.now() - start < SEQUENCE_POLL_HARD_CAP_MS) {
     if (abortController.signal.aborted) {
       dismissSlowToast();
-      throw new DOMException("Sequence search cancelled", "AbortError");
+      throw new DOMException("Search cancelled", "AbortError");
     }
     try {
-      const result = await fetchIbgcSequenceQueryStatus(taskId);
+      const result = await fetchStatus(taskId);
       dismissSlowToast();
       return result;
     } catch (e) {
@@ -282,16 +325,13 @@ async function pollSequenceTask(
           Date.now() - start > SEQUENCE_POLL_SLOW_NOTICE_MS
         ) {
           slowNoticeShown = true;
-          slowToastId = toast.message(
-            "Still searching… large protein queries can take several minutes. Keep this tab open.",
-            {
-              duration: Infinity,
-              action: {
-                label: "Cancel",
-                onClick: () => abortController.abort(),
-              },
+          slowToastId = toast.message(messages.slow, {
+            duration: Infinity,
+            action: {
+              label: "Cancel",
+              onClick: () => abortController.abort(),
             },
-          );
+          });
         }
         await new Promise((r) => setTimeout(r, waitMs));
         waitMs = Math.min(SEQUENCE_POLL_MAX_MS, Math.round(waitMs * 1.5));
@@ -302,7 +342,21 @@ async function pollSequenceTask(
     }
   }
   dismissSlowToast();
-  throw new Error(
-    "Sequence search exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
-  );
+  throw new Error(messages.timeout);
+}
+
+function pollSequenceTask(taskId: string, abortController: AbortController) {
+  return pollRosterTask(taskId, abortController, fetchIbgcSequenceQueryStatus, {
+    slow: "Still searching… large protein queries can take several minutes. Keep this tab open.",
+    timeout:
+      "Sequence search exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
+  });
+}
+
+function pollChemicalTask(taskId: string, abortController: AbortController) {
+  return pollRosterTask(taskId, abortController, fetchIbgcChemicalQueryStatus, {
+    slow: "Still classifying… novel structures can take a minute to classify in ClassyFire. Keep this tab open.",
+    timeout:
+      "Chemical search exceeded the 1-hour result lifetime — retry, or check that ClassyFire is reachable.",
+  });
 }

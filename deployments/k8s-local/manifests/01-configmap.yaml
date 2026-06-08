@@ -11,3 +11,6 @@ data:
   MATOMO_URL: ""
   MATOMO_SITE_ID: ""
   NUMBA_CACHE_DIR: /tmp/numba_cache
+  # ClassyFire: query-side SMILES → ChemOnt classification for chemical search.
+  # Defaults to the public service; override to a mirror if needed.
+  CLASSYFIRE_URL: "http://classyfire.wishartlab.com"

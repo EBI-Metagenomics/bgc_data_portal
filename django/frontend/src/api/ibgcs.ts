@@ -139,6 +139,17 @@ export function fetchIbgcSequenceQueryStatus(
   );
 }
 
+/** Poll a chemical (ChemOnt/ClassyFire) search task → iBGC roster. */
+export function fetchIbgcChemicalQueryStatus(
+  taskId: string,
+  params: IbgcSequenceStatusParams = {},
+) {
+  return apiGet<PaginatedIbgcRosterResponse>(
+    `/query/chemical/status/${taskId}/`,
+    params as Record<string, string | number | boolean | undefined>,
+  );
+}
+
 export function fetchIbgcDetail(ibgcId: number, assetToken?: string | null) {
   // Negative ids belong to ephemeral asset uploads — the backend resolves
   // them through the ``X-Asset-Token`` header so the URL path stays clean.

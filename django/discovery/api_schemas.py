@@ -589,6 +589,10 @@ class SequenceQueryAccepted(Schema):
     task_id: str
 
 
+class ChemicalQueryAccepted(Schema):
+    task_id: str
+
+
 class QueryResultAssemblyAggregation(Schema):
     assembly_id: int
     accession: str
