@@ -113,6 +113,50 @@ def test_region_endpoint_attributes_tools_per_cds(client, seeded_ibgc):
     assert any("antiSMASH" in cds["claimed_by_tools"] for cds in d["cds_list"])
 
 
+def test_asset_region_endpoint_serves_negative_id_from_cache():
+    """Uploaded-asset iBGCs use negative ids and live in the Redis asset
+    cache, not the DB. The region endpoint must branch on ``ibgc_id < 0``
+    and read the cached payload via the ``X-Asset-Token`` header — without it
+    the genes/CDS plot stays blank (the bug this guards)."""
+    from discovery.services.asset_upload import cache as asset_cache
+
+    token = "tok_region_test"
+    neg_id = -1
+    asset_cache.write_region(
+        token,
+        neg_id,
+        {
+            "region_length": 4000,
+            "window_start": 0,
+            "window_end": 4000,
+            "cds_list": [
+                {
+                    "protein_id": "ASSET_CDS_1",
+                    "start": 100,
+                    "end": 400,
+                    "strand": 1,
+                    "protein_length": 100,
+                }
+            ],
+            "domain_list": [],
+            "cluster_list": [],
+        },
+    )
+
+    c = Client()
+    # Without the token → 404 (can't resolve an asset iBGC from the DB).
+    assert c.get(f"/api/discovery/ibgcs/{neg_id}/region/").status_code == 404
+
+    resp = c.get(
+        f"/api/discovery/ibgcs/{neg_id}/region/",
+        HTTP_X_ASSET_TOKEN=token,
+    )
+    assert resp.status_code == 200, resp.content
+    d = resp.json()
+    assert d["ibgc_id"] == neg_id
+    assert [cds["protein_id"] for cds in d["cds_list"]] == ["ASSET_CDS_1"]
+
+
 @pytest.mark.django_db
 def test_filter_detectors_endpoint(client, seeded_ibgc):
     # Previously 500: Count("bgcs") — the reverse relation is source_bgcs.

@@ -91,18 +91,28 @@ def inspect_tarball(raw: bytes) -> ValidatedTarball:
                     f"Tarball has more than {MAX_TARBALL_ENTRIES} entries"
                 )
 
+            # Tarballs built the natural ``tar czf x.tar.gz .`` way carry a
+            # leading ``.`` directory entry (and ``./`` on every file). Skip
+            # benign directory members; only regular files carry data.
+            if member.isdir():
+                continue
             if not member.isfile():
                 raise AssetValidationError(
                     f"Unsupported member type for {member.name!r} — only regular files are allowed"
                 )
 
             name = member.name
-            if name.startswith(("/", "./")) or ".." in name.split("/") or "\\" in name:
+            # Strip a single leading ``./`` (the ``tar czf … .`` idiom) before
+            # the safety checks so ``./bgcs.tsv`` is treated as root-level.
+            basename = name[2:] if name.startswith("./") else name
+            if (
+                basename.startswith("/")
+                or ".." in basename.split("/")
+                or "\\" in basename
+            ):
                 raise AssetValidationError(
                     f"Refusing unsafe member path: {name!r}"
                 )
-            # Allow ``./bgcs.tsv`` etc. but only after stripping any leading dot-slash.
-            basename = name.lstrip("./")
             if "/" in basename:
                 raise AssetValidationError(
                     f"Members must sit at the tarball root; got nested path {name!r}"

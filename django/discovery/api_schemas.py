@@ -399,13 +399,17 @@ class ReportIbgcRow(Schema):
     cbgc_accession: Optional[str] = None
     label: str
     classification_path: str = ""
+    bgc_class: str = ""
     size_kb: float = 0.0
+    start: Optional[int] = None
+    end: Optional[int] = None
     novelty_score: Optional[float] = None
     domain_novelty: Optional[float] = None
     n_source_bgcs: int = 0
     source_tools: list[str] = []
     is_partial: bool = False
     is_validated: bool = False
+    is_type_strain: bool = False
     parent_assembly_accession: Optional[str] = None
     parent_assembly_id: Optional[int] = None
     organism_name: Optional[str] = None

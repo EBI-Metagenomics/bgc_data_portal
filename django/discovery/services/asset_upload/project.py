@@ -146,25 +146,36 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
 
         # Build rows shaped like the persistent path expects, using array
         # indices as transient bgc_ids so we can map back to the source rows.
+        # Row format mirrors integrated._build_ibgcs_for_contig:
+        # (sbgc_id, cbgc_id, start, end, tool, is_partial, is_validated, contig_accession).
+        # The helper ignores cbgc_id and contig_accession, so we pass placeholders.
         id_to_bgc: dict[int, AssetBgc] = {i: b for i, b in enumerate(bgcs)}
         rows = [
             (
                 i,
+                0,  # cbgc_id — unused by the helper
                 b.start_position,
                 b.end_position,
                 detector_tool.get(b.detector_name, ""),
                 b.is_partial,
                 b.is_validated,
+                contig.accession or "",  # contig_accession — unused by the helper
             )
             for i, b in id_to_bgc.items()
         ]
-        ibgc_tuples, _absorbed, _validated_standalones = _build_ibgcs_for_contig(
-            contig_id=0,  # unused
-            rows=rows,
-        )
+        ibgc_tuples, _absorbed, _validated_standalones = _build_ibgcs_for_contig(rows)
 
-        for interval_start, interval_end, source_tools, member_ids in ibgc_tuples:
-            members = [id_to_bgc[i] for i in member_ids]
+        for (
+            interval_start,
+            interval_end,
+            source_tools,
+            member_ids,
+            absorbed_ids,
+        ) in ibgc_tuples:
+            # Absorbed antiSMASH predictions share the iBGC FK in the
+            # persistent path, so fold them in as members here too — their
+            # CDS / domains / NPs belong to this virtual iBGC.
+            members = [id_to_bgc[i] for i in (*member_ids, *absorbed_ids)]
             cds_rows: list[AssetCds] = []
             dom_rows: list[AssetDomain] = []
             np_rows: list[AssetNaturalProduct] = []

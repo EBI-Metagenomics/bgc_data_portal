@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronLeft, ChevronRight, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -217,9 +216,8 @@ export function IbgcRosterTable() {
 
   return (
     <div className="flex h-full flex-col" data-testid="ibgc-roster">
-      <ScrollArea className="flex-1">
-        <Table>
-          <TableHeader className="sticky top-0 bg-card z-10">
+      <Table containerClassName="flex-1 min-h-0">
+        <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
               {COLUMNS.map((col) => {
                 const sortable = (
@@ -234,7 +232,9 @@ export function IbgcRosterTable() {
                   <TableHead
                     key={col.key}
                     className={
-                      sortable ? "cursor-pointer select-none" : undefined
+                      sortable
+                        ? "cursor-pointer select-none whitespace-nowrap"
+                        : "whitespace-nowrap"
                     }
                     onClick={
                       sortable
@@ -298,8 +298,7 @@ export function IbgcRosterTable() {
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </ScrollArea>
+      </Table>
 
       <Pagination
         page={page}

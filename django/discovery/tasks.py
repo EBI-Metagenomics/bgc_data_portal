@@ -111,9 +111,12 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
         )
     ic_values: dict[str, float] = ic_row.data
 
-    # Join CDS ChemOnt → CDS → owning iBGC via contig + range overlap.
-    # iBGCs are disjoint inside a cBGC and cBGCs are disjoint on a contig,
-    # so each CDS overlaps at most one iBGC.
+    # Pool each iBGC's ChemOnt terms from two sources:
+    #   1. CHAMOIS gene-based predictions (CdsChemOnt), attributed via range
+    #      overlap — each CDS contributes to the iBGC whose bgc_range overlaps
+    #      its cds_range on the same contig (iBGCs are disjoint per contig).
+    #   2. Structure-derived classes (IbgcChemOnt) — ClassyFire on a known
+    #      compound's SMILES, attached directly to the iBGC.
     ibgc_terms: dict[int, set[str]] = defaultdict(set)
     with connection.cursor() as cur:
         cur.execute(
@@ -129,6 +132,15 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
         for ibgc_id, cid in cur.fetchall():
             ibgc_terms[ibgc_id].add(cid)
 
+        cur.execute("SELECT ibgc_id, chemont_id FROM discovery_ibgc_chemont")
+        for ibgc_id, cid in cur.fetchall():
+            ibgc_terms[ibgc_id].add(cid)
+
+    # Symmetric BMA (Lin) over the query and each iBGC's pooled ChemOnt terms.
+    # Asymmetric coverage was evaluated and rejected: a fully-characterised
+    # query "explains" almost every cluster's sparse predicted classes, which
+    # collapses ranking (true producer fell to rank ~766/2560 vs #1 here).
+    # ``coverage_similarity`` remains available in common_core for other uses.
     ibgc_similarities: dict[int, float] = {}
     for ibgc_id, np_terms in ibgc_terms.items():
         score = semantic_similarity(query_term_ids, list(np_terms), ic_values, ont)

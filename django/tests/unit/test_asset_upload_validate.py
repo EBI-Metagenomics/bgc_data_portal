@@ -49,6 +49,47 @@ def test_accepts_minimal_valid_tarball():
     assert out.decompressed_bytes == sum(len(v) for v in _minimal_required().values())
 
 
+def test_accepts_dot_slash_prefixed_tarball():
+    """A tarball built the natural ``tar czf x.tar.gz .`` way carries a
+    leading ``.`` directory entry and ``./`` on every file. The benign
+    directory member must be skipped and the ``./``-prefixed files accepted
+    at the tarball root."""
+    members = _minimal_required()
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        # Leading directory entry, exactly as `tar czf … .` emits it.
+        tf.addfile(tarfile.TarInfo(name="."))
+        for name, data in members.items():
+            info = tarfile.TarInfo(name=f"./{name}")
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+    out = inspect_tarball(buf.getvalue())
+    assert set(out.members.keys()) >= {
+        "assemblies.tsv",
+        "contigs.tsv",
+        "detectors.tsv",
+        "bgcs.tsv",
+    }
+
+
+def test_rejects_dot_slash_traversal():
+    """Stripping a single ``./`` must not defang ``./../`` traversal."""
+    members = _minimal_required()
+    members.pop("bgcs.tsv")
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name=name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+        evil = b"x\n"
+        info = tarfile.TarInfo(name="./../bgcs.tsv")
+        info.size = len(evil)
+        tf.addfile(info, io.BytesIO(evil))
+    with pytest.raises(AssetValidationError, match="unsafe member path"):
+        inspect_tarball(buf.getvalue())
+
+
 def test_rejects_non_gzip_input():
     with pytest.raises(AssetValidationError, match="gzip"):
         inspect_tarball(b"not a gzip stream")

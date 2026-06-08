@@ -2156,19 +2156,20 @@ def _get_cached_report(token: str) -> dict:
     return cached
 
 
-@discovery_router.get("/report/{token}/export.assemblies.tsv")
-def report_export_assemblies_tsv(request, token: str):
-    """Download the report's assembly roster as a TSV.
+@discovery_router.get("/report/{token}/export.ibgcs.tsv")
+def report_export_ibgcs_tsv(request, token: str):
+    """Download the report's iBGC results as a TSV (one row per iBGC).
 
-    Reads from the cached snapshot — no extra DB queries within the 24h TTL.
+    Columns mirror the per-iBGC block of the analyst JSON. Reads from the
+    cached snapshot — no extra DB queries within the 24h TTL.
     """
-    from discovery.services.export import build_report_assembly_tsv
+    from discovery.services.export import build_report_ibgc_tsv
 
     cached = _get_cached_report(token)
-    tsv = build_report_assembly_tsv(cached.get("assembly_rows", []))
+    tsv = build_report_ibgc_tsv(cached.get("ibgc_rows", []))
     response = HttpResponse(tsv, content_type="text/tab-separated-values")
     response["Content-Disposition"] = (
-        f'attachment; filename="report_{token}_assemblies.tsv"'
+        f'attachment; filename="report_{token}_ibgcs.tsv"'
     )
     return response
 
@@ -3452,6 +3453,25 @@ def ibgc_region(request, ibgc_id: int):
     interval (``window_start=0``).
     """
     from discovery.models import IntegratedBgc
+
+    if ibgc_id < 0:
+        token = _asset_token_header(request)
+        if not token:
+            raise HttpError(404, "Asset token required for asset iBGC")
+        from discovery.services.asset_upload import cache as asset_cache
+
+        payload = asset_cache.read_region(token, ibgc_id)
+        if payload is None:
+            raise HttpError(404, "Asset iBGC not found or expired")
+        # The cached payload carries only the region fields; the iBGC identity
+        # fields aren't read by the region plot, so synthesise a label.
+        return IbgcRegionOut(
+            ibgc_id=ibgc_id,
+            ibgc_accession=f"iBGC-A{abs(ibgc_id)}",
+            cbgc_accession="",
+            contig_accession=None,
+            **payload,
+        )
 
     try:
         ibgc = IntegratedBgc.objects.select_related("contig", "cbgc").get(id=ibgc_id)

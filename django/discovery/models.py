@@ -1063,6 +1063,45 @@ class IbgcNaturalProduct(models.Model):
         return self.name
 
 
+class IbgcChemOnt(models.Model):
+    """ChemOnt classes assigned to an iBGC from a *characterised structure*.
+
+    Produced by running ClassyFire on an :class:`IbgcNaturalProduct` SMILES
+    (see the ``classify_ibgc_natural_products`` command). This complements the
+    gene-based predictions in :class:`CdsChemOnt` (from CHAMOIS): where a BGC
+    has a known compound, this carries the accurate structure-derived
+    classification. The chemical-similarity search and the ChemOnt IC
+    computation pool both sources per iBGC.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    ibgc = models.ForeignKey(
+        IntegratedBgc,
+        on_delete=models.CASCADE,
+        related_name="structure_chemont",
+    )
+    chemont_id = models.CharField(max_length=30)
+    chemont_name = models.CharField(max_length=255, blank=True, default="")
+    # Provenance: the InChIKey of the SMILES this classification came from.
+    inchikey = models.CharField(max_length=27, blank=True, default="")
+
+    class Meta:
+        db_table = "discovery_ibgc_chemont"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ibgc", "chemont_id"],
+                name="uniq_ibgcchemont_ibgc_cid",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["chemont_id"], name="idx_ibgcchemont_cid"),
+            models.Index(fields=["ibgc"], name="idx_ibgcchemont_ibgc"),
+        ]
+
+    def __str__(self):
+        return f"{self.chemont_id} ({self.chemont_name})"
+
+
 # ── Catalog tables with precomputed counts ───────────────────────────────────
 
 

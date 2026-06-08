@@ -22,38 +22,57 @@ if TYPE_CHECKING:
 FLANKING_WINDOW = 2000
 
 
-def build_report_assembly_tsv(assembly_rows: list[dict]) -> str:
-    """Tab-separated rendering of a Report shortlist's assembly roster.
+def build_report_ibgc_tsv(ibgc_rows: list[dict]) -> str:
+    """Tab-separated rendering of a Report shortlist, one row per iBGC.
 
-    Columns mirror the ``ReportAssemblyRow`` shape (taxonomy_path + phylum,
-    biome, source, BGC counts, iBGCs in shortlist, type-strain flag). One
-    row per assembly. Caller passes the cached payload's ``assembly_rows``.
+    Columns mirror the per-iBGC block of the analyst JSON (``ibgcs``) so the
+    TSV and JSON stay in lock-step: identity + parent assembly, taxonomy,
+    biome, genomic span (start/end/size), novelty scores, GCF, predicted
+    class, source tools, and the completeness/validation flags. Caller passes
+    the cached payload's ``ibgc_rows``.
     """
     buf = StringIO()
     writer = csv.writer(buf, delimiter="\t", lineterminator="\n")
     writer.writerow([
-        "accession",
-        "organism_name",
-        "taxonomy_path",
-        "taxonomy_phylum",
-        "biome_path",
-        "source",
-        "assembly_size_mb",
-        "total_bgcs_in_assembly",
-        "ibgcs_in_shortlist",
+        "ibgc_accession",
+        "assembly",
+        "organism",
+        "phylum",
+        "biome",
+        "contig",
+        "start",
+        "end",
+        "size_kb",
+        "novelty",
+        "domain_novelty",
+        "gcf",
+        "class",
+        "sources",
+        "is_partial",
+        "is_validated",
         "is_type_strain",
     ])
-    for r in assembly_rows:
+    for r in ibgc_rows:
+        novelty = r.get("novelty_score")
+        dom_nov = r.get("domain_novelty")
+        size_kb = r.get("size_kb")
         writer.writerow([
-            r.get("accession", ""),
+            r.get("label") or r.get("accession") or "",
+            r.get("parent_assembly_accession") or "",
             r.get("organism_name") or "",
-            r.get("taxonomy_path") or "",
             r.get("taxonomy_phylum") or "",
             r.get("biome_path") or "",
-            r.get("source_name") or "",
-            "" if r.get("assembly_size_mb") is None else f"{r['assembly_size_mb']:.3f}",
-            r.get("total_bgcs_in_assembly", 0),
-            r.get("ibgcs_in_shortlist", 0),
+            r.get("contig_accession") or "",
+            "" if r.get("start") is None else r.get("start"),
+            "" if r.get("end") is None else r.get("end"),
+            "" if size_kb is None else f"{size_kb:.3f}",
+            "" if novelty is None else f"{novelty:.6f}",
+            "" if dom_nov is None else f"{dom_nov:.6f}",
+            r.get("classification_path") or "",
+            r.get("bgc_class") or "",
+            ", ".join(r.get("source_tools") or []),
+            "true" if r.get("is_partial") else "false",
+            "true" if r.get("is_validated") else "false",
             "true" if r.get("is_type_strain") else "false",
         ])
     return buf.getvalue()

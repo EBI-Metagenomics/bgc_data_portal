@@ -151,7 +151,10 @@ def build_report_payload(
             "cbgc_accession": ibgc.cbgc.accession if ibgc.cbgc_id else None,
             "label": ibgc.accession,
             "classification_path": ibgc.gene_cluster_family or "",
+            "bgc_class": ibgc.bgc_class or "",
             "size_kb": round(ibgc.size_kb, 3),
+            "start": ibgc.start_position,
+            "end": ibgc.end_position,
             "novelty_score": ibgc.novelty_score,
             "domain_novelty": ibgc.domain_novelty,
             "n_source_bgcs": len(mems),
@@ -505,6 +508,13 @@ def build_report_payload(
     biome_sunburst = build_sunburst_from_paths(biome_paths)
 
     if extra_ibgc_rows:
+        # Asset roster rows may predate the start/end/class columns; backfill
+        # the keys so every iBGC row (DB + asset) has a uniform shape for the
+        # table, TSV, and analyst JSON.
+        for r in extra_ibgc_rows:
+            r.setdefault("bgc_class", "")
+            r.setdefault("start", None)
+            r.setdefault("end", None)
         ibgc_rows = list(extra_ibgc_rows) + ibgc_rows
 
     return {
@@ -531,11 +541,26 @@ def build_report_payload(
     }
 
 
-ANALYST_SCHEMA_VERSION = "1"
+# v2: added domain_composition tiers, domain_goslim_matrix, gcf/biome
+# sunbursts, assembly_stats, and start/end/class on each iBGC row.
+ANALYST_SCHEMA_VERSION = "2"
 
 
 def build_report_analyst_export(token: str, payload: dict) -> dict:
-    """Reshape a cached Report payload into an analyst-friendly JSON."""
+    """Reshape a cached Report payload into an analyst-friendly JSON.
+
+    The export carries two aggregation levels so a consumer can both
+    reproduce every summary plot/table and inspect the individual iBGCs:
+
+      * **Per-iBGC** — ``ibgcs`` (one row per iBGC, full column set incl.
+        start/end/class/contig), ``assemblies``, and ``domains_long`` (the
+        tidy per-iBGC × domain table).
+      * **Summary stats** — every panel's underlying data: the BGC-class,
+        completeness, length, predictor and source distributions, GCF
+        distribution + sunburst, score distributions, taxonomy & biome
+        sunbursts, the domain-composition tiers (core/variable/rare with
+        fractions), the GO-slim × tier matrix, and assembly stats.
+    """
     return {
         "metadata": {
             "schema_version": ANALYST_SCHEMA_VERSION,
@@ -545,17 +570,33 @@ def build_report_analyst_export(token: str, payload: dict) -> dict:
             "n_ibgcs": payload.get("n_ibgcs", 0),
             "n_assemblies": payload.get("n_assemblies", 0),
         },
+        # ── Per-iBGC detail ──────────────────────────────────────────────
         "ibgcs": payload.get("ibgc_rows", []),
         "assemblies": payload.get("assembly_rows", []),
         "domains_long": payload.get("_domains_long", []),
+        # ── Summary stats (one entry per report plot/table) ──────────────
         "bgc_class_counts": payload.get("bgc_class_pie", []),
         "completeness_counts": payload.get("completeness_bar", []),
         "length_histogram": payload.get("length_histogram", []),
         "predictor_distribution": payload.get("predictor_distribution", []),
         "source_distribution": payload.get("source_distribution", []),
         "gcf_distribution": payload.get("gcf_distribution", []),
+        "gcf_sunburst": payload.get("gcf_sunburst", []),
         "score_distributions": payload.get("score_distributions", []),
         "taxonomy_sunburst": payload.get("taxonomy_sunburst", []),
+        "biome_sunburst": payload.get("biome_sunburst", []),
+        "domain_composition": payload.get(
+            "domain_composition",
+            {
+                "core_count": 0, "variable_count": 0, "rare_count": 0,
+                "total_unique": 0, "rows": [],
+            },
+        ),
+        "domain_goslim_matrix": payload.get(
+            "domain_goslim_matrix",
+            {"categories": [], "tiers": [], "cells": []},
+        ),
+        "assembly_stats": payload.get("assembly_stats", {}),
     }
 
 

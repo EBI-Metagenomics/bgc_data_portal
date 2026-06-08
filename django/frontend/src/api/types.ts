@@ -791,7 +791,10 @@ export interface ReportIbgcRow {
   id: number;
   label: string;
   classification_path: string;
+  bgc_class: string;
   size_kb: number;
+  start: number | null;
+  end: number | null;
   novelty_score: number | null;
   domain_novelty: number | null;
   n_source_bgcs: number;

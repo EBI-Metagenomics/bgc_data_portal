@@ -235,7 +235,7 @@ function ReportHeader({ payload }: { payload: ReportPayload }) {
           </p>
         </div>
         <ReportDownloadButtons
-          token={payload.token}
+          payload={payload}
           label={`${payload.n_ibgcs} iBGCs`}
         />
       </CardHeader>
@@ -265,7 +265,11 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
                 <TableHead className="text-right">Novelty</TableHead>
                 <TableHead className="text-right">Dom. nov.</TableHead>
                 <TableHead>GCF</TableHead>
+                <TableHead>Class</TableHead>
                 <TableHead>Sources</TableHead>
+                <TableHead>Contig</TableHead>
+                <TableHead className="text-right">Start</TableHead>
+                <TableHead className="text-right">End</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -314,8 +318,18 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
                   <TableCell className="font-mono text-xs">
                     {r.classification_path || "—"}
                   </TableCell>
+                  <TableCell className="text-xs">{r.bgc_class || "—"}</TableCell>
                   <TableCell className="text-xs">
                     {r.source_tools.join(", ")}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {r.contig_accession ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right text-xs">
+                    {r.start ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right text-xs">
+                    {r.end ?? "—"}
                   </TableCell>
                 </TableRow>
               ))}

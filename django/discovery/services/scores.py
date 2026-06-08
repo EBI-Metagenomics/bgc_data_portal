@@ -291,13 +291,20 @@ def _compute_chemont_ic() -> None:
     overlaps its ``cds_range`` on the same contig. IC therefore reflects
     how broadly each ChemOnt term is observed across the iBGC corpus.
     """
+    from collections import Counter, defaultdict
+
     from common_core.chemont.ontology import get_ontology
     from common_core.chemont.similarity import compute_ic_values
 
+    # Pool ChemOnt terms per iBGC from both sources the chemical search uses:
+    # CHAMOIS gene-based predictions (CdsChemOnt, via range overlap) and
+    # structure-derived classes (IbgcChemOnt). IC must reflect their union so
+    # term specificity is calibrated against the same corpus the search scores.
+    ibgc_terms: dict[int, set[str]] = defaultdict(set)
     with connection.cursor() as cur:
         cur.execute(
             """
-            SELECT COUNT(DISTINCT i.id)
+            SELECT i.id AS ibgc_id, ch.chemont_id
             FROM discovery_cds_chemont ch
             JOIN discovery_cds c ON c.id = ch.cds_id
             JOIN discovery_ibgc i
@@ -305,24 +312,21 @@ def _compute_chemont_ic() -> None:
              AND i.bgc_range && c.cds_range
             """
         )
-        total_ibgcs = int(cur.fetchone()[0] or 0)
+        for ibgc_id, cid in cur.fetchall():
+            ibgc_terms[ibgc_id].add(cid)
 
-        if total_ibgcs == 0:
-            logger.info("No iBGC ChemOnt annotations — skipping IC computation")
-            return
+        cur.execute("SELECT ibgc_id, chemont_id FROM discovery_ibgc_chemont")
+        for ibgc_id, cid in cur.fetchall():
+            ibgc_terms[ibgc_id].add(cid)
 
-        cur.execute(
-            """
-            SELECT ch.chemont_id, COUNT(DISTINCT i.id) AS cnt
-            FROM discovery_cds_chemont ch
-            JOIN discovery_cds c ON c.id = ch.cds_id
-            JOIN discovery_ibgc i
-              ON i.contig_id = c.contig_id
-             AND i.bgc_range && c.cds_range
-            GROUP BY ch.chemont_id
-            """
-        )
-        term_counts = {row[0]: int(row[1]) for row in cur.fetchall()}
+    total_ibgcs = len(ibgc_terms)
+    if total_ibgcs == 0:
+        logger.info("No iBGC ChemOnt annotations — skipping IC computation")
+        return
+
+    term_counts: dict[str, int] = Counter(
+        cid for terms in ibgc_terms.values() for cid in terms
+    )
 
     if not term_counts:
         logger.info("No ChemOnt annotations — skipping IC computation")
