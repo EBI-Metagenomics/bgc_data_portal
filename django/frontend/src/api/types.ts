@@ -612,6 +612,8 @@ export interface IbgcRosterItem {
   umap_projected: boolean;
   parent_assembly_id: number | null;
   parent_assembly_accession: string | null;
+  /** Collection / data source of the parent assembly (e.g. GTDB, MIBiG). */
+  parent_assembly_collection: string | null;
   organism_name: string | null;
   contig_accession: string | null;
   similarity_score: number | null;

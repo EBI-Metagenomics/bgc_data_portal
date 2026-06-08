@@ -116,16 +116,6 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           <h3 className="font-mono text-sm font-semibold leading-tight">
             {ibgc.accession || ibgc.label}
           </h3>
-          {ibgc.bgc_class && (
-            <Badge variant="secondary" className="text-[10px]">
-              {ibgc.bgc_class}
-            </Badge>
-          )}
-          {ibgc.is_validated && (
-            <Badge variant="default" className="text-[10px]">
-              Validated
-            </Badge>
-          )}
           {ibgc.is_type_strain && (
             <Badge
               className="text-[10px] text-white border-transparent"
@@ -149,6 +139,8 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           naturalProducts={ibgc.natural_products}
           chemontTree={ibgc.chemont_tree}
           parentAssembly={ibgc.parent_assembly}
+          bgcClass={ibgc.bgc_class}
+          isValidated={ibgc.is_validated}
           isPartial={ibgc.is_partial}
           gcfPath={ibgc.classification_path}
           novelty={ibgc.novelty_score}
@@ -210,6 +202,8 @@ interface KpiStripProps {
   naturalProducts: NaturalProductSummary[];
   chemontTree: ChemOntAnnotationNode[];
   parentAssembly: ParentAssemblySummary | null;
+  bgcClass: string;
+  isValidated: boolean;
   isPartial: boolean;
   gcfPath: string;
   novelty: number | null;
@@ -224,6 +218,8 @@ function KpiStrip({
   naturalProducts,
   chemontTree,
   parentAssembly,
+  bgcClass,
+  isValidated,
   isPartial,
   gcfPath,
   novelty,
@@ -258,6 +254,18 @@ function KpiStrip({
             <span className="font-semibold">{parentAcc}</span>
           </span>
         )}
+
+        <span className={CHIP_BASE}>
+          <span className="text-muted-foreground">class</span>
+          <span className="font-semibold">{bgcClass || "—"}</span>
+        </span>
+
+        <span className={CHIP_BASE}>
+          <span className="text-muted-foreground">status</span>
+          <span className="font-semibold">
+            {isValidated ? "validated" : "candidate"}
+          </span>
+        </span>
 
         {/* Completeness: partial iBGCs are incomplete clusters (e.g. at a
             contig edge) projected into the map via nearest neighbours. */}

@@ -378,17 +378,15 @@ def build_report_payload(
         {"name": "Partial", "count": partial_n},
     ]
 
-    # ── BGC class pie ─────────────────────────────────────────────────────
-    # In v2 the class is the top-level segment of the iBGC's
-    # ``gene_cluster_family`` (no per-prediction classification_path field).
+    # ── BGC class distribution ────────────────────────────────────────────
+    # The iBGC class is the normalised product class on ``IntegratedBgc``
+    # (Polyketide / NRP / RiPP / … / Hybrid), not the GCF lineage segment.
     class_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
-        cp = (ibgc.gene_cluster_family or "").strip()
-        head = cp.split(".")[0] if cp else "(unclassified)"
+        head = (ibgc.bgc_class or "").strip() or "(unclassified)"
         class_counts[head] += 1
     for r in extra_ibgc_rows:
-        cp = (r.get("classification_path") or "").strip()
-        head = cp.split(".")[0] if cp else "(unclassified)"
+        head = (r.get("bgc_class") or "").strip() or "(unclassified)"
         class_counts[head] += 1
     bgc_class_pie = sorted(
         [{"name": k, "count": v} for k, v in class_counts.items()],

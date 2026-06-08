@@ -714,18 +714,18 @@ function BgcClassPanel({ rows }: { rows: CategoryCount[] }) {
       <Plot
         data={[
           {
-            type: "pie",
-            labels: rows.map((r) => r.name),
-            values: rows.map((r) => r.count),
-            hole: 0.4,
-            textinfo: "label+percent",
+            type: "bar",
+            x: rows.map((r) => r.name),
+            y: rows.map((r) => r.count),
+            marker: { color: "#6366f1" },
           },
         ]}
         layout={{
           autosize: true,
           height: 240,
-          margin: { l: 16, r: 16, t: 16, b: 16 },
-          showlegend: false,
+          margin: { l: 40, r: 16, t: 8, b: 60 },
+          xaxis: { title: { text: "class" }, tickangle: -30 },
+          yaxis: { title: { text: "iBGCs" } },
         }}
         useResizeHandler
         style={{ width: "100%" }}

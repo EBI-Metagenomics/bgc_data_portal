@@ -786,6 +786,11 @@ def _ibgc_to_roster_item(
         parent_assembly_accession=(
             parent_assembly.assembly_accession if parent_assembly else None
         ),
+        parent_assembly_collection=(
+            getattr(parent_assembly, "source_name", None)
+            if parent_assembly
+            else None
+        ),
         organism_name=parent_assembly.organism_name if parent_assembly else None,
         contig_accession=contig_accession,
         similarity_score=similarity_score,
@@ -838,11 +843,12 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
         rows = (
             SourceBgcPrediction.objects
             .filter(integrated_bgc_id__in=chunk)
-            .select_related("assembly", "contig")
+            .select_related("assembly", "assembly__source", "contig")
             .values(
                 "integrated_bgc_id", "is_validated",
                 "assembly_id", "assembly__assembly_accession",
                 "assembly__organism_name",
+                "assembly__source__name",
                 "assembly__is_type_strain",
                 "contig__accession",
             )
@@ -862,6 +868,7 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
                     "id": r["assembly_id"],
                     "assembly_accession": r["assembly__assembly_accession"],
                     "organism_name": r["assembly__organism_name"],
+                    "source_name": r["assembly__source__name"],
                 })()
             if not f["contig_accession"]:
                 f["contig_accession"] = r["contig__accession"]

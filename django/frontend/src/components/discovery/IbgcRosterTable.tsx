@@ -34,18 +34,22 @@ type SortKey =
 type ColumnKey =
   | SortKey
   | "label"
+  | "bgc_class"
   | "tools"
   | "assembly"
+  | "collection"
   | "similarity"
   | "bitscore"
   | "best_hit";
 
 const BASE_TAIL_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: "bgc_class", label: "Class" },
   { key: "size_kb", label: "Size (kb)" },
   { key: "novelty_score", label: "Novelty" },
   { key: "domain_novelty", label: "Dom. nov." },
   { key: "tools", label: "Sources" },
   { key: "assembly", label: "Assembly" },
+  { key: "collection", label: "Collection" },
 ];
 
 function columnsFor(searchSource: string | null) {
@@ -404,6 +408,7 @@ function IbgcRosterRow({
             {similarity != null ? similarity.toFixed(3) : "—"}
           </TableCell>
         )}
+        <TableCell className="text-xs">{ibgc.bgc_class || "—"}</TableCell>
         <TableCell>{ibgc.size_kb.toFixed(1)}</TableCell>
         <TableCell>{fmtScore(ibgc.novelty_score)}</TableCell>
         <TableCell>{fmtScore(ibgc.domain_novelty)}</TableCell>
@@ -412,6 +417,9 @@ function IbgcRosterRow({
         </TableCell>
         <TableCell className="text-xs">
           {ibgc.parent_assembly_accession ?? "—"}
+        </TableCell>
+        <TableCell className="text-xs text-muted-foreground">
+          {ibgc.parent_assembly_collection ?? "—"}
         </TableCell>
       </TableRow>
     </IbgcContextMenu>

@@ -173,6 +173,7 @@ class IbgcRosterItem(Schema):
     umap_projected: bool = False
     parent_assembly_id: Optional[int] = None
     parent_assembly_accession: Optional[str] = None
+    parent_assembly_collection: Optional[str] = None  # assembly source name
     organism_name: Optional[str] = None
     contig_accession: Optional[str] = None
     similarity_score: Optional[float] = None  # filled by similar-ibgc / query
