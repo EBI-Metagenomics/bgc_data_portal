@@ -663,18 +663,91 @@ def _get_asset_roster_rows(asset_token: Optional[str]) -> list[dict]:
     return list(asset_cache.read_ibgc_list(asset_token) or [])
 
 
+def _ibgc_filters_active(
+    *,
+    include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    np_classes: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    domain_text: Optional[str] = None,
+) -> bool:
+    """True when any chip / slider filter departs from its default.
+
+    Decides whether an active asset should *also* surface filtered DB rows.
+    A bare asset load (no filters) stays asset-only; the moment the user
+    narrows the catalogue we run the DB query and keep the asset pinned on
+    top. Mirrors the filter surface of ``_apply_ibgc_filters``; sort / page /
+    ``asset_token`` / ``ibgc_ids`` are deliberately excluded.
+    """
+    if include_partials is False or validated_only:
+        return True
+    if any(
+        v is not None
+        for v in (
+            min_length_kb,
+            max_length_kb,
+            min_novelty,
+            max_novelty,
+            min_domain_novelty,
+            max_domain_novelty,
+        )
+    ):
+        return True
+    return any(
+        bool(v)
+        for v in (
+            detector_tools,
+            source_tools,
+            source_names,
+            assembly_type,
+            leaf_path_prefix,
+            bgc_class,
+            chemont_ids,
+            np_classes,
+            bgc_accession,
+            assembly_accession,
+            assembly_ids,
+            organism,
+            biome_lineage,
+            taxonomy_path,
+            domain_text,
+        )
+    )
+
+
 def _asset_only_mode(
-    asset_token: Optional[str], parsed_ids: Optional[list[int]]
+    asset_token: Optional[str],
+    parsed_ids: Optional[list[int]],
+    filters_active: bool = False,
 ) -> bool:
     """Return True when the iBGC endpoints should skip the DB queryset.
 
-    An uploaded asset narrows the dashboard to its own iBGCs by default;
-    DB rows only re-enter the response when the caller supplies an explicit
-    ``ibgc_ids`` allow-list (i.e. a Run Query result from one of the
-    sequence/domain/chemical/similar-iBGC search endpoints). Pure chip /
-    slider filters alone are not enough.
+    An uploaded asset narrows the dashboard to *only* its own iBGCs on a bare
+    load. DB rows re-enter the response — with the asset rows still pinned on
+    top — as soon as the caller either:
+      * supplies an explicit ``ibgc_ids`` allow-list (a Run Query result from
+        a sequence/domain/chemical/similar-iBGC search), or
+      * applies any chip / slider filter (``filters_active``).
     """
-    return bool(asset_token) and not parsed_ids
+    return bool(asset_token) and not parsed_ids and not filters_active
 
 
 def _asset_row_to_roster_item(row: dict) -> IbgcRosterItem:
@@ -1117,7 +1190,32 @@ def ibgc_count(
         ] or None
 
     asset_rows = _get_asset_roster_rows(asset_token)
-    if _asset_only_mode(asset_token, parsed_ids):
+    filters_active = _ibgc_filters_active(
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        np_classes=np_classes,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
+    )
+    if _asset_only_mode(asset_token, parsed_ids, filters_active):
         total = len(asset_rows)
     else:
         qs = _apply_ibgc_filters(
@@ -1201,7 +1299,32 @@ def ibgc_roster(
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    asset_only = _asset_only_mode(asset_token, parsed_ids)
+    filters_active = _ibgc_filters_active(
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        np_classes=np_classes,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
+    )
+    asset_only = _asset_only_mode(asset_token, parsed_ids, filters_active)
     if asset_only:
         qs = IntegratedBgc.objects.none()
     else:
@@ -1366,7 +1489,32 @@ def ibgc_ids(
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    asset_only = _asset_only_mode(asset_token, parsed_ids)
+    filters_active = _ibgc_filters_active(
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        np_classes=np_classes,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
+    )
+    asset_only = _asset_only_mode(asset_token, parsed_ids, filters_active)
     if asset_only:
         qs = IntegratedBgc.objects.none()
     else:
@@ -1482,7 +1630,26 @@ def ibgc_umap(
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    if _asset_only_mode(asset_token, parsed_ids):
+    filters_active = _ibgc_filters_active(
+        include_partials=include_partials,
+        validated_only=validated_only,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        np_classes=np_classes,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
+    )
+    if _asset_only_mode(asset_token, parsed_ids, filters_active):
         db_points: list[IbgcUmapPoint] = []
     else:
         qs = (
@@ -1595,7 +1762,26 @@ def ibgc_scatter(
         )
 
     points: list[IbgcScatterPoint] = []
-    if not _asset_only_mode(asset_token, parsed_ids):
+    filters_active = _ibgc_filters_active(
+        include_partials=include_partials,
+        validated_only=validated_only,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        np_classes=np_classes,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+        domain_text=domain_text,
+    )
+    if not _asset_only_mode(asset_token, parsed_ids, filters_active):
         qs = _apply_ibgc_filters(
             IntegratedBgc.objects.all(),
             ibgc_ids=parsed_ids,

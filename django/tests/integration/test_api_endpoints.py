@@ -158,6 +158,45 @@ def test_asset_region_endpoint_serves_negative_id_from_cache():
 
 
 @pytest.mark.django_db
+def test_roster_with_asset_token_and_filter_returns_db_rows_pinned(client, seeded_ibgc):
+    """With an asset loaded, a bare roster is asset-only — but applying a
+    filter must re-engage the DB query while keeping the asset pinned on top.
+
+    Regression: previously any asset token forced ``IntegratedBgc.none()`` and
+    chip/slider filters were silently dropped, so 'Run Query' showed only the
+    asset."""
+    from discovery.services.asset_upload import cache as asset_cache
+
+    token = "tok_roster_filter"
+    asset_cache.write_ibgc_list(token, [{"id": -1, "label": "iBGC-A1"}])
+
+    # Bare load → asset-only: the seeded DB iBGC must NOT appear.
+    bare = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {"page": 1, "page_size": 50, "asset_token": token},
+    )
+    assert bare.status_code == 200, bare.content
+    bare_ids = [it["id"] for it in bare.json()["items"]]
+    assert bare_ids == [-1], bare_ids
+
+    # Filter applied (validated_only matches the seeded iBGC) → DB re-engages,
+    # asset still pinned first.
+    filtered = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {
+            "page": 1,
+            "page_size": 50,
+            "asset_token": token,
+            "validated_only": "true",
+        },
+    )
+    assert filtered.status_code == 200, filtered.content
+    ids = [it["id"] for it in filtered.json()["items"]]
+    assert ids[0] == -1, f"asset must stay pinned on top: {ids}"
+    assert seeded_ibgc.id in ids, f"filtered DB iBGC missing: {ids}"
+
+
+@pytest.mark.django_db
 def test_filter_detectors_endpoint(client, seeded_ibgc):
     # Previously 500: Count("bgcs") — the reverse relation is source_bgcs.
     resp = client.get("/api/discovery/filters/detectors/", {"page": 1, "page_size": 20})
