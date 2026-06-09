@@ -40,6 +40,13 @@ from django.http import HttpResponse
 from ninja import Router
 from ninja.errors import HttpError
 
+from discovery.security import first_party_gate
+from discovery.throttling import (
+    default_throttle,
+    search_throttle,
+    upload_throttle,
+)
+
 from discovery.models import (
     AssemblySource,
     ContigDomain,
@@ -120,7 +127,7 @@ from discovery.api_schemas import (
 
 logger = logging.getLogger(__name__)
 
-discovery_router = Router(tags=["Discovery Platform"])
+discovery_router = Router(tags=["Discovery Platform"], throttle=default_throttle)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -456,7 +463,12 @@ def assembly_detail(request, assembly_id: int):
     )
 
 
-@discovery_router.get("/assembly-scatter/", response=list[AssemblyScatterPoint])
+@discovery_router.get(
+    "/assembly-scatter/",
+    response=list[AssemblyScatterPoint],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def assembly_scatter(
     request,
     x_axis: str = "bgc_diversity_score",
@@ -1340,7 +1352,12 @@ def ibgc_count(
     )
 
 
-@discovery_router.get("/ibgcs/roster/", response=PaginatedIbgcRosterResponse)
+@discovery_router.get(
+    "/ibgcs/roster/",
+    response=PaginatedIbgcRosterResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def ibgc_roster(
     request,
     sort_by: str = "novelty_score",
@@ -1688,7 +1705,12 @@ def ibgc_ids(
     )
 
 
-@discovery_router.get("/ibgcs/umap/", response=list[IbgcUmapPoint])
+@discovery_router.get(
+    "/ibgcs/umap/",
+    response=list[IbgcUmapPoint],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def ibgc_umap(
     request,
     include_partials: bool = True,
@@ -1810,7 +1832,12 @@ def ibgc_umap(
     return asset_points + db_points
 
 
-@discovery_router.get("/ibgcs/scatter/", response=list[IbgcScatterPoint])
+@discovery_router.get(
+    "/ibgcs/scatter/",
+    response=list[IbgcScatterPoint],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def ibgc_scatter(
     request,
     x_axis: str = "novelty_score",
@@ -2153,6 +2180,9 @@ def ibgc_architecture_endpoint(request, ibgc_id: int):
 
 @discovery_router.post(
     "/query/similar-ibgc/", response=PaginatedIbgcRosterResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+    throttle=search_throttle,
 )
 def similar_ibgc_query(
     request,
@@ -2244,6 +2274,8 @@ def similar_ibgc_query(
 
 @discovery_router.post(
     "/query/ibgc-architecture/", response=PaginatedIbgcRosterResponse,
+    auth=first_party_gate,
+    throttle=search_throttle,
 )
 def ibgc_architecture_query(
     request,
@@ -2329,7 +2361,12 @@ def ibgc_architecture_query(
 # ── Shortlist Report endpoints ───────────────────────────────────────────────
 
 
-@discovery_router.post("/report/snapshot/", response=ReportSnapshotResponse)
+@discovery_router.post(
+    "/report/snapshot/",
+    response=ReportSnapshotResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def report_snapshot(request, body: ReportSnapshotRequest):
     """Materialise a shortlist Report payload and cache it in Redis by token.
 
@@ -2415,7 +2452,12 @@ def report_snapshot(request, body: ReportSnapshotRequest):
     )
 
 
-@discovery_router.get("/report/{token}/", response=ReportPayload)
+@discovery_router.get(
+    "/report/{token}/",
+    response=ReportPayload,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def report_get(request, token: str):
     """Return the cached Report payload for ``token``; 404 if expired."""
     from django.core.cache import cache
@@ -2441,7 +2483,11 @@ def _get_cached_report(token: str) -> dict:
     return cached
 
 
-@discovery_router.get("/report/{token}/export.ibgcs.tsv")
+@discovery_router.get(
+    "/report/{token}/export.ibgcs.tsv",
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def report_export_ibgcs_tsv(request, token: str):
     """Download the report's iBGC results as a TSV (one row per iBGC).
 
@@ -2459,7 +2505,11 @@ def report_export_ibgcs_tsv(request, token: str):
     return response
 
 
-@discovery_router.get("/report/{token}/export.json")
+@discovery_router.get(
+    "/report/{token}/export.json",
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def report_export_json(request, token: str):
     """Download the report as an analyst-friendly tidy JSON.
 
@@ -2480,7 +2530,11 @@ def report_export_json(request, token: str):
     return response
 
 
-@discovery_router.get("/report/{token}/export.gbk.zip")
+@discovery_router.get(
+    "/report/{token}/export.gbk.zip",
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def report_export_gbk_zip(request, token: str):
     """Download a zip of GBK files (one per source BGC) for the shortlist.
 
@@ -2627,6 +2681,7 @@ def _ibgc_roster_page_response(
 
 @discovery_router.post(
     "/query/ibgc-domain/", response=PaginatedIbgcRosterResponse, tags=["Query"],
+    throttle=search_throttle,
 )
 def ibgc_domain_query(
     request,
@@ -2887,6 +2942,9 @@ def ibgc_sequence_query_status(
     "/query/chemical/",
     response={202: ChemicalQueryAccepted},
     tags=["Query"],
+    include_in_schema=False,
+    auth=first_party_gate,
+    throttle=search_throttle,
 )
 def chemical_query(request, body: ChemicalQueryRequest):
     """Dispatch a ChemOnt chemical-similarity search for a SMILES query.
@@ -2923,6 +2981,8 @@ def chemical_query(request, body: ChemicalQueryRequest):
     "/query/chemical/status/{task_id}/",
     response=PaginatedIbgcRosterResponse,
     tags=["Query"],
+    include_in_schema=False,
+    auth=first_party_gate,
 )
 def chemical_query_status(
     request,
@@ -3033,6 +3093,9 @@ def chemical_query_status(
     "/query/sequence/",
     response={202: SequenceQueryAccepted},
     tags=["Query"],
+    include_in_schema=False,
+    auth=first_party_gate,
+    throttle=search_throttle,
 )
 def sequence_query(request, body: SequenceQueryRequest):
     lines = body.sequence.strip().splitlines()
@@ -3139,7 +3202,12 @@ def query_results_assembly_aggregation(
 # ── Filter endpoints ─────────────────────────────────────────────────────────
 
 
-@discovery_router.get("/filters/taxonomy/", response=list[TaxonomyNode])
+@discovery_router.get(
+    "/filters/taxonomy/",
+    response=list[TaxonomyNode],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def taxonomy_tree(request):
     from discovery.models import DashboardContig
 
@@ -3178,7 +3246,12 @@ def taxonomy_tree(request):
     return _build_nodes(tree)
 
 
-@discovery_router.get("/filters/bgc-classes/", response=list[BgcClassOption])
+@discovery_router.get(
+    "/filters/bgc-classes/",
+    response=list[BgcClassOption],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def bgc_classes(request):
     return [
         BgcClassOption(name=row.name, count=row.bgc_count)
@@ -3186,7 +3259,12 @@ def bgc_classes(request):
     ]
 
 
-@discovery_router.get("/filters/np-classes/", response=list[NpClassLevel])
+@discovery_router.get(
+    "/filters/np-classes/",
+    response=list[NpClassLevel],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def np_classes(request):
     paths = (
         IbgcNaturalProduct.objects
@@ -3230,7 +3308,12 @@ def np_classes(request):
     return _build(tree)
 
 
-@discovery_router.get("/filters/chemont-classes/", response=list[ChemOntClassNode])
+@discovery_router.get(
+    "/filters/chemont-classes/",
+    response=list[ChemOntClassNode],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def chemont_classes(request):
     """Return a hierarchical tree of ChemOnt classes with BGC counts.
 
@@ -3328,7 +3411,12 @@ def chemont_classes(request):
     )
 
 
-@discovery_router.get("/filters/domains/", response=PaginatedDomainResponse)
+@discovery_router.get(
+    "/filters/domains/",
+    response=PaginatedDomainResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def domain_list(
     request,
     search: Optional[str] = None,
@@ -3363,7 +3451,12 @@ def domain_list(
     )
 
 
-@discovery_router.get("/filters/gcfs/", response=PaginatedGcfResponse)
+@discovery_router.get(
+    "/filters/gcfs/",
+    response=PaginatedGcfResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def gcf_list(
     request,
     search: Optional[str] = None,
@@ -3415,7 +3508,12 @@ def gcf_list(
     )
 
 
-@discovery_router.get("/filters/sources/", response=PaginatedSourceResponse)
+@discovery_router.get(
+    "/filters/sources/",
+    response=PaginatedSourceResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def source_list(
     request,
     search: Optional[str] = None,
@@ -3439,7 +3537,12 @@ def source_list(
     )
 
 
-@discovery_router.get("/filters/detectors/", response=PaginatedDetectorResponse)
+@discovery_router.get(
+    "/filters/detectors/",
+    response=PaginatedDetectorResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def detector_list(
     request,
     search: Optional[str] = None,
@@ -3469,7 +3572,12 @@ def detector_list(
 # ── Stats endpoints ──────────────────────────────────────────────────────────
 
 
-@discovery_router.get("/stats/assemblies/", response=AssemblyStatsResponse)
+@discovery_router.get(
+    "/stats/assemblies/",
+    response=AssemblyStatsResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def assembly_stats(
     request,
     search: Optional[str] = None,
@@ -3498,7 +3606,11 @@ def assembly_stats(
     return compute_assembly_stats(qs)
 
 
-@discovery_router.get("/stats/assemblies/export/")
+@discovery_router.get(
+    "/stats/assemblies/export/",
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def export_assembly_stats(
     request,
     format: str = "json",
@@ -3562,7 +3674,11 @@ def _stats_to_tsv_response(stats: dict, filename: str) -> HttpResponse:
 # ── Export endpoints ─────────────────────────────────────────────────────────
 
 
-@discovery_router.post("/shortlist/assembly/export/")
+@discovery_router.post(
+    "/shortlist/assembly/export/",
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def export_assembly_shortlist(request, body: ShortlistExportRequest):
     if not body.ids:
         raise HttpError(400, "No assembly IDs provided")
@@ -3598,7 +3714,11 @@ def export_assembly_shortlist(request, body: ShortlistExportRequest):
     return response
 
 
-@discovery_router.post("/shortlist/bgc/export/")
+@discovery_router.post(
+    "/shortlist/bgc/export/",
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def export_bgc_shortlist(request, body: ShortlistExportRequest):
     """Export BGC shortlist as a multi-record GenBank file."""
     if not body.ids:
@@ -3622,7 +3742,12 @@ def export_bgc_shortlist(request, body: ShortlistExportRequest):
 # ── Platform overview ─────────────────────────────────────────────────────────
 
 
-@discovery_router.get("/stats/", response=DiscoveryStatsResponse)
+@discovery_router.get(
+    "/stats/",
+    response=DiscoveryStatsResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def discovery_stats(request):
     """Latest Discovery Platform overview counts for the Run Query card."""
     latest = DiscoveryStats.objects.order_by("-created_at").first()
@@ -3648,6 +3773,9 @@ _ASSET_MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 @discovery_router.post(
     "/assets/upload/",
     response={202: AssetUploadAccepted},
+    include_in_schema=False,
+    auth=first_party_gate,
+    throttle=upload_throttle,
 )
 def asset_upload(request):
     """Upload an ephemeral tarball of BGC TSVs (``Ga…_assembly_upload.tar.gz``).
@@ -3698,6 +3826,8 @@ def asset_upload(request):
 
 @discovery_router.get(
     "/assets/{token}/status/", response=AssetStatusResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
 )
 def asset_status(request, token: str):
     """Return the current state of the asset projection.
@@ -3713,7 +3843,12 @@ def asset_status(request, token: str):
     return AssetStatusResponse(**payload)
 
 
-@discovery_router.delete("/assets/{token}/", response={204: None})
+@discovery_router.delete(
+    "/assets/{token}/",
+    response={204: None},
+    include_in_schema=False,
+    auth=first_party_gate,
+)
 def asset_evict(request, token: str):
     """Drop every Redis key tied to this asset token (user X-click on chip)."""
     from discovery.services.asset_upload import cache as asset_cache

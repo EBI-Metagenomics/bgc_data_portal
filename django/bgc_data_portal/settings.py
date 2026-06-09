@@ -41,6 +41,32 @@ CORS_TRUSTED_ORIGINS = [
     x.strip() for x in os.getenv("CORS_TRUSTED_ORIGINS", "").split(",") if x.strip()
 ]
 
+# First-party API gate (see discovery/security.py). When enabled, UI-only and
+# abuse-prone Discovery endpoints accept only same-origin browser traffic
+# (the SPA), rejecting external programmatic callers with 403. The curated
+# public API stays open. Disabled automatically in the test suite.
+API_FIRST_PARTY_GATE_ENABLED = (
+    os.getenv("API_FIRST_PARTY_GATE_ENABLED", "true").lower() == "true"
+)
+
+# Per-client-IP rate limiting (see discovery/throttling.py). Rates are
+# "<count>/<period>" with period one of s|m|h|d; tune per deployment via env
+# without code changes. Counters live in the Redis cache (shared across
+# workers/pods). Disabled automatically in the test suite.
+API_THROTTLE_ENABLED = os.getenv("API_THROTTLE_ENABLED", "true").lower() == "true"
+API_THROTTLE_RATES = {
+    "default": os.getenv("API_THROTTLE_DEFAULT", "300/m"),
+    "search": os.getenv("API_THROTTLE_SEARCH", "30/m"),
+    "upload": os.getenv("API_THROTTLE_UPLOAD", "20/h"),
+}
+# Number of trusted reverse proxies in front of Django (e.g. k8s ingress, LB).
+# Lets the throttle read the real client IP from X-Forwarded-For instead of a
+# spoofable left-most value. Leave unset in local dev (no proxy); set to the
+# proxy count in prod. Consumed by Django-Ninja's throttle ident resolver.
+_ninja_num_proxies = os.getenv("NINJA_NUM_PROXIES")
+if _ninja_num_proxies:
+    NINJA_NUM_PROXIES = int(_ninja_num_proxies)
+
 # Allow overriding the externally mounted base path (used for URL reversing, static paths, etc.)
 # Default remains the production prefix to keep existing behaviour, but can be overridden in dev.
 FORCE_SCRIPT_NAME = os.getenv("DJANGO_FORCE_SCRIPT_NAME", "")
