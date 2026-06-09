@@ -1,5 +1,5 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
-        dev dev-full dev-clean dev-preflight deploy-local delete-local deploy-dev deploy-prod \
+        dev dev-full dev-clean dev-preflight deploy-local delete-local \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
         seed-real-data reset-db e2e-seed \
@@ -90,12 +90,9 @@ deploy-local: create-local-secrets
 delete-local:
 	skaffold delete -p local
 
-# ── Remote deploy (requires KUBE_CONTEXT env var) ─────────────────────────────
-deploy-dev:
-	skaffold run -p dev --kube-context $(KUBE_CONTEXT)
-
-deploy-prod:
-	skaffold run -p prod --kube-context $(KUBE_CONTEXT)
+# ── Cloud deploy ──────────────────────────────────────────────────────────────
+# Cloud dev/prod deploys moved to the private mgnify-bgcs-deployer repo (Helm):
+#   cd ../mgnify-bgcs-deployer && make deploy-dev|deploy-prod KUBE_CONTEXT=<ctx>
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 # pytest config (DJANGO_SETTINGS_MODULE, pythonpath) lives in the repo-root

@@ -1,8 +1,9 @@
 apiVersion: skaffold/v4beta11
 kind: Config
 
-# Build is shared by every profile; each profile owns its own `deploy` (so the
-# local Helm release never leaks into a cloud `skaffold run`, and vice-versa).
+# Local dev only. Cloud deploys (dev/prod) live in the private
+# mgnify-bgcs-deployer repo (Helm chart + per-env values: `make deploy-dev` /
+# `make deploy-prod` there) — they are NOT driven from this skaffold.yaml.
 build:
   artifacts:
     - image: bgc-data-portal-django
@@ -127,96 +128,3 @@ profiles:
               - deployments/chart/values-workspace.yaml
             namespace: bgc-local
             createNamespace: true
-
-  # ── dev / prod (cloud) ───────────────────────────────────────────────────────
-  # DEPRECATED here: cloud deploys now live in the private mgnify-bgcs-deployer
-  # repo (Helm chart + per-env values: `make deploy-dev` / `make deploy-prod`
-  # there). These profiles still deploy the legacy hand-written manifests and are
-  # kept only until the cutover is confirmed; do not add new config here.
-  - name: dev
-    build:
-      artifacts:
-        - image: quay.io/microbiome-informatics/bgc_dp_web_site
-          context: django
-          docker:
-            dockerfile: Dockerfile.dev
-          platforms:
-            - linux/amd64
-          sync:
-            manual:
-              - src: "**/*.py"
-                dest: /app
-              - src: "**/*.html"
-                dest: /app
-              - src: "**/*.css"
-                dest: /app
-              - src: "**/*.js"
-                dest: /app
-        - image: quay.io/microbiome-informatics/bgc_dp_web_site_worker
-          context: django
-          docker:
-            dockerfile: Dockerfile.worker.dev
-          platforms:
-            - linux/amd64
-          sync:
-            manual:
-              - src: "**/*.py"
-                dest: /app
-              - src: "**/*.html"
-                dest: /app
-              - src: "**/*.css"
-                dest: /app
-              - src: "**/*.js"
-                dest: /app
-      local:
-        push: true
-    manifests:
-      rawYaml:
-        - deployments/k8s-dev/ebi-wp-k8s-hl.yaml
-    deploy:
-      kubectl:
-        defaultNamespace: bgc-data-portal-hl-exp
-        hooks:
-          before:
-            - host:
-                command:
-                  - sh
-                  - -c
-                  - |
-                    kubectl --context "$SKAFFOLD_KUBE_CONTEXT" -n bgc-data-portal-hl-exp \
-                      delete job bgc-integration-tests bgc-e2e-tests --ignore-not-found
-                os: [darwin, linux]
-
-  - name: prod
-    build:
-      artifacts:
-        - image: quay.io/microbiome-informatics/bgc_dp_web_site
-          context: django
-          docker:
-            dockerfile: Dockerfile
-          platforms:
-            - linux/amd64
-        - image: quay.io/microbiome-informatics/bgc_dp_web_site_worker
-          context: django
-          docker:
-            dockerfile: Dockerfile.worker
-          platforms:
-            - linux/amd64
-      local:
-        push: true
-    manifests:
-      rawYaml:
-        - deployments/k8s-prod/ebi-wp-k8s-hl.yaml
-    deploy:
-      kubectl:
-        defaultNamespace: bgc-data-portal-hl-prod
-        hooks:
-          before:
-            - host:
-                command:
-                  - sh
-                  - -c
-                  - |
-                    kubectl --context "$SKAFFOLD_KUBE_CONTEXT" -n bgc-data-portal-hl-prod \
-                      delete job bgc-integration-tests bgc-e2e-tests --ignore-not-found
-                os: [darwin, linux]

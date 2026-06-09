@@ -158,29 +158,16 @@ Content is authored with Quarto under `docs/` and `django/docs/`. The compiled s
 
 ## Deployment notes (Kubernetes)
 
-Reference manifests:
-- Dev: `deployments/k8s-dev/ebi-wp-k8s-hl.yaml`
-- Prod: `deployments/k8s-prod/ebi-wp-k8s-hl.yaml`
+All deployments render from **one Helm chart** (`deployments/chart/`) — the
+single source of truth for the topology (proxy `ConfigMap`, `bgc-data-portal-secret`,
+PostgreSQL/pgvector StatefulSet, Redis, RabbitMQ, Django, Celery, static NGINX,
+ingress, PVCs):
 
-Key components defined in the manifests:
+- **laptop / self-host & dev loop** — `values-laptop.yaml` (k3d + Skaffold; `make dev`)
+- **cloud dev/prod** — values + deploy automation live in the private
+  `mgnify-bgcs-deployer` repo (`make deploy-dev` / `make deploy-prod` there)
 
-- Proxy `ConfigMap` (proxies, `ALLOWED_HOSTS`, optional CSRF/CORS, Matomo in prod)
-- Secret `bgc-data-portal-secret` with application env (DB, broker, cache, tokens)
-- PostgreSQL (StatefulSet) with `pgvector` and persistent volume claim
-- Redis (Deployment + Service)
-- RabbitMQ (Deployment + Service)
-- Django web app (Deployment + Service)
-	- Dev runs `runserver`; Prod runs `gunicorn`
-	- Prod sets `DJANGO_FORCE_SCRIPT_NAME=/finn-srv/mgnify-bgcs` for hosting under a path prefix
-	- PVCs for static files and data packages; optional HuggingFace cache
-- Celery worker (Deployment)
-- Static NGINX (serves `/static/*` with correct MIME types)
-
-Operational tips:
-- Ensure `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` match the public host
-- Set `DJANGO_DEBUG=False` in production
-- Run `collectstatic` as part of the image build (already in `django/Dockerfile`) or via a Job, and ensure the static PVC is mounted where NGINX expects it
-- Database readiness/liveness probes are present; adjust resources and PVC sizes as needed
+Runbook: `../../docs/runbooks/services/bgc_data_portal/deployment-helm.md`.
 
 ## API quick start
 
