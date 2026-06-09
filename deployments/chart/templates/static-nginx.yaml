@@ -1,0 +1,53 @@
+{{- if .Values.staticNginx.enabled }}
+{{- $ns := include "bgc.namespace" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bgc-data-portal-static
+  namespace: {{ $ns }}
+  labels:
+    app: bgc-data-portal-static
+spec:
+  replicas: {{ .Values.staticNginx.replicas }}
+  selector:
+    matchLabels:
+      app: bgc-data-portal-static
+  template:
+    metadata:
+      labels:
+        app: bgc-data-portal-static
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: nginx
+          image: {{ .Values.staticNginx.image }}
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: static-volume
+              mountPath: /usr/share/nginx/html
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+      volumes:
+        - name: static-volume
+          persistentVolumeClaim:
+            claimName: {{ .Values.staticNginx.staticClaimName }}
+        - name: nginx-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bgc-data-portal-static
+  namespace: {{ $ns }}
+spec:
+  selector:
+    app: bgc-data-portal-static
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+{{- end }}

@@ -1,0 +1,94 @@
+{{- if .Values.django.enabled }}
+{{- $ns := include "bgc.namespace" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bgc-data-portal-django
+  namespace: {{ $ns }}
+  labels:
+    app: bgc-data-portal-django
+spec:
+  replicas: {{ .Values.django.replicas }}
+  selector:
+    matchLabels:
+      app: bgc-data-portal-django
+  template:
+    metadata:
+      labels:
+        app: bgc-data-portal-django
+    spec:
+      {{- with .Values.django.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.django.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.django.initContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: django
+          {{- with .Values.django.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: {{ .Values.django.image }}
+          {{- with .Values.django.imagePullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
+          {{- with .Values.django.workingDir }}
+          workingDir: {{ . }}
+          {{- end }}
+          command:
+            {{- toYaml .Values.django.command | nindent 12 }}
+          {{- with .Values.django.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          envFrom:
+            {{- if .Values.django.includeSecret }}
+            - secretRef:
+                name: {{ .Values.secretName }}
+            {{- end }}
+            {{- if and .Values.config.enabled .Values.django.includeConfig }}
+            - configMapRef:
+                name: {{ .Values.config.name }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+          {{- with .Values.django.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.django.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bgc-data-portal-django
+  namespace: {{ $ns }}
+  labels:
+    app: bgc-data-portal-django
+spec:
+  type: {{ .Values.django.service.type }}
+  selector:
+    app: bgc-data-portal-django
+  ports:
+    - name: http
+      port: {{ .Values.django.service.port }}
+      targetPort: {{ .Values.django.service.targetPort }}
+      {{- if .Values.django.service.nodePort }}
+      nodePort: {{ .Values.django.service.nodePort }}
+      {{- end }}
+{{- end }}

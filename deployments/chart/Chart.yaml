@@ -1,0 +1,16 @@
+apiVersion: v2
+name: bgc-data-portal
+description: >-
+  BGC Data Portal — Django web app, Celery worker, and their backing services
+  (PostgreSQL/pgvector, Redis, RabbitMQ). One chart, rendered for three targets:
+  laptop/self-host (chart defaults), cloud-dev and cloud-prod (values supplied by
+  the private mgnify-bgcs-deployer repo).
+type: application
+# Chart version tracks the deployment topology, not the app. The application
+# version is the container image tag, set per-target in values.
+version: 0.1.0
+appVersion: "latest"
+kubeVersion: ">=1.25.0-0"
+maintainers:
+  - name: MGnify / Microbiome Informatics
+    url: https://github.com/EBI-Metagenomics
