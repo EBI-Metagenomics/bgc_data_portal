@@ -61,9 +61,17 @@ DISK_RECLAIMABLE_WARN_GB := 10
 
 # Sums GB-scale reclaimable across Images / Containers / Volumes / Build Cache.
 # Sub-GB rows are ignored (they're not what fills a 100 GB Colima VM).
+# Skaffold's Helm deployer shells out to `helm` but is NOT yet compatible with
+# Helm v4's post-renderer change (skaffold#9871) — it needs Helm v3. Resolve a
+# v3 binary for the dev loop without disturbing the global helm: prefer the
+# keg-only `helm@3`, else rely on a `helm` that is already v3 on PATH.
+HELM3_DIR := $(shell brew --prefix helm@3 2>/dev/null)/bin
+
 dev-preflight:
 	@command -v k3d  >/dev/null 2>&1 || { echo "ERROR: k3d not found — the dev loop runs on k3d. Install: brew install k3d"; exit 1; }
-	@command -v helm >/dev/null 2>&1 || { echo "ERROR: helm not found — Skaffold's Helm deployer shells out to it. Install: brew install helm"; exit 1; }
+	@if [ -x "$$(brew --prefix helm@3 2>/dev/null)/bin/helm" ]; then :; \
+	 elif command -v helm >/dev/null 2>&1 && helm version --short 2>/dev/null | grep -q '^v3'; then :; \
+	 else echo "ERROR: Skaffold needs Helm v3 (host helm is v4 or missing — skaffold#9871). Install: brew install helm@3"; exit 1; fi
 	@reclaim=$$(docker system df --format '{{.Reclaimable}}' 2>/dev/null \
 	  | grep -oE '[0-9]+(\.[0-9]+)?GB' | sed 's/GB//' \
 	  | awk '{s+=$$1} END {printf "%.0f", s+0}'); \
@@ -76,19 +84,19 @@ dev-preflight:
 	fi
 
 dev: dev-preflight create-local-secrets
-	skaffold dev -p local --cleanup=false
+	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local --cleanup=false
 
 dev-full: dev-preflight create-local-secrets
-	skaffold dev -p local-full --cleanup=false
+	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local-full --cleanup=false
 
 dev-clean:
-	skaffold delete -p local
+	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local
 
 deploy-local: create-local-secrets
-	skaffold run -p local
+	PATH="$(HELM3_DIR):$$PATH" skaffold run -p local
 
 delete-local:
-	skaffold delete -p local
+	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local
 
 # ── Cloud deploy ──────────────────────────────────────────────────────────────
 # Cloud dev/prod deploys moved to the private mgnify-bgcs-deployer repo (Helm):
