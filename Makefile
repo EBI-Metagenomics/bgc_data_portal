@@ -26,12 +26,21 @@ validate-secrets:
 	@echo "Secrets OK"
 
 # ── Cluster lifecycle ──────────────────────────────────────────────────────────
+# Pin the local kube context everywhere. A same-named KIND cluster
+# (kind-bgc-local) may linger from before the k3d migration; relying on the
+# *current* context risks deploying into (or, for reset-db, DROPing) the wrong
+# one. The deploy path below targets $(KCTX) explicitly.
+KCTX := k3d-bgc-local
+
 cluster-create:
 	k3d cluster create bgc-local
-	# Pin the namespace onto the context so `kubectl --context k3d-bgc-local`
-	# (and the runbooks' `--context "$${KUBE_CONTEXT}"` commands) target bgc-local
-	# instead of the empty `default` ns — matching how the remote contexts behave.
-	kubectl config set-context k3d-bgc-local --namespace=bgc-local
+	# k3d cannot merge into a multi-file KUBECONFIG, which leaves k3d-bgc-local a
+	# credential-less stub (deploys then silently hit whatever context is current).
+	# Merge the cluster's creds into the first KUBECONFIG entry (or ~/.kube/config),
+	# switch to it, and pin the namespace onto the context.
+	KUBECONFIG="$(firstword $(subst :, ,$(KUBECONFIG)) $(HOME)/.kube/config)" \
+	  k3d kubeconfig merge bgc-local --kubeconfig-merge-default --kubeconfig-switch-context
+	kubectl config set-context $(KCTX) --namespace=bgc-local
 
 cluster-delete:
 	k3d cluster delete bgc-local
@@ -41,17 +50,17 @@ cluster-delete:
 # a fast-retry of `make dev` after a previous teardown hits:
 #   "namespace bgc-local … is forbidden … is being terminated"
 create-local-namespace:
-	@if kubectl get ns bgc-local -o jsonpath='{.status.phase}' 2>/dev/null | grep -q Terminating; then \
+	@if kubectl --context $(KCTX) get ns bgc-local -o jsonpath='{.status.phase}' 2>/dev/null | grep -q Terminating; then \
 	  echo "Namespace bgc-local is Terminating; waiting up to 120s for cleanup..."; \
-	  kubectl wait --for=delete ns/bgc-local --timeout=120s || \
+	  kubectl --context $(KCTX) wait --for=delete ns/bgc-local --timeout=120s || \
 	    (echo "ERROR: bgc-local stuck Terminating. Inspect: kubectl get ns bgc-local -o yaml" && exit 1); \
 	fi
-	kubectl create namespace bgc-local --dry-run=client -o yaml | kubectl apply -f -
+	kubectl --context $(KCTX) create namespace bgc-local --dry-run=client -o yaml | kubectl --context $(KCTX) apply -f -
 
 create-local-secrets: validate-secrets create-local-namespace
-	kubectl create secret generic bgc-data-portal-secret \
+	kubectl --context $(KCTX) create secret generic bgc-data-portal-secret \
 	  --from-env-file=$(ENV_FILE) -n bgc-local \
-	  --dry-run=client -o yaml | kubectl apply -f -
+	  --dry-run=client -o yaml | kubectl --context $(KCTX) apply -f -
 
 # ── Local dev loop ────────────────────────────────────────────────────────────
 # Reclaimable threshold (GB) above which dev-preflight nags about running tidy.
@@ -84,19 +93,19 @@ dev-preflight:
 	fi
 
 dev: dev-preflight create-local-secrets
-	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local --cleanup=false
+	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local --kube-context $(KCTX) --cleanup=false
 
 dev-full: dev-preflight create-local-secrets
-	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local-full --cleanup=false
+	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local-full --kube-context $(KCTX) --cleanup=false
 
 dev-clean:
-	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local
+	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local --kube-context $(KCTX)
 
 deploy-local: create-local-secrets
-	PATH="$(HELM3_DIR):$$PATH" skaffold run -p local
+	PATH="$(HELM3_DIR):$$PATH" skaffold run -p local --kube-context $(KCTX)
 
 delete-local:
-	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local
+	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local --kube-context $(KCTX)
 
 # ── Cloud deploy ──────────────────────────────────────────────────────────────
 # Cloud dev/prod deploys moved to the private mgnify-bgcs-deployer repo (Helm):
