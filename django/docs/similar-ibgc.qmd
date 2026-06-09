@@ -1,0 +1,29 @@
+---
+title: "Find Similar iBGCs"
+subtitle: "Expand your search around a cluster you like"
+---
+
+**Find similar iBGCs** takes one iBGC and finds the clusters across the catalogue that are most like it. It is the fastest way to go from a single good candidate to its relatives — and to check whether that candidate sits in a crowded family or stands alone.
+
+## Running it
+
+Right-click any iBGC — in the [roster](bgc-roster.qmd), on a [map](umap.qmd), or in a [detail panel](ibgc-detail.qmd) — and choose **Find similar iBGCs**. Unlike the sequence and chemical searches, it runs immediately; you do not press Run Query.
+
+The results replace the current result set, ranked by similarity to the cluster you picked. The roster sorts by that similarity and its similarity column shows the score; on the [Variables map](variables-map.qmd) you can plot **Query similarity** on an axis.
+
+## What "similar" means here
+
+Similarity is measured from **shared protein domains and how they are arranged**, the same composite measure the platform uses for clustering and novelty — not from raw sequence. Two clusters rank as similar when they draw on the same domains in similar combinations, even if their sequences have diverged. (For a sequence-level search instead, use [Sequence Search](sequence-search.qmd).)
+
+## How to use it
+
+- **From a catalogue hit:** find one promising cluster, then find-similar to pull up its neighbours and judge how novel the family is. Many close hits → a populated family; few or none → an isolated, more novel cluster.
+- **From your own data:** [load your assembly](load-asset.qmd), set one of your submitted iBGCs as the reference, and find-similar to retrieve the catalogue clusters most like it — a direct way to ask "what is my cluster closest to?"
+- **Iteratively:** set a hit as the new reference and find-similar again to walk through a region of cluster space.
+
+## Related pages
+
+- [Search Overview](search-overview.qmd)
+- [Sequence Search](sequence-search.qmd) — the sequence-level alternative
+- [Gene Cluster Families](gcf-explained.qmd) · [Scores & Metrics](scores-metrics.qmd)
+- [Load Asset](load-asset.qmd)

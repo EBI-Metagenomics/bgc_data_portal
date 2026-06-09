@@ -6,8 +6,8 @@ execute:
   freeze: auto
 
 website:
-  title: "BGC Discovery Platform"
-  description: "Guides, tutorials, and reference for the MGnify BGC Discovery Platform."
+  title: "MGnify BGCs Discovery Platform"
+  description: "Guide and reference for the MGnify BGC Discovery Platform."
   page-navigation: true
   reader-mode: true
 
@@ -15,124 +15,108 @@ website:
     background: "#18974c"
     foreground: "#ffffff"
     left:
-      - text: "Getting Started"
+      - text: "Platform Overview"
         href: index.qmd
-      - text: "Explore"
-        href: explore-overview.qmd
-      - text: "Search"
-        href: search-overview.qmd
-      - text: "Evaluate"
-        href: evaluate-overview.qmd
-      - text: "Reference"
-        href: scores-metrics.qmd
-      - text: "Tutorials"
-        href: tutorials-index.qmd
+      - text: "Key Concepts"
+        href: key-concepts.qmd
+      - text: "Quickstart"
+        href: quickstart.qmd
+      - text: "Walkthrough"
+        href: walkthrough.qmd
     right:
-      - text: "Launch Platform"
-        href: /dashboard/
-        icon: rocket
+      - text: "Visit MGnify BGCs"
+        href: ../
       - icon: github
-        href: https://github.com/EBI-Metagenomics/mgnify-bgcs-v2
+        href: https://github.com/EBI-Metagenomics/bgc_data_portal
 
   sidebar:
-    - title: "Getting Started"
+    - id: docs
       style: docked
       search: true
+      collapse-level: 1
       contents:
-        - text: "Platform Overview"
-          href: index.qmd
-        - text: "Key Concepts"
-          href: key-concepts.qmd
-        - text: "Quickstart"
-          href: quickstart.qmd
-
-    - title: "Explore Assemblies"
-      contents:
-        - text: "Overview"
-          href: explore-overview.qmd
-        - text: "Assembly Scores"
-          href: assembly-scores.qmd
-        - text: "Filtering"
-          href: filtering.qmd
-        - text: "Assembly Space Map"
-          href: assembly-space-map.qmd
-        - text: "BGC Triad"
-          href: bgc-triad.qmd
-        - text: "BGC Detail"
-          href: bgc-detail.qmd
-        - text: "Shortlists"
-          href: shortlists.qmd
-
-    - title: "Search BGCs"
-      contents:
-        - text: "Overview"
-          href: search-overview.qmd
-        - text: "Domain Query"
-          href: domain-query.qmd
-        - text: "Sequence Search"
-          href: sequence-search.qmd
-        - text: "Chemical Search"
-          href: chemical-search.qmd
-        - text: "Similarity Scores"
-          href: similarity-scores.qmd
-        - text: "Search Results"
-          href: search-results.qmd
-        - text: "Cross-Mode Transitions"
-          href: cross-mode.qmd
-
-    - title: "Evaluate Asset"
-      contents:
-        - text: "Overview"
-          href: evaluate-overview.qmd
-        - text: "DB Assembly"
-          href: evaluate-db-assembly.qmd
-        - text: "DB BGC"
-          href: evaluate-db-bgc.qmd
-        - text: "Upload Assembly"
-          href: upload-assembly.qmd
-        - text: "Upload BGC"
-          href: upload-bgc.qmd
-        - text: "Assembly Report"
-          href: assembly-report.qmd
-        - text: "BGC Report"
-          href: bgc-report.qmd
-        - text: "Cross-Mode Evaluate"
-          href: cross-mode-evaluate.qmd
-
-    - title: "Reference"
-      contents:
-        - text: "Scores & Metrics"
-          href: scores-metrics.qmd
-        - text: "BGC Classes"
-          href: bgc-classes.qmd
-        - text: "ChemOnt"
-          href: chemont.qmd
-        - text: "Biome Ontology"
-          href: biome-ontology.qmd
-        - text: "GCF Explained"
-          href: gcf-explained.qmd
-        - text: "MIBiG Validated"
-          href: mibig-validated.qmd
-        - text: "Export Formats"
-          href: export-formats.qmd
-        - text: "Glossary"
-          href: glossary.qmd
-
-    - title: "Tutorials"
-      contents:
-        - text: "Tutorials"
-          href: tutorials-index.qmd
-
-    - title: "About"
-      contents:
-        - text: "About"
-          href: about.qmd
+        - section: "Getting Started"
+          contents:
+            - text: "Platform Overview"
+              href: index.qmd
+            - text: "Key Concepts"
+              href: key-concepts.qmd
+            - text: "Quickstart"
+              href: quickstart.qmd
+            - text: "Walkthrough"
+              href: walkthrough.qmd
+        - section: "The Discovery Platform"
+          contents:
+            - text: "Discovery Platform Overview"
+              href: dashboard-overview.qmd
+            - text: "BGC Roster"
+              href: bgc-roster.qmd
+            - text: "Variables Map"
+              href: variables-map.qmd
+            - text: "UMAP"
+              href: umap.qmd
+            - text: "iBGC Detail"
+              href: ibgc-detail.qmd
+            - text: "Protein Panel"
+              href: protein-panel.qmd
+            - text: "Filtering"
+              href: filtering.qmd
+            - text: "Accessions Field"
+              href: accessions.qmd
+            - text: "Load Asset"
+              href: load-asset.qmd
+        - section: "Searching"
+          contents:
+            - text: "Search Overview"
+              href: search-overview.qmd
+            - text: "Domain Search"
+              href: domain-query.qmd
+            - text: "Sequence Search"
+              href: sequence-search.qmd
+            - text: "Chemical Search"
+              href: chemical-search.qmd
+            - text: "Find Similar iBGCs"
+              href: similar-ibgc.qmd
+        - section: "Shortlist & Report"
+          contents:
+            - text: "Shortlists"
+              href: shortlists.qmd
+            - text: "The Report"
+              href: report.qmd
+            - text: "Export Formats"
+              href: export-formats.qmd
+        - section: "The Data"
+          contents:
+            - text: "How the Data Is Built"
+              href: how-data-is-built.qmd
+            - text: "What's in the Catalogue"
+              href: datasets.qmd
+        - section: "Reference"
+          contents:
+            - text: "Scores & Metrics"
+              href: scores-metrics.qmd
+            - text: "BGC Classes"
+              href: bgc-classes.qmd
+            - text: "Gene Cluster Families"
+              href: gcf-explained.qmd
+            - text: "ChemOnt"
+              href: chemont.qmd
+            - text: "Biome Ontology"
+              href: biome-ontology.qmd
+            - text: "MIBiG & Validated BGCs"
+              href: mibig-validated.qmd
+            - text: "Glossary"
+              href: glossary.qmd
+        - section: "About"
+          contents:
+            - text: "About"
+              href: about.qmd
 
   page-footer:
     left: "© 2026 EMBL-EBI"
     right:
       - icon: github
-        href: https://github.com/EBI-Metagenomics/mgnify-bgcs-v2
+        href: https://github.com/EBI-Metagenomics/bgc_data_portal
 
 format:
   html:

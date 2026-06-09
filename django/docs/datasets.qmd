@@ -1,0 +1,60 @@
+---
+title: "What's in the Catalogue"
+subtitle: "The data sources behind the platform (marine focus)"
+---
+
+The catalogue is assembled from several public data sources, each run through the [annotation pipeline](how-data-is-built.qmd) and loaded as a named **collection**. The collection name appears as the **Source** filter and the **Collection** column in the [roster](bgc-roster.qmd), so you can always tell where a candidate came from and restrict a query to a particular source.
+
+This page describes the sources currently emphasised: **marine** datasets, plus the two reference sets that underpin scoring and taxonomy across the whole catalogue.
+
+## Marine data sources
+
+### MGnify Marine Genome Catalogue
+
+High-quality, dereplicated **metagenome-assembled genomes (MAGs)** from marine environments, drawn from the MGnify genome catalogues. These are species-representative genomes — one per species cluster — so the collection is broad across marine prokaryotic diversity without redundancy. Genomes arrive with precomputed gene calls and domain annotations; the BGC detectors are run on top. Taxonomy is aligned to GTDB, and each genome links back to its MGnify genome page.
+
+### MGnify Marine Sediment Genome Catalogue
+
+Dereplicated MAGs specifically from **marine sediment** environments — a habitat rich in under-explored lineages and biosynthetic potential. As with the marine catalogue, these are species representatives with precomputed annotations and GTDB-aligned taxonomy.
+
+### MGnify Marine Eukaryotes Genome Catalogue (beta)
+
+Dereplicated **eukaryotic** marine genomes (species representatives), annotated with eukaryote-aware gene callers. This is a beta collection: the BGC detectors were developed for prokaryotes, so detections in eukaryotic genomes should be treated with extra caution — verify candidates carefully against their domain architecture.
+
+### MGnify Marine & Estuary Assemblies (v5)
+
+Raw **metagenome assemblies** from marine and estuarine studies, processed in metagenome mode. Unlike the MAG catalogues, these are whole-community assemblies, so clusters may be more fragmented — the **partial** flag and contig context matter here.
+
+### BacDive Marine Type Strains
+
+**Cultured isolate genomes** of bacterial **type strains** isolated from marine sources (ocean, seawater, sediment, reef, estuary, hydrothermal, and similar habitats), sourced via the DSMZ BacDive resource and linked NCBI genome assemblies. Every assembly in this collection is a **type strain**, flagged accordingly — which makes it the place to look when you need a *culturable* reference: the strain is available from a culture collection, with a catalogue link, so a promising cluster can be followed up in the lab.
+
+## Reference sets (catalogue-wide)
+
+These are not marine-specific, but they anchor the scoring and taxonomy you see everywhere.
+
+### MIBiG — validated BGCs
+
+[MIBiG](mibig-validated.qmd) is the curated repository of **experimentally validated** BGCs with known products. Its entries are loaded as **validated** iBGCs and serve as the reference set that **novelty** is measured against: an iBGC's novelty is its distance from the nearest validated cluster. Validated iBGCs also carry curated compound names and structures. Without MIBiG there would be no yardstick for "new".
+
+### GTDB representative genomes
+
+[GTDB](https://gtdb.ecogenomic.org/) representative genomes are high-quality isolate assemblies chosen to represent bacterial and archaeal diversity. They broaden the catalogue's coverage of cultured organisms and provide the standardised **taxonomy** used to label and filter assemblies across all collections.
+
+## How sources are labelled
+
+Every assembly carries, and you can filter on:
+
+- **Source / collection** — which dataset it came from (the names above).
+- **Assembly type** — genome, metagenome, or region.
+- **Type strain** — whether a culturable reference strain exists (notably the BacDive collection).
+- **Biome** — the environment, via the [GOLD biome ontology](biome-ontology.qmd) (e.g. *Marine*, *Marine sediment*).
+- **Taxonomy** — GTDB/NCBI lineage.
+
+More sources are added over time; the **Source** filter in the discovery platform always lists what is currently loaded, and the database badges in the top strip show current totals.
+
+## Related pages
+
+- [How the Data Is Built](how-data-is-built.qmd)
+- [MIBiG & Validated BGCs](mibig-validated.qmd) · [Biome Ontology](biome-ontology.qmd)
+- [Filtering](filtering.qmd)

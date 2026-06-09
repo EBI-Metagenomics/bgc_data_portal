@@ -1,41 +1,34 @@
 ---
-title: "Chemical Ontology (ChemOnt)"
-subtitle: "Understanding predicted chemical product classifications"
+title: "ChemOnt"
+subtitle: "The predicted chemistry of a cluster's product"
 ---
 
-## Goal
-
-To explain how the BGC Discovery Platform uses Chemical Ontology (ChemOnt) annotations to describe the predicted chemical products of biosynthetic gene clusters (BGCs), and how this classification complements the enzyme-based [BGC class](bgc-classes.qmd) system.
-
-## When to use this reference
-
-Consult this page when:
-
-- You see a ChemOnt term (such as "Macrolides and analogues" or "Benzene and substituted derivatives") in the platform and want to know what it represents.
-- You want to filter BGCs by the type of molecule they are predicted to produce, rather than by the type of enzyme they use.
-- You are comparing a BGC's class assignment with its ChemOnt annotation and the two seem contradictory.
+**ChemOnt** is the ontology the platform uses to describe what kind of molecule a cluster is predicted to make. It complements the [BGC class](bgc-classes.qmd): the class describes the enzymatic machinery; ChemOnt describes the product.
 
 ## What ChemOnt is
 
-ChemOnt (Chemical Ontology) is a hierarchical classification system for chemical compounds, developed as part of the ClassyFire project. It organises molecules into categories based on their structural features --- the rings, functional groups, and carbon frameworks that define a compound's chemical identity.
+ChemOnt (Chemical Ontology) is a hierarchical classification of chemical compounds from the ClassyFire project. It organises molecules by structural features — rings, functional groups, carbon frameworks. The full ontology contains roughly **4,825 terms**; the platform uses the subset relevant to microbial natural products.
 
-The BGC Discovery Platform uses ChemOnt to annotate each BGC with a prediction of what kind of molecule its gene cluster is likely to produce. These predictions come from machine learning models that examine the BGC's domain architecture and compare it against BGCs with known products.
+The platform's chemical predictions come from **CHAMOIS**, which assigns ChemOnt classes to a cluster's proteins. These per-protein predictions are aggregated up to the whole cluster (see below).
 
-## Key properties of ChemOnt annotations
+## How ChemOnt appears
 
-### Term format
+### On an iBGC
 
-Each ChemOnt term has a unique identifier in the format `CHEMONTID:XXXXXXX` (seven digits). In the platform interface, the human-readable name is displayed rather than the identifier, but you can see the full identifier by hovering over any ChemOnt label.
+The [iBGC detail](ibgc-detail.qmd) panel's "compound features" chip lists the cluster's predicted ChemOnt classes, aggregated across its genes and shown as a small tree. Each node shows the number of contributing genes and a confidence percentage. (For validated clusters, curated compound names appear alongside.)
 
-### Probability scores
+### On a gene
 
-Each ChemOnt annotation carries a **probability score** between 0 and 1. This score reflects the model's confidence that the BGC produces a compound belonging to that ChemOnt category. A score of 0.9 means the model is highly confident; a score of 0.3 means the prediction is uncertain.
+The [protein panel](protein-panel.qmd) shows the ChemOnt class predicted for an individual protein, with its probability and weight — the per-gene predictions that roll up into the cluster's overall chemistry.
 
-The platform displays probability scores as coloured bars or numbers next to each ChemOnt term. High-confidence predictions (above 0.7) are shown in bold; low-confidence predictions (below 0.3) are shown in grey italics.
+## Term format and confidence
 
-### Hierarchical structure
+- **Identifier:** each term has a `CHEMONTID:XXXXXXX` identifier; the human-readable name is shown, with the identifier on hover.
+- **Probability:** each prediction carries a confidence between 0 and 1 — how sure the model is that the cluster makes a compound of that class.
 
-ChemOnt is organised as a tree, from broad categories at the top to specific structural classes at the bottom. For example:
+## Hierarchical structure
+
+ChemOnt is a tree, broad at the top and specific at the bottom:
 
 ```
 Organic compounds
@@ -45,55 +38,34 @@ Organic compounds
         Sesquiterpene lactones
 ```
 
-A BGC can be annotated at multiple levels of the hierarchy. In general, broader categories receive higher confidence scores (it is easier to predict that a BGC makes "a lipid" than to predict that it makes "a sesquiterpene lactone specifically").
-
-### Ontology size
-
-The full ChemOnt ontology contains approximately **4,825 terms**. Not all of them are relevant to microbial natural products. The platform uses a curated subset of terms that appear in the MIBiG database or have been predicted for BGCs in the catalogue.
+A cluster can be annotated at several levels. Broader categories are generally predicted with higher confidence than specific ones (predicting "a lipid" is easier than "a sesquiterpene lactone").
 
 ## How ChemOnt differs from BGC class
 
-This distinction is fundamental and worth emphasising:
-
-| Property | BGC Class | ChemOnt |
-|----------|-----------|---------|
-| **What it describes** | The enzymatic machinery (the assembly line) | The chemical product (what comes off the line) |
-| **Basis** | Protein domains detected in the gene cluster | Predicted molecular structure of the product |
+| | BGC class | ChemOnt |
+|---|-----------|---------|
+| **Describes** | The enzymatic machinery | The chemical product |
+| **Based on** | Protein domains in the cluster | Predicted product structure (CHAMOIS) |
 | **Example** | Polyketide | Macrolides and analogues |
-| **Determined by** | Domain signature matching | Machine learning model |
 
-A single BGC class can produce many different ChemOnt categories. For example, Polyketide BGCs can produce macrolides, aromatic polyketides, enediynes, or linear polyketides --- each a different ChemOnt category. Conversely, molecules in the same ChemOnt category can sometimes be produced by different BGC classes (though this is less common).
+One BGC class can map to many ChemOnt categories — Polyketide clusters can make macrolides, aromatics, or linear polyketides, each a different ChemOnt class.
 
-### Practical example
+## Novel clusters and missing predictions
 
-Consider a BGC classified as `Polyketide.Macrolide` (BGC class) with a ChemOnt annotation of `Macrolides and analogues` (probability 0.85). The BGC class tells you the gene cluster uses a modular polyketide synthase that terminates with a cyclising thioesterase. The ChemOnt annotation tells you the predicted product is a large-ring lactone. In this case, the two classifications align --- but they measure different things and can diverge for unusual BGCs.
+Highly novel clusters often have weak or absent ChemOnt predictions: the model was trained on characterised clusters and struggles to predict products for clusters unlike anything it has seen. A missing or low-confidence prediction on a high-novelty cluster is expected — and is itself informative, reinforcing that the product is unlike known chemistry.
 
-## Novel BGCs and missing ChemOnt annotations
+## Filtering by ChemOnt
 
-Novel BGCs --- those with high Novelty Scores --- frequently lack ChemOnt annotations or carry only low-confidence predictions. This happens because the machine learning model was trained on characterised BGCs, and it struggles to predict products for gene clusters that are very different from anything in the training set.
-
-A missing or low-confidence ChemOnt annotation on a high-novelty BGC is not a problem; it is the expected outcome. The absence of a confident prediction is itself informative: it reinforces the signal that this BGC produces something unlike known compounds.
-
-## How to filter by ChemOnt
-
-In the platform's filter panel (available in Explore and Search modes), the ChemOnt filter presents a searchable dropdown of terms. You can:
-
-1. **Type a term name** to search for it (for example, "macrolide" or "alkaloid").
-2. **Select one or more terms.** The filter restricts results to BGCs annotated with at least one of the selected terms above the minimum probability threshold.
-3. **Adjust the probability threshold.** A slider below the term selector lets you set the minimum confidence required. The default is 0.5, which excludes low-confidence predictions.
-
-Selecting a parent term in the hierarchy includes all its children. For example, selecting "Lipids and lipid-like molecules" will include BGCs annotated as "Prenol lipids", "Fatty acids", and all other subcategories.
+The **ChemOnt class** [filter](filtering.qmd) is a searchable, hierarchical chip. Type a class name (e.g. "macrolide"), select one or more classes, and the catalogue narrows to clusters predicted to make them. Selecting a parent class includes its descendants. There is also the [Chemical Search](chemical-search.qmd), which starts from a SMILES structure rather than a class.
 
 ## Tips
 
-- **Use ChemOnt when you have a target product in mind.** If you are looking for BGCs that might produce a macrolide antibiotic, filter by the ChemOnt term "Macrolides and analogues" rather than filtering by the Polyketide BGC class (which includes many non-macrolide polyketides).
-- **Lower the probability threshold for exploratory searches.** Setting the threshold to 0.3 instead of 0.5 will include more speculative predictions but may surface interesting candidates that a strict filter would miss.
-- **Combine ChemOnt with BGC class for precision.** Filtering by both `Polyketide` (BGC class) and `Macrolides and analogues` (ChemOnt) gives you the subset of polyketide BGCs specifically predicted to produce macrolides.
-- **Do not rely on ChemOnt alone for novel BGCs.** High-novelty BGCs often have weak or absent ChemOnt predictions. If you are specifically hunting for novelty, use the Novelty Score as your primary filter and treat ChemOnt as supplementary information.
+- Filter by a ChemOnt class when you have a *target product type* in mind — more precise than filtering by enzyme class alone.
+- Combine ChemOnt with the BGC class filter for precision (e.g. Polyketide × Macrolides).
+- For pure novelty hunting, lead with the **novelty** score and treat ChemOnt as supplementary — novel clusters often have weak predictions.
 
 ## Related pages
 
-- [BGC Classes](bgc-classes.qmd) --- the enzyme-based classification system
-- [Scores and Metrics Reference](scores-metrics.qmd) --- how ChemOnt predictions relate to novelty decomposition
-- [Biome Ontology](biome-ontology.qmd) --- another hierarchical classification used for filtering
-- [Glossary](glossary.qmd) --- quick definitions of all terms
+- [BGC Classes](bgc-classes.qmd) — the enzyme-based classification
+- [Chemical Search](chemical-search.qmd) — search by structure
+- [iBGC Detail](ibgc-detail.qmd) · [Protein Panel](protein-panel.qmd) · [Glossary](glossary.qmd)

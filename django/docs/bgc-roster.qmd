@@ -1,0 +1,58 @@
+---
+title: "BGC Roster"
+subtitle: "The sortable table of matching iBGCs"
+---
+
+The **BGC roster** is the default view of your results: one row per integrated BGC ([iBGC](key-concepts.qmd#ibgc-integrated-bgc)) matching the current query. It is the fastest way to rank candidates and to read their key attributes side by side.
+
+The roster is empty until you press **Run Query** (or have an active filter, search, or loaded asset).
+
+![The BGC roster, sorted by novelty. Each row is one iBGC; badges flag validated and partial clusters (type-strain and submitted clusters are flagged the same way).](images/roster.png)
+
+## Columns
+
+| Column | Meaning |
+|--------|---------|
+| **iBGC** | The iBGC accession/label. Badges flag **Validated**, **Type Strain**, **Submitted** (your uploaded asset), and **Partial** (runs off the contig edge). |
+| **Sim.** | Similarity to your query — only meaningful after a search. Its label changes with the search type (see below). |
+| **Class** | The normalised [BGC class](bgc-classes.qmd) (Polyketide, NRPS, RiPP, …). |
+| **Size (kb)** | Length of the cluster in kilobases. |
+| **Novelty** | Distance from the nearest validated cluster (0–1; higher = more novel). |
+| **Dom. nov.** | Domain novelty — fraction of domains unique within the iBGC's GCF. |
+| **Sources** | The detection tools that called this cluster (antiSMASH, GECCO, SanntiS, …). |
+| **Assembly** | The parent assembly accession. |
+| **Collection** | The source collection the assembly came from. |
+
+Scores shown as "—" could not be computed for that iBGC (see [Scores & Metrics](scores-metrics.qmd)).
+
+## Sorting
+
+Click a sortable column header to sort; click again to reverse. Sortable columns are **Size**, **Novelty**, **Dom. nov.**, and **Sim.** The default sort is **Novelty**, descending — so the most novel candidates appear first.
+
+After a [sequence search](sequence-search.qmd) or a [Find similar iBGCs](similar-ibgc.qmd) run, the roster automatically sorts by the query similarity so the table mirrors the search ranking. You can override this at any time by clicking another header.
+
+## How the similarity column adapts to the search
+
+The second column reflects whichever search produced the results:
+
+- **No search** — there is no meaningful similarity, so it shows "—".
+- **Domain or Find-similar search** — it shows a domain-based similarity score (0–1).
+- **Sequence search** — it is replaced by two columns: **Bitscore** (the phmmer alignment score of the best-matching protein) and **Best hit** (the protein ID of that match).
+
+## Selecting and acting on rows
+
+- **Left-click** a row to load that iBGC into the [Compare](ibgc-detail.qmd) panel.
+- **Right-click** a row for the actions menu: **Set as reference iBGC**, **Find similar iBGCs**, and **Add to shortlist**.
+
+Submitted (uploaded-asset) iBGCs are shaded amber so they stand out against catalogue rows.
+
+## Paging and bulk shortlisting
+
+The footer shows the total match count and pages through results 50 at a time. **Add all to shortlist** adds every iBGC matching the current query — not just the visible page — up to the shortlist cap. If the query matched more than the considered limit, a note tells you how many were matched versus added, so you know the selection was truncated.
+
+## Related pages
+
+- [iBGC Detail](ibgc-detail.qmd) — the panel a left-click opens
+- [Variables Map](variables-map.qmd) · [UMAP](umap.qmd) — the other two result views
+- [Scores & Metrics](scores-metrics.qmd) — what the score columns mean
+- [Shortlists](shortlists.qmd)

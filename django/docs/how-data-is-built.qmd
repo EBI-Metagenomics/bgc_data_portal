@@ -1,0 +1,78 @@
+---
+title: "How the Data Is Built"
+subtitle: "From an assembly to a scored, searchable iBGC"
+---
+
+Everything you see in the discovery platform is precomputed. Before an assembly ever appears, it is run through an annotation pipeline that calls its genes, annotates their domains, detects its biosynthetic gene clusters, and predicts their chemistry. The results are then integrated, clustered into families, and scored. This page describes those steps in plain terms; it does not cover the operational details of running the pipeline.
+
+The annotation pipeline is a Nextflow workflow ([mgnify-bgcs-etl](https://github.com/EBI-Metagenomics/mgnify-bgcs-etl)); the integration, clustering, and scoring happen in the data portal.
+
+## 1. Input: an assembly
+
+The unit of input is one **assembly** — depending on the data source this may be:
+
+- an **isolate genome** (a cultured organism),
+- a **metagenome-assembled genome (MAG)** (a genome reconstructed from an environmental sample),
+- a raw **metagenome assembly**, or
+- a single, already-known **BGC region** (for validated reference sets like MIBiG).
+
+The pipeline accepts assemblies in whatever form a source provides — nucleotide sequence only, sequence plus predicted proteins, or with precomputed gene calls and annotations — and fills in whatever is missing.
+
+### Assembly modes
+
+A run is set to one of three modes, which tunes the steps that follow:
+
+- **genome** — a cultured isolate or high-quality MAG.
+- **metagenome** — a raw environmental assembly; gene calling is set up for fragmented, mixed-community data.
+- **region** — the input *is* a known BGC (one cluster per contig). Detectors are switched off and the whole region is treated as the cluster; used for validated reference sets.
+
+## 2. Gene calling
+
+If protein-coding genes are not already provided, the pipeline predicts them with **Pyrodigal** (a Prodigal implementation). Genomes that arrive with precomputed gene calls (for example MGnify catalogue MAGs annotated with Prodigal) reuse those directly. The result is a consistent set of proteins (CDS) per assembly.
+
+## 3. Protein domain annotation
+
+Every protein is scanned with **InterProScan**, which assigns **InterPro/Pfam** domains — the functional building blocks of enzymes. These domain annotations are central: they are what the platform uses to compare clusters, compute novelty, and answer domain searches. Sources that already ship InterProScan results reuse them.
+
+## 4. BGC detection
+
+Three independent detectors scan each assembly for biosynthetic gene clusters:
+
+- **antiSMASH** — rule-based detection with broad, well-established class definitions.
+- **GECCO** — a machine-learning detector.
+- **SanntiS** — a neural detector that works from the InterPro domain annotations.
+
+Using three tools improves coverage — each finds clusters the others miss — but they frequently overlap or disagree on boundaries. That disagreement is resolved later, during integration (step 7).
+
+For **validated reference sets** (region mode), no detector runs: each entry is already a curated BGC, so the whole region is taken as the cluster and flagged **validated**.
+
+## 5. Chemical-class prediction
+
+For each detected cluster, **CHAMOIS** predicts the chemical classes of its likely product from the cluster's protein sequences, expressed in the **[ChemOnt](chemont.qmd)** ontology. This is what populates the "predicted chemistry" you see on an iBGC and what the [chemical search](chemical-search.qmd) matches against. Validated reference clusters additionally carry curated compound names and structures.
+
+## 6. Metadata and packaging
+
+Alongside the biology, the pipeline records each assembly's metadata — organism, source collection, taxonomy, and [biome](biome-ontology.qmd) — and whether it is a **type strain**. The per-assembly output (clusters, genes, domains, chemistry, metadata) is packaged into a standard bundle. This same bundle format is what you upload via [Load Asset](load-asset.qmd).
+
+## 7. Integration into iBGCs
+
+In the portal, overlapping source predictions on the same contig are consolidated into a single **[integrated BGC (iBGC)](key-concepts.qmd#ibgc-integrated-bgc)** — one clean candidate that records which tools called it and which predictions it was built from. The iBGC, not the individual tool calls, is the unit you work with everywhere in the discovery platform. Clusters that run off the edge of a contig are flagged **partial**.
+
+## 8. Clustering and scoring
+
+Finally, all iBGCs are clustered into a hierarchy of **[gene cluster families](gcf-explained.qmd)** by similarity of domain content and arrangement, and each is scored:
+
+- **Novelty** — distance from the nearest validated cluster.
+- **Domain novelty** — fraction of domains unique within its family.
+
+A two-dimensional **[UMAP](umap.qmd)** layout is computed so similar clusters sit together on the map. Partial clusters are placed by their nearest complete neighbours. See [Scores & Metrics](scores-metrics.qmd) for the exact definitions.
+
+## The result
+
+By the time you open the discovery platform, every assembly has become a set of integrated, classified, chemically annotated, family-clustered, and scored iBGCs — which is why filtering and searching return in seconds.
+
+## Related pages
+
+- [What's in the Catalogue](datasets.qmd) — the assemblies fed into this pipeline
+- [Scores & Metrics](scores-metrics.qmd) · [Gene Cluster Families](gcf-explained.qmd)
+- [Key Concepts](key-concepts.qmd)

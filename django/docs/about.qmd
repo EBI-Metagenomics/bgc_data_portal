@@ -3,96 +3,69 @@ title: "About"
 subtitle: "The team, funding, and how to get in touch"
 ---
 
-## The BGC Discovery Platform
+## The MGnify BGCs Discovery Platform
 
-The BGC Discovery Platform is developed by the **Microbiome Informatics** team at the [European Bioinformatics Institute (EMBL-EBI)](https://www.ebi.ac.uk/), part of the [European Molecular Biology Laboratory (EMBL)](https://www.embl.org/). The platform is a component of [MGnify](https://www.ebi.ac.uk/metagenomics/), EMBL-EBI's resource for the analysis and archival of metagenomic and metatranscriptomic data.
+The MGnify BGCs Discovery Platform is developed by the **Microbiome Informatics** team at the [European Bioinformatics Institute (EMBL-EBI)](https://www.ebi.ac.uk/), part of the [European Molecular Biology Laboratory (EMBL)](https://www.embl.org/). It is a component of [MGnify](https://www.ebi.ac.uk/metagenomics/), EMBL-EBI's resource for the analysis and archival of metagenomic data.
 
-The platform was designed to help experimental biochemists identify organisms and biosynthetic gene clusters (BGCs) worth pursuing in the laboratory. It combines large-scale computational annotation of public genomic data with interactive visualisation and scoring tools, making bioinformatics-derived insights accessible to researchers who work primarily at the bench.
+The platform helps experimental researchers identify biosynthetic gene clusters worth pursuing in the laboratory. It combines large-scale computational annotation of public genomic data with interactive visualisation and scoring, making bioinformatics-derived candidates accessible to researchers who work primarily at the bench.
 
 ## Team
 
-The platform is built and maintained by the Microbiome Informatics team at EMBL-EBI. The team develops computational infrastructure for analysing microbial communities, with a focus on making complex genomic data useful for researchers across disciplines.
-
-Core contributors include researchers and software engineers specialising in natural product genomics, metagenomics, machine learning, and web application development.
+The platform is built and maintained by the Microbiome Informatics team at EMBL-EBI, with contributors in natural product genomics, metagenomics, machine learning, and web development.
 
 ## Funding
 
-Development of the BGC Discovery Platform is supported by:
+Development is supported by:
 
-- **EMBL** --- core funding for the European Bioinformatics Institute and the Microbiome Informatics team.
-- **Wellcome Trust** --- grant funding supporting the development of MGnify and related bioinformatics infrastructure.
+- **EMBL** — core funding for EMBL-EBI and the Microbiome Informatics team.
+- **Wellcome Trust** — grant funding for MGnify and related infrastructure.
 
-The platform builds on data and tools produced by the broader natural products research community, including [antiSMASH](https://antismash.secondarymetabolites.org/), [MIBiG](https://mibig.secondarymetabolites.org/), [Pfam](https://www.ebi.ac.uk/interpro/entry/pfam/), and [ClassyFire/ChemOnt](http://classyfire.wishartlab.com/).
+The platform builds on data and tools from the wider natural products community, including [antiSMASH](https://antismash.secondarymetabolites.org/), [GECCO](https://gecco.embl.de/), SanntiS, [MIBiG](https://mibig.secondarymetabolites.org/), [Pfam / InterPro](https://www.ebi.ac.uk/interpro/), and [ClassyFire/ChemOnt](http://classyfire.wishartlab.com/).
 
 ## Citation
 
-If you use the BGC Discovery Platform in your research, please cite:
+If you use the platform in your research, please cite:
 
 > Citation details will be added upon publication. In the meantime, please reference the platform URL and the MGnify resource.
 
-If your work relies on specific components, please also cite the relevant upstream tools:
-
-- **antiSMASH** for BGC prediction
-- **MIBiG** for the validated BGC reference set
-- **ESM** (Evolutionary Scale Modeling) for protein embeddings
-- **MGnify** for metagenomic assembly data
+If your work relies on specific components, please also cite the relevant upstream tools — antiSMASH, GECCO, and SanntiS for BGC detection; MIBiG for the validated reference set; InterPro/Pfam for domains; and MGnify for assembly data.
 
 ## Data sources
 
-The platform integrates data from several public resources:
+The platform integrates data from several public resources. See [What's in the Catalogue](datasets.qmd) for the current collections.
 
 | Source | What it provides |
 |--------|-----------------|
-| [MGnify](https://www.ebi.ac.uk/metagenomics/) | Metagenomic assemblies and associated metadata |
-| [GTDB](https://gtdb.ecogenomic.org/) | Standardised taxonomic classifications |
+| [MGnify](https://www.ebi.ac.uk/metagenomics/) | Metagenomic assemblies and metagenome-assembled genome catalogues |
+| [BacDive](https://bacdive.dsmz.de/) | Cultured type-strain metadata and isolation sources |
 | [MIBiG](https://mibig.secondarymetabolites.org/) | Experimentally validated BGCs and known compounds |
-| [INSDC](https://www.insdc.org/) (ENA, NCBI, DDBJ) | Genome assemblies and nucleotide sequences |
-| [GOLD](https://gold.jgi.doe.gov/) | Ecosystem and biome classifications |
-| [Pfam / InterPro](https://www.ebi.ac.uk/interpro/) | Protein domain definitions |
 
-## Technology
-
-The platform is built with open-source technologies:
-
-- **Django** and **Django Ninja** for the web application and REST API
-- **PostgreSQL** with **pgvector** for vector similarity search
-- **Celery** with **RabbitMQ** for asynchronous task processing
-- **Redis** for caching
-- **Nextflow** for the data ingestion and annotation pipeline
-
-The full source code is available on GitHub.
 
 ## Source code
 
-The platform's source code is hosted on GitHub:
+- **Data portal (Django):** [github.com/EBI-Metagenomics/bgc_data_portal](https://github.com/EBI-Metagenomics/bgc_data_portal)
+- **Annotation pipeline (Nextflow):** [github.com/EBI-Metagenomics/mgnify-bgcs-etl](https://github.com/EBI-Metagenomics/mgnify-bgcs-etl)
 
-- **Main repository:** [github.com/EBI-Metagenomics/mgnify-bgcs-v2](https://github.com/EBI-Metagenomics/mgnify-bgcs-v2)
-- **Data portal (Django application):** [github.com/Finn-Lab/bgc_data_portal](https://github.com/Finn-Lab/bgc_data_portal)
-- **ETL pipeline (Nextflow):** [github.com/Finn-Lab/mgnify-bgcs-etl](https://github.com/Finn-Lab/mgnify-bgcs-etl)
-
-Contributions, bug reports, and feature requests are welcome via GitHub Issues on the appropriate repository.
+Contributions, bug reports, and feature requests are welcome via GitHub Issues.
 
 ## Contact and feedback
 
-We welcome feedback from users at all levels of experience. If you have questions, encounter problems, or want to suggest improvements:
-
-- **Bug reports and feature requests:** Open an issue on the [GitHub repository](https://github.com/EBI-Metagenomics/mgnify-bgcs-v2/issues).
-- **General questions:** Contact the MGnify helpdesk at [metagenomics-help@ebi.ac.uk](mailto:metagenomics-help@ebi.ac.uk).
-- **Collaboration inquiries:** Contact the Microbiome Informatics team through the [EMBL-EBI website](https://www.ebi.ac.uk/about/contact).
+- **Bug reports / feature requests:** open an issue on the [GitHub repository](https://github.com/EBI-Metagenomics/bgc_data_portal).
+- **Collaboration:** the Microbiome Informatics team via the [EMBL-EBI website](https://www.ebi.ac.uk/about/contact/support/metagenomics).
 
 ## Privacy and data handling
 
-- **Database entries** are derived from publicly available genomic data and are freely accessible.
-- **Uploaded files** (in Evaluate mode) are processed ephemerally in your browser session. They are never stored on the server, added to the database, or shared with other users.
-- **Shortlists** are stored locally in your browser using browser storage. They are not transmitted to the server unless you explicitly trigger an export.
-- The platform does not require user accounts or authentication for read-only access to public data.
+- **Catalogue entries** are derived from public genomic data and are freely accessible.
+- **Uploaded assets** ([Load Asset](load-asset.qmd)) are processed ephemerally for your session only. They are never added to the public catalogue or shared with other users, and are evicted when you remove them or after they expire.
+- **Shortlists** are stored locally in your browser. They are sent to the server only when you generate a report or export.
+- No account is required for read-only access to public data.
 
 ## Version
 
-The current platform version and the versions of key data dependencies (MIBiG release, GTDB release, antiSMASH version) are displayed in the footer of the platform dashboard. This documentation corresponds to the platform version shown at the time of writing.
+The current platform version and key data dependencies (MIBiG release, GTDB release, tool versions) are shown in the platform footer. This documentation corresponds to the version current at the time of writing.
 
 ## Related pages
 
-- [Platform Overview](index.qmd) --- introduction to what the platform does
-- [Tutorials](tutorials-index.qmd) --- guided walkthroughs for common tasks
-- [Glossary](glossary.qmd) --- definitions of all terms used in the platform
+- [Platform Overview](index.qmd) · [Key Concepts](key-concepts.qmd)
+- [How the Data Is Built](how-data-is-built.qmd) · [What's in the Catalogue](datasets.qmd)
+- [Glossary](glossary.qmd)

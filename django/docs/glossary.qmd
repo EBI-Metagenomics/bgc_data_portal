@@ -1,97 +1,115 @@
 ---
 title: "Glossary"
-subtitle: "Alphabetical reference for all terms used in the platform"
+subtitle: "Short definitions of the platform's terms"
 ---
 
-## Goal
-
-To provide a quick-reference glossary of every technical term used in the BGC Discovery Platform. Each entry gives a brief definition and links to the page where the term is explained in full context.
+Each entry links to the page where the term is explained in full. New to the platform? Start with [Key Concepts](key-concepts.qmd).
 
 ---
+
+### Adjacency (domain adjacency)
+
+The neighbouring domain *pairs* along a cluster's proteins. Used alongside domain overlap to measure cluster similarity, capturing arrangement rather than just membership. See [Scores & Metrics](scores-metrics.qmd).
 
 ### Assembly
 
-A sequenced genome, metagenome-assembled genome (MAG), or genomic region from an environmental sample. Assemblies are the organism-level entities in the platform. Each assembly carries one or more BGCs and is scored on novelty, diversity, and density. See [Platform Overview](index.qmd).
+The genome or metagenome a cluster was found in — an isolate genome, a metagenome-assembled genome (MAG), an environmental assembly, or a single validated BGC region. In the discovery platform, assemblies provide context (organism, source, taxonomy, biome) for the iBGCs they contain. See [Key Concepts](key-concepts.qmd).
 
-### BGC (Biosynthetic Gene Cluster)
+### BGC (biosynthetic gene cluster)
 
-A contiguous stretch of DNA that encodes the enzymes, regulators, and transport proteins needed to produce a natural product (such as an antibiotic, siderophore, or pigment). Each BGC belongs to one assembly and is classified by its enzymatic machinery ([BGC class](bgc-classes.qmd)) and predicted product chemistry ([ChemOnt](chemont.qmd)). See [Platform Overview](index.qmd).
+A stretch of DNA whose genes work together to produce a natural product. See [Key Concepts](key-concepts.qmd).
 
-### BGC Class
+### BGC class
 
-A classification of a BGC based on the type of enzymatic machinery it uses to build its product. Major classes include Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, and Other. Classes are organised hierarchically with broad classes and subclasses, stored as dot-delimited paths (for example, `Polyketide.Macrolide`). See [BGC Classes](bgc-classes.qmd).
+A normalised label for the kind of biosynthetic machinery — Polyketide, NRPS, RiPP, Terpene, Saccharide, and hybrids. See [BGC Classes](bgc-classes.qmd).
 
-### Biome Lineage
+### Biome
 
-A hierarchical path describing the environmental origin of a metagenomic assembly, following the GOLD Ecosystem Classification. Formatted as colon-delimited strings (for example, `root:Environmental:Terrestrial:Soil`). Available only for metagenome-derived assemblies. See [Biome Ontology](biome-ontology.qmd).
+The environment an assembly came from, following the GOLD ecosystem classification (e.g. *Marine*, *Marine sediment*). See [Biome Ontology](biome-ontology.qmd).
 
-### ChemOnt (Chemical Ontology)
+### CHAMOIS
 
-A hierarchical classification system for chemical compounds based on structural features, developed as part of the ClassyFire project. The platform uses ChemOnt to annotate each BGC with a prediction of the type of molecule its gene cluster produces. Each annotation carries a probability score (0--1) reflecting prediction confidence. The ontology contains approximately 4,825 terms. See [Chemical Ontology](chemont.qmd).
+The tool that predicts a cluster's product chemistry (as [ChemOnt](chemont.qmd) classes) from its protein sequences. See [How the Data Is Built](how-data-is-built.qmd).
 
-### Density
+### ChemOnt
 
-An assembly-level score measuring the number of BGCs per megabase (Mb) of assembled sequence. Higher density indicates an organism that devotes a larger fraction of its genome to secondary metabolism. Typical range is 0--50 BGCs/Mb. See [Scores and Metrics Reference](scores-metrics.qmd).
+A hierarchical chemical-structure ontology (from ClassyFire) used to label predicted product chemistry. See [ChemOnt](chemont.qmd).
 
-### Diversity Score
+### Composite similarity
 
-An assembly-level score (0--1) measuring the normalised richness of BGC classes represented in an assembly. Calculated as the number of distinct BGC broad classes divided by the total number of broad classes observed across the database. Higher values indicate a broader biosynthetic repertoire. See [Scores and Metrics Reference](scores-metrics.qmd).
+The weighted combination of domain overlap and adjacency overlap used to compare clusters. The basis for clustering, find-similar, and novelty. See [Scores & Metrics](scores-metrics.qmd).
 
-### Domain Novelty
+### Detector
 
-A BGC-level score (0--1) measuring the fraction of Pfam protein domains in a BGC that are not found in any MIBiG-validated BGC. A score of 0 means every domain is known from validated BGCs; a score of 1 means none of the domains have been observed in validated BGCs. See [Scores and Metrics Reference](scores-metrics.qmd).
+A BGC detection tool — **antiSMASH**, **GECCO**, or **SanntiS**. Each produces source predictions that are integrated into iBGCs. See [Key Concepts](key-concepts.qmd).
 
-### GCF (Gene Cluster Family)
+### Domain (protein domain)
 
-A group of BGCs from across the database that share similar domain architecture and protein sequence content, clustered by cosine similarity of their embedding vectors. Each GCF has a representative member (medoid), a member count, and a validated member count. GCFs are used to assess redundancy and discovery potential. See [GCF Explained](gcf-explained.qmd).
+A functional unit within a protein (InterPro/Pfam), e.g. a ketosynthase or adenylation domain. The platform's currency for comparing clusters. See [Protein Panel](protein-panel.qmd).
+
+### Domain novelty
+
+The fraction of an iBGC's domains that are unique within its own GCF. "—" for single-member families or clusters with no domains. See [Scores & Metrics](scores-metrics.qmd).
+
+### GCF (gene cluster family)
+
+A group of iBGCs with similar domain content — a "natural product family". Identified by a dotted path (e.g. `42.7.3`). See [Gene Cluster Families](gcf-explained.qmd).
+
+### iBGC (integrated BGC)
+
+The platform's central unit: overlapping source predictions on one contig consolidated into a single candidate cluster. See [Key Concepts](key-concepts.qmd).
 
 ### MIBiG
 
-Minimum Information about a Biosynthetic Gene cluster --- a curated, public database of approximately 2,500 experimentally characterised BGCs linked to known natural products. MIBiG entries serve as the "validated" reference set for all novelty calculations in the platform. See [MIBiG and Validated BGCs](mibig-validated.qmd).
+The curated database of experimentally validated BGCs. Loaded as **validated** iBGCs; the reference set novelty is measured against. See [MIBiG & Validated BGCs](mibig-validated.qmd).
 
-### Nearest Validated Distance
+### Novelty
 
-A BGC-level score (0--1) representing the normalised Euclidean distance in embedding space between a BGC and the closest MIBiG-validated BGC. Functionally similar to the Novelty Score but uses Euclidean rather than cosine distance. See [Scores and Metrics Reference](scores-metrics.qmd).
+`1 − similarity to the nearest validated cluster`. Higher = less like anything known. "—" when no validated reference exists. See [Scores & Metrics](scores-metrics.qmd).
 
-### Novel Singleton
+### Partial
 
-A BGC that is the sole member of its Gene Cluster Family --- no other BGC in the database is similar enough to be grouped with it. This is the strongest possible novelty signal, indicating a BGC unlike anything else in both the validated and unvalidated catalogues. See [GCF Explained](gcf-explained.qmd).
+An iBGC that runs off the edge of its contig and may be incomplete. Placed onto the maps and scored by its nearest complete neighbours. See [UMAP](umap.qmd).
 
-### Novelty Score (Assembly)
+### Reference / Compare
 
-An assembly-level score (0--1) representing the mean Novelty Score across all BGCs belonging to that assembly. Higher values indicate an assembly whose BGCs are, on average, more distant from characterised gene clusters. See [Scores and Metrics Reference](scores-metrics.qmd).
+The two iBGC detail panels: the **reference** is pinned (right-click → set as reference); the **compare** panel updates on each left-click. See [iBGC Detail](ibgc-detail.qmd).
 
-### Novelty Score (BGC)
+### Region (assembly mode)
 
-A BGC-level score (0--1) representing the cosine distance between the BGC's protein embedding vector and the embedding of the nearest MIBiG-validated BGC. A score of 0 means the BGC is identical to a known BGC in embedding space; a score approaching 1 means it is maximally distant from all known BGCs. This is the primary metric for identifying novel biosynthetic potential. See [Scores and Metrics Reference](scores-metrics.qmd).
+A processing mode where the input *is* a known BGC (one per contig); detectors are off. Used for validated sets. See [How the Data Is Built](how-data-is-built.qmd).
 
-### Percentile Rank
+### Sequence search
 
-A value (0--100) computed in Evaluate mode that indicates what fraction of all assemblies (or BGCs) in the database score lower than the evaluated asset on a given metric. A percentile of 90 means the asset scores higher than 90% of all entries. Percentile ranks are calculated on demand and are not stored in the database. See [Scores and Metrics Reference](scores-metrics.qmd).
+Aligning a query protein against cluster proteins with phmmer, ranked by bitscore, identity, and coverage. See [Sequence Search](sequence-search.qmd).
 
-### Pfam Domain
+### Shortlist
 
-A conserved protein domain as defined in the Pfam database. Pfam domains represent functional units within proteins --- for example, a ketosynthase domain (PF00109) or an acyltransferase domain (PF00698). The platform identifies Pfam domains in each BGC's proteins and uses them for classification, domain architecture analysis, and the Domain Query search. See [BGC Classes](bgc-classes.qmd).
+The browser-held set of iBGCs you collect, turned into a report and exports. Holds up to 1,000 iBGCs. See [Shortlists](shortlists.qmd).
 
-### Taxonomic Novelty
+### Source / collection
 
-An assembly-level score (0--1) measuring how under-represented the assembly's taxonomic lineage is in the database. Calculated as the inverse frequency of the assembly's genus (or nearest resolved taxonomic rank) among all assemblies. High values indicate organisms from under-explored lineages. See [Scores and Metrics Reference](scores-metrics.qmd).
+The dataset an assembly came from (e.g. a marine catalogue, BacDive, MIBiG). A filter and a roster column. See [What's in the Catalogue](datasets.qmd).
 
-### Type Strain
+### Sørensen–Dice
 
-An assembly that corresponds to a microbial strain deposited in a public culture collection (such as DSMZ, ATCC, or NCTC). Type strains can be ordered, cultured, and studied in the laboratory. The platform flags assemblies with type strain status, making it easy to filter for organisms you can physically obtain. Assemblies without type strain status may represent organisms known only from sequence data.
+The set-overlap coefficient used to score domain and adjacency similarity: `2·|A∩B| / (|A|+|B|)`. See [Scores & Metrics](scores-metrics.qmd).
+
+### Submitted
+
+An iBGC from an assembly *you* uploaded with [Load Asset](load-asset.qmd), shown in amber. See [Load Asset](load-asset.qmd).
+
+### Type strain
+
+An assembly corresponding to a strain deposited in a public culture collection (DSMZ, ATCC, …) — i.e. one you can obtain and culture. Flagged in the roster and detail panels. See [What's in the Catalogue](datasets.qmd).
+
+### Validated
+
+An iBGC from an experimentally characterised reference (e.g. MIBiG). The yardstick for novelty; novelty `0` by definition. See [MIBiG & Validated BGCs](mibig-validated.qmd).
 
 ---
 
-## Using the glossary
-
-Each term links to the page where it is explained in full. If you are reading the platform documentation for the first time, consider starting with the [Platform Overview](index.qmd) and [Key Concepts](key-concepts.qmd) pages, which introduce these terms in a narrative context.
-
 ## Related pages
 
-- [Platform Overview](index.qmd) --- introduces assemblies, BGCs, and the three modes
-- [Key Concepts](key-concepts.qmd) --- narrative introduction to core concepts
-- [Scores and Metrics Reference](scores-metrics.qmd) --- detailed score definitions with calculation methods
-- [BGC Classes](bgc-classes.qmd) --- full class hierarchy
-- [Chemical Ontology](chemont.qmd) --- ChemOnt details
-- [GCF Explained](gcf-explained.qmd) --- Gene Cluster Family details
+- [Key Concepts](key-concepts.qmd) · [Scores & Metrics](scores-metrics.qmd)
+- [Gene Cluster Families](gcf-explained.qmd) · [BGC Classes](bgc-classes.qmd) · [ChemOnt](chemont.qmd)
