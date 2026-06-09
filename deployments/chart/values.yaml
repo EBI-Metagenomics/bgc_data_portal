@@ -115,3 +115,8 @@ tests:
   enabled: false
   image: ""
   jobs: []
+
+# Isolated Claude Code workspace pod (dev only; enabled by the local-full flow).
+workspace:
+  enabled: false
+  image: bgc-data-portal-workspace

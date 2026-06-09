@@ -13,9 +13,12 @@
 # be declared here, not inherited).
 # =============================================================================
 
+# The namespace is created out-of-band — `helm install --create-namespace`,
+# Skaffold's release createNamespace, or `make create-local-namespace` — so the
+# chart does not also render a (cluster-scoped) Namespace object inside the release.
 namespace:
   name: bgc-local
-  create: true
+  create: false
 
 imagePullSecrets: []
 

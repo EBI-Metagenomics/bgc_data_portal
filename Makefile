@@ -27,14 +27,14 @@ validate-secrets:
 
 # ── Cluster lifecycle ──────────────────────────────────────────────────────────
 cluster-create:
-	kind create cluster --config deployments/k8s-local/kind-cluster.yaml
-	# Pin the namespace onto the context so `kubectl --context kind-bgc-local`
+	k3d cluster create bgc-local
+	# Pin the namespace onto the context so `kubectl --context k3d-bgc-local`
 	# (and the runbooks' `--context "$${KUBE_CONTEXT}"` commands) target bgc-local
 	# instead of the empty `default` ns — matching how the remote contexts behave.
-	kubectl config set-context kind-bgc-local --namespace=bgc-local
+	kubectl config set-context k3d-bgc-local --namespace=bgc-local
 
 cluster-delete:
-	kind delete cluster --name bgc-local
+	k3d cluster delete bgc-local
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 # Wait for any in-progress namespace deletion before re-applying. Without this,
@@ -46,7 +46,7 @@ create-local-namespace:
 	  kubectl wait --for=delete ns/bgc-local --timeout=120s || \
 	    (echo "ERROR: bgc-local stuck Terminating. Inspect: kubectl get ns bgc-local -o yaml" && exit 1); \
 	fi
-	kubectl apply -f deployments/k8s-local/manifests/00-namespace.yaml
+	kubectl create namespace bgc-local --dry-run=client -o yaml | kubectl apply -f -
 
 create-local-secrets: validate-secrets create-local-namespace
 	kubectl create secret generic bgc-data-portal-secret \
@@ -62,6 +62,8 @@ DISK_RECLAIMABLE_WARN_GB := 10
 # Sums GB-scale reclaimable across Images / Containers / Volumes / Build Cache.
 # Sub-GB rows are ignored (they're not what fills a 100 GB Colima VM).
 dev-preflight:
+	@command -v k3d  >/dev/null 2>&1 || { echo "ERROR: k3d not found — the dev loop runs on k3d. Install: brew install k3d"; exit 1; }
+	@command -v helm >/dev/null 2>&1 || { echo "ERROR: helm not found — Skaffold's Helm deployer shells out to it. Install: brew install helm"; exit 1; }
 	@reclaim=$$(docker system df --format '{{.Reclaimable}}' 2>/dev/null \
 	  | grep -oE '[0-9]+(\.[0-9]+)?GB' | sed 's/GB//' \
 	  | awk '{s+=$$1} END {printf "%.0f", s+0}'); \
@@ -231,8 +233,8 @@ workspace-restart:
 clean-images:
 	@echo "Pruning dangling images in Docker daemon..."
 	docker image prune -af
-	@echo "Pruning unused images in Kind containerd (--timeout=300s)..."
-	docker exec bgc-local-control-plane crictl --timeout=300s rmi --prune || \
+	@echo "Pruning unused images in k3d containerd (--timeout=300s)..."
+	docker exec k3d-bgc-local-server-0 crictl --timeout=300s rmi --prune || \
 	  echo "WARN: crictl prune incomplete (node likely overloaded). Re-run 'make tidy', or 'make nuke' for a hard reset."
 	@echo "Done. Run 'docker system df' to verify."
 
@@ -246,7 +248,7 @@ tidy: clean-images
 	@echo "Disk after tidy:"
 	@docker system df
 
-# Nuclear reset: delete the Kind cluster AND prune everything Docker, including
+# Nuclear reset: delete the k3d cluster AND prune everything Docker, including
 # named volumes. WIPES local Postgres data (db_data volume). Use when 'make
 # tidy' isn't enough or you want a known-good clean slate.
 nuke: cluster-delete

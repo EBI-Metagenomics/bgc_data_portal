@@ -1,6 +1,8 @@
 apiVersion: skaffold/v4beta11
 kind: Config
 
+# Build is shared by every profile; each profile owns its own `deploy` (so the
+# local Helm release never leaks into a cloud `skaffold run`, and vice-versa).
 build:
   artifacts:
     - image: bgc-data-portal-django
@@ -38,18 +40,12 @@ build:
   local:
     push: false
 
-manifests:
-  rawYaml:
-    - deployments/k8s-local/manifests/*.yaml
-
-deploy:
-  kubectl:
-    defaultNamespace: bgc-local
-
 portForward:
-  # Reliable port-forward for macOS (NodePort via kind extraPortMappings is
-  # unreliable on macOS due to Docker Desktop's network stack).
-  # Access the app at http://localhost:8080
+  # Reliable port-forward for macOS (NodePort via cluster port-maps is unreliable
+  # on Docker Desktop / Colima's network stack). Access the app at
+  # http://localhost:8080. Skaffold rewrites built image refs into the Helm
+  # release via its built-in `--post-renderer`, so the chart's bare image names
+  # (bgc-data-portal-django, …-worker) resolve to the locally-built tags.
   - resourceType: service
     resourceName: bgc-data-portal-django
     namespace: bgc-local
@@ -58,14 +54,24 @@ portForward:
 
 profiles:
   # ── local ──────────────────────────────────────────────────────────────────
-  # Auto-activated when kubeContext is kind-bgc-local.
+  # Auto-activated when kubeContext is k3d-bgc-local.
   # Usage: make dev   OR   skaffold dev -p local
+  # Deploys the canonical chart (deployments/chart) with the laptop values.
   - name: local
     activation:
-      - kubeContext: kind-bgc-local
+      - kubeContext: k3d-bgc-local
+    deploy:
+      helm:
+        releases:
+          - name: bgc-local
+            chartPath: deployments/chart
+            valuesFiles:
+              - deployments/chart/values-laptop.yaml
+            namespace: bgc-local
+            createNamespace: true
 
-  # ── local-full ────────────────────────────────────────────────────────────
-  # Same as local but includes the workspace pod (Claude Code isolated env).
+  # ── local-full ─────────────────────────────────────────────────────────────
+  # Same as local plus the workspace pod (Claude Code isolated env).
   # Usage: make dev-full   OR   skaffold dev -p local-full
   - name: local-full
     build:
@@ -111,15 +117,22 @@ profiles:
           # NO sync block — workspace is isolated, no host file sync by design
       local:
         push: false
-    manifests:
-      rawYaml:
-        - deployments/k8s-local/manifests/*.yaml
-        - deployments/k8s-local/manifests-workspace/*.yaml
+    deploy:
+      helm:
+        releases:
+          - name: bgc-local
+            chartPath: deployments/chart
+            valuesFiles:
+              - deployments/chart/values-laptop.yaml
+              - deployments/chart/values-workspace.yaml
+            namespace: bgc-local
+            createNamespace: true
 
-  # ── dev ────────────────────────────────────────────────────────────────────
-  # Builds and pushes to quay.io, deploys to k8s-dev (EBI HL cluster, exp ns).
-  # Requires quay.io credentials: docker login quay.io
-  # Usage: KUBE_CONTEXT=<ctx> make deploy-dev
+  # ── dev / prod (cloud) ───────────────────────────────────────────────────────
+  # DEPRECATED here: cloud deploys now live in the private mgnify-bgcs-deployer
+  # repo (Helm chart + per-env values: `make deploy-dev` / `make deploy-prod`
+  # there). These profiles still deploy the legacy hand-written manifests and are
+  # kept only until the cutover is confirmed; do not add new config here.
   - name: dev
     build:
       artifacts:
@@ -174,9 +187,6 @@ profiles:
                       delete job bgc-integration-tests bgc-e2e-tests --ignore-not-found
                 os: [darwin, linux]
 
-  # ── prod ───────────────────────────────────────────────────────────────────
-  # Builds prod image (full requirements.txt, collectstatic), pushes, deploys.
-  # Usage: KUBE_CONTEXT=<ctx> make deploy-prod
   - name: prod
     build:
       artifacts:
