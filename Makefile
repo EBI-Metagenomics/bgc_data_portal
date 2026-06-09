@@ -8,7 +8,7 @@
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
         workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
 
-ENV_FILE := deployments/k8s-local/.env.local
+ENV_FILE := deployments/.env.local
 STAGED_FILES_DIR := ../../.SCRATCH/STAGED_FILES_SAMPLES
 
 # ── Secrets validation ─────────────────────────────────────────────────────────
