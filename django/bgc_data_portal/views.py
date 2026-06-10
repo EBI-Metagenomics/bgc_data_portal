@@ -24,8 +24,10 @@ import logging
 import os
 
 from django.conf import settings
+from django.core.exceptions import SuspiciousFileOperation
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
+from django.utils._os import safe_join
 from django.views.generic import TemplateView
 
 log = logging.getLogger(__name__)
@@ -35,8 +37,15 @@ log.setLevel(numeric_level)
 
 class DocsView(TemplateView):
     def get(self, request, path="index.html", *args, **kwargs):
-        file_path = os.path.join(settings.BASE_DIR, "docs", "_site", path)
-        if os.path.exists(file_path):
+        docs_root = os.path.join(settings.BASE_DIR, "docs", "_site")
+        # ``path`` is user-controlled (``<path:path>`` route); ``safe_join``
+        # raises ``SuspiciousFileOperation`` for any path that escapes
+        # ``docs_root`` (e.g. ``../../settings.py``), blocking path traversal.
+        try:
+            file_path = safe_join(docs_root, path)
+        except SuspiciousFileOperation:
+            raise Http404("File not found")
+        if os.path.isfile(file_path):
             return FileResponse(open(file_path, "rb"))
         raise Http404("File not found")
 
