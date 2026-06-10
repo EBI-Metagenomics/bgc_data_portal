@@ -8,7 +8,7 @@ description: >-
 type: application
 # Chart version tracks the deployment topology, not the app. The application
 # version is the container image tag, set per-target in values.
-version: 0.1.0
+version: 0.2.0
 appVersion: "latest"
 kubeVersion: ">=1.25.0-0"
 maintainers:

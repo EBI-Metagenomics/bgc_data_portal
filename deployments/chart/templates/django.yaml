@@ -31,7 +31,22 @@ spec:
       {{- end }}
       {{- with .Values.django.initContainers }}
       initContainers:
-        {{- toYaml . | nindent 8 }}
+        {{- /* init containers always run the app image, so they follow
+               django.image — this lets a single image override (or Skaffold's
+               post-renderer) cover both the main and init containers. */}}
+        {{- range . }}
+        - name: {{ .name }}
+          image: {{ $.Values.django.image }}
+          {{- with .workingDir }}
+          workingDir: {{ . }}
+          {{- end }}
+          command:
+            {{- toYaml .command | nindent 12 }}
+          {{- with .envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
       {{- end }}
       containers:
         - name: django

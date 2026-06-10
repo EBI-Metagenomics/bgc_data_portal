@@ -94,9 +94,10 @@ django:
       value: /data/protein_search
     - name: CLUSTERING_ARTIFACTS_DIR
       value: /data/clustering_artifacts
+  # init-container images follow django.image (set by the template), so none is
+  # specified here — a single image override covers main + init containers.
   initContainers:
     - name: wait-for-postgres
-      image: bgc-data-portal-django
       command:
         - sh
         - -c
@@ -105,7 +106,6 @@ django:
             echo "waiting for postgres..."; sleep 2
           done
     - name: migrate
-      image: bgc-data-portal-django
       workingDir: /app
       command: [python, manage.py, migrate, --noinput]
       envFrom:

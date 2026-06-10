@@ -1,0 +1,30 @@
+BGC Data Portal — release "{{ .Release.Name }}" deployed to namespace "{{ include "bgc.namespace" . }}".
+
+1. Wait for it to come up:
+   kubectl -n {{ include "bgc.namespace" . }} rollout status deploy/bgc-data-portal-django
+
+2. Open the app:
+{{- if eq .Values.django.service.type "NodePort" }}
+   kubectl -n {{ include "bgc.namespace" . }} port-forward svc/bgc-data-portal-django 8080:80
+   → http://localhost:8080/dashboard/
+{{- else }}
+   Reach it through your configured ingress host.
+{{- end }}
+
+3. A fresh instance is EMPTY. Load a published data snapshot (no repo access needed):
+
+   NS={{ include "bgc.namespace" . }}
+   URL=https://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_bgcs/snapshots/<snapshot>.tgz
+   curl -fSL "$URL" -o snapshot.tgz && mkdir -p snap && tar -xzf snapshot.tgz -C snap
+
+   # DB (POSTGRES_USER/DB come from your .env / the bgc-data-portal-secret)
+   kubectl -n "$NS" exec -i postgres-0 -- \
+     pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner < snap/db.dump
+
+   # artifacts + protein index
+   DJ=$(kubectl -n "$NS" get pod -l app=bgc-data-portal-django -o name | head -1)
+   kubectl -n "$NS" exec -i "$DJ" -- tar -C /data -xzf - < snap/artifacts.tgz
+   kubectl -n "$NS" exec "$DJ" -- python manage.py update_discovery_stats
+
+   Full snapshot details (and how to BUILD/publish one) are in this chart's
+   README.md ("Self-hosting" section).
