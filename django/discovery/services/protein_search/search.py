@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional
 
-from pyhmmer.easel import Alphabet, DigitalSequenceBlock, TextSequence
+from pyhmmer.easel import Alphabet, DigitalSequence, DigitalSequenceBlock, TextSequence
 from pyhmmer.hmmer import phmmer
 
-from .index import protein_search_index
+from .index import _split_block, protein_search_index
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +94,39 @@ def _compute_hit_metrics(hit, query_len: int) -> Optional[ProteinHitMetrics]:
     )
 
 
+def _scan_block(
+    query_seq: DigitalSequence,
+    target_block: DigitalSequenceBlock,
+    query_len: int,
+    *,
+    min_bitscore: float,
+    min_pident: float,
+    min_qcov: float,
+) -> dict[str, ProteinHitMetrics]:
+    """Run phmmer for a single query against one target block and return the
+    passing hits as ``{sha256: ProteinHitMetrics}``. Used per-chunk so the
+    work fans out across threads (pyhmmer releases the GIL during the search).
+    """
+    results: dict[str, ProteinHitMetrics] = {}
+    # phmmer yields one TopHits per query; we always pass a single query so this
+    # loop iterates exactly once. cpus=1 here: parallelism is across blocks, not
+    # within a single phmmer call (which only parallelises across queries).
+    for top_hits in phmmer((query_seq,), target_block, cpus=1, E=_PHMMER_E):
+        for hit in top_hits:
+            if float(hit.score) < min_bitscore:
+                continue
+            metrics = _compute_hit_metrics(hit, query_len)
+            if metrics is None:
+                continue
+            if metrics.pident < min_pident or metrics.qcoverage < min_qcov:
+                continue
+            sha256 = hit.name.decode("ascii")
+            existing = results.get(sha256)
+            if existing is None or metrics.bitscore > existing.bitscore:
+                results[sha256] = metrics
+    return results
+
+
 def phmmer_search(
     sequence: str,
     *,
@@ -119,10 +153,15 @@ def phmmer_search(
         Drop hits whose query coverage (union of domain envelopes / query
         length) is below this. 0–100.
     cpus
-        Worker threads. Default 1 to match ``--concurrency=1``.
+        Number of threads to split the scan across. The target DB is divided
+        into ``cpus`` slices, each scanned on its own thread; results are
+        merged. Default 1 (no split). One phmmer search at a time is assumed
+        (Celery ``--concurrency=1``), so these threads have the pod to
+        themselves.
     block
         Override the target block (used by tests). When omitted, loads the
-        shared worker-local index.
+        shared worker-local index. When passed, it is split on the fly; the
+        index path uses the singleton's cached split.
 
     Returns
     -------
@@ -133,28 +172,34 @@ def phmmer_search(
     seq = sequence.strip().upper()
     query_len = len(seq)
     alphabet = Alphabet.amino()
-    target_block = block if block is not None else protein_search_index.get_block()
+
+    # Target slices for the (optionally parallel) scan. Prefer the index's
+    # cached split; fall back to splitting a test-supplied block on the fly.
+    if block is not None:
+        target_blocks = _split_block(block, cpus)
+    elif cpus > 1:
+        target_blocks = protein_search_index.get_blocks(cpus)
+    else:
+        target_blocks = [protein_search_index.get_block()]
 
     query_seq = TextSequence(name=QUERY_NAME, sequence=seq).digitize(alphabet)
 
+    def scan(b: DigitalSequenceBlock) -> dict[str, ProteinHitMetrics]:
+        return _scan_block(
+            query_seq, b, query_len,
+            min_bitscore=min_bitscore, min_pident=min_pident, min_qcov=min_qcov,
+        )
+
+    if len(target_blocks) == 1:
+        partials = [scan(target_blocks[0])]
+    else:
+        with ThreadPoolExecutor(max_workers=len(target_blocks)) as ex:
+            partials = list(ex.map(scan, target_blocks))
+
+    # Merge per-chunk results, keeping the higher-bitscore record per sha256.
     results: dict[str, ProteinHitMetrics] = {}
-    # phmmer yields one TopHits per query; we always pass a single query so this
-    # loop iterates exactly once.
-    for top_hits in phmmer(
-        (query_seq,),
-        target_block,
-        cpus=cpus,
-        E=_PHMMER_E,
-    ):
-        for hit in top_hits:
-            if float(hit.score) < min_bitscore:
-                continue
-            metrics = _compute_hit_metrics(hit, query_len)
-            if metrics is None:
-                continue
-            if metrics.pident < min_pident or metrics.qcoverage < min_qcov:
-                continue
-            sha256 = hit.name.decode("ascii")
+    for partial in partials:
+        for sha256, metrics in partial.items():
             existing = results.get(sha256)
             if existing is None or metrics.bitscore > existing.bitscore:
                 results[sha256] = metrics

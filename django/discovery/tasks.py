@@ -403,6 +403,7 @@ def sequence_similarity_search(
     A CDS belongs to an iBGC by genomic-range overlap on its contig
     (iBGCs are disjoint within a cBGC, so each CDS overlaps at most one iBGC).
     """
+    from django.conf import settings
     from django.db import connection
 
     from discovery.services.protein_search import phmmer_search
@@ -426,7 +427,7 @@ def sequence_similarity_search(
             min_bitscore=min_bitscore,
             min_pident=min_pident,
             min_qcov=min_qcov,
-            cpus=1,
+            cpus=getattr(settings, "PROTEIN_SEARCH_CPUS", 1),
         )
     except IndexNotBuiltError:
         log.error(

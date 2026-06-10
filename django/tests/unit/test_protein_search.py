@@ -26,6 +26,7 @@ from discovery.services.protein_search.build import (
 from discovery.services.protein_search.index import (
     IndexNotBuiltError,
     ProteinSearchIndex,
+    _split_block,
 )
 from discovery.services.protein_search.search import (
     ProteinHitMetrics,
@@ -244,6 +245,49 @@ def test_phmmer_search_partial_query_yields_partial_coverage(built_index):
     assert m.pident >= 70.0
 
 
+# ── Chunk-parallel scan ────────────────────────────────────────────────────────
+
+
+def test_split_block_preserves_every_sequence(built_index):
+    """Splitting the block must partition it — same sequences, no loss/dupe."""
+    paths, _ = built_index
+    block = _load_block(paths)
+
+    for n_chunks in (1, 2, 3, 4, 10):
+        chunks = _split_block(block, n_chunks)
+        recovered = [s.name.decode("ascii") for c in chunks for s in c]
+        assert sorted(recovered) == sorted(s.name.decode("ascii") for s in block)
+        # Never produce more chunks than requested, nor any empty chunk.
+        assert len(chunks) <= max(1, n_chunks)
+        assert all(len(c) > 0 for c in chunks)
+
+
+def test_split_block_noop_for_trivial_cases(built_index):
+    """≤1 chunk (or a single-sequence block) returns the block unchanged."""
+    paths, _ = built_index
+    block = _load_block(paths)
+    assert _split_block(block, 1) == [block]
+    assert _split_block(block, 0) == [block]
+
+
+def test_phmmer_search_chunked_matches_unchunked(built_index):
+    """A multi-threaded (chunked) scan returns byte-identical hits + metrics to
+    the single-threaded scan — parallelism must not change results."""
+    paths, _ = built_index
+    block = _load_block(paths)
+
+    common = dict(min_bitscore=0.0, min_pident=0.0, min_qcov=0.0, block=block)
+    serial = phmmer_search(_PROTEIN_A, cpus=1, **common)
+    parallel = phmmer_search(_PROTEIN_A, cpus=4, **common)
+
+    assert set(serial) == set(parallel)
+    for sha, m in serial.items():
+        pm = parallel[sha]
+        assert pm.bitscore == pytest.approx(m.bitscore)
+        assert pm.pident == pytest.approx(m.pident)
+        assert pm.qcoverage == pytest.approx(m.qcoverage)
+
+
 # ── ProteinSearchIndex (worker-local cache) ────────────────────────────────────
 
 
@@ -285,3 +329,29 @@ def test_index_reloads_on_version_bump(built_index, monkeypatch):
     assert psi.loaded_version() == v2
     assert block_v2 is not block_v1
     assert len(block_v2) == len(block_v1) + 1
+
+
+def test_get_blocks_caches_and_invalidates_on_reload(built_index, monkeypatch):
+    """get_blocks() caches the split for a given chunk count and rebuilds it
+    only when the underlying block reloads."""
+    paths, _ = built_index
+    monkeypatch.setattr(
+        "discovery.services.protein_search.build.settings.PROTEIN_SEARCH_INDEX_DIR",
+        paths.base_dir,
+    )
+    psi = ProteinSearchIndex()
+
+    chunks_a = psi.get_blocks(2)
+    assert len(chunks_a) <= 2
+    # Same request → same cached list object (no re-split).
+    assert psi.get_blocks(2) is chunks_a
+    # n_chunks=1 short-circuits to the whole block, never the cached split.
+    assert psi.get_blocks(1) == [psi.get_block()]
+
+    # A version bump must invalidate the cached split.
+    extra_sha = _sha256("MYAAAAA")
+    with paths.fasta.open("a") as fh:
+        fh.write(f">{extra_sha}\nMYAAAAA\n")
+    bump_version(paths)
+    chunks_b = psi.get_blocks(2)
+    assert chunks_b is not chunks_a
