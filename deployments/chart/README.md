@@ -10,33 +10,47 @@ minimal skeleton and is **not** a usable target on its own):
 | cloud-dev | `envs/cloud-dev/values.yaml` | `mgnify-bgcs-deployer` (private) |
 | cloud-prod | `envs/cloud-prod/values.yaml` | `mgnify-bgcs-deployer` (private) |
 
-## Self-hosting (no git access required)
+## Self-hosting
 
-Everything you need is public: the **chart** (this OCI artifact), the **images**
-(quay.io/microbiome-informatics), and a **data snapshot** (EBI FTP). You do not
-need any source repository.
+Two ways in, depending on whether you can reach the image registry:
 
-### 1. Install
+### A. Build from source — no registry needed (recommended)
+
+The app images build entirely from public base images (`python:3.12-slim`,
+`pgvector/pgvector`, …), so you never touch a private registry. From a checkout
+of the app repo:
 
 ```bash
-# Pull + unpack the chart from the registry
-helm pull oci://quay.io/microbiome-informatics/charts/bgc-data-portal --untar
+make selfhost                 # build prod images → import into k3d → helm install
+#  or:  scripts/selfhost-build.sh -h     (cluster/namespace/tag/secret options)
+```
 
-# Install with the single-node values + the public-image overlay
+It builds `django/Dockerfile` + `Dockerfile.worker`, imports them into a local
+k3d cluster, and installs this chart with `values-laptop.yaml` + the built-image
+names (init-container images follow `django.image`, so one override covers all).
+No second deployment definition — same chart as the cloud.
+
+### B. From the published OCI chart — needs the registry to be public
+
+Only if `quay.io/microbiome-informatics` (images + `charts/`) is public:
+
+```bash
+helm pull oci://quay.io/microbiome-informatics/charts/bgc-data-portal --untar
 helm install bgc ./bgc-data-portal \
   -f ./bgc-data-portal/values-laptop.yaml \
   -f ./bgc-data-portal/values-selfhost.yaml \
   --namespace bgc-local --create-namespace
 ```
 
-`values-selfhost.yaml` swaps the build-time image names for the published
-`quay.io/microbiome-informatics/bgc_dp_web_site[:_worker]:latest` images;
-init-container images follow `django.image` automatically. Override the tag with
+`values-selfhost.yaml` selects the published quay images; override the tag with
 `--set django.image=…:vX --set celery.image=…_worker:vX` to pin a version.
 
-A Secret named `bgc-data-portal-secret` must exist first (DB creds, tokens,
-broker/cache URLs). The chart's `values-laptop.yaml` header lists the keys; the
-defaults work for a private instance:
+### Secret (path B / manual)
+
+`make selfhost` (path A) creates the Secret for you from the env file. For path B
+(or any manual install) a Secret named `bgc-data-portal-secret` must exist first
+(DB creds, tokens, broker/cache URLs). The chart's `values-laptop.yaml` header
+lists the keys; the defaults work for a private instance:
 
 ```bash
 kubectl create namespace bgc-local
@@ -51,7 +65,7 @@ in-cluster `postgres` service, the broker at `rabbitmq`, cache/result at `redis`
 
 The post-install `NOTES` print the access URL and snapshot-load commands.
 
-### 2. Access
+### Access
 
 ```bash
 kubectl -n bgc-local rollout status deploy/bgc-data-portal-django
@@ -59,7 +73,7 @@ kubectl -n bgc-local port-forward svc/bgc-data-portal-django 8080:80
 # → http://localhost:8080/dashboard/
 ```
 
-### 3. Load data (a fresh instance is empty)
+### Load data (a fresh instance is empty)
 
 Snapshots are published at
 `https://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_bgcs/snapshots/`

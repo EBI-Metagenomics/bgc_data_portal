@@ -1,5 +1,5 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
-        dev dev-full dev-clean dev-preflight deploy-local delete-local \
+        dev dev-full dev-clean dev-preflight deploy-local delete-local selfhost \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
         seed-real-data reset-db e2e-seed \
@@ -106,6 +106,13 @@ deploy-local: create-local-secrets
 
 delete-local:
 	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local --kube-context $(KCTX)
+
+# ── Self-host (build from source, no registry) ────────────────────────────────
+# Builds the prod images from the public-base Dockerfiles, imports them into k3d,
+# and installs the canonical chart — for self-hosters without access to the
+# private image registry. Options: scripts/selfhost-build.sh -h
+selfhost:
+	./scripts/selfhost-build.sh
 
 # ── Cloud deploy ──────────────────────────────────────────────────────────────
 # Cloud dev/prod deploys moved to the private mgnify-bgcs-deployer repo (Helm):
