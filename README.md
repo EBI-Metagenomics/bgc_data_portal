@@ -1,196 +1,249 @@
-# MGnify Biosynthetic Gene Clusters (BGCs) Portal
+# MGnify BGC Data Portal
 
-MGnify BGCs is a web portal for exploring predicted biosynthetic gene clusters (BGCs) across MGnify metagenomic datasets. It harmonises outputs from multiple detection tools (e.g., antiSMASH, GECCO, SanntiS) and provides both an interactive UI and a programmatic API for search, download, and analysis.
+A web portal and REST API for exploring **biosynthetic gene clusters (BGCs)**
+predicted across MGnify metagenomic datasets. The portal harmonises outputs from
+multiple detection tools (antiSMASH, GECCO, SanntiS) into a single **integrated
+BGC (iBGC)** catalogue you can search, cluster, visualise, and download.
 
-The portal is developed by EMBL-EBI’s MGnify team as part of the EUREMAP project. See the About page content in `django/docs/about.qmd` for background, scope, and references.
+Developed by the [MGnify](https://www.ebi.ac.uk/metagenomics) team at EMBL-EBI as
+part of the EUREMAP project.
 
+- **Discovery Platform:** served at `/dashboard/`
+- **Discovery Platform docs:** pages at `/docs`
+- **API docs:** Swagger UI at `/api/docs`
+---
 
-## Quickstart
-### VENV
-```bash
+## What you can do
 
-python3.12 -m venv .venv --prompt portal
-source .venv/bin/activate
-# --prefer-binary keeps Intel-macOS installs working: numba/llvmlite
-# dropped x86_64 mac wheels at 0.63, so pip picks the last wheeled
-# version (0.62.x) instead of trying to compile from source.
-python -m pip install --prefer-binary -e '.[dev]' # '.[dev,dev-gpu]' if in cluster
+- Browse the **iBGC-first** dashboard — each iBGC consolidates one or more
+  source predictions, placed on a similarity map of gene-cluster families (GCFs).
+- **Search** the catalogue: faceted metadata filters (class, completeness,
+  detector, domains) and **sequence search** (phmmer-based protein similarity).
+- Inspect an iBGC's regions, domains, novelty scores, and nearest neighbours.
+- **Download** a BGC as GBK / FNA / FAA / JSON, or export result sets as TSV.
+- Build a **shortlist report** from selected iBGCs (shareable snapshot token).
+- Drive everything programmatically through the Django Ninja REST API.
 
-# Activate in posterios sesions
-# source services/mgnify-bgcs-etl/scripts/activate
-```
+---
 
+## Run your own instance (self-host)
 
-## Features
-
-- Explore BGCs and associated contigs/assemblies and metadata in a unified interface
-- Multiple search modes:
-	- Keyword search across metadata
-	- Advanced faceted search (class, assembly/contig, domain filters, completeness, detectors)
-	- Sequence-based search (nucleotide/protein; HMMER/cosine similarity; region vs CDS set)
-	- Chemical structure search using SMILES
-- Download a single BGC in GBK/FNA/FAA/JSON
-- Export search results as TSV
-- REST-like API powered by Django Ninja (`/api`)
-- Asynchronous background processing using Celery (RabbitMQ broker, Redis result cache)
-
-
-## Running tests
-
-Unit/integration tests (pytest):
+You need a single-node Kubernetes cluster and a container runtime
+(Docker / Colima / Podman). [k3d](https://k3d.io) is the lightest option:
 
 ```bash
-docker compose exec django pytest -q
+k3d cluster create bgc-local -p "8080:30080@server:0"   # NodePort → host :8080
+kubectl config use-context k3d-bgc-local
 ```
 
-End-to-end (Playwright) tests can target a running instance (see `pytest.ini`):
+### Install — build from source (recommended, no registry needed)
+
+The app images build entirely from public base images, so you never touch a
+private registry. One command builds the images, imports them into k3d, and
+installs the Helm chart:
 
 ```bash
-# Example (against dev site):
-E2E_BASE_URL=https://bgc-portal-dev.mgnify.org pytest tests/e2e/playwright -q
-
-# Or specify base URL via CLI option:
-pytest tests/e2e/playwright -q --e2e-base-url http://localhost:8000
+make selfhost
+#  or, for cluster/namespace/tag/secret options:
+scripts/selfhost-build.sh -h
 ```
 
-## Stack and architecture
+This installs the chart in `deployments/chart/` with `values-laptop.yaml` and the
+locally built image names, and creates the `bgc-data-portal-secret` for you.
 
-- Django 5, Django Ninja (API), Django REST Framework (throttling)
-- Celery workers (RabbitMQ broker, Redis result backend)
-- PostgreSQL with pgvector extension (see `db/init/init_vector.sql`)
-- Static files: collected by Django; served by NGINX in Kubernetes; WhiteNoise available
-- Optional analytics via Matomo
+### Install — from the published OCI chart (alternative)
 
-Main services (local via Docker Compose):
-- Postgres (pgvector)
-- Redis
-- RabbitMQ
-- Django web app
-- Celery worker
-
-
-## Repository layout (high level)
-
-- `django/` — Django project and app code, Dockerfile, requirements
-- `django/bgc_data_portal/` — project settings, URLs, templates
-- `django/mgnify_bgcs/` — app (API, models, tasks, utilities)
-- `db/` — database Dockerfile and init scripts (pgvector)
-- `deployments/` — Kubernetes manifests (dev/prod)
-- `docs/` — Quarto site (compiled under `docs/_site/`) and content
-- `tests/` — unit/integration/e2e test scaffolding
-- `docker-compose.yml` — local development stack
-
-
-
-## Quick start (Docker Compose)
-
-
-1) Create a `.env` file at the repo root with the required environment variables. Minimal example for local use:
-
-```
-DJANGO_SECRET_KEY=change-me
-DJANGO_DEBUG=True
-
-# Database (Compose uses service name `db`)
-POSTGRES_USER=bgc_dp_pg_user
-POSTGRES_PASSWORD=dummy_password
-POSTGRES_DB=mgnify_bgcs
-DATABASE_URL=postgres://bgc_dp_pg_user:dummy_password@db:5432/mgnify_bgcs
-
-# Messaging + caching
-CELERY_BROKER_URL=amqp://bgc_dp_user:dummy_password@rabbitmq:5672//
-CELERY_RESULT_BACKEND=redis://redis:6379/1
-DJANGO_CACHE_BACKEND=redis://redis:6379/0
-
-# RabbitMQ defaults (for container init)
-RABBITMQ_DEFAULT_USER=bgc_dp_user
-RABBITMQ_DEFAULT_PASS=dummy_password
-
-# Optional analytics and host settings for local dev
-ALLOWED_HOSTS=localhost,127.0.0.1
-CSRF_TRUSTED_ORIGINS=http://localhost:8000
-```
-
-2) Start the stack:
+If `quay.io/microbiome-informatics` (chart + images) is reachable, you can skip
+the build. Create the secret first (see below), then:
 
 ```bash
-docker compose up --build
+helm pull oci://quay.io/microbiome-informatics/charts/bgc-data-portal --untar
+helm install bgc ./bgc-data-portal \
+  -f ./bgc-data-portal/values-laptop.yaml \
+  -f ./bgc-data-portal/values-selfhost.yaml \
+  -n bgc-local --create-namespace
 ```
 
-This will:
-- Build the Django image from `django/Dockerfile`
-- Start Redis, Postgres (with `pgvector` enabled via `db/init/init_vector.sql`), RabbitMQ
-- Run Django migrations and start the dev server on http://localhost:8000
-- Start a Celery worker
+`values-selfhost.yaml` selects the published quay images; pin a version with
+`--set django.image=…:vX --set celery.image=…_worker:vX`.
 
-Notes
-- Compose mounts `./django` into the app container for rapid iteration.
-- The app uses `/data/packages` for package ingestion and `/data/huggingface` as a cache; see volumes in `docker-compose.yml`.
+### Secret
 
+`make selfhost` creates the secret automatically. For the OCI path (or any manual
+install) create it first — a secret named `bgc-data-portal-secret` with these
+keys (defaults are fine for a private instance):
 
-## Environment variables
+```bash
+kubectl create namespace bgc-local
+kubectl create secret generic bgc-data-portal-secret \
+  --from-env-file=my-secrets.env -n bgc-local
+```
 
-Key variables read by the app (see `django/bgc_data_portal/settings.py`):
+```
+DJANGO_SECRET_KEY      ADMIN_API_TOKEN        PROJECT_USER_TOKEN
+POSTGRES_USER          POSTGRES_PASSWORD      POSTGRES_DB
+DATABASE_URL           CELERY_BROKER_URL      CELERY_RESULT_BACKEND
+DJANGO_CACHE_BACKEND
+```
 
-- `DJANGO_SECRET_KEY` — Django secret key (required)
-- `DJANGO_DEBUG` — Enable debug mode in development (`True`/`False`)
-- `ALLOWED_HOSTS` — Comma-separated allowed hosts; required in non-debug
-- `CSRF_TRUSTED_ORIGINS`, `CORS_TRUSTED_ORIGINS` — Optional origins lists
-- `DJANGO_FORCE_SCRIPT_NAME` — Set when the app is hosted under a path prefix (used in prod)
-- `DATABASE_URL` — Postgres connection URL
-- `CELERY_BROKER_URL` — RabbitMQ broker URL
-- `CELERY_RESULT_BACKEND` — Redis URL for Celery results
-- `DJANGO_CACHE_BACKEND` — Redis URL for Django cache
-- `MATOMO_URL`, `MATOMO_SITE_ID` — Optional analytics config
-- `ADMIN_API_TOKEN`, `PROJECT_USER_TOKEN` — Bearer tokens for admin/project-scoped API endpoints
+Point `DATABASE_URL` at the in-cluster `postgres` service, `CELERY_BROKER_URL` at
+`rabbitmq`, and the cache/result URLs at `redis`.
 
+### Access
 
+```bash
+kubectl -n bgc-local rollout status deploy/bgc-data-portal-django
+```
 
+Open **<http://localhost:8080/dashboard/>** (with the k3d NodePort mapping above;
+otherwise `kubectl -n bgc-local port-forward svc/bgc-data-portal-django 8080:80`).
 
-## Documentation
+### Load data (a fresh instance is empty)
 
-Content is authored with Quarto under `docs/` and `django/docs/`. The compiled site is in `docs/_site/`. To update:
+The images ship no reference data. Load a published snapshot (DB dump +
+clustering artifacts + protein-search index) to get a working catalogue.
+Snapshots live at
+`https://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_bgcs/snapshots/`
+(`latest.txt` names the newest compatible bundle):
 
-1) Edit or add `.qmd` content (e.g., `django/docs/about.qmd`)
-2) Render the site with Quarto
-3) Keep `bgc_data_portal/templates/about.html` in sync with the rendered `about.html` for consistent in-app About content
+```bash
+NS=bgc-local
+curl -fSL "https://ftp.ebi.ac.uk/.../bgc-portal-snapshot-<ver>.tgz" -o snapshot.tgz
+mkdir -p snap && tar -xzf snapshot.tgz -C snap
 
+# DB (POSTGRES_USER/DB are the values you put in the secret)
+kubectl -n "$NS" exec -i postgres-0 -- \
+  pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner < snap/db.dump
 
-## Deployment notes (Kubernetes)
+# clustering artifacts + protein-search index, then refresh stats
+DJ=$(kubectl -n "$NS" get pod -l app=bgc-data-portal-django -o name | head -1)
+kubectl -n "$NS" exec -i "$DJ" -- tar -C /data -xzf - < snap/artifacts.tgz
+kubectl -n "$NS" exec "$DJ" -- python manage.py update_discovery_stats
+```
 
-All deployments render from **one Helm chart** (`deployments/chart/`) — the
-single source of truth for the topology (proxy `ConfigMap`, `bgc-data-portal-secret`,
-PostgreSQL/pgvector StatefulSet, Redis, RabbitMQ, Django, Celery, static NGINX,
-ingress, PVCs):
+No further network access is needed afterwards — suitable for an air-gapped HPC
+or laptop.
 
-- **laptop / self-host & dev loop** — `values-laptop.yaml` (k3d + Skaffold; `make dev`)
-- **cloud dev/prod** — values + deploy automation live in the private
-  `mgnify-bgcs-deployer` repo (`make deploy-dev` / `make deploy-prod` there)
+> Full chart reference (all install paths, cloud targets, and conventions):
+> [`deployments/chart/README.md`](./deployments/chart/README.md).
 
-Runbook: `../../docs/runbooks/services/bgc_data_portal/deployment-helm.md`.
+### Teardown
 
-## API quick start
+```bash
+helm uninstall bgc -n bgc-local
+k3d cluster delete bgc-local
+```
 
-- Base path: `/api`
-- OpenAPI/Docs (Django Ninja): typically available at `/api/docs` in development
-- Selected endpoints (see `django/mgnify_bgcs/api.py`):
-	- `POST /api/search/keyword` — keyword search (async)
-	- `POST /api/search/advanced` — advanced faceted search (async)
-	- `POST /api/search/sequence` — sequence-based search (async)
-	- `POST /api/search/chemical` — SMILES search (async)
-	- `GET /api/download/bgc` — download a single BGC (gbk/fna/faa/json)
-	- `GET /api/download/results-tsv` — download results for a task as TSV
+---
 
-Authentication
-- Administrative DB-operation endpoints under `/api/db_op/*` require `Authorization: Bearer <ADMIN_API_TOKEN>`
-- Ingestion endpoint `/api/upload/ingest_bgc` requires `Authorization: Bearer <PROJECT_USER_TOKEN>`
+## Develop
 
+The dev loop runs the same chart on k3d with **Skaffold** hot-reload. You need
+`k3d`, `kubectl`, `skaffold`, and **Helm v3** (`brew install helm@3` — Skaffold is
+incompatible with Helm v4).
+
+```bash
+make dev          # build, deploy to k3d, watch django/ for changes
+```
+
+Skaffold forwards `django:80` → `localhost:8080`; the dashboard is at
+`/dashboard/`. Run commands and tests inside the cluster via Make targets (they
+wrap `kubectl exec`):
+
+```bash
+make test-unit            # pytest tests/unit/
+make test-integration     # pytest tests/integration/
+make shell                # shell into the django pod
+make logs-django          # tail logs
+```
+
+### Seed a dev database
+
+A fresh DB needs schema + data before there's anything to render:
+
+```bash
+make reset-db                              # rebuild the v2 schema (DESTRUCTIVE, dev only)
+STAGED_FILES_DIR=/path/to/staged \
+  make seed-real-data                      # load raw discovery data
+make build-protein-index                   # build the sequence-search index
+```
+
+### End-to-end tests
+
+Playwright specs run **outside** the cluster against the forwarded port (needs
+`playwright install chromium` once):
+
+```bash
+make e2e-seed             # build iBGCs + a clustering run from seeded data
+make test-e2e             # run the browser suite
+```
+
+---
+
+## Architecture
+
+| Component          | Technology                                          |
+|--------------------|-----------------------------------------------------|
+| Web framework      | Django 5 + Django Ninja (OpenAPI)                   |
+| Database           | PostgreSQL + pgvector                               |
+| Cache / results    | Redis                                               |
+| Task broker        | RabbitMQ                                            |
+| Async workers      | Celery                                              |
+| Production server  | Gunicorn (static served by NGINX in Kubernetes)    |
+| Packaging / deploy | One Helm chart → k3d (self-host/dev) or cloud k8s  |
+
+The catalogue is **iBGC-first**: `IntegratedBGC` rows are the primary unit
+everywhere. Similarity uses a **composite Sørensen–Dice** score over shared
+protein domains and adjacency pairs, feeding a KNN → hierarchical Leiden
+clustering pipeline that assigns iBGCs to gene-cluster families and computes
+novelty scores. Heavy clustering runs as an HPC handoff in production.
+
+```
+django/
+  bgc_data_portal/    # project settings, root URLs, SPA + docs views
+  discovery/          # v2 Discovery app (iBGC-first): models, api, tasks, services/
+  mgnify_bgcs/        # legacy app (pre-v2, being retired)
+  tests/              # unit / integration / e2e
+db/                   # Postgres (pgvector) init
+deployments/chart/    # Helm chart — single source of truth for all deploys
+docs/                 # in-app Quarto docs
+```
+
+---
+
+## API
+
+The REST API is served under `/api/`, with interactive docs at **`/api/docs`**.
+Discovery endpoints live under `/api/discovery/` (iBGC search, clustering,
+reports, downloads).
+
+- **Async search** — search endpoints return `202` with a `task_id`; poll the
+  job-status endpoint for results (Celery-backed).
+- **Auth** — admin DB-operation endpoints require
+  `Authorization: Bearer <ADMIN_API_TOKEN>`; ingestion requires
+  `Authorization: Bearer <PROJECT_USER_TOKEN>`.
+
+---
+
+## Deployment
+
+All environments render from **one Helm chart** (`deployments/chart/`): the
+laptop / self-host targets use `values-laptop.yaml` (+ `values-selfhost.yaml`),
+while cloud dev/prod values and automation live in the private
+`mgnify-bgcs-deployer` repo. Images publish to `quay.io/microbiome-informatics`
+and the chart to `oci://quay.io/microbiome-informatics/charts/bgc-data-portal`
+via GitHub Actions. Versioning is automated by Release Please from
+[Conventional Commits](https://www.conventionalcommits.org/).
+
+Chart details and conventions: [`deployments/chart/README.md`](./deployments/chart/README.md).
+
+---
 
 ## Funding
 
-This portal is part of the EUREMAP project, funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No. 101131663).
-
+Part of the EUREMAP project, funded by the European Union under
+HORIZON-INFRA-2023-DEV-01-04 (Grant No. 101131663).
 
 ## License
 
-Apache License 2.0. See LICENSE file in the repository root for details.
+Apache License 2.0 — see [LICENSE](./LICENSE).
