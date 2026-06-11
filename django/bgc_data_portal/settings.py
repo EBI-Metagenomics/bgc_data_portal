@@ -8,7 +8,7 @@ import os
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
-# from csp.constants import NONCE, SELF
+from csp.constants import NONE, SELF
 
 # Load environment variables from .env file
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -110,7 +110,6 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "ninja",
     "matomo",
-    "rest_framework",
     "django_celery_results",
     "pgvector",
     "csp",
@@ -223,16 +222,6 @@ PROTEIN_SEARCH_CPUS: int = int(
 )
 
 
-# REST Framework
-REST_FRAMEWORK = {
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-    ],
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "20/minute",
-    },
-}
-
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -307,14 +296,67 @@ MATOMO_SITE_ID = (
     int(os.getenv("MATOMO_SITE_ID")) if os.getenv("MATOMO_SITE_ID") else None
 )
 
-# Content Security Policy (CSP)
-# CONTENT_SECURITY_POLICY = {
-#     "DIRECTIVES": {
-#     "default-src": [SELF],
-#     "script-src":  [SELF, NONCE],
-#     "style-src":   [SELF, NONCE],
-#     },
-# }
+# Content Security Policy (CSP) — enforced by csp.middleware.CSPMiddleware.
+#
+# Scoped to the app's real resource origins:
+#   * 'self'                     — Django pages, the React SPA bundle, /api, static
+#   * assets.emblstatic.net      — EMBL Visual Framework CSS/JS + its woff/svg assets
+#   * code.jquery.com            — jQuery (static portal pages)
+#   * MATOMO_URL                 — analytics tracker + beacon, only when configured
+# Fonts are self-hosted (static/css/fonts.css), so no Google Fonts origins are
+# needed. 'unsafe-inline' is required for styles (VF + Plotly inject <style> blocks
+# and inline style="" attributes) — a known, accepted limitation of those libs.
+# Scripts deliberately avoid 'unsafe-inline'/'unsafe-eval' except for the Matomo
+# inline bootstrap, which is only allowed when Matomo is enabled.
+#
+# Roll-out safety: set CSP_REPORT_ONLY=true to emit the policy as
+# Content-Security-Policy-Report-Only (logs violations without blocking) while
+# validating the dashboard, then unset to enforce.
+_VF_HOST = "https://assets.emblstatic.net"
+_JQUERY_HOST = "https://code.jquery.com"
+
+# The EMBL VF hero/masthead background images (e.g. roundels.png) are served
+# through the embl.org cloudimg proxy, not emblstatic — without these the hero
+# falls back to its bare green background colour.
+_EMBL_IMG_HOSTS = ["https://acxngcvroo.cloudimg.io", "https://www.embl.org"]
+
+# The EMBL VF global header's "content hub" widget fetches notifications and
+# ontology patterns from these EMBL services (with a github.io fallback). Without
+# them the header's notification bell silently fails (no impact on the app data).
+_EMBL_CONNECT_HOSTS = [
+    "https://www.embl.org",
+    "https://wwwdev.embl.org",
+    "https://embl-communications.github.io",
+]
+
+_csp_script = [SELF, _VF_HOST, _JQUERY_HOST]
+_csp_style = [SELF, _VF_HOST, "'unsafe-inline'"]
+_csp_font = [SELF, _VF_HOST]
+_csp_img = [SELF, "data:", _VF_HOST, *_EMBL_IMG_HOSTS]
+_csp_connect = [SELF, *_EMBL_CONNECT_HOSTS]
+
+if MATOMO_URL:
+    _csp_script += [MATOMO_URL, "'unsafe-inline'"]
+    _csp_img.append(MATOMO_URL)
+    _csp_connect.append(MATOMO_URL)
+
+_CSP_DIRECTIVES = {
+    "default-src": [SELF],
+    "script-src": _csp_script,
+    "style-src": _csp_style,
+    "font-src": _csp_font,
+    "img-src": _csp_img,
+    "connect-src": _csp_connect,
+    "worker-src": [SELF, "blob:"],  # SPA may spin up web workers from blob URLs
+    "object-src": [NONE],           # no <object>/<embed>/<applet>
+    "base-uri": [SELF],             # block <base> tag hijacking
+    "frame-ancestors": [SELF],      # clickjacking protection
+}
+
+if os.getenv("CSP_REPORT_ONLY", "false").lower() == "true":
+    CONTENT_SECURITY_POLICY_REPORT_ONLY = {"DIRECTIVES": _CSP_DIRECTIVES}
+else:
+    CONTENT_SECURITY_POLICY = {"DIRECTIVES": _CSP_DIRECTIVES}
 
 # Logging
 

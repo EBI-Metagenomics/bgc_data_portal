@@ -4,7 +4,7 @@
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
         seed-real-data reset-db e2e-seed \
         build-protein-index update-protein-index \
-        clean-images tidy nuke \
+        clean-images tidy nuke lock \
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
         workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
 
@@ -276,3 +276,24 @@ nuke: cluster-delete
 	@echo "Pruning Docker daemon (images, containers, build cache, networks, VOLUMES)..."
 	docker system prune -af --volumes
 	@echo "Cluster deleted and Docker pruned. Next 'make dev' starts cold."
+
+# ── Dependency lockfiles ────────────────────────────────────────────────────────
+# Recompile the fully-pinned requirements-*.lock files from the human-edited
+# requirements-*.txt sources. Runs uv inside the prod base image (python:3.12-slim)
+# resolving for linux/amd64 so the locks match the deployed images regardless of
+# the host arch — nothing is installed on the host. Edit a requirements-*.txt to
+# add/bump a top-level dep, then run `make lock` and commit the updated .lock files.
+PY_PLATFORM := x86_64-unknown-linux-gnu
+PY_VERSION := 3.12
+lock:
+	@echo "Recompiling requirements-*.lock (uv, linux/amd64, py$(PY_VERSION))..."
+	docker run --rm -v "$(CURDIR)/django:/w" -w /w python:$(PY_VERSION)-slim sh -c '\
+	  apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1 && \
+	  pip install -q uv && \
+	  for f in web ml worker dev; do \
+	    echo "  - requirements-$$f.lock" && \
+	    uv pip compile requirements-$$f.txt -o requirements-$$f.lock \
+	      --python-platform $(PY_PLATFORM) --python-version $(PY_VERSION) \
+	      --emit-index-url --no-header --quiet; \
+	  done'
+	@echo "Done. Review the diff and commit the updated lockfiles."

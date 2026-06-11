@@ -23,11 +23,13 @@ surfaces lived under ``/legacy/*`` and were retired with the
 import logging
 import os
 
+from csp.decorators import csp_update
 from django.conf import settings
 from django.core.exceptions import SuspiciousFileOperation
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
 from django.utils._os import safe_join
+from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
 
 log = logging.getLogger(__name__)
@@ -35,6 +37,25 @@ numeric_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 log.setLevel(numeric_level)
 
 
+# The docs are static Quarto-generated HTML. Quarto needs a markedly looser CSP
+# than the app, and it's all relaxed for THIS view only (content is built by us
+# and served same-origin, so the risk is low) while the app + SPA keep the strict
+# policy. Quarto uses:
+#   * inline <script> blocks (Headroom, nav, search)        -> 'unsafe-inline'
+#   * a mermaid/OJS runtime that uses eval/new Function      -> 'unsafe-eval'
+#   * ES modules + styles + fonts inlined as data: URIs      -> data: in
+#     script-src / style-src / font-src
+# (style-src/font-src already allow 'self'+VF globally; we only add data: here.)
+@method_decorator(
+    csp_update(
+        {
+            "script-src": ["'unsafe-inline'", "'unsafe-eval'", "data:"],
+            "style-src": ["data:"],
+            "font-src": ["data:"],
+        }
+    ),
+    name="dispatch",
+)
 class DocsView(TemplateView):
     def get(self, request, path="index.html", *args, **kwargs):
         docs_root = os.path.join(settings.BASE_DIR, "docs", "_site")

@@ -39,8 +39,8 @@ RUN mkdir -p /data/chemont  \
 ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
 
 WORKDIR /app
-COPY requirements-web.txt .
-RUN pip install --upgrade pip && pip install -r requirements-web.txt
+COPY requirements-web.lock .
+RUN pip install --upgrade pip && pip install -r requirements-web.lock
 
 COPY . .
 

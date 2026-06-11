@@ -2208,8 +2208,10 @@ def similar_ibgc_query(
 
     try:
         scoring = get_active_scoring_cache()
-    except FileNotFoundError as exc:
-        raise HttpError(503, str(exc))
+    except FileNotFoundError:
+        # Log the path-bearing detail server-side; never leak it to the client.
+        logger.exception("Scoring cache unavailable for similar-iBGC query")
+        raise HttpError(503, "Similarity index is not available yet")
 
     row_ix = scoring.row_index_for(body.ibgc_id)
     if row_ix is None:
@@ -2305,8 +2307,10 @@ def ibgc_architecture_query(
 
     try:
         scoring = get_active_scoring_cache()
-    except FileNotFoundError as exc:
-        raise HttpError(503, str(exc))
+    except FileNotFoundError:
+        # Log the path-bearing detail server-side; never leak it to the client.
+        logger.exception("Scoring cache unavailable for architecture query")
+        raise HttpError(503, "Similarity index is not available yet")
 
     k = max(1, min(int(body.k), 500))
 
@@ -2842,18 +2846,11 @@ def ibgc_sequence_query_status(
 
     res = AsyncResult(task_id)
     if res.failed():
-        # Surface the underlying message — the most actionable case is
-        # IndexNotBuiltError, which means the operator needs to run
-        # ``make build-protein-index`` before sequence search can return
-        # anything. Without this, the dashboard just showed an empty
-        # roster and the cause was invisible.
-        raw = res.result
-        detail = (
-            f"{type(raw).__name__}: {raw}"
-            if isinstance(raw, BaseException)
-            else "Sequence search failed"
-        )
-        raise HttpError(500, detail)
+        # Log the full exception server-side (the most actionable case is
+        # IndexNotBuiltError → the operator must run ``make build-protein-index``);
+        # return a generic message so internal detail isn't leaked to the client.
+        logger.error("Sequence search task %s failed", task_id, exc_info=res.result)
+        raise HttpError(500, "Sequence search failed")
     if not res.ready():
         raise HttpError(503, "Sequence search still running")
 
@@ -2961,11 +2958,10 @@ def chemical_query(request, body: ChemicalQueryRequest):
     if not (0.0 <= body.similarity_threshold <= 1.0):
         raise HttpError(400, "similarity_threshold must be between 0 and 1")
 
-    from rdkit import Chem
-
-    if Chem.MolFromSmiles(smiles) is None:
-        raise HttpError(400, "Invalid SMILES string")
-
+    # SMILES structural validity is checked in the Celery worker (which owns
+    # rdkit): ``chemical_similarity_search`` returns no matches for a SMILES
+    # rdkit can't parse. The web pod is intentionally rdkit-free, so we only
+    # do the cheap non-empty/range checks above here.
     from discovery.tasks import chemical_similarity_search
 
     try:
@@ -3030,13 +3026,10 @@ def chemical_query_status(
 
     res = AsyncResult(task_id)
     if res.failed():
-        raw = res.result
-        detail = (
-            f"{type(raw).__name__}: {raw}"
-            if isinstance(raw, BaseException)
-            else "Chemical search failed"
-        )
-        raise HttpError(500, detail)
+        # Log the full exception server-side; return a generic message so
+        # internal detail (paths, ClassyFire/host info) isn't leaked.
+        logger.error("Chemical search task %s failed", task_id, exc_info=res.result)
+        raise HttpError(500, "Chemical search failed")
     if not res.ready():
         raise HttpError(503, "Chemical search still running")
 

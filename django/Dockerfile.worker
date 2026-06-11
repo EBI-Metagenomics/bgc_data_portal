@@ -33,12 +33,12 @@ ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
 WORKDIR /app
 
 # ── Layer A: heavy ML packages (rarely change → maximise cache) ─────────────
-COPY requirements-ml.txt .
-RUN pip install --upgrade pip && pip install -r requirements-ml.txt
+COPY requirements-ml.lock .
+RUN pip install --upgrade pip && pip install -r requirements-ml.lock
 
-# ── Layer B: remaining deps ─-─────────────────────────────────────────────────
-COPY requirements-web.txt requirements-worker.txt ./
-RUN pip install -r requirements-worker.txt
+# ── Layer B: remaining deps (full resolved set; ML already satisfied) ────────
+COPY requirements-worker.lock .
+RUN pip install -r requirements-worker.lock
 
 # ── Layer C: application code (changes often) ───────────────────────────────
 COPY . .
