@@ -7,7 +7,7 @@ relied on by the ingestion loader and asset projection paths.
 from __future__ import annotations
 
 import json
-from unittest.mock import patch, mock_open
+from unittest.mock import mock_open, patch
 
 from discovery.services import go_slim as go_slim_mod
 from discovery.services.go_slim import go_slim_for_terms

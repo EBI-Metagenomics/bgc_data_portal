@@ -12,21 +12,16 @@ the values now reflect iBGC-level counts.
 """
 
 import random
-from collections import defaultdict
-
-from django.db import connection
-from django.db.models import Avg, Count, Q
 
 from discovery.models import (
     AssemblyType,
-    CdsChemOnt,
     DashboardAssembly,
     IbgcNaturalProduct,
     IntegratedBgc,
-    PrecomputedStats,
     SourceBgcPrediction,
 )
-
+from django.db import connection
+from django.db.models import Avg, Count, Q
 
 MAX_BOXPLOT_VALUES = 10_000
 
@@ -107,7 +102,13 @@ def compute_assembly_stats(assembly_qs) -> dict:
 
 
 TAXONOMY_RANK_NAMES = [
-    "kingdom", "phylum", "class", "order", "family", "genus", "species",
+    "kingdom",
+    "phylum",
+    "class",
+    "order",
+    "family",
+    "genus",
+    "species",
 ]
 
 
@@ -191,9 +192,7 @@ def compute_bgc_stats(ibgc_qs) -> dict:
 
     core_domains = _compute_core_domains(ibgc_qs, total_ibgcs)
 
-    score_rows = list(
-        ibgc_qs.values_list("novelty_score", "domain_novelty")
-    )
+    score_rows = list(ibgc_qs.values_list("novelty_score", "domain_novelty"))
     novelty_vals = _sample_values([r[0] for r in score_rows if r[0] is not None])
     domain_novelty_vals = _sample_values([r[1] for r in score_rows if r[1] is not None])
 
@@ -207,8 +206,9 @@ def compute_bgc_stats(ibgc_qs) -> dict:
     ibgc_ids = list(ibgc_qs.values_list("id", flat=True))
     if ibgc_ids:
         partial_ids = set(
-            SourceBgcPrediction.objects
-            .filter(integrated_bgc_id__in=ibgc_ids, is_partial=True)
+            SourceBgcPrediction.objects.filter(
+                integrated_bgc_id__in=ibgc_ids, is_partial=True
+            )
             .values_list("integrated_bgc_id", flat=True)
             .distinct()
         )
@@ -229,8 +229,7 @@ def compute_bgc_stats(ibgc_qs) -> dict:
         .order_by("-count")
     )
     bgc_class_distribution = [
-        {"name": row["bgc_class"], "count": row["count"]}
-        for row in bgc_class_dist
+        {"name": row["bgc_class"], "count": row["count"]} for row in bgc_class_dist
     ]
 
     return {
@@ -323,7 +322,12 @@ def _build_np_class_sunburst(ibgc_qs) -> list[dict]:
             if l3:
                 l3_id = f"l3:{l1}/{l2}/{l3}"
                 if l3_id not in nodes:
-                    nodes[l3_id] = {"id": l3_id, "label": l3, "parent": l2_id, "count": 0}
+                    nodes[l3_id] = {
+                        "id": l3_id,
+                        "label": l3,
+                        "parent": l2_id,
+                        "count": 0,
+                    }
                 nodes[l3_id]["count"] += 1
 
     return list(nodes.values())
@@ -409,8 +413,9 @@ def generate_discovery_stats() -> dict:
     least one validated row (ground-truth iBGCs).
     """
     validated_ibgc_ids = (
-        SourceBgcPrediction.objects
-        .filter(is_validated=True, integrated_bgc__isnull=False)
+        SourceBgcPrediction.objects.filter(
+            is_validated=True, integrated_bgc__isnull=False
+        )
         .values_list("integrated_bgc_id", flat=True)
         .distinct()
     )
@@ -421,7 +426,9 @@ def generate_discovery_stats() -> dict:
         "metagenomes": DashboardAssembly.objects.filter(
             assembly_type=AssemblyType.METAGENOME
         ).count(),
-        "validated_bgcs": IntegratedBgc.objects.filter(id__in=validated_ibgc_ids).count(),
+        "validated_bgcs": IntegratedBgc.objects.filter(
+            id__in=validated_ibgc_ids
+        ).count(),
         "ibgcs": IntegratedBgc.objects.count(),
         "total_bgc_predictions": SourceBgcPrediction.objects.count(),
     }

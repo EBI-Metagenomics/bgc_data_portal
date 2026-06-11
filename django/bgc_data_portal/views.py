@@ -24,6 +24,7 @@ import logging
 import os
 
 from csp.decorators import csp_update
+
 from django.conf import settings
 from django.core.exceptions import SuspiciousFileOperation
 from django.http import FileResponse, Http404
@@ -100,10 +101,14 @@ def about(request):
 
 def dashboard_spa(request):
     """Serve the React SPA for the Discovery Platform."""
-    return render(request, "dashboard.html", {
-        "FORCE_SCRIPT_NAME": settings.FORCE_SCRIPT_NAME,
-        "DEBUG": settings.DEBUG,
-    })
+    return render(
+        request,
+        "dashboard.html",
+        {
+            "FORCE_SCRIPT_NAME": settings.FORCE_SCRIPT_NAME,
+            "DEBUG": settings.DEBUG,
+        },
+    )
 
 
 def custom_404_view(request, exception):

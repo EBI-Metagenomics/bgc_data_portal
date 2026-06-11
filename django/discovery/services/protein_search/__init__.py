@@ -18,7 +18,7 @@ Public entry points:
   module-level singleton handed the loaded ``DigitalSequenceBlock``.
 """
 
-from .build import rebuild_index, update_index, index_paths
+from .build import index_paths, rebuild_index, update_index
 from .index import protein_search_index
 from .search import ProteinHitMetrics, phmmer_search
 

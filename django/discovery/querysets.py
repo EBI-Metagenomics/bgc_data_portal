@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from django.db.models import OuterRef, QuerySet, Subquery
-
 from discovery.models import SourceBgcPrediction
+from django.db.models import OuterRef, QuerySet, Subquery
 
 
 def latest_version_bgcs(qs: QuerySet | None = None) -> QuerySet:

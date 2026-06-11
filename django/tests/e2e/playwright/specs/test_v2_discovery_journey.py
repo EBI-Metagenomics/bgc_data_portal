@@ -62,7 +62,7 @@ def test_v2_results_tabs_switch(page, e2e_v2_base_url):
     # Switch to Variables map.
     page.locator('[data-testid="results-tab-variables"]').click()
     # Variables tab shows X/Y axis selectors (combobox role).
-    page.wait_for_selector('text=/^Novelty$/', timeout=10_000)
+    page.wait_for_selector("text=/^Novelty$/", timeout=10_000)
 
     # Switch to UMAP.
     page.locator('[data-testid="results-tab-umap"]').click()
@@ -90,14 +90,14 @@ def test_v2_roster_surfaces_ibgc_accessions(page, e2e_v2_base_url):
         pytest.skip("No iBGCs in the dataset — skipping accession test")
 
     row_text = rows.first.inner_text()
-    assert ACCESSION_RE.search(row_text), (
-        f"No MGYB accession visible in roster row: {row_text!r}"
-    )
+    assert ACCESSION_RE.search(
+        row_text
+    ), f"No MGYB accession visible in roster row: {row_text!r}"
     # iBGCs carry the two-char per-cBGC suffix; a bare cBGC accession here
     # would mean the roster is rendering the wrong entity.
-    assert IBGC_ACCESSION_RE.search(row_text), (
-        f"Expected a suffixed iBGC accession in roster row: {row_text!r}"
-    )
+    assert IBGC_ACCESSION_RE.search(
+        row_text
+    ), f"Expected a suffixed iBGC accession in roster row: {row_text!r}"
 
 
 @pytest.mark.e2e
@@ -185,17 +185,13 @@ def test_v2_architecture_tab_runs_query(page, e2e_v2_base_url):
     page.wait_for_selector('[data-testid="ibgc-dashboard"]', timeout=30_000)
 
     # Open the Domains chip (it lives in the filter strip).
-    domains_chip = page.get_by_role(
-        "button", name=re.compile(r"^Domains", re.I)
-    ).first
+    domains_chip = page.get_by_role("button", name=re.compile(r"^Domains", re.I)).first
     domains_chip.click()
 
     # The query builder mounts with AND active by default. Switch to ARCH.
     query_panel = page.locator('[data-tour="domain-query"]')
     query_panel.wait_for(timeout=10_000)
-    arch_tab = query_panel.get_by_role(
-        "radio", name=re.compile(r"^ARCH$", re.I)
-    )
+    arch_tab = query_panel.get_by_role("radio", name=re.compile(r"^ARCH$", re.I))
     if arch_tab.count() == 0:
         # Radix ToggleGroup may render as button; fall back.
         arch_tab = query_panel.locator("button", has_text=re.compile(r"^ARCH$"))
@@ -230,9 +226,7 @@ def test_v2_generate_report_opens_tab_and_renders(page, e2e_v2_base_url, context
 
     # Add the first iBGC to the shortlist.
     rows.first.click(button="right")
-    page.get_by_role(
-        "menuitem", name=re.compile("Add to shortlist", re.I)
-    ).click()
+    page.get_by_role("menuitem", name=re.compile("Add to shortlist", re.I)).click()
 
     # Open the shortlist dropdown + click Generate Report; new tab opens.
     page.locator('[data-testid="shortlist-trigger"]').click()
@@ -247,17 +241,13 @@ def test_v2_generate_report_opens_tab_and_renders(page, e2e_v2_base_url, context
 
     # Report root + at least one section render.
     report_tab.wait_for_selector("[data-report-root]", timeout=30_000)
-    report_tab.get_by_text(
-        re.compile("BGC Shortlist Report", re.I)
-    ).wait_for(timeout=10_000)
+    report_tab.get_by_text(re.compile("BGC Shortlist Report", re.I)).wait_for(
+        timeout=10_000
+    )
 
     # Download buttons exist (and are hidden in print via data-print-hide).
-    save_html = report_tab.get_by_role(
-        "button", name=re.compile("Save as HTML", re.I)
-    )
-    print_btn = report_tab.get_by_role(
-        "button", name=re.compile("Print / PDF", re.I)
-    )
+    save_html = report_tab.get_by_role("button", name=re.compile("Save as HTML", re.I))
+    print_btn = report_tab.get_by_role("button", name=re.compile("Print / PDF", re.I))
     assert save_html.is_visible()
     assert print_btn.is_visible()
 

@@ -24,9 +24,6 @@ pytest.importorskip("leidenalg")
 
 from pathlib import Path
 
-from django.db.models import Q
-from django.test import override_settings
-
 from discovery.models import (
     ClusteringRun,
     DashboardGCF,
@@ -41,14 +38,17 @@ from discovery.services.clustering.reclassify import (
 )
 from discovery.services.ingestion.loader import run_pipeline
 
+from django.db.models import Q
+from django.test import override_settings
+
 FAMILY_A = ["PF0A001", "PF0A002", "PF0A003"]
 FAMILY_B = ["PF0B001", "PF0B002", "PF0B003"]
 
 # (contig index, family domains, is_partial, is_validated)
 _CORPUS = (
-    [(i, FAMILY_A, False, i == 0) for i in range(0, 5)]      # 5 family-A (one validated)
-    + [(i, FAMILY_B, False, False) for i in range(5, 10)]    # 5 family-B
-    + [(i, FAMILY_A, True, False) for i in range(10, 13)]    # 3 partial (family-A)
+    [(i, FAMILY_A, False, i == 0) for i in range(0, 5)]  # 5 family-A (one validated)
+    + [(i, FAMILY_B, False, False) for i in range(5, 10)]  # 5 family-B
+    + [(i, FAMILY_A, True, False) for i in range(10, 13)]  # 3 partial (family-A)
 )
 
 
@@ -181,7 +181,8 @@ def test_clustering_classifies_primaries_then_projects_partials(tmp_path):
         assert all(p.classification_run_id is None for p in partials_pre)
 
         rc = reclassify_bgcs(
-            clustering_run_pk=run.pk, scope=SCOPE_ALL_NON_PRIMARY,
+            clustering_run_pk=run.pk,
+            scope=SCOPE_ALL_NON_PRIMARY,
         )
         assert rc["classified"] >= 1
 

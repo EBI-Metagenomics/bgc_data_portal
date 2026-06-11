@@ -12,13 +12,13 @@ from __future__ import annotations
 import json
 
 import pytest
-from django.test import Client
-
 from tests.factories.discovery_models import (
     ContigCdsFactory,
     IntegratedBgcFactory,
     SourceBgcPredictionFactory,
 )
+
+from django.test import Client
 
 POST_URL = "/api/discovery/query/chemical/"
 STATUS_URL = "/api/discovery/query/chemical/status/{}/"
@@ -160,8 +160,11 @@ def test_task_scores_overlapping_ibgc_above_threshold(monkeypatch):
     ibgc = IntegratedBgcFactory(start_pos=1000, end_pos=5000)
     cds = ContigCdsFactory(contig=ibgc.contig, start_pos=1100, end_pos=1400)
     CdsChemOnt.objects.create(
-        cds=cds, chemont_id=term, chemont_name="Terpenes",
-        probability=0.9, weight=0.5,
+        cds=cds,
+        chemont_id=term,
+        chemont_name="Terpenes",
+        probability=0.9,
+        weight=0.5,
     )
     PrecomputedStats.objects.update_or_create(
         key="chemont_ic", defaults={"data": {term: 2.0}}

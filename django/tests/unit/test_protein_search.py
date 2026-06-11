@@ -15,8 +15,6 @@ import pytest
 # during collection.
 pytest.importorskip("pyhmmer")
 
-from pyhmmer.easel import Alphabet, SequenceFile
-
 from discovery.services.protein_search.build import (
     bump_version,
     index_paths,
@@ -32,7 +30,7 @@ from discovery.services.protein_search.search import (
     ProteinHitMetrics,
     phmmer_search,
 )
-
+from pyhmmer.easel import Alphabet, SequenceFile
 
 # A handful of clearly-distinguishable proteins. The "target" is repeated in
 # slightly mutated form so phmmer recovers it for a query equal to the original.
@@ -100,7 +98,9 @@ def test_fasta_roundtrip_via_sequence_file(built_index):
     paths, records = built_index
 
     alphabet = Alphabet.amino()
-    with SequenceFile(str(paths.fasta), format="fasta", digital=True, alphabet=alphabet) as sf:
+    with SequenceFile(
+        str(paths.fasta), format="fasta", digital=True, alphabet=alphabet
+    ) as sf:
         block = sf.read_block()
     assert len(block) == len(records)
     names_seen = {seq.name.decode("ascii") for seq in block}
@@ -121,7 +121,9 @@ def test_bump_version_is_monotonic(index_dir):
 
 def _load_block(paths):
     alphabet = Alphabet.amino()
-    with SequenceFile(str(paths.fasta), format="fasta", digital=True, alphabet=alphabet) as sf:
+    with SequenceFile(
+        str(paths.fasta), format="fasta", digital=True, alphabet=alphabet
+    ) as sf:
         return sf.read_block()
 
 

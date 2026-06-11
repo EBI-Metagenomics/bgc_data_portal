@@ -7,9 +7,8 @@ antiSMASH calls (absorbed when they overlap an existing iBGC, standalone
 otherwise).
 """
 
-from django.core.management.base import BaseCommand
-
 from discovery.tasks import build_integrated_bgcs_task, update_discovery_stats_task
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
@@ -47,7 +46,8 @@ class Command(BaseCommand):
         else:
             # Chain stats onto the build task so it only fires on its success.
             stats_link = (
-                None if skip_discovery_stats
+                None
+                if skip_discovery_stats
                 else update_discovery_stats_task.si().set(queue=queue)
             )
             res = build_integrated_bgcs_task.apply_async(queue=queue, link=stats_link)
@@ -66,6 +66,6 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f"Enqueued DiscoveryStats refresh: {res.id}")
             )
         except Exception as exc:
-            self.stdout.write(self.style.WARNING(
-                f"Could not enqueue DiscoveryStats refresh: {exc}"
-            ))
+            self.stdout.write(
+                self.style.WARNING(f"Could not enqueue DiscoveryStats refresh: {exc}")
+            )

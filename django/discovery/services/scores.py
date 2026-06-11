@@ -18,12 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from django.db import connection
-from django.db.models import Count, Min
-from django.db.models.expressions import RawSQL
-
 from discovery.models import (
-    CdsChemOnt,
     ContigDomain,
     DashboardAssembly,
     DashboardBgcClass,
@@ -33,6 +28,9 @@ from discovery.models import (
     PrecomputedStats,
     SourceBgcPrediction,
 )
+from django.db import connection
+from django.db.models import Count, Min
+from django.db.models.expressions import RawSQL
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +81,9 @@ def recompute_ibgc_classes() -> None:
             ibgc.bgc_class = label
             batch.append(ibgc)
         if len(batch) >= BATCH_SIZE:
-            IntegratedBgc.objects.bulk_update(batch, ["bgc_class"], batch_size=BATCH_SIZE)
+            IntegratedBgc.objects.bulk_update(
+                batch, ["bgc_class"], batch_size=BATCH_SIZE
+            )
             updated += len(batch)
             batch.clear()
     if batch:
@@ -147,7 +147,13 @@ def _compute_assembly_aggregates() -> None:
         if len(batch) >= BATCH_SIZE:
             DashboardAssembly.objects.bulk_update(
                 batch,
-                ["bgc_count", "l1_class_count", "bgc_novelty_score", "bgc_density", "bgc_diversity_score"],
+                [
+                    "bgc_count",
+                    "l1_class_count",
+                    "bgc_novelty_score",
+                    "bgc_density",
+                    "bgc_diversity_score",
+                ],
                 batch_size=BATCH_SIZE,
             )
             batch.clear()
@@ -155,7 +161,13 @@ def _compute_assembly_aggregates() -> None:
     if batch:
         DashboardAssembly.objects.bulk_update(
             batch,
-            ["bgc_count", "l1_class_count", "bgc_novelty_score", "bgc_density", "bgc_diversity_score"],
+            [
+                "bgc_count",
+                "l1_class_count",
+                "bgc_novelty_score",
+                "bgc_density",
+                "bgc_diversity_score",
+            ],
             batch_size=BATCH_SIZE,
         )
 
@@ -202,18 +214,22 @@ def _rebuild_gcf_table() -> None:
     never creates or deletes rows. If no ClusteringRun has been performed
     yet, this is a no-op.
     """
+    from discovery.models import ClusteringRun
     from discovery.services.clustering.reclassify import _refresh_gcf_aggregates
 
-    from discovery.models import ClusteringRun
-
-    latest = ClusteringRun.objects.order_by("-created_at").values_list("id", flat=True).first()
+    latest = (
+        ClusteringRun.objects.order_by("-created_at")
+        .values_list("id", flat=True)
+        .first()
+    )
     if latest is None:
         logger.info("No ClusteringRun yet — skipping GCF aggregate refresh")
         return
     _refresh_gcf_aggregates(latest)
     logger.info(
         "GCF aggregates refreshed for ClusteringRun pk=%s (%d nodes)",
-        latest, DashboardGCF.objects.filter(clustering_run_id=latest).count(),
+        latest,
+        DashboardGCF.objects.filter(clustering_run_id=latest).count(),
     )
 
 
@@ -233,19 +249,19 @@ def _rebuild_catalog_tables() -> None:
     )
     DashboardBgcClass.objects.all().delete()
     DashboardBgcClass.objects.bulk_create(
-        [DashboardBgcClass(name=r["bgc_class"], bgc_count=r["cnt"]) for r in class_counts],
+        [
+            DashboardBgcClass(name=r["bgc_class"], bgc_count=r["cnt"])
+            for r in class_counts
+        ],
         batch_size=BATCH_SIZE,
     )
 
     # Domain counts — distinct iBGC reach via the denormalised contig FK on
     # ContigDomain. Same acc can carry different names across annotations;
     # pick one deterministically via Min.
-    domain_counts = (
-        ContigDomain.objects.values("domain_acc", "ref_db")
-        .annotate(
-            cnt=Count("contig__ibgcs", distinct=True),
-            domain_name=Min("domain_name"),
-        )
+    domain_counts = ContigDomain.objects.values("domain_acc", "ref_db").annotate(
+        cnt=Count("contig__ibgcs", distinct=True),
+        domain_name=Min("domain_name"),
     )
     DashboardDomain.objects.all().delete()
     DashboardDomain.objects.bulk_create(

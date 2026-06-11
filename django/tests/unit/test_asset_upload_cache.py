@@ -6,9 +6,9 @@ the Celery worker use to exchange the uploaded tarball bytes across pods.
 from __future__ import annotations
 
 import pytest
-from django.core.cache import cache
-
 from discovery.services.asset_upload import cache as asset_cache
+
+from django.core.cache import cache
 
 
 @pytest.fixture(autouse=True)

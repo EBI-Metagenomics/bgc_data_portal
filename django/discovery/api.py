@@ -20,8 +20,93 @@ import json
 import logging
 import math
 from io import StringIO
-from typing import Optional
 
+from ninja import Router
+from ninja.errors import HttpError
+
+from discovery.api_schemas import (
+    AccessionResolveOut,
+    AssemblyDetail,
+    AssemblyRosterItem,
+    AssemblyScatterPoint,
+    AssemblyStatsResponse,
+    AssetStatusResponse,
+    AssetUploadAccepted,
+    BgcClassOption,
+    ChemicalQueryAccepted,
+    ChemicalQueryRequest,
+    ChemOntAnnotationNode,
+    ChemOntClassNode,
+    DetectorOption,
+    DiscoveryStatsResponse,
+    DomainArchitectureItem,
+    DomainOption,
+    DomainQueryRequest,
+    GcfOption,
+    IbgcArchitectureQueryRequest,
+    IbgcArchitectureResponse,
+    IbgcCountResponse,
+    IbgcDetail,
+    IbgcIdsResponse,
+    IbgcMemberBgc,
+    IbgcRegionOut,
+    IbgcRosterItem,
+    IbgcScatterPoint,
+    IbgcUmapPoint,
+    InterproAnnotationOut,
+    NaturalProductSummary,
+    NpClassLevel,
+    PaginatedAssemblyAggregationResponse,
+    PaginatedAssemblyResponse,
+    PaginatedDetectorResponse,
+    PaginatedDomainResponse,
+    PaginatedGcfResponse,
+    PaginatedIbgcRosterResponse,
+    PaginatedSourceResponse,
+    PaginationMeta,
+    ParentAssemblySummary,
+    PfamAnnotationOut,
+    QueryResultAssemblyAggregation,
+    RegionCdsOut,
+    RegionClusterOut,
+    RegionDomainOut,
+    ReportPayload,
+    ReportSnapshotRequest,
+    ReportSnapshotResponse,
+    SequenceQueryAccepted,
+    SequenceQueryRequest,
+    ShortlistExportRequest,
+    SimilarIbgcRequest,
+    SourceOption,
+    TaxonomyNode,
+)
+from discovery.models import (
+    AssemblySource,
+    CdsChemOnt,
+    ClusteringRun,
+    ContigCds,
+    ContigDomain,
+    DashboardAssembly,
+    DashboardBgcClass,
+    DashboardDetector,
+    DashboardDomain,
+    DashboardGCF,
+    DiscoveryStats,
+    IbgcNaturalProduct,
+    IntegratedBgc,
+    SourceBgcPrediction,
+)
+from discovery.security import first_party_gate
+from discovery.services.architecture import (
+    collapse_to_interpro_rows,
+    ibgc_architecture,
+)
+from discovery.services.stats import compute_assembly_stats
+from discovery.throttling import (
+    default_throttle,
+    search_throttle,
+    upload_throttle,
+)
 from django.db.models import (
     Avg,
     Case,
@@ -37,93 +122,6 @@ from django.db.models import (
     When,
 )
 from django.http import HttpResponse
-from ninja import Router
-from ninja.errors import HttpError
-
-from discovery.security import first_party_gate
-from discovery.throttling import (
-    default_throttle,
-    search_throttle,
-    upload_throttle,
-)
-
-from discovery.models import (
-    AssemblySource,
-    ContigDomain,
-    ClusteringRun,
-    SourceBgcPrediction,
-    DashboardBgcClass,
-    ContigCds,
-    CdsChemOnt,
-    DashboardDetector,
-    DashboardDomain,
-    DashboardGCF,
-    DashboardAssembly,
-    IbgcNaturalProduct,
-    DiscoveryStats,
-    IntegratedBgc,
-)
-from discovery.services.architecture import (
-    collapse_to_interpro_rows,
-    ibgc_architecture,
-)
-from discovery.services.stats import compute_assembly_stats
-from discovery.api_schemas import (
-    AssetStatusResponse,
-    AssetUploadAccepted,
-    SequenceQueryAccepted,
-    BgcClassOption,
-    IbgcRegionOut,
-    AccessionResolveOut,
-    ChemicalQueryRequest,
-    ChemicalQueryAccepted,
-    SequenceQueryRequest,
-    AssemblyStatsResponse,
-    DomainArchitectureItem,
-    DomainOption,
-    DomainQueryRequest,
-    AssemblyDetail,
-    AssemblyRosterItem,
-    AssemblyScatterPoint,
-    ChemOntAnnotationNode,
-    ChemOntClassNode,
-    DiscoveryStatsResponse,
-    NaturalProductSummary,
-    NpClassLevel,
-    IbgcCountResponse,
-    IbgcDetail,
-    IbgcIdsResponse,
-    IbgcMemberBgc,
-    IbgcRosterItem,
-    IbgcScatterPoint,
-    IbgcUmapPoint,
-    GcfOption,
-    PaginatedDomainResponse,
-    PaginatedGcfResponse,
-    PaginatedIbgcRosterResponse,
-    PaginatedSourceResponse,
-    PaginatedDetectorResponse,
-    ReportPayload,
-    ReportSnapshotRequest,
-    ReportSnapshotResponse,
-    IbgcArchitectureQueryRequest,
-    IbgcArchitectureResponse,
-    SimilarIbgcRequest,
-    SourceOption,
-    DetectorOption,
-    PaginatedAssemblyAggregationResponse,
-    PaginatedAssemblyResponse,
-    PaginationMeta,
-    InterproAnnotationOut,
-    ParentAssemblySummary,
-    PfamAnnotationOut,
-    QueryResultAssemblyAggregation,
-    RegionCdsOut,
-    RegionClusterOut,
-    RegionDomainOut,
-    ShortlistExportRequest,
-    TaxonomyNode,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +144,7 @@ def _expand_chemont_ids(ids: list[str]) -> list[str]:
     expanded = set(ids)
     try:
         from common_core.chemont.ontology import get_ontology
+
         ont = get_ontology()
     except (FileNotFoundError, ImportError):
         return list(expanded)
@@ -190,6 +189,7 @@ def _build_chemont_tree_from_cds(cds_chemont_rows) -> list[ChemOntAnnotationNode
     ont = None
     try:
         from common_core.chemont.ontology import get_ontology
+
         ont = get_ontology()
     except (FileNotFoundError, ImportError):
         pass
@@ -299,16 +299,16 @@ def _assembly_to_roster_item(assembly: DashboardAssembly) -> AssemblyRosterItem:
 def _apply_assembly_filters(
     qs,
     *,
-    assembly_ids: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    source_names: Optional[str] = None,
-    detector_tools: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    search: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
+    assembly_ids: str | None = None,
+    assembly_type: str | None = None,
+    source_names: str | None = None,
+    detector_tools: str | None = None,
+    taxonomy_path: str | None = None,
+    search: str | None = None,
+    bgc_class: str | None = None,
+    biome_lineage: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
 ):
     """Apply common assembly filters to a DashboardAssembly queryset."""
     if assembly_ids:
@@ -319,6 +319,7 @@ def _apply_assembly_filters(
             qs = qs.none()
     if assembly_type:
         from discovery.models import AssemblyType
+
         type_map = {v.label: v.value for v in AssemblyType}
         if assembly_type.lower() in type_map:
             qs = qs.filter(assembly_type=type_map[assembly_type.lower()])
@@ -332,12 +333,12 @@ def _apply_assembly_filters(
             qs = qs.filter(bgcs__detector__tool__in=tools).distinct()
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
+
         matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
         qs = qs.filter(contigs__in=matching_contigs).distinct()
     if search:
         qs = qs.filter(
-            Q(organism_name__icontains=search)
-            | Q(assembly_accession__icontains=search)
+            Q(organism_name__icontains=search) | Q(assembly_accession__icontains=search)
         )
     if bgc_class:
         qs = qs.filter(
@@ -351,7 +352,9 @@ def _apply_assembly_filters(
         upper = bgc_accession.upper()
         if "." in upper and upper.startswith("MGYB"):
             # Structured accession: exact match
-            qs = qs.filter(source_bgcs__prediction_accession__iexact=bgc_accession).distinct()
+            qs = qs.filter(
+                source_bgcs__prediction_accession__iexact=bgc_accession
+            ).distinct()
         elif upper.startswith("MGYB") and "." not in upper:
             # cBGC accession (e.g. MGYB-ABC123). Resolve via the registry
             # (including any alias) and filter by the live cBGC id.
@@ -361,9 +364,13 @@ def _apply_assembly_filters(
             if resolved is not None and resolved.current_id is not None:
                 qs = qs.filter(contigs__ibgcs__cbgc_id=resolved.current_id).distinct()
             else:
-                qs = qs.filter(source_bgcs__prediction_accession__icontains=bgc_accession).distinct()
+                qs = qs.filter(
+                    source_bgcs__prediction_accession__icontains=bgc_accession
+                ).distinct()
         else:
-            qs = qs.filter(source_bgcs__prediction_accession__icontains=bgc_accession).distinct()
+            qs = qs.filter(
+                source_bgcs__prediction_accession__icontains=bgc_accession
+            ).distinct()
     if assembly_accession:
         qs = qs.filter(assembly_accession__icontains=assembly_accession)
     return qs
@@ -379,16 +386,16 @@ def assembly_roster(
     page_size: int = 25,
     sort_by: str = "bgc_novelty_score",
     order: str = "desc",
-    search: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    source_names: Optional[str] = None,
-    detector_tools: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    assembly_type: Optional[str] = None,
+    search: str | None = None,
+    taxonomy_path: str | None = None,
+    source_names: str | None = None,
+    detector_tools: str | None = None,
+    bgc_class: str | None = None,
+    biome_lineage: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    assembly_type: str | None = None,
 ):
     qs = DashboardAssembly.objects.select_related("source").all()
     qs = _apply_assembly_filters(
@@ -406,8 +413,11 @@ def assembly_roster(
     )
 
     score_fields = {
-        "bgc_count", "bgc_diversity_score",
-        "bgc_novelty_score", "bgc_density", "taxonomic_novelty",
+        "bgc_count",
+        "bgc_diversity_score",
+        "bgc_novelty_score",
+        "bgc_density",
+        "taxonomic_novelty",
         "l1_class_count",
     }
     prefix = "-" if order == "desc" else ""
@@ -421,7 +431,7 @@ def assembly_roster(
 
     total_count = qs.count()
     page, page_size, total_pages, offset = _paginate(page, page_size, total_count)
-    page_qs = qs[offset: offset + page_size]
+    page_qs = qs[offset : offset + page_size]
 
     items = [_assembly_to_roster_item(assembly) for assembly in page_qs]
 
@@ -439,7 +449,9 @@ def assembly_roster(
 @discovery_router.get("/assemblies/{assembly_id}/", response=AssemblyDetail)
 def assembly_detail(request, assembly_id: int):
     try:
-        assembly = DashboardAssembly.objects.select_related("source").get(id=assembly_id)
+        assembly = DashboardAssembly.objects.select_related("source").get(
+            id=assembly_id
+        )
     except DashboardAssembly.DoesNotExist:
         raise HttpError(404, "Assembly not found")
 
@@ -473,14 +485,16 @@ def assembly_scatter(
     request,
     x_axis: str = "bgc_diversity_score",
     y_axis: str = "bgc_novelty_score",
-    source_names: Optional[str] = None,
-    detector_tools: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
+    source_names: str | None = None,
+    detector_tools: str | None = None,
+    taxonomy_path: str | None = None,
+    bgc_class: str | None = None,
+    assembly_ids: str | None = None,
 ):
     allowed_axes = {
-        "bgc_diversity_score", "bgc_novelty_score", "bgc_density",
+        "bgc_diversity_score",
+        "bgc_novelty_score",
+        "bgc_density",
         "taxonomic_novelty",
     }
     if x_axis not in allowed_axes or y_axis not in allowed_axes:
@@ -501,6 +515,7 @@ def assembly_scatter(
             qs = qs.filter(bgcs__detector__tool__in=tools).distinct()
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
+
         matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
         qs = qs.filter(contigs__in=matching_contigs).distinct()
     if bgc_class:
@@ -537,14 +552,14 @@ def download_bgc(request, bgc_id: int, format: str = "gbk"):
     valid_formats = {"gbk", "fna", "faa", "json"}
     fmt = format.lower()
     if fmt not in valid_formats:
-        raise HttpError(400, f"Invalid format '{format}'. Use: {', '.join(sorted(valid_formats))}")
+        raise HttpError(
+            400, f"Invalid format '{format}'. Use: {', '.join(sorted(valid_formats))}"
+        )
 
     try:
-        ibgc_id = (
-            SourceBgcPrediction.objects
-            .values_list("integrated_bgc_id", flat=True)
-            .get(id=bgc_id)
-        )
+        ibgc_id = SourceBgcPrediction.objects.values_list(
+            "integrated_bgc_id", flat=True
+        ).get(id=bgc_id)
     except SourceBgcPrediction.DoesNotExist:
         raise HttpError(404, "BGC not found")
 
@@ -552,17 +567,17 @@ def download_bgc(request, bgc_id: int, format: str = "gbk"):
         # Partials are NULL-integrated until clustering folds them in.
         raise HttpError(404, "BGC is not yet integrated into an iBGC")
 
-    ibgc = (
-        IntegratedBgc.objects
-        .select_related("contig", "contig__seq", "contig__assembly", "cbgc")
-        .get(id=ibgc_id)
-    )
+    ibgc = IntegratedBgc.objects.select_related(
+        "contig", "contig__seq", "contig__assembly", "cbgc"
+    ).get(id=ibgc_id)
     accession = ibgc.accession
 
     if fmt == "gbk":
-        from discovery.services.gbk import build_ibgc_genbank_record
         from io import StringIO
+
         from Bio import SeqIO
+
+        from discovery.services.gbk import build_ibgc_genbank_record
 
         record = build_ibgc_genbank_record(ibgc)
         handle = StringIO()
@@ -625,9 +640,10 @@ def _ibgc_span_bp():
     The ``upper()``/``lower()`` range accessors give the half-open bounds and
     their difference is the length in bp.
     """
-    return Func(
-        F("bgc_range"), function="upper", output_field=IntegerField()
-    ) - Func(F("bgc_range"), function="lower", output_field=IntegerField())
+    return Func(F("bgc_range"), function="upper", output_field=IntegerField()) - Func(
+        F("bgc_range"), function="lower", output_field=IntegerField()
+    )
+
 
 # Soft cap applied uniformly across the dashboard's "show me all matching
 # iBGCs" surfaces: /ibgcs/umap/ (map points), /ibgcs/scatter/ (Variables map
@@ -641,11 +657,10 @@ def _ibgc_label(ibgc_id: int) -> str:
     return f"iBGC-{ibgc_id}"
 
 
-def _pick_representative_ibgc_id(ibgc_id: int) -> Optional[int]:
+def _pick_representative_ibgc_id(ibgc_id: int) -> int | None:
     """Lowest-id source SourceBgcPrediction for an iBGC (deterministic)."""
     return (
-        SourceBgcPrediction.objects
-        .filter(integrated_bgc_id=ibgc_id)
+        SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc_id)
         .order_by("id")
         .values_list("id", flat=True)
         .first()
@@ -667,7 +682,7 @@ def _ibgc_is_partial(ibgc: IntegratedBgc) -> bool:
 # every filter ("always shown in results") per the locked product decision.
 
 
-def _get_asset_roster_rows(asset_token: Optional[str]) -> list[dict]:
+def _get_asset_roster_rows(asset_token: str | None) -> list[dict]:
     if not asset_token:
         return []
     from discovery.services.asset_upload import cache as asset_cache
@@ -679,28 +694,28 @@ def _ibgc_filters_active(
     *,
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
 ) -> bool:
     """True when any chip / slider filter departs from its default.
 
@@ -748,8 +763,8 @@ def _ibgc_filters_active(
 
 
 def _asset_only_mode(
-    asset_token: Optional[str],
-    parsed_ids: Optional[list[int]],
+    asset_token: str | None,
+    parsed_ids: list[int] | None,
     filters_active: bool = False,
 ) -> bool:
     """Return True when the iBGC endpoints should skip the DB queryset.
@@ -790,7 +805,7 @@ def _asset_row_to_roster_item(row: dict) -> IbgcRosterItem:
     )
 
 
-def _asset_row_to_umap_point(row: dict) -> Optional[IbgcUmapPoint]:
+def _asset_row_to_umap_point(row: dict) -> IbgcUmapPoint | None:
     if row.get("umap_x") is None or row.get("umap_y") is None:
         return None
     return IbgcUmapPoint(
@@ -810,11 +825,11 @@ def _asset_row_to_umap_point(row: dict) -> Optional[IbgcUmapPoint]:
 
 def _asset_row_to_scatter_point(
     row: dict, x_axis: str, y_axis: str
-) -> Optional[IbgcScatterPoint]:
+) -> IbgcScatterPoint | None:
     # Asset rows expose the same numeric columns the DB rows do (novelty_score,
     # domain_novelty, size_kb). For non-existent axes we drop the point so the
     # surface stays consistent with the DB-row behaviour.
-    axis_value: dict[str, Optional[float]] = {
+    axis_value: dict[str, float | None] = {
         "novelty_score": row.get("novelty_score"),
         "domain_novelty": row.get("domain_novelty"),
         "size_kb": row.get("size_kb"),
@@ -841,16 +856,16 @@ def _asset_row_to_scatter_point(
 def _ibgc_to_roster_item(
     ibgc: IntegratedBgc,
     *,
-    parent_assembly: Optional[DashboardAssembly] = None,
+    parent_assembly: DashboardAssembly | None = None,
     n_source_bgcs: int = 0,
     is_validated: bool = False,
     is_type_strain: bool = False,
-    contig_accession: Optional[str] = None,
-    cbgc_accession: Optional[str] = None,
-    similarity_score: Optional[float] = None,
-    best_hit_protein_id: Optional[str] = None,
-    best_pident: Optional[float] = None,
-    best_qcoverage: Optional[float] = None,
+    contig_accession: str | None = None,
+    cbgc_accession: str | None = None,
+    similarity_score: float | None = None,
+    best_hit_protein_id: str | None = None,
+    best_pident: float | None = None,
+    best_qcoverage: float | None = None,
 ) -> IbgcRosterItem:
     return IbgcRosterItem(
         id=ibgc.id,
@@ -873,9 +888,7 @@ def _ibgc_to_roster_item(
             parent_assembly.assembly_accession if parent_assembly else None
         ),
         parent_assembly_collection=(
-            getattr(parent_assembly, "source_name", None)
-            if parent_assembly
-            else None
+            getattr(parent_assembly, "source_name", None) if parent_assembly else None
         ),
         organism_name=parent_assembly.organism_name if parent_assembly else None,
         contig_accession=contig_accession,
@@ -917,22 +930,23 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
     }
     # Parent cBGC accession per iBGC (one chunked query, no N+1).
     for i in range(0, len(ibgc_ids), _MEMBER_FACTS_CHUNK):
-        chunk = ibgc_ids[i: i + _MEMBER_FACTS_CHUNK]
-        for iid, cbgc_acc in IntegratedBgc.objects.filter(
-            id__in=chunk
-        ).values_list("id", "cbgc__accession"):
+        chunk = ibgc_ids[i : i + _MEMBER_FACTS_CHUNK]
+        for iid, cbgc_acc in IntegratedBgc.objects.filter(id__in=chunk).values_list(
+            "id", "cbgc__accession"
+        ):
             f = facts.get(iid)
             if f is not None:
                 f["cbgc_accession"] = cbgc_acc
     for i in range(0, len(ibgc_ids), _MEMBER_FACTS_CHUNK):
-        chunk = ibgc_ids[i: i + _MEMBER_FACTS_CHUNK]
+        chunk = ibgc_ids[i : i + _MEMBER_FACTS_CHUNK]
         rows = (
-            SourceBgcPrediction.objects
-            .filter(integrated_bgc_id__in=chunk)
+            SourceBgcPrediction.objects.filter(integrated_bgc_id__in=chunk)
             .select_related("assembly", "assembly__source", "contig")
             .values(
-                "integrated_bgc_id", "is_validated",
-                "assembly_id", "assembly__assembly_accession",
+                "integrated_bgc_id",
+                "is_validated",
+                "assembly_id",
+                "assembly__assembly_accession",
                 "assembly__organism_name",
                 "assembly__source__name",
                 "assembly__is_type_strain",
@@ -946,16 +960,20 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
                 continue
             f["n_source_bgcs"] += 1
             f["is_validated"] = f["is_validated"] or bool(r["is_validated"])
-            f["is_type_strain"] = (
-                f["is_type_strain"] or bool(r["assembly__is_type_strain"])
+            f["is_type_strain"] = f["is_type_strain"] or bool(
+                r["assembly__is_type_strain"]
             )
             if f["parent_assembly"] is None and r["assembly_id"]:
-                f["parent_assembly"] = type("AsmStub", (), {
-                    "id": r["assembly_id"],
-                    "assembly_accession": r["assembly__assembly_accession"],
-                    "organism_name": r["assembly__organism_name"],
-                    "source_name": r["assembly__source__name"],
-                })()
+                f["parent_assembly"] = type(
+                    "AsmStub",
+                    (),
+                    {
+                        "id": r["assembly_id"],
+                        "assembly_accession": r["assembly__assembly_accession"],
+                        "organism_name": r["assembly__organism_name"],
+                        "source_name": r["assembly__source__name"],
+                    },
+                )()
             if not f["contig_accession"]:
                 f["contig_accession"] = r["contig__accession"]
     return facts
@@ -1041,29 +1059,29 @@ def _apply_ibgc_filters(
     *,
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,  # CSV; "any of" on iBGC.source_tools JSON
-    source_tools: Optional[str] = None,    # Deprecated alias for detector_tools
-    source_names: Optional[str] = None,    # CSV of AssemblySource.name
-    assembly_type: Optional[str] = None,   # AssemblyType label (metagenome/genome/region)
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,     # CSV of ChemOnt class ids
-    np_classes: Optional[str] = None,      # CSV of NP-class names (any level)
-    accession: Optional[str] = None,       # Smart single-field accession (any kind)
-    bgc_accession: Optional[str] = None,   # Deprecated: legacy BGC-only accession field
-    assembly_accession: Optional[str] = None,  # Deprecated: legacy assembly-only field
-    assembly_ids: Optional[str] = None,    # CSV of DashboardAssembly ids
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,  # free-text over the iBGC's domain annotations
-    ibgc_ids: Optional[list[int]] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,  # CSV; "any of" on iBGC.source_tools JSON
+    source_tools: str | None = None,  # Deprecated alias for detector_tools
+    source_names: str | None = None,  # CSV of AssemblySource.name
+    assembly_type: str | None = None,  # AssemblyType label (metagenome/genome/region)
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,  # CSV of ChemOnt class ids
+    np_classes: str | None = None,  # CSV of NP-class names (any level)
+    accession: str | None = None,  # Smart single-field accession (any kind)
+    bgc_accession: str | None = None,  # Deprecated: legacy BGC-only accession field
+    assembly_accession: str | None = None,  # Deprecated: legacy assembly-only field
+    assembly_ids: str | None = None,  # CSV of DashboardAssembly ids
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,  # free-text over the iBGC's domain annotations
+    ibgc_ids: list[int] | None = None,
 ):
     """Apply iBGC-level filters to a ``IntegratedBgc`` queryset.
 
@@ -1123,6 +1141,7 @@ def _apply_ibgc_filters(
             ).distinct()
     if assembly_type:
         from discovery.models import AssemblyType
+
         type_map = {v.label: v.value for v in AssemblyType}
         key = assembly_type.strip().lower()
         if key in type_map:
@@ -1186,7 +1205,9 @@ def _apply_ibgc_filters(
         acc = bgc_accession.strip()
         upper = acc.upper()
         if "." in upper and upper.startswith("MGYB"):
-            qs = qs.filter(source_predictions__prediction_accession__iexact=acc).distinct()
+            qs = qs.filter(
+                source_predictions__prediction_accession__iexact=acc
+            ).distinct()
         elif upper.startswith("MGYB") and "." not in upper:
             # cBGC accession (e.g. MGYB-ABC123). Resolve via the registry,
             # then filter iBGCs by their cBGC parent.
@@ -1223,9 +1244,8 @@ def _apply_ibgc_filters(
         ).distinct()
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
-        qs = qs.filter(
-            contig__in=filter_contigs_by_taxonomy(taxonomy_path)
-        ).distinct()
+
+        qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
     if domain_text:
         # Free-text fallback for landing-page keyword search: match iBGCs
         # whose contig domains carry the term in their name / description /
@@ -1248,30 +1268,30 @@ def ibgc_count(
     request,
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
-    ibgc_ids: Optional[str] = None,
-    asset_token: Optional[str] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias for detector_tools
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
+    ibgc_ids: str | None = None,
+    asset_token: str | None = None,
 ):
     """Cheap COUNT over the iBGC filter surface.
 
@@ -1280,7 +1300,7 @@ def ibgc_count(
     set and (b) warn the user when the result will be sampled by the maps
     (count > ``DASHBOARD_RESULT_CAP``).
     """
-    parsed_ids: Optional[list[int]] = None
+    parsed_ids: list[int] | None = None
     if ibgc_ids:
         parsed_ids = [
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
@@ -1366,30 +1386,30 @@ def ibgc_roster(
     page_size: int = 25,
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
-    ibgc_ids: Optional[str] = None,
-    asset_token: Optional[str] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias for detector_tools
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
+    ibgc_ids: str | None = None,
+    asset_token: str | None = None,
 ):
     """Paginated, filterable iBGC roster (v2 Discovery primary unit).
 
@@ -1398,7 +1418,7 @@ def ibgc_roster(
     ``asset_token`` pre-pends ephemeral asset iBGCs (negative ids) ahead of
     the DB rows on page 1; they bypass filters and always render.
     """
-    parsed_ids: Optional[list[int]] = None
+    parsed_ids: list[int] | None = None
     if ibgc_ids:
         parsed_ids = [
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
@@ -1472,6 +1492,7 @@ def ibgc_roster(
     if sort_by == "similarity" and parsed_ids:
         from django.db.models import IntegerField
         from django.db.models.expressions import RawSQL
+
         ordered_ids = list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
         # The roster queryset may join discovery_bgc / discovery_assembly when
         # a chip filter is active, so qualify the id column to avoid an
@@ -1499,7 +1520,8 @@ def ibgc_roster(
         descending = order == "desc"
         # NULLS LAST keeps unscored partials out of the head of the page.
         qs = qs.order_by(
-            F(order_field).desc(nulls_last=True) if descending
+            F(order_field).desc(nulls_last=True)
+            if descending
             else F(order_field).asc(nulls_last=True)
         )
 
@@ -1521,9 +1543,7 @@ def ibgc_roster(
     else:
         db_offset = offset - len(asset_items)
 
-    page_qs = (
-        list(qs[db_offset : db_offset + db_limit]) if db_limit > 0 else []
-    )
+    page_qs = list(qs[db_offset : db_offset + db_limit]) if db_limit > 0 else []
 
     facts = _ibgc_member_facts([ibgc.id for ibgc in page_qs])
     db_items = [
@@ -1541,7 +1561,10 @@ def ibgc_roster(
     return PaginatedIbgcRosterResponse(
         items=asset_slice + db_items,
         pagination=PaginationMeta(
-            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+            page=pg,
+            page_size=ps,
+            total_count=total_count,
+            total_pages=tp,
         ),
     )
 
@@ -1558,30 +1581,30 @@ def ibgc_ids(
     order: str = "desc",
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
-    ibgc_ids: Optional[str] = None,
-    asset_token: Optional[str] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
+    ibgc_ids: str | None = None,
+    asset_token: str | None = None,
 ):
     """Bulk iBGC ids matching the same filter surface as ``/ibgcs/roster/``.
 
@@ -1591,7 +1614,7 @@ def ibgc_ids(
     what the roster would show. ``truncated=True`` when the filter would
     have matched more rows than the cap.
     """
-    parsed_ids: Optional[list[int]] = None
+    parsed_ids: list[int] | None = None
     if ibgc_ids:
         parsed_ids = [
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
@@ -1659,6 +1682,7 @@ def ibgc_ids(
     if sort_by == "similarity" and parsed_ids:
         from django.db.models import IntegerField
         from django.db.models.expressions import RawSQL
+
         ordered_ids = list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
         ibgc_id_col = f"{IntegratedBgc._meta.db_table}.id"
         qs = qs.annotate(
@@ -1682,7 +1706,8 @@ def ibgc_ids(
             order_field = sort_map.get(sort_by, "novelty_score")
         descending = order == "desc"
         qs = qs.order_by(
-            F(order_field).desc(nulls_last=True) if descending
+            F(order_field).desc(nulls_last=True)
+            if descending
             else F(order_field).asc(nulls_last=True)
         )
 
@@ -1716,31 +1741,31 @@ def ibgc_umap(
     include_partials: bool = True,
     max_points: int = DASHBOARD_RESULT_CAP,
     validated_only: bool = False,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
-    ibgc_ids: Optional[str] = None,
-    asset_token: Optional[str] = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias for detector_tools
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
+    ibgc_ids: str | None = None,
+    asset_token: str | None = None,
 ):
     """All iBGC UMAP coordinates. ``umap_projected`` marks partial-derived coords.
 
     Accepts the same filter surface as ``/ibgcs/roster/`` so the v2 dashboard
     can keep the UMAP map in lockstep with the roster after a Run Query.
     """
-    parsed_ids: Optional[list[int]] = None
+    parsed_ids: list[int] | None = None
     if ibgc_ids:
         parsed_ids = [
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
@@ -1769,10 +1794,8 @@ def ibgc_umap(
     if _asset_only_mode(asset_token, parsed_ids, filters_active):
         db_points: list[IbgcUmapPoint] = []
     else:
-        qs = (
-            IntegratedBgc.objects
-            .exclude(umap_x__isnull=True)
-            .exclude(umap_y__isnull=True)
+        qs = IntegratedBgc.objects.exclude(umap_x__isnull=True).exclude(
+            umap_y__isnull=True
         )
         qs = _apply_ibgc_filters(
             qs,
@@ -1845,31 +1868,29 @@ def ibgc_scatter(
     include_partials: bool = True,
     max_points: int = 5_000,
     validated_only: bool = False,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
-    ibgc_ids: Optional[str] = None,
-    asset_token: Optional[str] = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias for detector_tools
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
+    ibgc_ids: str | None = None,
+    asset_token: str | None = None,
 ):
     if x_axis not in _IBGC_AXES or y_axis not in _IBGC_AXES:
-        raise HttpError(
-            400, f"axes must be one of: {', '.join(sorted(_IBGC_AXES))}"
-        )
+        raise HttpError(400, f"axes must be one of: {', '.join(sorted(_IBGC_AXES))}")
 
-    parsed_ids: Optional[list[int]] = None
+    parsed_ids: list[int] | None = None
     if ibgc_ids:
         parsed_ids = [
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
@@ -1934,8 +1955,7 @@ def ibgc_scatter(
         # whose range overlaps ``bgc_range`` (same membership rule as the region
         # view). There is no per-prediction ``cds_list`` relation to count.
         n_cds_subq = (
-            ContigCds.objects
-            .filter(
+            ContigCds.objects.filter(
                 contig_id=OuterRef("contig_id"),
                 cds_range__overlap=OuterRef("bgc_range"),
             )
@@ -1964,6 +1984,7 @@ def ibgc_scatter(
 
         ibgc_list = list(qs)
         facts = _ibgc_member_facts([n.id for n in ibgc_list])
+
         # ``size_kb`` lives on the ``_size_kb`` annotation (the model property of
         # that name is read-only and can't carry the annotated value).
         def _axis_val(obj, axis):
@@ -1984,7 +2005,7 @@ def ibgc_scatter(
                     novelty_score=ibgc.novelty_score,
                     domain_novelty=ibgc.domain_novelty,
                     is_partial=not facts[ibgc.id]["is_validated"]
-                               and ibgc.classification_run_id is None,
+                    and ibgc.classification_run_id is None,
                     is_validated=facts[ibgc.id]["is_validated"],
                     is_type_strain=facts[ibgc.id]["is_type_strain"],
                     umap_projected=ibgc.umap_projected,
@@ -2002,7 +2023,7 @@ def ibgc_scatter(
 # `/ibgcs/<literal>/` route above (roster, umap, scatter, …) — Django Ninja
 # matches in declaration order, so an earlier `{ibgc_id}` would swallow
 # "umap" / "scatter" and 422 on int parsing.
-def _asset_token_header(request) -> Optional[str]:
+def _asset_token_header(request) -> str | None:
     """Frontend passes the active asset token via ``X-Asset-Token`` so the
     negative-id dispatcher can resolve asset iBGCs out of Redis without
     polluting the URL with a query param."""
@@ -2028,16 +2049,14 @@ def ibgc_detail(request, ibgc_id: int):
         raise HttpError(404, "iBGC not found")
 
     member_qs = (
-        SourceBgcPrediction.objects
-        .filter(integrated_bgc_id=ibgc_id)
+        SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc_id)
         .select_related("assembly", "assembly__source", "detector")
         .order_by("id")
     )
     members = list(member_qs)
     is_validated = any(m.is_validated for m in members)
     is_type_strain = any(
-        m.assembly is not None and m.assembly.is_type_strain
-        for m in members
+        m.assembly is not None and m.assembly.is_type_strain for m in members
     )
 
     parent = None
@@ -2087,14 +2106,15 @@ def ibgc_detail(request, ibgc_id: int):
     # contig-anchored in v2; membership is range-overlap, not a FK).
     _ibgc_cds_ids = (
         ContigCds.objects.filter(
-            contig_id=ibgc.contig_id, cds_range__overlap=ibgc.bgc_range,
+            contig_id=ibgc.contig_id,
+            cds_range__overlap=ibgc.bgc_range,
         ).values_list("id", flat=True)
         if ibgc.bgc_range is not None
         else ContigCds.objects.none()
     )
-    chemont_rows = CdsChemOnt.objects.filter(
-        cds_id__in=_ibgc_cds_ids
-    ).only("chemont_id", "chemont_name", "probability")
+    chemont_rows = CdsChemOnt.objects.filter(cds_id__in=_ibgc_cds_ids).only(
+        "chemont_id", "chemont_name", "probability"
+    )
     chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
 
     member_items = [
@@ -2139,7 +2159,8 @@ def ibgc_detail(request, ibgc_id: int):
 
 
 @discovery_router.get(
-    "/ibgcs/{ibgc_id}/architecture/", response=IbgcArchitectureResponse,
+    "/ibgcs/{ibgc_id}/architecture/",
+    response=IbgcArchitectureResponse,
 )
 def ibgc_architecture_endpoint(request, ibgc_id: int):
     """Pooled positional domain accessions for an iBGC (clipboard payload).
@@ -2179,7 +2200,8 @@ def ibgc_architecture_endpoint(request, ibgc_id: int):
 
 
 @discovery_router.post(
-    "/query/similar-ibgc/", response=PaginatedIbgcRosterResponse,
+    "/query/similar-ibgc/",
+    response=PaginatedIbgcRosterResponse,
     include_in_schema=False,
     auth=first_party_gate,
     throttle=search_throttle,
@@ -2243,12 +2265,14 @@ def similar_ibgc_query(
     if not top_ids:
         return PaginatedIbgcRosterResponse(
             items=[],
-            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+            pagination=PaginationMeta(
+                page=1, page_size=page_size, total_count=0, total_pages=0
+            ),
         )
 
     total_count = len(top_ids)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_ids = top_ids[offset: offset + ps]
+    page_ids = top_ids[offset : offset + ps]
 
     ibgcs = {n.id: n for n in IntegratedBgc.objects.filter(id__in=page_ids)}
     facts = _ibgc_member_facts(page_ids)
@@ -2269,13 +2293,17 @@ def similar_ibgc_query(
     return PaginatedIbgcRosterResponse(
         items=items,
         pagination=PaginationMeta(
-            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+            page=pg,
+            page_size=ps,
+            total_count=total_count,
+            total_pages=tp,
         ),
     )
 
 
 @discovery_router.post(
-    "/query/ibgc-architecture/", response=PaginatedIbgcRosterResponse,
+    "/query/ibgc-architecture/",
+    response=PaginatedIbgcRosterResponse,
     auth=first_party_gate,
     throttle=search_throttle,
 )
@@ -2316,12 +2344,18 @@ def ibgc_architecture_query(
 
     def _compute():
         result = architecture_search(
-            accs, weight=body.weight, k=k, cache=scoring,
+            accs,
+            weight=body.weight,
+            k=k,
+            cache=scoring,
         )
         return {"ids": result["ibgc_ids"], "scores": result["scores"]}
 
     cache_key = cache_key_architecture(
-        sha256=scoring.sha256, accs_ordered=accs, weight=float(body.weight), k=k,
+        sha256=scoring.sha256,
+        accs_ordered=accs,
+        weight=float(body.weight),
+        k=k,
     )
     cached = cache_similarity_query(cache_key=cache_key, compute=_compute)
     top_ids: list[int] = list(cached["ids"])
@@ -2336,7 +2370,7 @@ def ibgc_architecture_query(
     sim_lookup = dict(zip(top_ids, top_scores))
     total_count = len(top_ids)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_ids = top_ids[offset: offset + ps]
+    page_ids = top_ids[offset : offset + ps]
 
     ibgcs = {n.id: n for n in IntegratedBgc.objects.filter(id__in=page_ids)}
     facts = _ibgc_member_facts(page_ids)
@@ -2357,7 +2391,10 @@ def ibgc_architecture_query(
     return PaginatedIbgcRosterResponse(
         items=items,
         pagination=PaginationMeta(
-            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+            page=pg,
+            page_size=ps,
+            total_count=total_count,
+            total_pages=tp,
         ),
     )
 
@@ -2377,7 +2414,6 @@ def report_snapshot(request, body: ReportSnapshotRequest):
     The token is ``sha256(sorted comma-joined ids)[:32]`` so the same shortlist
     always resolves to the same token (cheap re-render across browsers/sessions).
     """
-    from django.core.cache import cache
     import hashlib
 
     from discovery.services.report import (
@@ -2385,6 +2421,7 @@ def report_snapshot(request, body: ReportSnapshotRequest):
         REPORT_TTL_SECONDS,
         build_report_payload,
     )
+    from django.core.cache import cache
 
     ids = sorted({int(i) for i in body.ibgc_ids})
     if not ids:
@@ -2406,7 +2443,8 @@ def report_snapshot(request, body: ReportSnapshotRequest):
         from discovery.services.asset_upload import cache as asset_cache
 
         cached_roster = {
-            int(r["id"]): r for r in (asset_cache.read_ibgc_list(body.asset_token) or [])
+            int(r["id"]): r
+            for r in (asset_cache.read_ibgc_list(body.asset_token) or [])
         }
         for nid in asset_ids:
             row = cached_roster.get(nid)
@@ -2503,9 +2541,7 @@ def report_export_ibgcs_tsv(request, token: str):
     cached = _get_cached_report(token)
     tsv = build_report_ibgc_tsv(cached.get("ibgc_rows", []))
     response = HttpResponse(tsv, content_type="text/tab-separated-values")
-    response["Content-Disposition"] = (
-        f'attachment; filename="report_{token}_ibgcs.tsv"'
-    )
+    response["Content-Disposition"] = f'attachment; filename="report_{token}_ibgcs.tsv"'
     return response
 
 
@@ -2528,9 +2564,7 @@ def report_export_json(request, token: str):
         json.dumps(body, default=str),
         content_type="application/json",
     )
-    response["Content-Disposition"] = (
-        f'attachment; filename="report_{token}.json"'
-    )
+    response["Content-Disposition"] = f'attachment; filename="report_{token}.json"'
     return response
 
 
@@ -2551,9 +2585,7 @@ def report_export_gbk_zip(request, token: str):
     ibgc_ids = [row["id"] for row in cached.get("ibgc_rows", [])]
     zip_bytes = build_shortlist_gbk_zip(ibgc_ids)
     response = HttpResponse(zip_bytes, content_type="application/zip")
-    response["Content-Disposition"] = (
-        f'attachment; filename="report_{token}_gbk.zip"'
-    )
+    response["Content-Disposition"] = f'attachment; filename="report_{token}_gbk.zip"'
     return response
 
 
@@ -2570,10 +2602,10 @@ def _ibgc_roster_page_response(
     order: str,
     page: int,
     page_size: int,
-    similarity_lookup: Optional[dict[int, float]] = None,
-    best_hit_protein_lookup: Optional[dict[int, str]] = None,
-    best_pident_lookup: Optional[dict[int, float]] = None,
-    best_qcoverage_lookup: Optional[dict[int, float]] = None,
+    similarity_lookup: dict[int, float] | None = None,
+    best_hit_protein_lookup: dict[int, str] | None = None,
+    best_pident_lookup: dict[int, float] | None = None,
+    best_qcoverage_lookup: dict[int, float] | None = None,
 ) -> PaginatedIbgcRosterResponse:
     """Sort, paginate, and serialise a filtered ``IntegratedBgc`` queryset.
 
@@ -2603,7 +2635,7 @@ def _ibgc_roster_page_response(
         )
         total_count = len(rows)
         pg, ps, tp, offset = _paginate(page, page_size, total_count)
-        page_rows = rows[offset: offset + ps]
+        page_rows = rows[offset : offset + ps]
         facts = _ibgc_member_facts([n.id for n in page_rows])
         items = [
             _ibgc_to_roster_item(
@@ -2617,15 +2649,14 @@ def _ibgc_roster_page_response(
                 similarity_score=similarity_lookup.get(n.id),
                 best_hit_protein_id=(
                     best_hit_protein_lookup.get(n.id)
-                    if best_hit_protein_lookup else None
+                    if best_hit_protein_lookup
+                    else None
                 ),
                 best_pident=(
-                    best_pident_lookup.get(n.id)
-                    if best_pident_lookup else None
+                    best_pident_lookup.get(n.id) if best_pident_lookup else None
                 ),
                 best_qcoverage=(
-                    best_qcoverage_lookup.get(n.id)
-                    if best_qcoverage_lookup else None
+                    best_qcoverage_lookup.get(n.id) if best_qcoverage_lookup else None
                 ),
             )
             for n in page_rows
@@ -2633,7 +2664,10 @@ def _ibgc_roster_page_response(
         return PaginatedIbgcRosterResponse(
             items=items,
             pagination=PaginationMeta(
-                page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+                page=pg,
+                page_size=ps,
+                total_count=total_count,
+                total_pages=tp,
             ),
         )
     else:
@@ -2641,12 +2675,13 @@ def _ibgc_roster_page_response(
 
     descending = order == "desc"
     qs = qs.order_by(
-        F(order_field).desc(nulls_last=True) if descending
+        F(order_field).desc(nulls_last=True)
+        if descending
         else F(order_field).asc(nulls_last=True)
     )
     total_count = qs.count()
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_qs = list(qs[offset: offset + ps])
+    page_qs = list(qs[offset : offset + ps])
     facts = _ibgc_member_facts([n.id for n in page_qs])
     items = [
         _ibgc_to_roster_item(
@@ -2661,16 +2696,11 @@ def _ibgc_roster_page_response(
                 similarity_lookup.get(n.id) if similarity_lookup else None
             ),
             best_hit_protein_id=(
-                best_hit_protein_lookup.get(n.id)
-                if best_hit_protein_lookup else None
+                best_hit_protein_lookup.get(n.id) if best_hit_protein_lookup else None
             ),
-            best_pident=(
-                best_pident_lookup.get(n.id)
-                if best_pident_lookup else None
-            ),
+            best_pident=(best_pident_lookup.get(n.id) if best_pident_lookup else None),
             best_qcoverage=(
-                best_qcoverage_lookup.get(n.id)
-                if best_qcoverage_lookup else None
+                best_qcoverage_lookup.get(n.id) if best_qcoverage_lookup else None
             ),
         )
         for n in page_qs
@@ -2678,13 +2708,18 @@ def _ibgc_roster_page_response(
     return PaginatedIbgcRosterResponse(
         items=items,
         pagination=PaginationMeta(
-            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+            page=pg,
+            page_size=ps,
+            total_count=total_count,
+            total_pages=tp,
         ),
     )
 
 
 @discovery_router.post(
-    "/query/ibgc-domain/", response=PaginatedIbgcRosterResponse, tags=["Query"],
+    "/query/ibgc-domain/",
+    response=PaginatedIbgcRosterResponse,
+    tags=["Query"],
     throttle=search_throttle,
 )
 def ibgc_domain_query(
@@ -2696,28 +2731,28 @@ def ibgc_domain_query(
     order: str = "desc",
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias for detector_tools
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
 ):
     """iBGC-collapsed domain query.
 
@@ -2737,13 +2772,13 @@ def ibgc_domain_query(
             bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc=acc)
     elif required:
         bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc__in=required)
-    ibgc_ids = list(
-        bgc_qs.values_list("integrated_bgc_id", flat=True).distinct()
-    )
+    ibgc_ids = list(bgc_qs.values_list("integrated_bgc_id", flat=True).distinct())
     if excluded and ibgc_ids:
         excluded_ibgc_ids = set(
-            SourceBgcPrediction.objects
-            .filter(integrated_bgc_id__in=ibgc_ids, contig__cds_list__domains__domain_acc__in=excluded)
+            SourceBgcPrediction.objects.filter(
+                integrated_bgc_id__in=ibgc_ids,
+                contig__cds_list__domains__domain_acc__in=excluded,
+            )
             .values_list("integrated_bgc_id", flat=True)
             .distinct()
         )
@@ -2753,7 +2788,10 @@ def ibgc_domain_query(
         return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(
-                page=1, page_size=page_size, total_count=0, total_pages=0,
+                page=1,
+                page_size=page_size,
+                total_count=0,
+                total_pages=0,
             ),
         )
 
@@ -2811,28 +2849,28 @@ def ibgc_sequence_query_status(
     order: str = "desc",
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias for detector_tools
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
 ):
     """Poll a ``sequence_similarity_search`` Celery task and return results
     collapsed to iBGC level.
@@ -2868,7 +2906,10 @@ def ibgc_sequence_query_status(
         return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(
-                page=1, page_size=page_size, total_count=0, total_pages=0,
+                page=1,
+                page_size=page_size,
+                total_count=0,
+                total_pages=0,
             ),
         )
 
@@ -2989,28 +3030,28 @@ def chemical_query_status(
     order: str = "desc",
     include_partials: bool = True,
     validated_only: bool = False,
-    min_length_kb: Optional[float] = None,
-    max_length_kb: Optional[float] = None,
-    min_novelty: Optional[float] = None,
-    max_novelty: Optional[float] = None,
-    min_domain_novelty: Optional[float] = None,
-    max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,
-    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
-    source_names: Optional[str] = None,
-    assembly_type: Optional[str] = None,
-    leaf_path_prefix: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    chemont_ids: Optional[str] = None,
-    np_classes: Optional[str] = None,
-    accession: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    organism: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    domain_text: Optional[str] = None,
+    min_length_kb: float | None = None,
+    max_length_kb: float | None = None,
+    min_novelty: float | None = None,
+    max_novelty: float | None = None,
+    min_domain_novelty: float | None = None,
+    max_domain_novelty: float | None = None,
+    detector_tools: str | None = None,
+    source_tools: str | None = None,  # deprecated alias for detector_tools
+    source_names: str | None = None,
+    assembly_type: str | None = None,
+    leaf_path_prefix: str | None = None,
+    bgc_class: str | None = None,
+    chemont_ids: str | None = None,
+    np_classes: str | None = None,
+    accession: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
+    organism: str | None = None,
+    biome_lineage: str | None = None,
+    taxonomy_path: str | None = None,
+    domain_text: str | None = None,
 ):
     """Poll a ``chemical_similarity_search`` task and return results collapsed
     to iBGC level.
@@ -3040,7 +3081,10 @@ def chemical_query_status(
         return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(
-                page=1, page_size=page_size, total_count=0, total_pages=0,
+                page=1,
+                page_size=page_size,
+                total_count=0,
+                total_pages=0,
             ),
         )
 
@@ -3135,7 +3179,9 @@ def query_results_assembly_aggregation(
     if not ids:
         return PaginatedAssemblyAggregationResponse(
             items=[],
-            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+            pagination=PaginationMeta(
+                page=1, page_size=page_size, total_count=0, total_pages=0
+            ),
         )
 
     # SQL aggregation instead of Python grouping
@@ -3171,7 +3217,7 @@ def query_results_assembly_aggregation(
 
     total_count = assembly_agg.count()
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_agg = assembly_agg[offset: offset + ps]
+    page_agg = assembly_agg[offset : offset + ps]
 
     items = [
         QueryResultAssemblyAggregation(
@@ -3188,7 +3234,9 @@ def query_results_assembly_aggregation(
 
     return PaginatedAssemblyAggregationResponse(
         items=items,
-        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp
+        ),
     )
 
 
@@ -3248,7 +3296,9 @@ def taxonomy_tree(request):
 def bgc_classes(request):
     return [
         BgcClassOption(name=row.name, count=row.bgc_count)
-        for row in DashboardBgcClass.objects.filter(bgc_count__gt=0).order_by("-bgc_count")
+        for row in DashboardBgcClass.objects.filter(bgc_count__gt=0).order_by(
+            "-bgc_count"
+        )
     ]
 
 
@@ -3259,10 +3309,8 @@ def bgc_classes(request):
     auth=first_party_gate,
 )
 def np_classes(request):
-    paths = (
-        IbgcNaturalProduct.objects
-        .exclude(np_class_path="")
-        .values_list("np_class_path", flat=True)
+    paths = IbgcNaturalProduct.objects.exclude(np_class_path="").values_list(
+        "np_class_path", flat=True
     )
 
     tree: dict = {}
@@ -3285,7 +3333,10 @@ def np_classes(request):
 
             if l3:
                 if l3 not in tree[l1]["children"][l2]["children"]:
-                    tree[l1]["children"][l2]["children"][l3] = {"count": 0, "children": {}}
+                    tree[l1]["children"][l2]["children"][l3] = {
+                        "count": 0,
+                        "children": {},
+                    }
                 tree[l1]["children"][l2]["children"][l3]["count"] += 1
 
     def _build(level: dict) -> list[NpClassLevel]:
@@ -3319,9 +3370,9 @@ def chemont_classes(request):
     # per-iBGC count would need a range-overlap aggregation; distinct-CDS is a
     # cheap, stable proxy for relative class frequency.
     rows = list(
-        CdsChemOnt.objects
-        .values("chemont_id", "chemont_name")
-        .annotate(cnt=Count("cds", distinct=True))
+        CdsChemOnt.objects.values("chemont_id", "chemont_name").annotate(
+            cnt=Count("cds", distinct=True)
+        )
     )
 
     if not rows:
@@ -3339,6 +3390,7 @@ def chemont_classes(request):
     ont = None
     try:
         from common_core.chemont.ontology import get_ontology
+
         ont = get_ontology()
     except (FileNotFoundError, ImportError):
         pass
@@ -3412,7 +3464,7 @@ def chemont_classes(request):
 )
 def domain_list(
     request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = 1,
     page_size: int = 50,
 ):
@@ -3435,12 +3487,14 @@ def domain_list(
             description=d.description,
             count=d.bgc_count,
         )
-        for d in qs.order_by("-bgc_count")[offset: offset + ps]
+        for d in qs.order_by("-bgc_count")[offset : offset + ps]
     ]
 
     return PaginatedDomainResponse(
         items=items,
-        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp
+        ),
     )
 
 
@@ -3452,8 +3506,8 @@ def domain_list(
 )
 def gcf_list(
     request,
-    search: Optional[str] = None,
-    level: Optional[int] = None,
+    search: str | None = None,
+    level: int | None = None,
     page: int = 1,
     page_size: int = 50,
 ):
@@ -3464,7 +3518,9 @@ def gcf_list(
     if run is None:
         return PaginatedGcfResponse(
             items=[],
-            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+            pagination=PaginationMeta(
+                page=1, page_size=page_size, total_count=0, total_pages=0
+            ),
         )
 
     from django.db.models.expressions import RawSQL
@@ -3481,9 +3537,7 @@ def gcf_list(
     # Paths are unpadded (e.g. "42.7.3"), so a plain string sort would order
     # "10" before "2". Cast the dot-path to an int[] for hierarchical numeric
     # ordering as the final tiebreaker.
-    qs = qs.annotate(
-        _path_key=RawSQL("string_to_array(family_path, '.')::int[]", [])
-    )
+    qs = qs.annotate(_path_key=RawSQL("string_to_array(family_path, '.')::int[]", []))
     items = [
         GcfOption(
             family_path=g.family_path,
@@ -3492,12 +3546,16 @@ def gcf_list(
             validated_count=g.validated_count,
             mean_novelty=g.mean_novelty,
         )
-        for g in qs.order_by("-member_count", "level", "_path_key")[offset: offset + ps]
+        for g in qs.order_by("-member_count", "level", "_path_key")[
+            offset : offset + ps
+        ]
     ]
 
     return PaginatedGcfResponse(
         items=items,
-        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp
+        ),
     )
 
 
@@ -3509,7 +3567,7 @@ def gcf_list(
 )
 def source_list(
     request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = 1,
     page_size: int = 50,
 ):
@@ -3522,11 +3580,13 @@ def source_list(
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     items = [
         SourceOption(name=s.name, count=s.assembly_count)
-        for s in qs.order_by("-assembly_count")[offset: offset + ps]
+        for s in qs.order_by("-assembly_count")[offset : offset + ps]
     ]
     return PaginatedSourceResponse(
         items=items,
-        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp
+        ),
     )
 
 
@@ -3538,13 +3598,12 @@ def source_list(
 )
 def detector_list(
     request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = 1,
     page_size: int = 50,
 ):
     qs = (
-        DashboardDetector.objects
-        .values("tool")
+        DashboardDetector.objects.values("tool")
         .annotate(count=Count("source_bgcs"))
         .filter(count__gt=0)
     )
@@ -3554,11 +3613,13 @@ def detector_list(
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     items = [
         DetectorOption(tool=d["tool"], count=d["count"])
-        for d in qs.order_by("-count")[offset: offset + ps]
+        for d in qs.order_by("-count")[offset : offset + ps]
     ]
     return PaginatedDetectorResponse(
         items=items,
-        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp
+        ),
     )
 
 
@@ -3573,15 +3634,15 @@ def detector_list(
 )
 def assembly_stats(
     request,
-    search: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    source_names: Optional[str] = None,
-    detector_tools: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
+    search: str | None = None,
+    taxonomy_path: str | None = None,
+    source_names: str | None = None,
+    detector_tools: str | None = None,
+    bgc_class: str | None = None,
+    biome_lineage: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
 ):
     qs = DashboardAssembly.objects.all()
     qs = _apply_assembly_filters(
@@ -3607,15 +3668,15 @@ def assembly_stats(
 def export_assembly_stats(
     request,
     format: str = "json",
-    search: Optional[str] = None,
-    taxonomy_path: Optional[str] = None,
-    source_names: Optional[str] = None,
-    detector_tools: Optional[str] = None,
-    bgc_class: Optional[str] = None,
-    biome_lineage: Optional[str] = None,
-    bgc_accession: Optional[str] = None,
-    assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
+    search: str | None = None,
+    taxonomy_path: str | None = None,
+    source_names: str | None = None,
+    detector_tools: str | None = None,
+    bgc_class: str | None = None,
+    biome_lineage: str | None = None,
+    bgc_accession: str | None = None,
+    assembly_accession: str | None = None,
+    assembly_ids: str | None = None,
 ):
     qs = DashboardAssembly.objects.all()
     qs = _apply_assembly_filters(
@@ -3682,25 +3743,40 @@ def export_assembly_shortlist(request, body: ShortlistExportRequest):
 
     buf = StringIO()
     writer = csv.writer(buf)
-    writer.writerow([
-        "accession", "organism_name",
-        "biome_path",
-        "is_type_strain", "type_strain_catalog_url",
-        "assembly_size_mb",
-        "bgc_count", "l1_class_count",
-        "bgc_diversity_score", "bgc_novelty_score", "bgc_density", "taxonomic_novelty",
-    ])
+    writer.writerow(
+        [
+            "accession",
+            "organism_name",
+            "biome_path",
+            "is_type_strain",
+            "type_strain_catalog_url",
+            "assembly_size_mb",
+            "bgc_count",
+            "l1_class_count",
+            "bgc_diversity_score",
+            "bgc_novelty_score",
+            "bgc_density",
+            "taxonomic_novelty",
+        ]
+    )
 
     for g in assemblies:
-        writer.writerow([
-            g.assembly_accession,
-            g.organism_name,
-            g.biome_path,
-            g.is_type_strain, g.type_strain_catalog_url,
-            g.assembly_size_mb or "",
-            g.bgc_count, g.l1_class_count,
-            g.bgc_diversity_score, g.bgc_novelty_score, g.bgc_density, g.taxonomic_novelty,
-        ])
+        writer.writerow(
+            [
+                g.assembly_accession,
+                g.organism_name,
+                g.biome_path,
+                g.is_type_strain,
+                g.type_strain_catalog_url,
+                g.assembly_size_mb or "",
+                g.bgc_count,
+                g.l1_class_count,
+                g.bgc_diversity_score,
+                g.bgc_novelty_score,
+                g.bgc_density,
+                g.taxonomic_novelty,
+            ]
+        )
 
     response = HttpResponse(buf.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="assembly_shortlist.csv"'
@@ -3818,7 +3894,8 @@ def asset_upload(request):
 
 
 @discovery_router.get(
-    "/assets/{token}/status/", response=AssetStatusResponse,
+    "/assets/{token}/status/",
+    response=AssetStatusResponse,
     include_in_schema=False,
     auth=first_party_gate,
 )
@@ -3895,8 +3972,9 @@ def ibgc_region(request, ibgc_id: int):
     region_length = window_end - window_start
 
     predictions = list(
-        SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc.id)
-        .select_related("detector")
+        SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc.id).select_related(
+            "detector"
+        )
     )
 
     # CDS overlapping the iBGC range, on the same contig.
@@ -3904,7 +3982,9 @@ def ibgc_region(request, ibgc_id: int):
         ContigCds.objects.filter(
             contig_id=ibgc.contig_id,
             cds_range__overlap=bgc_range,
-        ).select_related("seq").order_by("cds_range")
+        )
+        .select_related("seq")
+        .order_by("cds_range")
     )
     cds_ids = [c.id for c in cds_rows]
 
@@ -3912,7 +3992,8 @@ def ibgc_region(request, ibgc_id: int):
     domains_by_cds: dict[int, list] = {}
     if cds_ids:
         for d in ContigDomain.objects.filter(cds_id__in=cds_ids).order_by(
-            "cds_id", "start_position",
+            "cds_id",
+            "start_position",
         ):
             domains_by_cds.setdefault(d.cds_id, []).append(d)
 
@@ -3930,40 +4011,46 @@ def ibgc_region(request, ibgc_id: int):
 
         pfam = []
         for d in cds_doms:
-            pfam.append(PfamAnnotationOut(
-                accession=d.domain_acc or "",
-                description=d.domain_description or d.domain_name or "",
-                go_slim=list(d.go_slim or []),
-                envelope_start=d.start_position or 0,
-                envelope_end=d.end_position or 0,
-                e_value=str(d.score) if d.score is not None else None,
-                url=d.url or "",
-            ))
+            pfam.append(
+                PfamAnnotationOut(
+                    accession=d.domain_acc or "",
+                    description=d.domain_description or d.domain_name or "",
+                    go_slim=list(d.go_slim or []),
+                    envelope_start=d.start_position or 0,
+                    envelope_end=d.end_position or 0,
+                    e_value=str(d.score) if d.score is not None else None,
+                    url=d.url or "",
+                )
+            )
             if (cds.strand or 1) >= 0:
                 dom_nt_start = cds.start_position + (d.start_position or 0) * 3
                 dom_nt_end = cds.start_position + (d.end_position or 0) * 3
             else:
                 dom_nt_start = cds.end_position - (d.end_position or 0) * 3
                 dom_nt_end = cds.end_position - (d.start_position or 0) * 3
-            domain_list_out.append(RegionDomainOut(
-                accession=d.domain_acc or "",
-                description=d.domain_description or d.domain_name or "",
-                start=max(0, dom_nt_start - window_start),
-                end=max(0, dom_nt_end - window_start),
-                strand=cds.strand,
-                score=d.score,
-                go_slim=list(d.go_slim or []),
-                parent_cds_id=cds.protein_id_str,
-                url=d.url or "",
-            ))
+            domain_list_out.append(
+                RegionDomainOut(
+                    accession=d.domain_acc or "",
+                    description=d.domain_description or d.domain_name or "",
+                    start=max(0, dom_nt_start - window_start),
+                    end=max(0, dom_nt_end - window_start),
+                    strand=cds.strand,
+                    score=d.score,
+                    go_slim=list(d.go_slim or []),
+                    parent_cds_id=cds.protein_id_str,
+                    url=d.url or "",
+                )
+            )
 
         # claimed_by_tools: predictions whose bgc_range overlaps this CDS.
         claimed: set[str] = set()
         for pred in predictions:
             if pred.bgc_range is None:
                 continue
-            if pred.bgc_range.lower < cds.cds_range.upper and \
-               cds.cds_range.lower < pred.bgc_range.upper:
+            if (
+                pred.bgc_range.lower < cds.cds_range.upper
+                and cds.cds_range.lower < pred.bgc_range.upper
+            ):
                 tool = pred.detector.tool if pred.detector_id else ""
                 if tool:
                     claimed.add(tool)
@@ -3972,37 +4059,43 @@ def ibgc_region(request, ibgc_id: int):
         sequence = seq_obj.get_sequence() if seq_obj else ""
 
         chemont_hit = chemont_by_cds.get(cds.id)
-        cds_list_out.append(RegionCdsOut(
-            protein_id=cds.protein_id_str,
-            start=cds.start_position - window_start,
-            end=cds.end_position - window_start,
-            strand=cds.strand,
-            protein_length=cds.protein_length,
-            gene_caller=cds.gene_caller or "",
-            cluster_representative=cds.cluster_representative or None,
-            cluster_representative_url=None,
-            sequence=sequence,
-            pfam=pfam,
-            interpro=[InterproAnnotationOut(**r) for r in interpro],
-            chemont_id=chemont_hit.chemont_id if chemont_hit else None,
-            chemont_name=chemont_hit.chemont_name if chemont_hit else None,
-            chemont_probability=chemont_hit.probability if chemont_hit else None,
-            chemont_weight=chemont_hit.weight if chemont_hit else None,
-            claimed_by_tools=sorted(claimed),
-        ))
+        cds_list_out.append(
+            RegionCdsOut(
+                protein_id=cds.protein_id_str,
+                start=cds.start_position - window_start,
+                end=cds.end_position - window_start,
+                strand=cds.strand,
+                protein_length=cds.protein_length,
+                gene_caller=cds.gene_caller or "",
+                cluster_representative=cds.cluster_representative or None,
+                cluster_representative_url=None,
+                sequence=sequence,
+                pfam=pfam,
+                interpro=[InterproAnnotationOut(**r) for r in interpro],
+                chemont_id=chemont_hit.chemont_id if chemont_hit else None,
+                chemont_name=chemont_hit.chemont_name if chemont_hit else None,
+                chemont_probability=chemont_hit.probability if chemont_hit else None,
+                chemont_weight=chemont_hit.weight if chemont_hit else None,
+                claimed_by_tools=sorted(claimed),
+            )
+        )
 
     cluster_list_out = []
     for pred in predictions:
         if pred.bgc_range is None:
             continue
-        cluster_list_out.append(RegionClusterOut(
-            accession=pred.prediction_accession,
-            start=max(0, pred.bgc_range.lower - window_start),
-            end=max(0, pred.bgc_range.upper - 1 - window_start),
-            source=pred.detector.tool if pred.detector_id else "",
-            # Raw per-tool product class, shown verbatim on prediction hover.
-            bgc_classes=[pred.classification_path] if pred.classification_path else [],
-        ))
+        cluster_list_out.append(
+            RegionClusterOut(
+                accession=pred.prediction_accession,
+                start=max(0, pred.bgc_range.lower - window_start),
+                end=max(0, pred.bgc_range.upper - 1 - window_start),
+                source=pred.detector.tool if pred.detector_id else "",
+                # Raw per-tool product class, shown verbatim on prediction hover.
+                bgc_classes=(
+                    [pred.classification_path] if pred.classification_path else []
+                ),
+            )
+        )
 
     return IbgcRegionOut(
         ibgc_id=ibgc.id,
@@ -4039,7 +4132,7 @@ def accession_resolve(request, accession: str):
 
     kind = "ibgc" if resolved.kind == AccessionEntityType.IBGC else "cbgc"
     if resolved.current_id is None:
-        current_url: Optional[str] = None
+        current_url: str | None = None
     elif kind == "ibgc":
         current_url = f"/api/discovery/ibgcs/{resolved.current_id}/"
     else:

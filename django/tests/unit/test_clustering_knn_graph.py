@@ -11,7 +11,7 @@ igraph = pytest.importorskip("igraph")
 from discovery.services.clustering.knn_graph import build_knn_graph  # noqa: E402
 
 
-def _sim_from_dense(dense: np.ndarray) -> "scipy_sparse.csr_matrix":
+def _sim_from_dense(dense: np.ndarray) -> scipy_sparse.csr_matrix:
     return scipy_sparse.csr_matrix(np.asarray(dense, dtype=np.float64))
 
 
@@ -108,7 +108,9 @@ def test_edge_weight_is_similarity_not_rank():
         ]
     )
     g = build_knn_graph(sim, k=1)
-    edge_to_weight = {tuple(sorted(e)): w for e, w in zip(g.get_edgelist(), g.es["weight"])}
+    edge_to_weight = {
+        tuple(sorted(e)): w for e, w in zip(g.get_edgelist(), g.es["weight"])
+    }
     # Edge (1,2): both endpoints rank each other top-1 with value 0.8 → weight 0.8.
     assert edge_to_weight[(1, 2)] == pytest.approx(0.8)
     # Edge (0,1): row 0 ranks 1 top-1 (0.4); row 1 ranks 2 top-1, not 0.

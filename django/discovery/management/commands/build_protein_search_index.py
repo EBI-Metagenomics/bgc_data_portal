@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import logging
 
+from discovery.services.protein_search.build import rebuild_index, update_index
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-
-from discovery.services.protein_search.build import rebuild_index, update_index
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +43,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if not getattr(settings, "PROTEIN_SEARCH_INDEX_DIR", None):
-            raise CommandError("PROTEIN_SEARCH_INDEX_DIR is not configured in settings.")
+            raise CommandError(
+                "PROTEIN_SEARCH_INDEX_DIR is not configured in settings."
+            )
 
         if options["rebuild"]:
             self.stdout.write("Rebuilding protein search index from scratch...")
@@ -53,7 +54,9 @@ class Command(BaseCommand):
             self.stdout.write("Updating protein search index (append-only)...")
             stats = update_index()
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Done in {stats.elapsed_seconds:.1f}s — "
-            f"total={stats.total_in_db} added={stats.newly_added} version={stats.version}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Done in {stats.elapsed_seconds:.1f}s — "
+                f"total={stats.total_in_db} added={stats.newly_added} version={stats.version}"
+            )
+        )

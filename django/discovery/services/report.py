@@ -19,10 +19,6 @@ import json
 import logging
 from collections import defaultdict
 from datetime import timedelta
-from typing import Optional
-
-from django.db import connection
-from django.utils import timezone
 
 from discovery.models import (
     DashboardAssembly,
@@ -30,6 +26,8 @@ from discovery.models import (
     IntegratedBgc,
     SourceBgcPrediction,
 )
+from django.db import connection
+from django.utils import timezone
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +52,7 @@ LENGTH_BUCKETS: list[tuple[float, float, str]] = [
 SCORE_SAMPLE_CAP = 500
 
 
-def _taxonomy_phylum(taxonomy_path: Optional[str]) -> Optional[str]:
+def _taxonomy_phylum(taxonomy_path: str | None) -> str | None:
     if not taxonomy_path:
         return None
     parts = taxonomy_path.split(".")
@@ -94,8 +92,8 @@ def _fetch_domain_rows_for_ibgcs(ibgc_ids: list[int]) -> list[tuple]:
 def build_report_payload(
     ibgc_ids: list[int],
     *,
-    extra_ibgc_rows: Optional[list[dict]] = None,
-    extra_domain_rows: Optional[list[dict]] = None,
+    extra_ibgc_rows: list[dict] | None = None,
+    extra_domain_rows: list[dict] | None = None,
 ) -> dict:
     """Assemble the complete report payload for a shortlist of iBGC ids.
 
@@ -113,7 +111,9 @@ def build_report_payload(
     extra_ibgc_rows = list(extra_ibgc_rows or [])
     extra_domain_rows = list(extra_domain_rows or [])
     ibgcs = list(
-        IntegratedBgc.objects.select_related("contig", "cbgc").filter(id__in=db_ibgc_ids)
+        IntegratedBgc.objects.select_related("contig", "cbgc").filter(
+            id__in=db_ibgc_ids
+        )
     )
     n_ibgcs = len(ibgcs) + len(extra_ibgc_rows)
     now = timezone.now()
@@ -124,9 +124,9 @@ def build_report_payload(
 
     # ── Source predictions grouped by iBGC (single sweep) ──────────────────
     members = list(
-        SourceBgcPrediction.objects
-        .filter(integrated_bgc_id__in=db_ibgc_ids)
-        .select_related("assembly", "assembly__source", "contig", "detector")
+        SourceBgcPrediction.objects.filter(
+            integrated_bgc_id__in=db_ibgc_ids
+        ).select_related("assembly", "assembly__source", "contig", "detector")
     )
     members_by_ibgc: dict[int, list[SourceBgcPrediction]] = defaultdict(list)
     for m in members:
@@ -145,30 +145,36 @@ def build_report_payload(
         if first_asm:
             assembly_ids.add(first_asm.id)
         contig = ibgc.contig
-        ibgc_rows.append({
-            "id": ibgc.id,
-            "accession": ibgc.accession,
-            "cbgc_accession": ibgc.cbgc.accession if ibgc.cbgc_id else None,
-            "label": ibgc.accession,
-            "classification_path": ibgc.gene_cluster_family or "",
-            "bgc_class": ibgc.bgc_class or "",
-            "size_kb": round(ibgc.size_kb, 3),
-            "start": ibgc.start_position,
-            "end": ibgc.end_position,
-            "novelty_score": ibgc.novelty_score,
-            "domain_novelty": ibgc.domain_novelty,
-            "n_source_bgcs": len(mems),
-            "source_tools": list(ibgc.source_tools or []),
-            "is_partial": _is_partial(ibgc),
-            "is_validated": is_validated,
-            "is_type_strain": is_type_strain,
-            "parent_assembly_accession": first_asm.assembly_accession if first_asm else None,
-            "parent_assembly_id": first_asm.id if first_asm else None,
-            "organism_name": first_asm.organism_name if first_asm else None,
-            "biome_path": first_asm.biome_path if first_asm else "",
-            "taxonomy_phylum": _taxonomy_phylum(contig.taxonomy_path if contig else None),
-            "contig_accession": contig.accession if contig else None,
-        })
+        ibgc_rows.append(
+            {
+                "id": ibgc.id,
+                "accession": ibgc.accession,
+                "cbgc_accession": ibgc.cbgc.accession if ibgc.cbgc_id else None,
+                "label": ibgc.accession,
+                "classification_path": ibgc.gene_cluster_family or "",
+                "bgc_class": ibgc.bgc_class or "",
+                "size_kb": round(ibgc.size_kb, 3),
+                "start": ibgc.start_position,
+                "end": ibgc.end_position,
+                "novelty_score": ibgc.novelty_score,
+                "domain_novelty": ibgc.domain_novelty,
+                "n_source_bgcs": len(mems),
+                "source_tools": list(ibgc.source_tools or []),
+                "is_partial": _is_partial(ibgc),
+                "is_validated": is_validated,
+                "is_type_strain": is_type_strain,
+                "parent_assembly_accession": (
+                    first_asm.assembly_accession if first_asm else None
+                ),
+                "parent_assembly_id": first_asm.id if first_asm else None,
+                "organism_name": first_asm.organism_name if first_asm else None,
+                "biome_path": first_asm.biome_path if first_asm else "",
+                "taxonomy_phylum": _taxonomy_phylum(
+                    contig.taxonomy_path if contig else None
+                ),
+                "contig_accession": contig.accession if contig else None,
+            }
+        )
 
     # ── Domain composition (core / variable / rare per acc) ───────────────
     domain_to_ibgcs: dict[str, set[int]] = defaultdict(set)
@@ -253,31 +259,37 @@ def build_report_payload(
         name = domain_name_lookup.get(acc, "")
         desc = domain_desc_lookup.get(acc, "")
         slim = domain_goslim_lookup.get(acc, "") or NO_GOSLIM
-        composition_rows.append({
-            "domain_acc": acc,
-            "domain_name": name,
-            "domain_description": desc,
-            "go_slim": slim,
-            "ibgc_count": c,
-            "fraction": round(frac, 4),
-            "tier": tier,
-        })
-        matrix_buckets[(slim, tier)].append({
-            "domain_acc": acc,
-            "domain_name": name,
-            "domain_description": desc,
-        })
-        for nid in sorted(hit_ibgcs):
-            domains_long.append({
-                "ibgc_id": nid,
+        composition_rows.append(
+            {
                 "domain_acc": acc,
                 "domain_name": name,
                 "domain_description": desc,
                 "go_slim": slim,
-                "tier": tier,
-                "occurs_in_n_ibgcs": c,
+                "ibgc_count": c,
                 "fraction": round(frac, 4),
-            })
+                "tier": tier,
+            }
+        )
+        matrix_buckets[(slim, tier)].append(
+            {
+                "domain_acc": acc,
+                "domain_name": name,
+                "domain_description": desc,
+            }
+        )
+        for nid in sorted(hit_ibgcs):
+            domains_long.append(
+                {
+                    "ibgc_id": nid,
+                    "domain_acc": acc,
+                    "domain_name": name,
+                    "domain_description": desc,
+                    "go_slim": slim,
+                    "tier": tier,
+                    "occurs_in_n_ibgcs": c,
+                    "fraction": round(frac, 4),
+                }
+            )
     domain_composition = {
         "core_count": core_count,
         "variable_count": variable_count,
@@ -300,12 +312,14 @@ def build_report_payload(
     for cat in categories:
         for tier in tiers:
             doms = matrix_buckets.get((cat, tier), [])
-            cells.append({
-                "category": cat,
-                "tier": tier,
-                "count": len(doms),
-                "domains": doms,
-            })
+            cells.append(
+                {
+                    "category": cat,
+                    "tier": tier,
+                    "count": len(doms),
+                    "domains": doms,
+                }
+            )
     domain_goslim_matrix = {
         "categories": categories,
         "tiers": tiers,
@@ -321,9 +335,11 @@ def build_report_payload(
     # iBGC-derived GCF sunburst over the full classification path (e.g.
     # 42 → 42.7 → 42.7.3). Unclassified iBGCs (empty path) are omitted.
     from discovery.services.stats import build_sunburst_from_paths
+
     gcf_paths = [ibgc.gene_cluster_family for ibgc in ibgcs if ibgc.gene_cluster_family]
     gcf_paths += [
-        r.get("classification_path") for r in extra_ibgc_rows
+        r.get("classification_path")
+        for r in extra_ibgc_rows
         if r.get("classification_path")
     ]
     gcf_sunburst = build_sunburst_from_paths(gcf_paths)
@@ -347,9 +363,7 @@ def build_report_payload(
         if r.get("novelty_score") is not None:
             novelty_vals.append(float(r["novelty_score"]))
     novelty_vals = novelty_vals[:SCORE_SAMPLE_CAP]
-    dn_vals = [
-        float(n.domain_novelty) for n in ibgcs if n.domain_novelty is not None
-    ]
+    dn_vals = [float(n.domain_novelty) for n in ibgcs if n.domain_novelty is not None]
     for r in extra_ibgc_rows:
         if r.get("domain_novelty") is not None:
             dn_vals.append(float(r["domain_novelty"]))
@@ -364,8 +378,9 @@ def build_report_payload(
     # (contig-edge truncation) — the same definition compute_bgc_stats uses.
     if db_ibgc_ids:
         partial_ibgc_ids = set(
-            SourceBgcPrediction.objects
-            .filter(integrated_bgc_id__in=db_ibgc_ids, is_partial=True)
+            SourceBgcPrediction.objects.filter(
+                integrated_bgc_id__in=db_ibgc_ids, is_partial=True
+            )
             .values_list("integrated_bgc_id", flat=True)
             .distinct()
         )
@@ -418,10 +433,10 @@ def build_report_payload(
     # ── Predictor distribution ────────────────────────────────────────────
     predictor_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
-        for tool in (ibgc.source_tools or []):
+        for tool in ibgc.source_tools or []:
             predictor_counts[tool] += 1
     for r in extra_ibgc_rows:
-        for tool in (r.get("source_tools") or []):
+        for tool in r.get("source_tools") or []:
             predictor_counts[tool] += 1
     predictor_distribution = sorted(
         [{"name": k, "count": v} for k, v in predictor_counts.items()],
@@ -447,14 +462,12 @@ def build_report_payload(
 
     # ── Assembly roster + stats ───────────────────────────────────────────
     assemblies = list(
-        DashboardAssembly.objects
-        .filter(id__in=assembly_ids)
-        .select_related("source")
+        DashboardAssembly.objects.filter(id__in=assembly_ids).select_related("source")
     )
     contig_taxonomy_lookup: dict[int, str] = {}
-    for c in DashboardContig.objects.filter(
-        assembly_id__in=assembly_ids
-    ).values("assembly_id", "taxonomy_path"):
+    for c in DashboardContig.objects.filter(assembly_id__in=assembly_ids).values(
+        "assembly_id", "taxonomy_path"
+    ):
         if c["taxonomy_path"] and c["assembly_id"] not in contig_taxonomy_lookup:
             contig_taxonomy_lookup[c["assembly_id"]] = c["taxonomy_path"]
 
@@ -466,21 +479,24 @@ def build_report_payload(
     assembly_rows = []
     for asm in assemblies:
         tx = contig_taxonomy_lookup.get(asm.id, "")
-        assembly_rows.append({
-            "id": asm.id,
-            "accession": asm.assembly_accession,
-            "organism_name": asm.organism_name,
-            "source_name": asm.source.name if asm.source else None,
-            "biome_path": asm.biome_path,
-            "taxonomy_path": tx,
-            "taxonomy_phylum": _taxonomy_phylum(tx),
-            "assembly_size_mb": asm.assembly_size_mb,
-            "total_bgcs_in_assembly": asm.bgc_count,
-            "ibgcs_in_shortlist": ibgcs_per_assembly.get(asm.id, 0),
-            "is_type_strain": asm.is_type_strain,
-        })
+        assembly_rows.append(
+            {
+                "id": asm.id,
+                "accession": asm.assembly_accession,
+                "organism_name": asm.organism_name,
+                "source_name": asm.source.name if asm.source else None,
+                "biome_path": asm.biome_path,
+                "taxonomy_path": tx,
+                "taxonomy_phylum": _taxonomy_phylum(tx),
+                "assembly_size_mb": asm.assembly_size_mb,
+                "total_bgcs_in_assembly": asm.bgc_count,
+                "ibgcs_in_shortlist": ibgcs_per_assembly.get(asm.id, 0),
+                "is_type_strain": asm.is_type_strain,
+            }
+        )
 
     from discovery.services.stats import compute_assembly_stats
+
     try:
         assembly_stats = compute_assembly_stats(
             DashboardAssembly.objects.filter(id__in=assembly_ids)
@@ -494,17 +510,15 @@ def build_report_payload(
 
     # ── iBGC-derived taxonomy sunburst ─────────────────────────────────────
     from discovery.services.stats import build_taxonomy_sunburst_from_paths
+
     ibgc_taxonomy_paths = [
-        n.contig.taxonomy_path for n in ibgcs
-        if n.contig and n.contig.taxonomy_path
+        n.contig.taxonomy_path for n in ibgcs if n.contig and n.contig.taxonomy_path
     ]
     taxonomy_sunburst = build_taxonomy_sunburst_from_paths(ibgc_taxonomy_paths)
 
     # ── iBGC-derived biome sunburst (one count per iBGC) ───────────────────
     biome_paths = [r.get("biome_path") for r in ibgc_rows if r.get("biome_path")]
-    biome_paths += [
-        r.get("biome_path") for r in extra_ibgc_rows if r.get("biome_path")
-    ]
+    biome_paths += [r.get("biome_path") for r in extra_ibgc_rows if r.get("biome_path")]
     biome_sunburst = build_sunburst_from_paths(biome_paths)
 
     if extra_ibgc_rows:
@@ -588,8 +602,11 @@ def build_report_analyst_export(token: str, payload: dict) -> dict:
         "domain_composition": payload.get(
             "domain_composition",
             {
-                "core_count": 0, "variable_count": 0, "rare_count": 0,
-                "total_unique": 0, "rows": [],
+                "core_count": 0,
+                "variable_count": 0,
+                "rare_count": 0,
+                "total_unique": 0,
+                "rows": [],
             },
         ),
         "domain_goslim_matrix": payload.get(
@@ -608,8 +625,11 @@ def _empty_payload(now, expires_at) -> dict:
         "n_assemblies": 0,
         "ibgc_rows": [],
         "domain_composition": {
-            "core_count": 0, "variable_count": 0, "rare_count": 0,
-            "total_unique": 0, "rows": [],
+            "core_count": 0,
+            "variable_count": 0,
+            "rare_count": 0,
+            "total_unique": 0,
+            "rows": [],
         },
         "gcf_distribution": [],
         "gcf_sunburst": [],

@@ -12,14 +12,15 @@
 # limitations under the License.
 
 from csp.decorators import csp_update
+from debug_toolbar.toolbar import debug_toolbar_urls
+from discovery.api import discovery_router
+from ninja.openapi.docs import Redoc
+
 from django.contrib import admin
 from django.urls import path, re_path
-from debug_toolbar.toolbar import debug_toolbar_urls
-from ninja.openapi.docs import Redoc
 
 from . import views
 from .api import api as ninja_api
-from discovery.api import discovery_router
 
 ninja_api.add_router("/discovery/", discovery_router)
 
@@ -35,6 +36,7 @@ handler404 = "bgc_data_portal.views.custom_404_view"
 @csp_update({"script-src": ["'unsafe-inline'", "'unsafe-eval'"]})
 def redoc_view(request):
     return Redoc().render_page(request, ninja_api)
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),

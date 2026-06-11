@@ -113,16 +113,20 @@ class Command(BaseCommand):
                     self.style.SUCCESS(f"Rebuilt scoring cache: {cache_dir}")
                 )
             else:
-                self.stdout.write(self.style.WARNING(
-                    "No clusterable iBGCs — scoring cache not written."
-                ))
+                self.stdout.write(
+                    self.style.WARNING(
+                        "No clusterable iBGCs — scoring cache not written."
+                    )
+                )
         except Exception as exc:
             # Non-fatal: the import (DB state) succeeded. Surface a clear hint;
             # the cache can be regenerated with `rebuild_scoring_cache`.
-            self.stdout.write(self.style.WARNING(
-                f"Scoring cache rebuild failed ({exc}). Find-similar / architecture "
-                f"search will 503 until you run: manage.py rebuild_scoring_cache"
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Scoring cache rebuild failed ({exc}). Find-similar / architecture "
+                    f"search will 503 until you run: manage.py rebuild_scoring_cache"
+                )
+            )
             log.exception("Scoring cache rebuild failed after import")
 
         # The import is synchronous and transaction-wrapped: reaching here means
@@ -138,9 +142,11 @@ class Command(BaseCommand):
                     self.style.SUCCESS(f"Enqueued DiscoveryStats refresh: {res.id}")
                 )
             except Exception as exc:
-                self.stdout.write(self.style.WARNING(
-                    f"Could not enqueue DiscoveryStats refresh: {exc}"
-                ))
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Could not enqueue DiscoveryStats refresh: {exc}"
+                    )
+                )
 
     @transaction.atomic
     def _apply(self, payload: dict, *, force: bool):
@@ -178,11 +184,14 @@ class Command(BaseCommand):
             "scipy_version": libs.get("scipy", ""),
         }
         run, created = ClusteringRun.objects.update_or_create(
-            sha256=sha, defaults=defaults,
+            sha256=sha,
+            defaults=defaults,
         )
         log.info(
             "%s ClusteringRun pk=%s sha=%s",
-            "Created" if created else "Updated", run.pk, sha[:12],
+            "Created" if created else "Updated",
+            run.pk,
+            sha[:12],
         )
 
         DashboardGCF.objects.filter(clustering_run=run).delete()
@@ -205,7 +214,9 @@ class Command(BaseCommand):
     def _import_gcfs(self, run, gcf_table: dict):
         from discovery.models import DashboardGCF
 
-        rep_ibgc_ids = [int(x) if x else None for x in gcf_table.get("representative_ibgc_id", [])]
+        rep_ibgc_ids = [
+            int(x) if x else None for x in gcf_table.get("representative_ibgc_id", [])
+        ]
 
         rows: list[DashboardGCF] = []
         n = len(gcf_table.get("family_path", []))
@@ -234,10 +245,14 @@ class Command(BaseCommand):
         )
 
         existing = list(
-            IntegratedBgc.objects.filter(id__in=_bigint_array_in(ibgc_ids))
-            .only(
-                "id", "umap_x", "umap_y", "umap_projected",
-                "gene_cluster_family", "novelty_score", "domain_novelty",
+            IntegratedBgc.objects.filter(id__in=_bigint_array_in(ibgc_ids)).only(
+                "id",
+                "umap_x",
+                "umap_y",
+                "umap_projected",
+                "gene_cluster_family",
+                "novelty_score",
+                "domain_novelty",
             )
         )
         snaps = [
@@ -255,7 +270,9 @@ class Command(BaseCommand):
         ]
         IbgcClusteringSnapshot.objects.filter(clustering_run=run).delete()
         IbgcClusteringSnapshot.objects.bulk_create(
-            snaps, batch_size=5_000, ignore_conflicts=False,
+            snaps,
+            batch_size=5_000,
+            ignore_conflicts=False,
         )
         log.info("Snapshot wrote %d rows for run pk=%s", len(snaps), run.pk)
 
@@ -305,7 +322,9 @@ class Command(BaseCommand):
             ibgc.classification_run = run
             ibgc.classified_at = now
         IntegratedBgc.objects.bulk_update(
-            rows, list(IBGC_BULK_UPDATE_FIELDS), batch_size=5_000,
+            rows,
+            list(IBGC_BULK_UPDATE_FIELDS),
+            batch_size=5_000,
         )
         log.info("Updated %d primary IntegratedBgc rows", len(rows))
 
@@ -340,7 +359,9 @@ class Command(BaseCommand):
             ibgc.classification_run = run
             ibgc.classified_at = now
         IntegratedBgc.objects.bulk_update(
-            rows, list(IBGC_BULK_UPDATE_FIELDS), batch_size=5_000,
+            rows,
+            list(IBGC_BULK_UPDATE_FIELDS),
+            batch_size=5_000,
         )
         log.info("Updated %d partial-projection IntegratedBgc rows", len(rows))
 

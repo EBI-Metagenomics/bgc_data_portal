@@ -18,7 +18,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
 from discovery.services.architecture import (
     _signature_url,
     collapse_to_interpro_rows,
@@ -47,21 +46,35 @@ def _dom(**kw):
 @pytest.mark.parametrize(
     "ref_db,acc,expected",
     [
-        ("Gene3D", "G3DSA:1.20.1720.10",
-         "https://www.ebi.ac.uk/interpro/entry/cathgene3d/G3DSA:1.20.1720.10/"),
-        ("Pfam", "PF00109",
-         "https://www.ebi.ac.uk/interpro/entry/pfam/PF00109/"),
+        (
+            "Gene3D",
+            "G3DSA:1.20.1720.10",
+            "https://www.ebi.ac.uk/interpro/entry/cathgene3d/G3DSA:1.20.1720.10/",
+        ),
+        ("Pfam", "PF00109", "https://www.ebi.ac.uk/interpro/entry/pfam/PF00109/"),
         # TIGRFAM is served under the NCBIFAM slug on InterPro.
-        ("TIGRFAM", "TIGR00001",
-         "https://www.ebi.ac.uk/interpro/entry/ncbifam/TIGR00001/"),
+        (
+            "TIGRFAM",
+            "TIGR00001",
+            "https://www.ebi.ac.uk/interpro/entry/ncbifam/TIGR00001/",
+        ),
         # PROSITE patterns vs profiles map to distinct slugs.
-        ("PROSITE_PATTERNS", "PS00012",
-         "https://www.ebi.ac.uk/interpro/entry/prosite/PS00012/"),
-        ("PROSITE_PROFILES", "PS50011",
-         "https://www.ebi.ac.uk/interpro/entry/profile/PS50011/"),
+        (
+            "PROSITE_PATTERNS",
+            "PS00012",
+            "https://www.ebi.ac.uk/interpro/entry/prosite/PS00012/",
+        ),
+        (
+            "PROSITE_PROFILES",
+            "PS50011",
+            "https://www.ebi.ac.uk/interpro/entry/profile/PS50011/",
+        ),
         # Case-insensitive ref_db.
-        ("ncbifam", "NF000001",
-         "https://www.ebi.ac.uk/interpro/entry/ncbifam/NF000001/"),
+        (
+            "ncbifam",
+            "NF000001",
+            "https://www.ebi.ac.uk/interpro/entry/ncbifam/NF000001/",
+        ),
     ],
 )
 def test_signature_url_known_refdbs(ref_db, acc, expected):

@@ -16,9 +16,6 @@ Range-bearing factories accept ``start_pos`` / ``end_pos`` overrides
 from __future__ import annotations
 
 import factory
-from factory.django import DjangoModelFactory
-from django.db.backends.postgresql.psycopg_any import NumericRange
-
 from discovery.models import (
     AssemblySource,
     ConsensusBgc,
@@ -34,6 +31,9 @@ from discovery.services.accession_registry import (
     lookup_or_mint_cbgc,
     lookup_or_mint_ibgc,
 )
+from factory.django import DjangoModelFactory
+
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 
 def _range(start: int, end_inclusive: int) -> NumericRange:

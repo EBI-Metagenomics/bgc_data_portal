@@ -1,8 +1,7 @@
-from django.core.management.base import BaseCommand
-from django.db import transaction
-
 from discovery.models import DiscoveryStats
 from discovery.services.stats import generate_discovery_stats
+from django.core.management.base import BaseCommand
+from django.db import transaction
 
 
 class Command(BaseCommand):

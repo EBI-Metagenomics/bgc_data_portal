@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Optional
 
 from pyhmmer.easel import Alphabet, DigitalSequence, DigitalSequenceBlock, TextSequence
 from pyhmmer.hmmer import phmmer
@@ -55,7 +54,7 @@ def _union_length(intervals: list[tuple[int, int]]) -> int:
     return total
 
 
-def _compute_hit_metrics(hit, query_len: int) -> Optional[ProteinHitMetrics]:
+def _compute_hit_metrics(hit, query_len: int) -> ProteinHitMetrics | None:
     """Aggregate domain-level alignment stats into a single hit-level metrics
     record. Returns ``None`` if the hit has no usable alignments.
     """
@@ -134,7 +133,7 @@ def phmmer_search(
     min_pident: float = 70.0,
     min_qcov: float = 70.0,
     cpus: int = 1,
-    block: Optional[DigitalSequenceBlock] = None,
+    block: DigitalSequenceBlock | None = None,
 ) -> dict[str, ProteinHitMetrics]:
     """Run phmmer with ``sequence`` against the on-disk protein DB and return
     per-target metrics for hits that pass all three thresholds.
@@ -186,8 +185,12 @@ def phmmer_search(
 
     def scan(b: DigitalSequenceBlock) -> dict[str, ProteinHitMetrics]:
         return _scan_block(
-            query_seq, b, query_len,
-            min_bitscore=min_bitscore, min_pident=min_pident, min_qcov=min_qcov,
+            query_seq,
+            b,
+            query_len,
+            min_bitscore=min_bitscore,
+            min_pident=min_pident,
+            min_qcov=min_qcov,
         )
 
     if len(target_blocks) == 1:
@@ -206,6 +209,10 @@ def phmmer_search(
 
     log.info(
         "phmmer_search: query_len=%d min_bitscore=%g min_pident=%g min_qcov=%g hits=%d",
-        query_len, min_bitscore, min_pident, min_qcov, len(results),
+        query_len,
+        min_bitscore,
+        min_pident,
+        min_qcov,
+        len(results),
     )
     return results

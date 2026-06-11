@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 def pick_medoid(
     member_indices: list[int],
-    sim: "sp.csr_matrix",
+    sim: sp.csr_matrix,
 ) -> int:
     """Return the BGC index from ``member_indices`` with the highest summed similarity to the rest.
 

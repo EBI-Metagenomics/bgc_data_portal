@@ -28,16 +28,14 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from django.db.backends.postgresql.psycopg_any import NumericRange
-
 from discovery.models import (
     AccessionAlias,
-    AccessionEntityType,
     AccessionRegistry,
     ConsensusBgc,
     SourceBgcPrediction,
 )
 from discovery.services.accession_registry import lookup_or_mint_cbgc
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +54,9 @@ class _Cbgc:
     contig_accession: str
     start: int
     end: int
-    next_bgc_number: dict[int, int] = field(default_factory=lambda: defaultdict(lambda: 1))
+    next_bgc_number: dict[int, int] = field(
+        default_factory=lambda: defaultdict(lambda: 1)
+    )
 
 
 class CbgcAssigner:
@@ -198,7 +198,8 @@ class CbgcAssigner:
         for c in absorbed:
             for det_id, num in c.next_bgc_number.items():
                 survivor.next_bgc_number[det_id] = max(
-                    survivor.next_bgc_number[det_id], num,
+                    survivor.next_bgc_number[det_id],
+                    num,
                 )
 
         absorbed_ids = [c.db_id for c in absorbed]

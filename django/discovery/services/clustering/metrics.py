@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def dice_similarity(M: "sp.csr_matrix") -> "sp.csr_matrix":
+def dice_similarity(M: sp.csr_matrix) -> sp.csr_matrix:
     """Sørensen–Dice on a binary BGC × feature matrix.
 
     ``dice(A, B) = 2 · |A ∩ B| / (|A| + |B|)``

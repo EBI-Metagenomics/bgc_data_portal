@@ -15,11 +15,9 @@ folds them at render time.
 from __future__ import annotations
 
 import pytest
-
 from discovery.services import go_slim as go_slim_mod
 from discovery.services.asset_upload.project import VirtualIbgc, _region_payload
 from discovery.services.asset_upload.schemas import AssetCds, AssetDomain
-
 
 SLIM_MAP = {
     "GO:0016491": ["Oxidoreductase activity"],

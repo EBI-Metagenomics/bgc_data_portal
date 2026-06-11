@@ -28,12 +28,12 @@ _UMAP_MIN_VERTICES = 50
 
 
 def compute_2d_layout(
-    graph: "ig.Graph",
-    sim: "sp.csr_matrix",
+    graph: ig.Graph,
+    sim: sp.csr_matrix,
     *,
     seed: int = 42,
     n_neighbors: int | None = None,
-) -> "np.ndarray":
+) -> np.ndarray:
     """Return a normalized ``(n_bgcs, 2)`` array of 2D coordinates.
 
     Tries UMAP on the KNN structure of ``sim``; falls back to igraph DRL
@@ -57,11 +57,11 @@ def compute_2d_layout(
 
 
 def _umap_layout(
-    sim: "sp.csr_matrix",
+    sim: sp.csr_matrix,
     *,
     seed: int,
     n_neighbors: int | None,
-) -> "np.ndarray | None":
+) -> np.ndarray | None:
     """Run UMAP on the KNN structure of ``sim``. Returns None on failure."""
     try:
         import numpy as np
@@ -141,12 +141,14 @@ def _umap_layout(
         if finite_mask.sum() < max(2, n // 2):
             log.warning(
                 "UMAP produced %d/%d non-finite rows; falling back to igraph",
-                n_bad, n,
+                n_bad,
+                n,
             )
             return None
         log.warning(
             "UMAP produced %d/%d non-finite rows; replacing with layout centre",
-            n_bad, n,
+            n_bad,
+            n,
         )
         centre = coords[finite_mask].mean(axis=0)
         coords[~finite_mask] = centre
@@ -154,7 +156,7 @@ def _umap_layout(
     return coords
 
 
-def _igraph_layout(graph: "ig.Graph", *, seed: int) -> "np.ndarray":
+def _igraph_layout(graph: ig.Graph, *, seed: int) -> np.ndarray:
     """Layout via igraph (DRL preferred, Fruchterman–Reingold as fallback)."""
     import numpy as np
 
@@ -171,7 +173,7 @@ def _igraph_layout(graph: "ig.Graph", *, seed: int) -> "np.ndarray":
     return np.asarray(layout.coords, dtype=np.float64)
 
 
-def _normalize(coords: "np.ndarray") -> "np.ndarray":
+def _normalize(coords: np.ndarray) -> np.ndarray:
     """Centre on origin; scale longest extent to ``_LAYOUT_RANGE``."""
     import numpy as np
 

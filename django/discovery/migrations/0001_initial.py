@@ -35,13 +35,11 @@ class Migration(migrations.Migration):
             sql="CREATE EXTENSION IF NOT EXISTS btree_gist;",
             reverse_sql="DROP EXTENSION IF EXISTS btree_gist;",
         ),
-
         # ── Accession-minting sequence (consumed by services.accession_registry) ─
         migrations.RunSQL(
             sql="CREATE SEQUENCE IF NOT EXISTS discovery_cbgc_accession_seq AS bigint;",
             reverse_sql="DROP SEQUENCE IF EXISTS discovery_cbgc_accession_seq;",
         ),
-
         # ── Lookups & catalog tables (no FKs) ───────────────────────────────
         migrations.CreateModel(
             name="AssemblySource",
@@ -82,7 +80,10 @@ class Migration(migrations.Migration):
                     models.CharField(
                         choices=[
                             ("RAW", "Raw signature accessions"),
-                            ("IPR_PROJECTED", "IPR entry when available, else signature"),
+                            (
+                                "IPR_PROJECTED",
+                                "IPR entry when available, else signature",
+                            ),
                         ],
                         default="IPR_PROJECTED",
                         max_length=20,
@@ -97,10 +98,22 @@ class Migration(migrations.Migration):
                 ("n_levels", models.PositiveSmallIntegerField(default=0)),
                 ("n_root_communities", models.PositiveIntegerField(default=0)),
                 ("n_leaf_communities", models.PositiveIntegerField(default=0)),
-                ("igraph_version", models.CharField(blank=True, default="", max_length=50)),
-                ("leidenalg_version", models.CharField(blank=True, default="", max_length=50)),
-                ("umap_version", models.CharField(blank=True, default="", max_length=50)),
-                ("scipy_version", models.CharField(blank=True, default="", max_length=50)),
+                (
+                    "igraph_version",
+                    models.CharField(blank=True, default="", max_length=50),
+                ),
+                (
+                    "leidenalg_version",
+                    models.CharField(blank=True, default="", max_length=50),
+                ),
+                (
+                    "umap_version",
+                    models.CharField(blank=True, default="", max_length=50),
+                ),
+                (
+                    "scipy_version",
+                    models.CharField(blank=True, default="", max_length=50),
+                ),
                 ("sha256", models.CharField(max_length=64, unique=True)),
             ],
             options={
@@ -137,7 +150,10 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="PrecomputedStats",
             fields=[
-                ("key", models.CharField(max_length=100, primary_key=True, serialize=False)),
+                (
+                    "key",
+                    models.CharField(max_length=100, primary_key=True, serialize=False),
+                ),
                 ("data", models.JSONField(default=dict)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
             ],
@@ -156,16 +172,31 @@ class Migration(migrations.Migration):
                 "ordering": ["-created_at"],
             },
         ),
-
         # ── Assembly + Contig ───────────────────────────────────────────────
         migrations.CreateModel(
             name="DashboardAssembly",
             fields=[
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
-                ("assembly_accession", models.CharField(db_index=True, max_length=255, unique=True)),
-                ("organism_name", models.CharField(blank=True, default="", max_length=255)),
-                ("assembly_type", models.SmallIntegerField(choices=[(1, "metagenome"), (2, "genome"), (3, "region")], db_index=True, default=2)),
-                ("biome_path", models.CharField(blank=True, default="", max_length=512)),
+                (
+                    "assembly_accession",
+                    models.CharField(db_index=True, max_length=255, unique=True),
+                ),
+                (
+                    "organism_name",
+                    models.CharField(blank=True, default="", max_length=255),
+                ),
+                (
+                    "assembly_type",
+                    models.SmallIntegerField(
+                        choices=[(1, "metagenome"), (2, "genome"), (3, "region")],
+                        db_index=True,
+                        default=2,
+                    ),
+                ),
+                (
+                    "biome_path",
+                    models.CharField(blank=True, default="", max_length=512),
+                ),
                 ("is_type_strain", models.BooleanField(db_index=True, default=False)),
                 ("type_strain_catalog_url", models.URLField(blank=True, default="")),
                 ("assembly_size_mb", models.FloatField(blank=True, null=True)),
@@ -195,8 +226,12 @@ class Migration(migrations.Migration):
             options={
                 "db_table": "discovery_assembly",
                 "indexes": [
-                    models.Index(fields=["-bgc_novelty_score"], name="idx_da_novelty_desc"),
-                    models.Index(fields=["-bgc_diversity_score"], name="idx_da_diversity_desc"),
+                    models.Index(
+                        fields=["-bgc_novelty_score"], name="idx_da_novelty_desc"
+                    ),
+                    models.Index(
+                        fields=["-bgc_diversity_score"], name="idx_da_diversity_desc"
+                    ),
                     models.Index(fields=["-bgc_density"], name="idx_da_density_desc"),
                     models.Index(fields=["organism_name"], name="idx_da_organism"),
                     models.Index(fields=["biome_path"], name="idx_da_biome"),
@@ -207,10 +242,21 @@ class Migration(migrations.Migration):
             name="DashboardContig",
             fields=[
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
-                ("sequence_sha256", models.CharField(db_index=True, max_length=64, unique=True)),
-                ("accession", models.CharField(blank=True, db_index=True, default="", max_length=255)),
+                (
+                    "sequence_sha256",
+                    models.CharField(db_index=True, max_length=64, unique=True),
+                ),
+                (
+                    "accession",
+                    models.CharField(
+                        blank=True, db_index=True, default="", max_length=255
+                    ),
+                ),
                 ("length", models.IntegerField(default=0)),
-                ("taxonomy_path", models.CharField(blank=True, default="", max_length=1024)),
+                (
+                    "taxonomy_path",
+                    models.CharField(blank=True, default="", max_length=1024),
+                ),
                 (
                     "assembly",
                     models.ForeignKey(
@@ -245,14 +291,19 @@ class Migration(migrations.Migration):
             ],
             options={"db_table": "discovery_contig_sequence"},
         ),
-
         # ── ConsensusBgc (cBGC) ─────────────────────────────────────────────
         migrations.CreateModel(
             name="ConsensusBgc",
             fields=[
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
-                ("accession", models.CharField(db_index=True, max_length=20, unique=True)),
-                ("bgc_range", django.contrib.postgres.fields.ranges.IntegerRangeField()),
+                (
+                    "accession",
+                    models.CharField(db_index=True, max_length=20, unique=True),
+                ),
+                (
+                    "bgc_range",
+                    django.contrib.postgres.fields.ranges.IntegerRangeField(),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 (
@@ -275,16 +326,26 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
-
         # ── IntegratedBgc (iBGC) ────────────────────────────────────────────
         migrations.CreateModel(
             name="IntegratedBgc",
             fields=[
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
-                ("accession", models.CharField(db_index=True, max_length=20, unique=True)),
-                ("bgc_range", django.contrib.postgres.fields.ranges.IntegerRangeField()),
+                (
+                    "accession",
+                    models.CharField(db_index=True, max_length=20, unique=True),
+                ),
+                (
+                    "bgc_range",
+                    django.contrib.postgres.fields.ranges.IntegerRangeField(),
+                ),
                 ("source_tools", models.JSONField(default=list)),
-                ("gene_cluster_family", models.CharField(blank=True, db_index=True, default="", max_length=512)),
+                (
+                    "gene_cluster_family",
+                    models.CharField(
+                        blank=True, db_index=True, default="", max_length=512
+                    ),
+                ),
                 ("umap_x", models.FloatField(blank=True, null=True)),
                 ("umap_y", models.FloatField(blank=True, null=True)),
                 ("umap_projected", models.BooleanField(default=False)),
@@ -335,7 +396,6 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
-
         # ── Accession Registry & Alias ──────────────────────────────────────
         migrations.CreateModel(
             name="AccessionRegistry",
@@ -382,13 +442,23 @@ class Migration(migrations.Migration):
                 "db_table": "discovery_accession_registry",
                 "constraints": [
                     models.UniqueConstraint(
-                        fields=("entity_type", "contig_accession", "start_pos", "end_pos"),
+                        fields=(
+                            "entity_type",
+                            "contig_accession",
+                            "start_pos",
+                            "end_pos",
+                        ),
                         name="uniq_registry_identity",
                     ),
                 ],
                 "indexes": [
                     models.Index(
-                        fields=["entity_type", "contig_accession", "start_pos", "end_pos"],
+                        fields=[
+                            "entity_type",
+                            "contig_accession",
+                            "start_pos",
+                            "end_pos",
+                        ],
                         name="idx_registry_identity",
                     ),
                 ],
@@ -398,7 +468,10 @@ class Migration(migrations.Migration):
             name="AccessionAlias",
             fields=[
                 ("id", models.AutoField(primary_key=True, serialize=False)),
-                ("alias_accession", models.CharField(db_index=True, max_length=50, unique=True)),
+                (
+                    "alias_accession",
+                    models.CharField(db_index=True, max_length=50, unique=True),
+                ),
                 (
                     "registry",
                     models.ForeignKey(
@@ -410,14 +483,19 @@ class Migration(migrations.Migration):
             ],
             options={"db_table": "discovery_accession_alias"},
         ),
-
         # ── SourceBgcPrediction ─────────────────────────────────────────────
         migrations.CreateModel(
             name="SourceBgcPrediction",
             fields=[
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
-                ("prediction_accession", models.CharField(db_index=True, max_length=50)),
-                ("bgc_range", django.contrib.postgres.fields.ranges.IntegerRangeField()),
+                (
+                    "prediction_accession",
+                    models.CharField(db_index=True, max_length=50),
+                ),
+                (
+                    "bgc_range",
+                    django.contrib.postgres.fields.ranges.IntegerRangeField(),
+                ),
                 ("is_partial", models.BooleanField(default=False)),
                 ("is_validated", models.BooleanField(default=False)),
                 ("bgc_number", models.PositiveSmallIntegerField(default=0)),
@@ -479,7 +557,11 @@ class Migration(migrations.Migration):
                 "constraints": [
                     django.contrib.postgres.constraints.ExclusionConstraint(
                         name="excl_source_bgc_overlap_per_detector",
-                        expressions=[("contig", "="), ("detector", "="), ("bgc_range", "&&")],
+                        expressions=[
+                            ("contig", "="),
+                            ("detector", "="),
+                            ("bgc_range", "&&"),
+                        ],
                     ),
                 ],
                 "indexes": [
@@ -488,19 +570,32 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
-
         # ── Contig CDS & Sequence & Domain & ChemOnt ────────────────────────
         migrations.CreateModel(
             name="ContigCds",
             fields=[
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
-                ("cds_range", django.contrib.postgres.fields.ranges.IntegerRangeField()),
+                (
+                    "cds_range",
+                    django.contrib.postgres.fields.ranges.IntegerRangeField(),
+                ),
                 ("strand", models.SmallIntegerField()),
                 ("protein_id_str", models.CharField(max_length=255)),
                 ("protein_length", models.IntegerField(default=0)),
-                ("gene_caller", models.CharField(blank=True, default="", max_length=100)),
-                ("cluster_representative", models.CharField(blank=True, default="", max_length=64)),
-                ("protein_sha256", models.CharField(blank=True, db_index=True, default="", max_length=64)),
+                (
+                    "gene_caller",
+                    models.CharField(blank=True, default="", max_length=100),
+                ),
+                (
+                    "cluster_representative",
+                    models.CharField(blank=True, default="", max_length=64),
+                ),
+                (
+                    "protein_sha256",
+                    models.CharField(
+                        blank=True, db_index=True, default="", max_length=64
+                    ),
+                ),
                 (
                     "contig",
                     models.ForeignKey(
@@ -516,11 +611,17 @@ class Migration(migrations.Migration):
                 "constraints": [
                     django.contrib.postgres.constraints.ExclusionConstraint(
                         name="uniq_cds_contig_range_strand",
-                        expressions=[("contig", "="), ("cds_range", "="), ("strand", "=")],
+                        expressions=[
+                            ("contig", "="),
+                            ("cds_range", "="),
+                            ("strand", "="),
+                        ],
                     ),
                 ],
                 "indexes": [
-                    models.Index(fields=["protein_sha256"], name="idx_dcds_prot_sha256"),
+                    models.Index(
+                        fields=["protein_sha256"], name="idx_dcds_prot_sha256"
+                    ),
                 ],
             },
         ),
@@ -550,8 +651,14 @@ class Migration(migrations.Migration):
                 ("domain_description", models.TextField(blank=True, default="")),
                 ("ref_db", models.CharField(blank=True, default="", max_length=50)),
                 ("go_slim", models.JSONField(blank=True, default=list)),
-                ("interpro_entry_acc", models.CharField(blank=True, default="", max_length=20)),
-                ("interpro_entry_description", models.CharField(blank=True, default="", max_length=255)),
+                (
+                    "interpro_entry_acc",
+                    models.CharField(blank=True, default="", max_length=20),
+                ),
+                (
+                    "interpro_entry_description",
+                    models.CharField(blank=True, default="", max_length=255),
+                ),
                 ("go_terms", models.JSONField(blank=True, default=list)),
                 ("start_position", models.IntegerField(default=0)),
                 ("end_position", models.IntegerField(default=0)),
@@ -584,9 +691,16 @@ class Migration(migrations.Migration):
                     ),
                 ],
                 "indexes": [
-                    models.Index(fields=["domain_acc", "contig"], name="idx_dom_acc_contig"),
-                    models.Index(fields=["contig", "domain_acc"], name="idx_dom_contig_acc"),
-                    models.Index(fields=["contig", "ref_db", "domain_acc"], name="idx_dom_contig_ref_acc"),
+                    models.Index(
+                        fields=["domain_acc", "contig"], name="idx_dom_acc_contig"
+                    ),
+                    models.Index(
+                        fields=["contig", "domain_acc"], name="idx_dom_contig_acc"
+                    ),
+                    models.Index(
+                        fields=["contig", "ref_db", "domain_acc"],
+                        name="idx_dom_contig_ref_acc",
+                    ),
                 ],
             },
         ),
@@ -616,14 +730,18 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
-
         # ── GCF & clustering snapshot ───────────────────────────────────────
         migrations.CreateModel(
             name="DashboardGCF",
             fields=[
                 ("id", models.AutoField(primary_key=True, serialize=False)),
                 ("family_path", models.CharField(db_index=True, max_length=512)),
-                ("parent_path", models.CharField(blank=True, db_index=True, default="", max_length=512)),
+                (
+                    "parent_path",
+                    models.CharField(
+                        blank=True, db_index=True, default="", max_length=512
+                    ),
+                ),
                 ("level", models.PositiveSmallIntegerField()),
                 ("member_count", models.IntegerField(default=0)),
                 ("validated_count", models.IntegerField(default=0)),
@@ -660,8 +778,13 @@ class Migration(migrations.Migration):
                     ),
                 ],
                 "indexes": [
-                    models.Index(fields=["clustering_run", "level"], name="idx_gcf_run_level"),
-                    models.Index(fields=["clustering_run", "parent_path"], name="idx_gcf_run_parent"),
+                    models.Index(
+                        fields=["clustering_run", "level"], name="idx_gcf_run_level"
+                    ),
+                    models.Index(
+                        fields=["clustering_run", "parent_path"],
+                        name="idx_gcf_run_parent",
+                    ),
                 ],
             },
         ),
@@ -672,7 +795,10 @@ class Migration(migrations.Migration):
                 ("umap_x", models.FloatField(blank=True, null=True)),
                 ("umap_y", models.FloatField(blank=True, null=True)),
                 ("umap_projected", models.BooleanField(default=False)),
-                ("gene_cluster_family", models.CharField(blank=True, default="", max_length=512)),
+                (
+                    "gene_cluster_family",
+                    models.CharField(blank=True, default="", max_length=512),
+                ),
                 ("novelty_score", models.FloatField(blank=True, null=True)),
                 ("domain_novelty", models.FloatField(blank=True, null=True)),
                 (
@@ -705,7 +831,6 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
-
         # ── iBGC Natural Product ────────────────────────────────────────────
         migrations.CreateModel(
             name="IbgcNaturalProduct",
@@ -714,7 +839,10 @@ class Migration(migrations.Migration):
                 ("name", models.CharField(max_length=255)),
                 ("smiles", models.TextField(blank=True, default="")),
                 ("dedup_hash", models.CharField(max_length=64)),
-                ("np_class_path", models.CharField(blank=True, default="", max_length=512)),
+                (
+                    "np_class_path",
+                    models.CharField(blank=True, default="", max_length=512),
+                ),
                 ("structure_svg_base64", models.TextField(blank=True, default="")),
                 ("morgan_fp", models.BinaryField(blank=True, null=True)),
                 (
@@ -740,7 +868,6 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
-
         # ── ltree GiST functional indexes ───────────────────────────────────
         migrations.RunSQL(
             sql="CREATE INDEX IF NOT EXISTS idx_dcontig_tax_ltree ON discovery_contig USING gist ((taxonomy_path::ltree));",

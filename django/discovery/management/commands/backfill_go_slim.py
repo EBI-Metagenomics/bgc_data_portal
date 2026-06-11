@@ -7,10 +7,9 @@ command after refreshing ``services/data/go_slim_map.json`` (via
 wiring was in place.
 """
 
-from django.core.management.base import BaseCommand
-
 from discovery.models import ContigDomain
 from discovery.services.go_slim import go_slim_for_terms
+from django.core.management.base import BaseCommand
 
 BATCH_SIZE = 5000
 
@@ -79,5 +78,7 @@ class Command(BaseCommand):
             updated += len(batch)
 
         self.stdout.write(
-            self.style.SUCCESS(f"\n✔ Updated go_slim on {updated:,} ContigDomain records")
+            self.style.SUCCESS(
+                f"\n✔ Updated go_slim on {updated:,} ContigDomain records"
+            )
         )

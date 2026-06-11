@@ -22,9 +22,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from collections.abc import Sequence
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
-from typing import Sequence
 
 log = logging.getLogger(__name__)
 
@@ -66,9 +67,6 @@ def run_clustering_pipeline(
     output. The caller (Celery task / management command) is responsible
     for chaining a reclassify step against partials.
     """
-    from django.db.models import Q
-    from django.utils import timezone
-
     from discovery.models import (
         ClusteringRun,
         ContigDomain,
@@ -88,6 +86,8 @@ def run_clustering_pipeline(
     from discovery.services.clustering.membership import build_ibgc_domain_matrix
     from discovery.services.clustering.paths import build_ltree_paths
     from discovery.services.clustering.representative import pick_medoid
+    from django.db.models import Q
+    from django.utils import timezone
 
     leiden_resolutions = tuple(leiden_resolutions)
     upper_sources = tuple(sorted({s.upper() for s in domain_sources}))
@@ -95,7 +95,9 @@ def run_clustering_pipeline(
 
     # ── 0. Pre-flight: iBGC table must be populated ───────────────────────
     if not IntegratedBgc.objects.exists():
-        return {"error": "IntegratedBgc table is empty — run build_integrated_bgcs first"}
+        return {
+            "error": "IntegratedBgc table is empty — run build_integrated_bgcs first"
+        }
 
     # Clusterable subset: iBGCs with at least one non-partial-or-validated
     # source prediction. Partial+unvalidated-only iBGCs are reclassified via
@@ -111,7 +113,8 @@ def run_clustering_pipeline(
 
     # ── 1. Domain matrix ─────────────────────────────────────────────────
     M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
-        sources=upper_sources, ibgc_ids_subset=clusterable_ibgc_ids,
+        sources=upper_sources,
+        ibgc_ids_subset=clusterable_ibgc_ids,
     )
     if M_domains.shape[0] == 0:
         return {"error": "no iBGCs with selected-source domains found"}
@@ -125,12 +128,17 @@ def run_clustering_pipeline(
 
     # ── 3. Composite weighted-mean Dice similarity ──────────────────────
     sim = compute_composite_similarity(
-        M_domains, M_pairs, weights=weights, prune_below=0.05,
+        M_domains,
+        M_pairs,
+        weights=weights,
+        prune_below=0.05,
     )
 
     # ── 4. Union top-k kNN (auto-pick k when not supplied) ──────────────
     effective_k = int(knn_k) if knn_k is not None else auto_knn_k(M_domains.shape[0])
-    log.info("kNN k = %d (n_ibgcs=%d, supplied=%s)", effective_k, M_domains.shape[0], knn_k)
+    log.info(
+        "kNN k = %d (n_ibgcs=%d, supplied=%s)", effective_k, M_domains.shape[0], knn_k
+    )
     graph = build_knn_graph(sim, k=effective_k)
 
     # ── 5. Hierarchical Leiden under CPM ─────────────────────────────────
@@ -145,14 +153,11 @@ def run_clustering_pipeline(
     # ── 8. Run dedup + persist ───────────────────────────────────────────
     from django.db.models.functions import Upper
 
-    domain_qs = (
-        ContigDomain.objects.annotate(ref_db_upper=Upper("ref_db"))
-        .filter(ref_db_upper__in=upper_sources)
+    domain_qs = ContigDomain.objects.annotate(ref_db_upper=Upper("ref_db")).filter(
+        ref_db_upper__in=upper_sources
     )
     n_domain_rows = domain_qs.count()
-    domain_max_id = (
-        domain_qs.order_by("-id").values_list("id", flat=True).first() or 0
-    )
+    domain_max_id = domain_qs.order_by("-id").values_list("id", flat=True).first() or 0
     ibgc_max_id = (
         IntegratedBgc.objects.order_by("-id").values_list("id", flat=True).first() or 0
     )
@@ -190,7 +195,9 @@ def run_clustering_pipeline(
     )
     log.info(
         "%s ClusteringRun pk=%s sha=%s...",
-        "Created" if created else "Updated", run.pk, sha[:12],
+        "Created" if created else "Updated",
+        run.pk,
+        sha[:12],
     )
 
     # ── 9. Replace DashboardGCF rows; pick medoids ──────────────────────
@@ -221,19 +228,24 @@ def run_clustering_pipeline(
     if parent_to_children:
         rows_to_update = list(
             DashboardGCF.objects.filter(
-                clustering_run=run, family_path__in=list(parent_to_children.keys()),
+                clustering_run=run,
+                family_path__in=list(parent_to_children.keys()),
             )
         )
         for row in rows_to_update:
             row.descendant_count = parent_to_children.get(row.family_path, 0)
         DashboardGCF.objects.bulk_update(
-            rows_to_update, ["descendant_count"], batch_size=5_000,
+            rows_to_update,
+            ["descendant_count"],
+            batch_size=5_000,
         )
 
     # ── 10. Apply: write iBGC leaf path + UMAP coords ────────────────────
     artifacts_dir = None
     result_extra_scoring: dict | None = None
-    leaf_paths: list[str] = [paths_per_row[int(ibgc_id)] for ibgc_id in ibgc_ids.tolist()]
+    leaf_paths: list[str] = [
+        paths_per_row[int(ibgc_id)] for ibgc_id in ibgc_ids.tolist()
+    ]
     if apply:
         now = timezone.now()
 
@@ -250,8 +262,12 @@ def run_clustering_pipeline(
         IntegratedBgc.objects.bulk_update(
             ibgc_rows,
             [
-                "gene_cluster_family", "umap_x", "umap_y", "umap_projected",
-                "classification_run", "classified_at",
+                "gene_cluster_family",
+                "umap_x",
+                "umap_y",
+                "umap_projected",
+                "classification_run",
+                "classified_at",
             ],
             batch_size=5_000,
         )
@@ -260,12 +276,14 @@ def run_clustering_pipeline(
         from discovery.services.clustering.mibig_analysis import emit_run_artifacts
 
         try:
-            artifacts_dir = str(emit_run_artifacts(
-                run,
-                ibgc_ids=ibgc_ids.tolist(),
-                leaf_paths=leaf_paths,
-                coords=coords,
-            ))
+            artifacts_dir = str(
+                emit_run_artifacts(
+                    run,
+                    ibgc_ids=ibgc_ids.tolist(),
+                    leaf_paths=leaf_paths,
+                    coords=coords,
+                )
+            )
         except Exception:  # noqa: BLE001 — never block the run on plot errors
             log.exception("MIBiG analysis failed; clustering run is intact")
 
@@ -351,8 +369,11 @@ def _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids_target):
         return M_pairs
 
     target_index = {int(x): i for i, x in enumerate(ibgc_ids_target.tolist())}
-    row_map = {i: target_index[int(x)] for i, x in enumerate(ibgc_ids_adj.tolist())
-               if int(x) in target_index}
+    row_map = {
+        i: target_index[int(x)]
+        for i, x in enumerate(ibgc_ids_adj.tolist())
+        if int(x) in target_index
+    }
 
     if not row_map:
         return sp.csr_matrix((n_target, n_cols), dtype=M_pairs.dtype)
@@ -381,13 +402,11 @@ def _build_sig_to_ipr_lookup(
     Only includes signatures whose IPR entry actually appears in the active
     domain-acc vocabulary (``vocab_set``).
     """
+    from discovery.models import ContigDomain
     from django.db.models.functions import Upper
 
-    from discovery.models import ContigDomain
-
     pairs = (
-        ContigDomain.objects
-        .annotate(ref_db_upper=Upper("ref_db"))
+        ContigDomain.objects.annotate(ref_db_upper=Upper("ref_db"))
         .filter(
             ref_db_upper__in=sources,
             interpro_entry_acc__gt="",
@@ -419,20 +438,22 @@ def _compute_run_sha(
     domain_vocab: str,
 ) -> str:
     """Return a stable sha256 hex digest for ``ClusteringRun.update_or_create``."""
-    payload = "|".join([
-        f"sources={','.join(sources)}",
-        f"vocab={domain_vocab}",
-        f"weights={weights[0]:.6f},{weights[1]:.6f}",
-        f"k={knn_k}",
-        "res=" + ",".join(f"{r:.6f}" for r in leiden_resolutions),
-        f"seed={seed}",
-        f"ibgc_etag={ibgc_etag}",
-        f"domain_etag={domain_etag}",
-    ])
+    payload = "|".join(
+        [
+            f"sources={','.join(sources)}",
+            f"vocab={domain_vocab}",
+            f"weights={weights[0]:.6f},{weights[1]:.6f}",
+            f"k={knn_k}",
+            "res=" + ",".join(f"{r:.6f}" for r in leiden_resolutions),
+            f"seed={seed}",
+            f"ibgc_etag={ibgc_etag}",
+            f"domain_etag={domain_etag}",
+        ]
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def rebuild_scoring_cache_from_db(run) -> "Path | None":
+def rebuild_scoring_cache_from_db(run) -> Path | None:
     """Rebuild and persist the on-demand scoring cache for ``run`` from DB state.
 
     ``run_clustering_pipeline(apply=True)`` writes ``scoring_cache/`` as a side
@@ -447,15 +468,14 @@ def rebuild_scoring_cache_from_db(run) -> "Path | None":
     ``<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/``. Returns the cache
     directory, or ``None`` when there is nothing clusterable to score.
     """
-    from django.conf import settings
-    from django.db.models import Q
-
     from discovery.models import IntegratedBgc, SourceBgcPrediction
     from discovery.services.clustering.adjacency import (
         build_ibgc_adjacency_pair_matrix,
     )
     from discovery.services.clustering.ibgc_scoring import persist_scoring_cache
     from discovery.services.clustering.membership import build_ibgc_domain_matrix
+    from django.conf import settings
+    from django.db.models import Q
 
     upper_sources = tuple(
         sorted({s.upper() for s in (run.domain_sources or DEFAULT_DOMAIN_SOURCES)})
@@ -473,27 +493,30 @@ def rebuild_scoring_cache_from_db(run) -> "Path | None":
         return None
 
     M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
-        sources=upper_sources, ibgc_ids_subset=clusterable_ibgc_ids,
+        sources=upper_sources,
+        ibgc_ids_subset=clusterable_ibgc_ids,
     )
     if M_domains.shape[0] == 0:
         return None
 
     M_pairs, ibgc_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
-        sources=upper_sources, ibgc_ids_subset=ibgc_ids.tolist(),
+        sources=upper_sources,
+        ibgc_ids_subset=ibgc_ids.tolist(),
     )
     M_pairs = _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids)
 
     # Leaf GCF paths come straight from the imported iBGC rows, aligned to the
     # matrix row order.
     gcf_by_id = dict(
-        IntegratedBgc.objects
-        .filter(id__in=[int(x) for x in ibgc_ids.tolist()])
-        .values_list("id", "gene_cluster_family")
+        IntegratedBgc.objects.filter(
+            id__in=[int(x) for x in ibgc_ids.tolist()]
+        ).values_list("id", "gene_cluster_family")
     )
     leaf_paths = [gcf_by_id.get(int(i)) or "" for i in ibgc_ids.tolist()]
 
     sig_to_ipr = _build_sig_to_ipr_lookup(
-        sources=upper_sources, vocab_set=set(domain_accs.tolist()),
+        sources=upper_sources,
+        vocab_set=set(domain_accs.tolist()),
     )
 
     artifacts_dir = Path(settings.CLUSTERING_ARTIFACTS_DIR) / run.sha256[:12]

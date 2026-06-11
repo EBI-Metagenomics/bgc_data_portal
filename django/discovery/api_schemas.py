@@ -1,10 +1,8 @@
 """Pydantic schemas for the Discovery Platform API."""
 
 from datetime import datetime
-from typing import Optional
 
 from ninja import Schema
-
 
 # ── Pagination ────────────────────────────────────────────────────────────────
 
@@ -23,7 +21,7 @@ class AssemblyRosterItem(Schema):
     id: int
     accession: str
     organism_name: str = ""
-    source_name: Optional[str] = None
+    source_name: str | None = None
     assembly_type: str = "genome"
     is_type_strain: bool = False
     type_strain_catalog_url: str = ""
@@ -45,11 +43,11 @@ class AssemblyDetail(Schema):
     id: int
     accession: str
     organism_name: str = ""
-    source_name: Optional[str] = None
+    source_name: str | None = None
     assembly_type: str = "genome"
     is_type_strain: bool = False
     type_strain_catalog_url: str = ""
-    assembly_size_mb: Optional[float] = None
+    assembly_size_mb: float | None = None
     biome_path: str = ""
     url: str = ""
     # Scores
@@ -65,7 +63,7 @@ class AssemblyScatterPoint(Schema):
     id: int
     x: float
     y: float
-    organism_name: Optional[str] = None
+    organism_name: str | None = None
     is_type_strain: bool = False
 
 
@@ -95,16 +93,16 @@ class DomainArchitectureItem(Schema):
     ref_db: str
     start: int
     end: int
-    score: Optional[float] = None
+    score: float | None = None
     url: str = ""
 
 
 class ParentAssemblySummary(Schema):
     # ``None`` for ephemeral asset-upload assemblies that have no DB row.
-    assembly_id: Optional[int] = None
+    assembly_id: int | None = None
     accession: str
-    organism_name: Optional[str] = None
-    source_name: Optional[str] = None
+    organism_name: str | None = None
+    source_name: str | None = None
     is_type_strain: bool = False
     url: str = ""
 
@@ -159,30 +157,30 @@ class IbgcRosterItem(Schema):
     id: int
     accession: str = ""  # MGYB-XXXXXX-YY (stable)
     label: str  # human-facing identifier (e.g. "iBGC-12345")
-    cbgc_accession: Optional[str] = None
+    cbgc_accession: str | None = None
     classification_path: str = ""  # leaf GCF path (gene_cluster_family)
     bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     size_kb: float = 0.0  # (end - start) / 1000
     n_source_bgcs: int = 0
     source_tools: list[str] = []
-    novelty_score: Optional[float] = None
-    domain_novelty: Optional[float] = None
+    novelty_score: float | None = None
+    domain_novelty: float | None = None
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False  # any source BGC sits on a type-strain assembly
     umap_projected: bool = False
-    parent_assembly_id: Optional[int] = None
-    parent_assembly_accession: Optional[str] = None
-    parent_assembly_collection: Optional[str] = None  # assembly source name
-    organism_name: Optional[str] = None
-    contig_accession: Optional[str] = None
-    similarity_score: Optional[float] = None  # filled by similar-ibgc / query
+    parent_assembly_id: int | None = None
+    parent_assembly_accession: str | None = None
+    parent_assembly_collection: str | None = None  # assembly source name
+    organism_name: str | None = None
+    contig_accession: str | None = None
+    similarity_score: float | None = None  # filled by similar-ibgc / query
     # Populated only by sequence-protein search responses — the protein_id
     # of the highest-bitscore CDS within the iBGC, and that CDS's aggregate
     # alignment stats. Percent identity and query coverage are 0–100.
-    best_hit_protein_id: Optional[str] = None
-    best_pident: Optional[float] = None
-    best_qcoverage: Optional[float] = None
+    best_hit_protein_id: str | None = None
+    best_pident: float | None = None
+    best_qcoverage: float | None = None
     # True for iBGCs sourced from an uploaded asset (negative id, ephemeral).
     is_asset: bool = False
 
@@ -210,7 +208,7 @@ class IbgcMemberBgc(Schema):
 
     id: int
     accession: str  # prediction_accession
-    detector_name: Optional[str] = None
+    detector_name: str | None = None
     is_partial: bool = False
     is_validated: bool = False
     size_kb: float = 0.0
@@ -219,25 +217,25 @@ class IbgcMemberBgc(Schema):
 class IbgcDetail(Schema):
     id: int
     accession: str = ""  # MGYB-XXXXXX-YY (stable)
-    cbgc_accession: Optional[str] = None
+    cbgc_accession: str | None = None
     label: str
     classification_path: str = ""
     bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     size_kb: float = 0.0
     start_position: int = 0
     end_position: int = 0
-    contig_accession: Optional[str] = None
+    contig_accession: str | None = None
     source_tools: list[str] = []
-    novelty_score: Optional[float] = None
-    domain_novelty: Optional[float] = None
+    novelty_score: float | None = None
+    domain_novelty: float | None = None
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
     umap_projected: bool = False
-    umap_x: Optional[float] = None
-    umap_y: Optional[float] = None
-    parent_assembly: Optional[ParentAssemblySummary] = None
-    region_endpoint_url: Optional[str] = None  # /api/discovery/ibgcs/{id}/region/
+    umap_x: float | None = None
+    umap_y: float | None = None
+    parent_assembly: ParentAssemblySummary | None = None
+    region_endpoint_url: str | None = None  # /api/discovery/ibgcs/{id}/region/
     member_bgcs: list[IbgcMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
     natural_products: list[NaturalProductSummary] = []
@@ -252,13 +250,13 @@ class IbgcScatterPoint(Schema):
     y: float
     classification_path: str = ""
     bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
-    novelty_score: Optional[float] = None
-    domain_novelty: Optional[float] = None
+    novelty_score: float | None = None
+    domain_novelty: float | None = None
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
     umap_projected: bool = False
-    similarity_score: Optional[float] = None
+    similarity_score: float | None = None
     is_asset: bool = False
 
 
@@ -270,7 +268,7 @@ class IbgcUmapPoint(Schema):
     umap_x: float
     umap_y: float
     classification_path: str = ""
-    novelty_score: Optional[float] = None
+    novelty_score: float | None = None
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
@@ -331,7 +329,7 @@ class ReportSnapshotRequest(Schema):
     ibgc_ids: list[int]
     # When negative ids are present in ``ibgc_ids`` the snapshot endpoint
     # resolves them out of the asset cache identified by ``asset_token``.
-    asset_token: Optional[str] = None
+    asset_token: str | None = None
 
 
 class ReportSnapshotResponse(Schema):
@@ -396,37 +394,37 @@ class LengthBucket(Schema):
 class ReportIbgcRow(Schema):
     id: int
     accession: str = ""  # MGYB-XXXXXX-YY
-    cbgc_accession: Optional[str] = None
+    cbgc_accession: str | None = None
     label: str
     classification_path: str = ""
     bgc_class: str = ""
     size_kb: float = 0.0
-    start: Optional[int] = None
-    end: Optional[int] = None
-    novelty_score: Optional[float] = None
-    domain_novelty: Optional[float] = None
+    start: int | None = None
+    end: int | None = None
+    novelty_score: float | None = None
+    domain_novelty: float | None = None
     n_source_bgcs: int = 0
     source_tools: list[str] = []
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
-    parent_assembly_accession: Optional[str] = None
-    parent_assembly_id: Optional[int] = None
-    organism_name: Optional[str] = None
+    parent_assembly_accession: str | None = None
+    parent_assembly_id: int | None = None
+    organism_name: str | None = None
     biome_path: str = ""
-    taxonomy_phylum: Optional[str] = None
-    contig_accession: Optional[str] = None
+    taxonomy_phylum: str | None = None
+    contig_accession: str | None = None
 
 
 class ReportAssemblyRow(Schema):
     id: int
     accession: str
-    organism_name: Optional[str] = None
-    source_name: Optional[str] = None
+    organism_name: str | None = None
+    source_name: str | None = None
     biome_path: str = ""
     taxonomy_path: str = ""
-    taxonomy_phylum: Optional[str] = None
-    assembly_size_mb: Optional[float] = None
+    taxonomy_phylum: str | None = None
+    assembly_size_mb: float | None = None
     total_bgcs_in_assembly: int = 0
     ibgcs_in_shortlist: int = 0
     is_type_strain: bool = False
@@ -492,7 +490,7 @@ class ChemOntClassNode(Schema):
 class DomainOption(Schema):
     acc: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     count: int
 
 
@@ -547,8 +545,8 @@ class SequenceQueryRequest(Schema):
     # phmmer hit must pass all three thresholds. Defaults are tuned for
     # "clearly a close homolog" (bitscore ≥ 30, ≥70% identity, ≥70% query coverage).
     min_bitscore: float = 30.0
-    min_pident: float = 70.0   # percent, 0..100
-    min_qcov: float = 70.0     # percent, 0..100
+    min_pident: float = 70.0  # percent, 0..100
+    min_qcov: float = 70.0  # percent, 0..100
 
 
 class DomainCondition(Schema):
@@ -573,15 +571,15 @@ class QueryResultBgc(Schema):
     # other modes it keeps the mode-specific score (Dice, Tanimoto, etc.).
     similarity_score: float = 0.0
     # Sequence-query-specific metrics (populated only by the protein search).
-    best_bitscore: Optional[float] = None
-    best_pident: Optional[float] = None     # percent, 0..100
-    best_qcoverage: Optional[float] = None  # percent, 0..100
+    best_bitscore: float | None = None
+    best_pident: float | None = None  # percent, 0..100
+    best_qcoverage: float | None = None  # percent, 0..100
     # Parent assembly summary
-    assembly_id: Optional[int] = None
-    assembly_accession: Optional[str] = None
-    organism_name: Optional[str] = None
+    assembly_id: int | None = None
+    assembly_accession: str | None = None
+    organism_name: str | None = None
     is_type_strain: bool = False
-    source_name: Optional[str] = None
+    source_name: str | None = None
 
 
 class PaginatedQueryResultResponse(Schema):
@@ -600,9 +598,9 @@ class ChemicalQueryAccepted(Schema):
 class QueryResultAssemblyAggregation(Schema):
     assembly_id: int
     accession: str
-    organism_name: Optional[str] = None
+    organism_name: str | None = None
     is_type_strain: bool = False
-    source_name: Optional[str] = None
+    source_name: str | None = None
     hit_count: int = 0
     complete_fraction: float = 0.0
 
@@ -686,7 +684,7 @@ class PfamAnnotationOut(Schema):
     go_slim: list[str] = []
     envelope_start: int = 0
     envelope_end: int = 0
-    e_value: Optional[str] = None
+    e_value: str | None = None
     url: str = ""
 
 
@@ -704,7 +702,7 @@ class InterproAnnotationOut(Schema):
     go_slim: list[str] = []
     envelope_start: int = 0  # min start across collapsed signatures
     envelope_end: int = 0  # max end across collapsed signatures
-    e_value: Optional[str] = None  # best (smallest) e-value across signatures
+    e_value: str | None = None  # best (smallest) e-value across signatures
     url: str = ""
 
 
@@ -715,17 +713,17 @@ class RegionCdsOut(Schema):
     strand: int
     protein_length: int
     gene_caller: str = ""
-    cluster_representative: Optional[str] = None
-    cluster_representative_url: Optional[str] = None
+    cluster_representative: str | None = None
+    cluster_representative_url: str | None = None
     sequence: str = ""
     pfam: list[PfamAnnotationOut] = []
     # Non-redundant InterPro-entry annotations for the protein info card.
     interpro: list[InterproAnnotationOut] = []
     # Deepest ChemOnt class predicted by CHAMOIS for this CDS.
-    chemont_id: Optional[str] = None
-    chemont_name: Optional[str] = None
-    chemont_probability: Optional[float] = None
-    chemont_weight: Optional[float] = None
+    chemont_id: str | None = None
+    chemont_name: str | None = None
+    chemont_probability: float | None = None
+    chemont_weight: float | None = None
     # Tools whose source-BGC prediction range covers this CDS, within the
     # owning iBGC. Range-overlap derived at request time; not stored.
     # Empty for the per-prediction BGC region endpoint.
@@ -738,7 +736,7 @@ class RegionDomainOut(Schema):
     start: int
     end: int
     strand: int
-    score: Optional[float] = None
+    score: float | None = None
     go_slim: list[str] = []
     parent_cds_id: str = ""
     url: str = ""
@@ -778,7 +776,7 @@ class IbgcRegionOut(Schema):
     region_length: int  # iBGC bgc_range size, in bp
     window_start: int
     window_end: int
-    contig_accession: Optional[str] = None
+    contig_accession: str | None = None
     cds_list: list[RegionCdsOut] = []
     domain_list: list[RegionDomainOut] = []
     # Each source prediction's range, for per-tool tinting in the region plot.
@@ -798,10 +796,10 @@ class AccessionResolveOut(Schema):
 
     accession: str
     kind: str  # "cbgc" | "ibgc"
-    current_id: Optional[int] = None
-    current_url: Optional[str] = None
+    current_id: int | None = None
+    current_url: str | None = None
     tombstoned: bool = False
-    alias_of: Optional[str] = None  # set when the request was for an alias accession
+    alias_of: str | None = None  # set when the request was for an alias accession
 
 
 # Assessment schemas removed in v2 — the Evaluate Asset feature was
@@ -817,7 +815,7 @@ class DiscoveryStatsResponse(Schema):
     validated_bgcs: int = 0
     ibgcs: int = 0
     total_bgc_predictions: int = 0
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # ── Ephemeral asset upload schemas ──────────────────────────────────────────
@@ -838,7 +836,7 @@ class AssetStatusResponse(Schema):
     """
 
     state: str
-    task_id: Optional[str] = None
-    progress: Optional[dict] = None
-    error: Optional[str] = None
-    summary: Optional[dict] = None
+    task_id: str | None = None
+    progress: dict | None = None
+    error: str | None = None
+    summary: dict | None = None

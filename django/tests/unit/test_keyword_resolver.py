@@ -10,7 +10,6 @@ iBGC's domain annotations — rather than the organism-only ``search`` param.
 from __future__ import annotations
 
 import pytest
-
 from discovery.services.keyword_resolver import classify_accession, resolve_keyword
 
 

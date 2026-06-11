@@ -7,7 +7,6 @@ import io
 import tarfile
 
 import pytest
-
 from discovery.services.asset_upload.validate import (
     AssetValidationError,
     inspect_tarball,
@@ -173,8 +172,7 @@ def test_rejects_bad_header_in_required_tsv():
     members = _minimal_required()
     # Drop the required "start_position" column.
     members["bgcs.tsv"] = (
-        b"contig_sha256\tdetector_name\tend_position\n"
-        b"deadbeef\tantiSMASH:1\t100\n"
+        b"contig_sha256\tdetector_name\tend_position\n" b"deadbeef\tantiSMASH:1\t100\n"
     )
     raw = _build_tarball(members)
     with pytest.raises(AssetValidationError, match="missing required column"):
@@ -185,8 +183,8 @@ def test_rejects_oversize_member():
     from discovery.services.asset_upload.schemas import MAX_FILE_BYTES
 
     members = _minimal_required()
-    members["contig_sequences.tsv"] = (
-        b"contig_sha256\tsequence_base64\n" + b"x" * (MAX_FILE_BYTES + 10)
+    members["contig_sequences.tsv"] = b"contig_sha256\tsequence_base64\n" + b"x" * (
+        MAX_FILE_BYTES + 10
     )
     raw = _build_tarball(members)
     with pytest.raises(AssetValidationError, match="per-file cap"):

@@ -27,7 +27,9 @@ from django.db import transaction
 
 
 class Command(BaseCommand):
-    help = "Classify iBGC natural-product SMILES into ChemOnt (ClassyFire) → IbgcChemOnt"
+    help = (
+        "Classify iBGC natural-product SMILES into ChemOnt (ClassyFire) → IbgcChemOnt"
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -74,9 +76,7 @@ class Command(BaseCommand):
             .order_by("ibgc_id")
         )
         if not opts["reclassify"]:
-            done = set(
-                IbgcChemOnt.objects.values_list("ibgc_id", flat=True).distinct()
-            )
+            done = set(IbgcChemOnt.objects.values_list("ibgc_id", flat=True).distinct())
         else:
             done = set()
 
@@ -122,7 +122,9 @@ class Command(BaseCommand):
             classified += 1
 
             if opts["dry_run"]:
-                self.stdout.write(f"iBGC {ibgc_id}: {len(terms)} ChemOnt terms (dry-run)")
+                self.stdout.write(
+                    f"iBGC {ibgc_id}: {len(terms)} ChemOnt terms (dry-run)"
+                )
                 continue
 
             with transaction.atomic():

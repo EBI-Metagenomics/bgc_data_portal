@@ -16,9 +16,8 @@ skips the in-process assembly-score / catalog computation inside the pipeline.)
 import logging
 import time
 
-from django.core.management.base import BaseCommand
-
 from discovery.services.ingestion.loader import run_pipeline
+from django.core.management.base import BaseCommand
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,11 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Loading discovery data from: {data_dir}")
         if truncate:
-            self.stdout.write(self.style.WARNING("TRUNCATE mode: all discovery tables will be cleared first."))
+            self.stdout.write(
+                self.style.WARNING(
+                    "TRUNCATE mode: all discovery tables will be cleared first."
+                )
+            )
 
         t0 = time.perf_counter()
         run_pipeline(data_dir, truncate=truncate, skip_stats=skip_stats)
@@ -105,9 +108,11 @@ class Command(BaseCommand):
                         "Chained DiscoveryStats refresh (runs on protein-index success)"
                     )
             except Exception as exc:
-                self.stdout.write(self.style.WARNING(
-                    f"Could not enqueue protein search index update: {exc}"
-                ))
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Could not enqueue protein search index update: {exc}"
+                    )
+                )
         elif not skip_discovery_stats:
             try:
                 from discovery.tasks import update_discovery_stats_task
@@ -117,6 +122,8 @@ class Command(BaseCommand):
                     f"Enqueued DiscoveryStats refresh (task_id={async_result.id})"
                 )
             except Exception as exc:
-                self.stdout.write(self.style.WARNING(
-                    f"Could not enqueue DiscoveryStats refresh: {exc}"
-                ))
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Could not enqueue DiscoveryStats refresh: {exc}"
+                    )
+                )

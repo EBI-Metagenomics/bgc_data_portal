@@ -27,16 +27,15 @@ False`` (the test suite does this; see ``tests/conftest.py``).
 
 from __future__ import annotations
 
-from typing import Optional
+from ninja.throttling import SimpleRateThrottle
 
 from django.conf import settings
-from ninja.throttling import SimpleRateThrottle
 
 
 class _IPRateThrottle(SimpleRateThrottle):
     """Throttle keyed purely on client IP, ignoring the gate's auth marker."""
 
-    def get_cache_key(self, request) -> Optional[str]:
+    def get_cache_key(self, request) -> str | None:
         if not getattr(settings, "API_THROTTLE_ENABLED", True):
             return None  # disabled -> allow_request short-circuits to True
         return self.cache_format % {

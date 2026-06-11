@@ -94,8 +94,11 @@ def _align_rows(M, source_ids, target_ids, *, ncols_keep=False):
         return M
 
     target_index = {int(x): i for i, x in enumerate(target_ids.tolist())}
-    row_map = {i: target_index[int(x)] for i, x in enumerate(source_ids.tolist())
-               if int(x) in target_index}
+    row_map = {
+        i: target_index[int(x)]
+        for i, x in enumerate(source_ids.tolist())
+        if int(x) in target_index
+    }
     if not row_map:
         return sp.csr_matrix((n_target, n_cols), dtype=M.dtype)
 
@@ -132,13 +135,16 @@ def _refresh_gcf_aggregates(clustering_run_pk: int) -> None:
 
     validated_ibgc_ids = set(
         SourceBgcPrediction.objects.filter(
-            is_validated=True, integrated_bgc__isnull=False,
+            is_validated=True,
+            integrated_bgc__isnull=False,
         ).values_list("integrated_bgc_id", flat=True)
     )
 
     ibgc_rows = list(
         IntegratedBgc.objects.exclude(gene_cluster_family="").values_list(
-            "id", "gene_cluster_family", "novelty_score",
+            "id",
+            "gene_cluster_family",
+            "novelty_score",
         )
     )
 

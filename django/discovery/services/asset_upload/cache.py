@@ -83,7 +83,9 @@ def mark_pending(token: str, task_id: str) -> None:
     write_status(token, {"state": "PENDING", "task_id": task_id})
 
 
-def mark_running(token: str, task_id: str, progress: dict[str, Any] | None = None) -> None:
+def mark_running(
+    token: str, task_id: str, progress: dict[str, Any] | None = None
+) -> None:
     payload: dict[str, Any] = {"state": "RUNNING", "task_id": task_id}
     if progress is not None:
         payload["progress"] = progress

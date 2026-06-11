@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import numpy as np
+    pass
 
 log = logging.getLogger(__name__)
 
@@ -139,6 +139,8 @@ def build_ltree_paths(
 
     log.info(
         "build_ltree_paths: %d nodes across %d levels (leaf paths assigned to %d BGCs)",
-        len(nodes), n_levels, len(paths_per_bgc),
+        len(nodes),
+        n_levels,
+        len(paths_per_bgc),
     )
     return paths_per_bgc, nodes

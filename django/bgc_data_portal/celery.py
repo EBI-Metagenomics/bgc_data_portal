@@ -18,8 +18,8 @@ app.conf.update(
 
 # Queue declarations
 app.conf.task_queues = [
-    Queue("celery"),   # default
-    Queue("scores"),   # dedicated queue for score recomputation
+    Queue("celery"),  # default
+    Queue("scores"),  # dedicated queue for score recomputation
 ]
 
 # auto-discover tasks.py in installed apps

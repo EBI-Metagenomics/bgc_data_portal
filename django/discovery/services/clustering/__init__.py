@@ -16,11 +16,11 @@ from discovery.services.clustering.adjacency import (
 from discovery.services.clustering.bgc_similarity import (
     compute_composite_similarity,
 )
+from discovery.services.clustering.integrated import build_integrated_bgcs
 from discovery.services.clustering.knn_graph import build_knn_graph
 from discovery.services.clustering.membership import build_ibgc_domain_matrix
 from discovery.services.clustering.metrics import dice_similarity
 from discovery.services.clustering.mibig_analysis import emit_run_artifacts
-from discovery.services.clustering.integrated import build_integrated_bgcs
 from discovery.services.clustering.pipeline import (
     DEFAULT_DOMAIN_SOURCES,
     DEFAULT_RESOLUTIONS,

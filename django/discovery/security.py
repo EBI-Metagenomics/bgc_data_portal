@@ -29,8 +29,9 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from django.conf import settings
 from ninja.errors import HttpError
+
+from django.conf import settings
 
 # Fetch-Metadata site values we treat as first-party.
 #   same-origin / same-site -> SPA fetch() calls (the normal path)

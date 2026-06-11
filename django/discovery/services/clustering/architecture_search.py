@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import numpy as np
@@ -50,10 +51,10 @@ def normalize_architecture_input(raw: Sequence[str] | str) -> list[str]:
 
 def _build_query_vectors(
     accs_ordered: Sequence[str],
-    domain_accs: "np.ndarray",
-    pair_vocab: "np.ndarray",
+    domain_accs: np.ndarray,
+    pair_vocab: np.ndarray,
     sig_to_ipr: dict[str, str] | None = None,
-) -> tuple["sp.csr_matrix", "sp.csr_matrix", list[str]]:
+) -> tuple[sp.csr_matrix, sp.csr_matrix, list[str]]:
     """Return (q_dom 1×D, q_pair 1×P, unmatched_accs).
 
     ``sig_to_ipr`` lets the caller resolve raw signature accessions
@@ -98,8 +99,10 @@ def _build_query_vectors(
         q_dom = sp.csr_matrix(
             (
                 np.ones(len(matched), dtype=np.uint8),
-                (np.zeros(len(matched), dtype=np.int64),
-                 np.asarray(matched, dtype=np.int64)),
+                (
+                    np.zeros(len(matched), dtype=np.int64),
+                    np.asarray(matched, dtype=np.int64),
+                ),
             ),
             shape=(1, n_dom),
             dtype=np.uint8,
@@ -129,8 +132,7 @@ def _build_query_vectors(
         q_pair = sp.csr_matrix(
             (
                 np.ones(len(cols), dtype=np.uint8),
-                (np.zeros(len(cols), dtype=np.int64),
-                 np.asarray(cols, dtype=np.int64)),
+                (np.zeros(len(cols), dtype=np.int64), np.asarray(cols, dtype=np.int64)),
             ),
             shape=(1, n_pair),
             dtype=np.uint8,
@@ -198,7 +200,10 @@ def architecture_search(
         sig_to_ipr = {}
 
     q_dom, q_pair, unmatched = _build_query_vectors(
-        accs_ordered, domain_accs, pair_vocab, sig_to_ipr=sig_to_ipr,
+        accs_ordered,
+        domain_accs,
+        pair_vocab,
+        sig_to_ipr=sig_to_ipr,
     )
 
     n_q_dom = int(q_dom.nnz)
@@ -214,14 +219,18 @@ def architecture_search(
         row_sums_d = np.asarray(M_dom.sum(axis=1)).reshape(-1).astype(np.float32)
         denom_d = row_sums_d + float(n_q_dom)
         with np.errstate(divide="ignore", invalid="ignore"):
-            dice_d = np.where(denom_d > 0, 2.0 * num_d / denom_d, 0.0).astype(np.float32)
+            dice_d = np.where(denom_d > 0, 2.0 * num_d / denom_d, 0.0).astype(
+                np.float32
+            )
 
     if w_a > 0.0 and n_q_pair > 0:
         num_a = np.asarray((q_pair @ M_pair.T).todense()).reshape(-1).astype(np.float32)
         row_sums_a = np.asarray(M_pair.sum(axis=1)).reshape(-1).astype(np.float32)
         denom_a = row_sums_a + float(n_q_pair)
         with np.errstate(divide="ignore", invalid="ignore"):
-            dice_a = np.where(denom_a > 0, 2.0 * num_a / denom_a, 0.0).astype(np.float32)
+            dice_a = np.where(denom_a > 0, 2.0 * num_a / denom_a, 0.0).astype(
+                np.float32
+            )
 
     score = (w * dice_d) + (w_a * dice_a)
 
@@ -244,7 +253,11 @@ def architecture_search(
 
     log.info(
         "architecture_search: q_dom=%d q_pair=%d unmatched=%d top_k=%d (w=%.2f)",
-        n_q_dom, n_q_pair, len(unmatched), k_eff, w,
+        n_q_dom,
+        n_q_pair,
+        len(unmatched),
+        k_eff,
+        w,
     )
 
     return {

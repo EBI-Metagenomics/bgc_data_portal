@@ -22,26 +22,34 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--num-assemblies", type=int, default=0,
+            "--num-assemblies",
+            type=int,
+            default=0,
             help="Ignored — kept for backwards compatibility.",
         )
         parser.add_argument(
-            "--num-bgcs", type=int, default=0,
+            "--num-bgcs",
+            type=int,
+            default=0,
             help="Ignored — kept for backwards compatibility.",
         )
         parser.add_argument(
-            "--clear", action="store_true",
+            "--clear",
+            action="store_true",
             help="Ignored — use `--truncate` on `load_discovery_data` instead.",
         )
         parser.add_argument(
-            "--small", action="store_true",
+            "--small",
+            action="store_true",
             help="Ignored — kept for backwards compatibility.",
         )
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING(
-            "seed_discovery_data is deprecated under the v2 iBGC-first schema."
-        ))
+        self.stdout.write(
+            self.style.WARNING(
+                "seed_discovery_data is deprecated under the v2 iBGC-first schema."
+            )
+        )
         self.stdout.write(
             "Load real NDJSON dumps with:\n"
             "    manage.py load_discovery_data <path/to/dump.tgz> [--truncate]\n"

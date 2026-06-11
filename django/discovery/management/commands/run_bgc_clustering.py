@@ -5,12 +5,11 @@ first, or pass ``--rebuild-ibgc`` to chain it). Partial iBGCs are
 projected by the chained ``reclassify_bgcs`` step.
 """
 
-from django.core.management.base import BaseCommand
-
 from discovery.tasks import (
     build_integrated_bgcs_task,
     run_bgc_clustering_task,
 )
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
@@ -136,11 +135,13 @@ class Command(BaseCommand):
             "score_ibgcs": options["score_ibgcs"],
         }
         if options["score_ibgcs"] and not options["auto_reclassify"]:
-            self.stdout.write(self.style.WARNING(
-                "--score-ibgcs is enabled but --no-auto-reclassify was passed: "
-                "primary iBGCs will be scored inline, but partial iBGCs won't be "
-                "projected (the projection step is chained after reclassify)."
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    "--score-ibgcs is enabled but --no-auto-reclassify was passed: "
+                    "primary iBGCs will be scored inline, but partial iBGCs won't be "
+                    "projected (the projection step is chained after reclassify)."
+                )
+            )
         queue = options["queue"]
 
         # --sync runs both tasks in-process and sequentially, so there is no
@@ -153,7 +154,9 @@ class Command(BaseCommand):
             self.stdout.write("Running BGC clustering synchronously ...")
             result = run_bgc_clustering_task.apply(kwargs=kwargs).result
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
-            if isinstance(result, dict) and (artifacts_dir := result.get("artifacts_dir")):
+            if isinstance(result, dict) and (
+                artifacts_dir := result.get("artifacts_dir")
+            ):
                 self.stdout.write(
                     self.style.SUCCESS(f"MIBiG analysis artifacts: {artifacts_dir}")
                 )
@@ -171,7 +174,8 @@ class Command(BaseCommand):
         if options["rebuild_ibgc"]:
             cluster_sig = run_bgc_clustering_task.si(**kwargs).set(queue=queue)
             async_result = build_integrated_bgcs_task.apply_async(
-                queue=queue, link=cluster_sig,
+                queue=queue,
+                link=cluster_sig,
             )
             self.stdout.write(
                 self.style.SUCCESS(

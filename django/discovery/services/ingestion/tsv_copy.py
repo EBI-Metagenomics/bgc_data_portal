@@ -5,7 +5,8 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from typing import IO, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import IO
 
 from django.db import connection
 

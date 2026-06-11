@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def build_knn_graph(sim: "sp.csr_matrix", k: int = 5) -> "ig.Graph":
+def build_knn_graph(sim: sp.csr_matrix, k: int = 5) -> ig.Graph:
     """For each row, keep its top-k off-diagonal entries; symmetrize.
 
     Edges with weight = similarity. Disconnected BGCs become singleton
@@ -62,6 +62,8 @@ def build_knn_graph(sim: "sp.csr_matrix", k: int = 5) -> "ig.Graph":
 
     log.info(
         "build_knn_graph: %d vertices, %d edges, k=%d",
-        g.vcount(), g.ecount(), k,
+        g.vcount(),
+        g.ecount(),
+        k,
     )
     return g

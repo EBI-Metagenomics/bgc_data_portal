@@ -17,13 +17,13 @@ from __future__ import annotations
 import json
 
 import pytest
-from django.test import Client
-
 from tests.factories.discovery_models import (
     ContigCdsFactory,
     IntegratedBgcFactory,
     SourceBgcPredictionFactory,
 )
+
+from django.test import Client
 
 POST_URL = "/api/discovery/query/sequence/"
 STATUS_URL = "/api/discovery/query/ibgc-sequence/status/{}/"

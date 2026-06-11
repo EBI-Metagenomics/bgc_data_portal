@@ -1,25 +1,23 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List
-
 
 # Implement a local pure-Python copy of `merge_overlaps` so tests are fast,
 # isolated and avoid importing Django models.
-from typing import Sequence
 
 
 @dataclass
 class _Region:
     start: int
     end: int
-    bgcs: List[object]
+    bgcs: list[object]
 
 
-def merge_overlaps(bgcs: Sequence[object]) -> List[_Region]:
+def merge_overlaps(bgcs: Sequence[object]) -> list[_Region]:
     if not bgcs:
         return []
 
     ordered = sorted(bgcs, key=lambda b: b.start_position)
-    regions: List[_Region] = []
+    regions: list[_Region] = []
 
     cur_start, cur_end, cur_group = (
         ordered[0].start_position,
@@ -49,7 +47,7 @@ class _MockBgc:
     end_position: int
 
 
-def to_bgcs(tuples: List[tuple]) -> List[_MockBgc]:
+def to_bgcs(tuples: list[tuple]) -> list[_MockBgc]:
     return [_MockBgc(i + 1, s, e) for i, (s, e) in enumerate(tuples)]
 
 

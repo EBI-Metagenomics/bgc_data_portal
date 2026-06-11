@@ -12,8 +12,7 @@ from .backfill_go_slim import Command as BackfillCommand
 
 class Command(BackfillCommand):
     help = (
-        "DEPRECATED: use `manage.py backfill_go_slim` instead. "
-        + BackfillCommand.help
+        "DEPRECATED: use `manage.py backfill_go_slim` instead. " + BackfillCommand.help
     )
 
     def handle(self, *args, **options):

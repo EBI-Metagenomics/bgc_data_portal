@@ -7,15 +7,15 @@ first match as a dict containing the dashboard redirect URL and metadata.
 from __future__ import annotations
 
 import re
-from typing import Optional
 from urllib.parse import urlencode
 
 from django.conf import settings
 
-
 # Compiled patterns for accession detection
 # New format: MGYB-XXXXXX (cBGC) or MGYB-XXXXXX-YY (iBGC). Crockford base32.
-_BGC_ACCESSION_RE = re.compile(r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}(-[0-9A-HJKMNP-TV-Z]{2})?$", re.IGNORECASE)
+_BGC_ACCESSION_RE = re.compile(
+    r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}(-[0-9A-HJKMNP-TV-Z]{2})?$", re.IGNORECASE
+)
 # Legacy format: MGYBNNNNNNNN (pre-refactor cBGC; resolved via AccessionAlias).
 _BGC_LEGACY_RE = re.compile(r"^MGYB\d+$", re.IGNORECASE)
 # Allow a trailing version segment (e.g. ``GCA_000001405.1``) — GCA/GCF
@@ -71,7 +71,9 @@ def _build_result(
 ) -> dict:
     """Build the resolver result dict with a dashboard redirect URL."""
     base = getattr(settings, "FORCE_SCRIPT_NAME", "") or ""
-    params = urlencode({"mode": "query", filter_param: filter_value, "auto_run": "true"})
+    params = urlencode(
+        {"mode": "query", filter_param: filter_value, "auto_run": "true"}
+    )
     return {
         "redirect_url": f"{base}/dashboard/?{params}",
         "match_type": match_type,
@@ -108,7 +110,7 @@ def resolve_keyword(keyword: str) -> dict:
 # ── Individual resolvers (private) ───────────────────────────────────────────
 
 
-def _try_bgc_accession(keyword: str) -> Optional[dict]:
+def _try_bgc_accession(keyword: str) -> dict | None:
     # Matches MGYB-XXXXXX (cBGC), MGYB-XXXXXX-YY (iBGC), and legacy MGYBNNNNNNNN.
     # Resolution goes through the accession registry + alias table.
     from discovery.models import AccessionAlias, AccessionRegistry
@@ -127,7 +129,7 @@ def _try_bgc_accession(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_assembly_accession(keyword: str) -> Optional[dict]:
+def _try_assembly_accession(keyword: str) -> dict | None:
     if not _ASSEMBLY_ACCESSION_RE.match(keyword):
         return None
     from discovery.models import DashboardAssembly
@@ -142,7 +144,7 @@ def _try_assembly_accession(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_domain_accession(keyword: str) -> Optional[dict]:
+def _try_domain_accession(keyword: str) -> dict | None:
     if not _DOMAIN_ACCESSION_RE.match(keyword):
         return None
     from discovery.models import DashboardDomain
@@ -157,7 +159,7 @@ def _try_domain_accession(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_bgc_class(keyword: str) -> Optional[dict]:
+def _try_bgc_class(keyword: str) -> dict | None:
     from discovery.models import DashboardBgcClass
 
     # Exact match first
@@ -181,7 +183,7 @@ def _try_bgc_class(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_detector(keyword: str) -> Optional[dict]:
+def _try_detector(keyword: str) -> dict | None:
     from discovery.models import DashboardDetector
 
     # Exact tool name
@@ -204,7 +206,7 @@ def _try_detector(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_biome(keyword: str) -> Optional[dict]:
+def _try_biome(keyword: str) -> dict | None:
     from discovery.models import DashboardAssembly
 
     # Find the first distinct biome_path that contains the keyword
@@ -227,7 +229,7 @@ def _try_biome(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_taxonomy(keyword: str) -> Optional[dict]:
+def _try_taxonomy(keyword: str) -> dict | None:
     from discovery.models import DashboardContig
 
     match = (
@@ -252,7 +254,7 @@ def _try_taxonomy(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_organism_name(keyword: str) -> Optional[dict]:
+def _try_organism_name(keyword: str) -> dict | None:
     from discovery.models import DashboardAssembly
 
     if DashboardAssembly.objects.filter(organism_name__icontains=keyword).exists():
@@ -260,7 +262,7 @@ def _try_organism_name(keyword: str) -> Optional[dict]:
     return None
 
 
-def _try_natural_product(keyword: str) -> Optional[dict]:
+def _try_natural_product(keyword: str) -> dict | None:
     from discovery.models import IbgcNaturalProduct
 
     if IbgcNaturalProduct.objects.filter(name__icontains=keyword).exists():

@@ -72,7 +72,8 @@ def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
     if mibig_rows:
         _build_mibig_validation_tsv(mibig_rows, out_dir / "mibig_validation.tsv")
         _build_confusion_heatmap_html(
-            mibig_rows, out_dir / "mibig_class_cluster_heatmap.html",
+            mibig_rows,
+            out_dir / "mibig_class_cluster_heatmap.html",
             run_sha=run.sha256,
         )
     else:
@@ -82,7 +83,9 @@ def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
         )
 
     _build_umap_plot_html(
-        ibgc_lookup, mibig_rows, out_dir / "umap_scatter.html",
+        ibgc_lookup,
+        mibig_rows,
+        out_dir / "umap_scatter.html",
         run_sha=run.sha256,
         seed=int(run.seed or 0),
     )
@@ -109,8 +112,11 @@ def _collect_validated_rows(
 
     validated_ibgc_ids = list(
         SourceBgcPrediction.objects.filter(
-            is_validated=True, integrated_bgc__isnull=False,
-        ).values_list("integrated_bgc_id", flat=True).distinct()
+            is_validated=True,
+            integrated_bgc__isnull=False,
+        )
+        .values_list("integrated_bgc_id", flat=True)
+        .distinct()
     )
     if not validated_ibgc_ids:
         return []
@@ -129,9 +135,15 @@ def _collect_validated_rows(
     pred_accessions_by_ibgc: dict[int, list[str]] = defaultdict(list)
     for pred_id, ibgc_id, acc, tool in (
         SourceBgcPrediction.objects.filter(
-            is_validated=True, integrated_bgc__isnull=False,
-        ).select_related("detector").values_list(
-            "id", "integrated_bgc_id", "prediction_accession", "detector__tool",
+            is_validated=True,
+            integrated_bgc__isnull=False,
+        )
+        .select_related("detector")
+        .values_list(
+            "id",
+            "integrated_bgc_id",
+            "prediction_accession",
+            "detector__tool",
         )
     ):
         detector_by_prediction[int(pred_id)] = tool or ""
@@ -140,7 +152,8 @@ def _collect_validated_rows(
     ibgc_meta = {
         ibgc.id: ibgc.accession
         for ibgc in IntegratedBgc.objects.filter(id__in=validated_ibgc_ids).only(
-            "id", "accession",
+            "id",
+            "accession",
         )
     }
 
@@ -152,22 +165,26 @@ def _collect_validated_rows(
         leaf_path, ux, uy = cluster_info
         class_path = np_paths_by_ibgc.get(int(ibgc_id), "")
         class_top = class_path.split(".", 1)[0] if class_path else UNCLASSIFIED_BUCKET
-        rows.append({
-            "ibgc_accession": ibgc_meta.get(int(ibgc_id), str(ibgc_id)),
-            "integrated_bgc_id": int(ibgc_id),
-            "source_prediction_accessions": "|".join(
-                sorted(pred_accessions_by_ibgc.get(int(ibgc_id), []))
-            ),
-            "leaf_cluster_path": leaf_path,
-            "umap_x": ux,
-            "umap_y": uy,
-            "mibig_class_top": class_top,
-            "mibig_class_full_path": class_path,
-        })
+        rows.append(
+            {
+                "ibgc_accession": ibgc_meta.get(int(ibgc_id), str(ibgc_id)),
+                "integrated_bgc_id": int(ibgc_id),
+                "source_prediction_accessions": "|".join(
+                    sorted(pred_accessions_by_ibgc.get(int(ibgc_id), []))
+                ),
+                "leaf_cluster_path": leaf_path,
+                "umap_x": ux,
+                "umap_y": uy,
+                "mibig_class_top": class_top,
+                "mibig_class_full_path": class_path,
+            }
+        )
     return rows
 
 
-def _build_mibig_validation_tsv(mibig_rows: list[dict[str, Any]], out_path: Path) -> None:
+def _build_mibig_validation_tsv(
+    mibig_rows: list[dict[str, Any]], out_path: Path
+) -> None:
     import pandas as pd
 
     if not mibig_rows:
@@ -187,23 +204,25 @@ def _build_mibig_validation_tsv(mibig_rows: list[dict[str, Any]], out_path: Path
         same_class = leaf_class_counts[leaf][cls_top]
         purity = same_class / mibig_count_in_leaf if mibig_count_in_leaf else 0.0
         level_parts = leaf.split(".") if leaf else []
-        enriched.append({
-            "ibgc_accession": row["ibgc_accession"],
-            "integrated_bgc_id": row["integrated_bgc_id"],
-            "source_prediction_accessions": row["source_prediction_accessions"],
-            "leaf_cluster_path": leaf,
-            "level_0_cluster": level_parts[0] if len(level_parts) > 0 else "",
-            "level_1_cluster": level_parts[1] if len(level_parts) > 1 else "",
-            "level_2_cluster": level_parts[2] if len(level_parts) > 2 else "",
-            "level_3_cluster": level_parts[3] if len(level_parts) > 3 else "",
-            "umap_x": row["umap_x"],
-            "umap_y": row["umap_y"],
-            "mibig_class_top": cls_top,
-            "mibig_class_full_path": row["mibig_class_full_path"],
-            "leaf_cluster_mibig_count": mibig_count_in_leaf,
-            "leaf_cluster_mibig_purity": purity,
-            "n_neighbors_same_class_in_cluster": same_class - 1,
-        })
+        enriched.append(
+            {
+                "ibgc_accession": row["ibgc_accession"],
+                "integrated_bgc_id": row["integrated_bgc_id"],
+                "source_prediction_accessions": row["source_prediction_accessions"],
+                "leaf_cluster_path": leaf,
+                "level_0_cluster": level_parts[0] if len(level_parts) > 0 else "",
+                "level_1_cluster": level_parts[1] if len(level_parts) > 1 else "",
+                "level_2_cluster": level_parts[2] if len(level_parts) > 2 else "",
+                "level_3_cluster": level_parts[3] if len(level_parts) > 3 else "",
+                "umap_x": row["umap_x"],
+                "umap_y": row["umap_y"],
+                "mibig_class_top": cls_top,
+                "mibig_class_full_path": row["mibig_class_full_path"],
+                "leaf_cluster_mibig_count": mibig_count_in_leaf,
+                "leaf_cluster_mibig_purity": purity,
+                "n_neighbors_same_class_in_cluster": same_class - 1,
+            }
+        )
 
     df = pd.DataFrame(enriched).sort_values(
         ["leaf_cluster_path", "mibig_class_top", "ibgc_accession"]
@@ -221,7 +240,8 @@ def _sample_background_coords(
 ) -> tuple[list[tuple[float, float]], int]:
     """Pick the gray-background iBGCs: random sample of non-validated, capped at ``cap``."""
     items = [
-        (x, y) for ibgc_id, (_path, x, y) in ibgc_lookup.items()
+        (x, y)
+        for ibgc_id, (_path, x, y) in ibgc_lookup.items()
         if ibgc_id not in mibig_ibgc_ids
     ]
     total = len(items)
@@ -244,7 +264,10 @@ def _build_umap_plot_html(
     fig = go.Figure()
     mibig_ibgc_ids = {int(row["integrated_bgc_id"]) for row in mibig_rows}
     bg_items, total_non_mibig = _sample_background_coords(
-        ibgc_lookup, mibig_ibgc_ids, cap=MAX_BACKGROUND_IBGCS, seed=seed,
+        ibgc_lookup,
+        mibig_ibgc_ids,
+        cap=MAX_BACKGROUND_IBGCS,
+        seed=seed,
     )
     if bg_items:
         xs = [x for x, _ in bg_items]
@@ -258,7 +281,9 @@ def _build_umap_plot_html(
             bg_name = f"non-validated iBGCs ({len(bg_items):,})"
         fig.add_trace(
             go.Scattergl(
-                x=xs, y=ys, mode="markers",
+                x=xs,
+                y=ys,
+                mode="markers",
                 marker=dict(size=4, color="lightgray", opacity=0.5),
                 name=bg_name,
                 hoverinfo="skip",
@@ -322,7 +347,9 @@ def _build_confusion_heatmap_html(
         leaf_totals[leaf] += 1
         classes.add(cls)
 
-    top_leaves = [leaf for leaf, _ in leaf_totals.most_common(TOP_N_CLUSTERS_FOR_HEATMAP)]
+    top_leaves = [
+        leaf for leaf, _ in leaf_totals.most_common(TOP_N_CLUSTERS_FOR_HEATMAP)
+    ]
     classes_sorted = sorted(classes)
 
     matrix = np.zeros((len(classes_sorted), len(top_leaves)), dtype=int)

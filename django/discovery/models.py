@@ -32,7 +32,6 @@ from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import IntegerRangeField
 from django.db import models
 
-
 # ── Assembly source lookup ─────────────────────────────────────────────────────
 
 
@@ -553,7 +552,9 @@ class SourceBgcPrediction(models.Model):
     )
 
     prediction_accession = models.CharField(max_length=50, db_index=True)
-    bgc_range = IntegerRangeField(help_text="Half-open [start, end) genomic span on the contig")
+    bgc_range = IntegerRangeField(
+        help_text="Half-open [start, end) genomic span on the contig"
+    )
 
     classification_path = models.CharField(
         max_length=255,
@@ -656,7 +657,9 @@ class ContigCds(models.Model):
         related_name="cds_list",
         db_index=True,
     )
-    cds_range = IntegerRangeField(help_text="Half-open [start, end) genomic span on the contig")
+    cds_range = IntegerRangeField(
+        help_text="Half-open [start, end) genomic span on the contig"
+    )
     strand = models.SmallIntegerField()
 
     protein_id_str = models.CharField(
@@ -762,7 +765,9 @@ class ContigDomain(models.Model):
 
     go_slim = models.JSONField(default=list, blank=True)
     interpro_entry_acc = models.CharField(max_length=20, blank=True, default="")
-    interpro_entry_description = models.CharField(max_length=255, blank=True, default="")
+    interpro_entry_description = models.CharField(
+        max_length=255, blank=True, default=""
+    )
     go_terms = models.JSONField(default=list, blank=True)
 
     # Protein-relative (amino-acid) coordinates of the hit
@@ -962,7 +967,9 @@ class DashboardGCF(models.Model):
         ]
         indexes = [
             models.Index(fields=["clustering_run", "level"], name="idx_gcf_run_level"),
-            models.Index(fields=["clustering_run", "parent_path"], name="idx_gcf_run_parent"),
+            models.Index(
+                fields=["clustering_run", "parent_path"], name="idx_gcf_run_parent"
+            ),
         ]
 
     def __str__(self):

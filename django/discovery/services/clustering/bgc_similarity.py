@@ -24,12 +24,12 @@ log = logging.getLogger(__name__)
 
 
 def compute_composite_similarity(
-    M_domains: "sp.csr_matrix",
-    M_pairs: "sp.csr_matrix",
+    M_domains: sp.csr_matrix,
+    M_pairs: sp.csr_matrix,
     *,
     weights: tuple[float, float] = (0.5, 0.5),
     prune_below: float = 0.0,
-) -> "sp.csr_matrix":
+) -> sp.csr_matrix:
     """Return weighted-mean Sørensen–Dice similarity on two binary matrices.
 
     Parameters
@@ -89,6 +89,9 @@ def compute_composite_similarity(
 
     log.info(
         "compute_composite_similarity: shape=%s nnz=%d weights=(%.3f, %.3f)",
-        sim.shape, sim.nnz, w_d, w_a,
+        sim.shape,
+        sim.nnz,
+        w_d,
+        w_a,
     )
     return sim

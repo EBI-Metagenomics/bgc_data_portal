@@ -234,7 +234,8 @@ def _validated_ibgc_ids() -> set[int]:
 
     return set(
         SourceBgcPrediction.objects.filter(
-            is_validated=True, integrated_bgc__isnull=False,
+            is_validated=True,
+            integrated_bgc__isnull=False,
         ).values_list("integrated_bgc_id", flat=True)
     )
 
@@ -294,7 +295,10 @@ def score_primary_ibgcs(
         )
 
     novelty = compute_novelty_against_validated(
-        M_domains, M_pairs, validated_cols, weights=weights,
+        M_domains,
+        M_pairs,
+        validated_cols,
+        weights=weights,
     )
     domain_novelty = compute_domain_novelty_array(M_domains, leaf_paths)
 
@@ -363,7 +367,6 @@ def project_partial_ibgcs(
     unprojected and counted as ``skipped``.
     """
     import scipy.sparse as sp
-    from django.utils import timezone
 
     from discovery.models import ClusteringRun, IntegratedBgc
     from discovery.services.clustering.adjacency import (
@@ -374,6 +377,7 @@ def project_partial_ibgcs(
     )
     from discovery.services.clustering.membership import build_ibgc_domain_matrix
     from discovery.services.clustering.reclassify import _align_rows
+    from django.utils import timezone
 
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
     sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM", "TIGRFAM")
@@ -414,7 +418,8 @@ def project_partial_ibgcs(
 
     # ── 2. Primary matrices (rebuilt fresh; cache exists for parity only) ─
     M_dom_pri, pri_row_ids, dom_accs = build_ibgc_domain_matrix(
-        sources=sources, ibgc_ids_subset=primary_ids,
+        sources=sources,
+        ibgc_ids_subset=primary_ids,
     )
     if M_dom_pri.shape[0] == 0:
         return {
@@ -424,7 +429,8 @@ def project_partial_ibgcs(
             "scope": len(partial_ibgc_ids),
         }
     M_pair_pri, pri_row_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
-        sources=sources, ibgc_ids_subset=primary_ids,
+        sources=sources,
+        ibgc_ids_subset=primary_ids,
     )
     M_pair_pri = _align_rows(M_pair_pri, pri_row_ids_adj, pri_row_ids)
     n_primary = M_dom_pri.shape[0]
@@ -433,9 +439,9 @@ def project_partial_ibgcs(
 
     primary_meta = {
         ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family)
-        for ibgc in IntegratedBgc.objects.filter(
-            id__in=primary_ids
-        ).only("id", "umap_x", "umap_y", "gene_cluster_family")
+        for ibgc in IntegratedBgc.objects.filter(id__in=primary_ids).only(
+            "id", "umap_x", "umap_y", "gene_cluster_family"
+        )
     }
     pri_coords = np.array(
         [
@@ -486,7 +492,10 @@ def project_partial_ibgcs(
         M_dom_full = sp.vstack([M_dom_pri, M_dom_q], format="csr")
         M_pair_full = sp.vstack([M_pair_pri, M_pair_q], format="csr")
         sim_full = compute_composite_similarity(
-            M_dom_full, M_pair_full, weights=weights, prune_below=0.0,
+            M_dom_full,
+            M_pair_full,
+            weights=weights,
+            prune_below=0.0,
         )
         sim_block = sim_full[n_primary:, :n_primary].tocsr()
         M_dom_q_csr = M_dom_q.tocsr()
@@ -560,19 +569,26 @@ def project_partial_ibgcs(
             )
 
         if progress_cb is not None:
-            progress_cb({
-                "processed": min(start + chunk_size, len(partial_ibgc_ids)),
-                "total": len(partial_ibgc_ids),
-                "projected": len(update_batch),
-            })
+            progress_cb(
+                {
+                    "processed": min(start + chunk_size, len(partial_ibgc_ids)),
+                    "total": len(partial_ibgc_ids),
+                    "projected": len(update_batch),
+                }
+            )
 
     if update_batch:
         IntegratedBgc.objects.bulk_update(
             update_batch,
             [
-                "umap_x", "umap_y", "umap_projected",
-                "gene_cluster_family", "novelty_score", "domain_novelty",
-                "classification_run", "classified_at",
+                "umap_x",
+                "umap_y",
+                "umap_projected",
+                "gene_cluster_family",
+                "novelty_score",
+                "domain_novelty",
+                "classification_run",
+                "classified_at",
             ],
             batch_size=5_000,
         )
@@ -581,7 +597,10 @@ def project_partial_ibgcs(
     skipped = len(partial_ibgc_ids) - projected
     log.info(
         "project_partial_ibgcs: run=%s projected=%d skipped=%d scope=%d",
-        run.pk, projected, skipped, len(partial_ibgc_ids),
+        run.pk,
+        projected,
+        skipped,
+        len(partial_ibgc_ids),
     )
     return {
         "clustering_run_pk": run.pk,

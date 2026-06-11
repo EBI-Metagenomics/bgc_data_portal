@@ -41,9 +41,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from django.conf import settings
-
 from discovery.services.go_slim import go_slim_for_terms
+from django.conf import settings
 
 from . import cache as asset_cache
 from .matrices import (
@@ -329,7 +328,10 @@ def _project_against_run(
     M_dom_full = sp.vstack([M_dom_pri.astype(M_dom_q.dtype), M_dom_q], format="csr")
     M_pair_full = sp.vstack([M_pair_pri.astype(M_pair_q.dtype), M_pair_q], format="csr")
     sim_full = compute_composite_similarity(
-        M_dom_full, M_pair_full, weights=weights, prune_below=0.0,
+        M_dom_full,
+        M_pair_full,
+        weights=weights,
+        prune_below=0.0,
     )
     sim_block = sim_full[n_primary:, :n_primary].tocsr()
     M_dom_q_csr = M_dom_q.tocsr()
@@ -558,7 +560,9 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
 
     cds_list = []
     domain_list: list[dict[str, Any]] = []
-    domains_by_cds_pid: dict[tuple[tuple[str, int, int, str], str], list[AssetDomain]] = defaultdict(list)
+    domains_by_cds_pid: dict[
+        tuple[tuple[str, int, int, str], str], list[AssetDomain]
+    ] = defaultdict(list)
     for d in vibgc.domains:
         domains_by_cds_pid[(d.bgc_key, d.cds_protein_id)].append(d)
     chemont_by_cds: dict[tuple[tuple[str, int, int, str], str], AssetCdsChemOnt] = {
@@ -573,9 +577,9 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
             try:
                 import zlib
 
-                sequence = zlib.decompress(base64.b64decode(cds.sequence_zlib_b64)).decode(
-                    "ascii", errors="replace"
-                )
+                sequence = zlib.decompress(
+                    base64.b64decode(cds.sequence_zlib_b64)
+                ).decode("ascii", errors="replace")
             except Exception:  # noqa: BLE001
                 sequence = ""
 
@@ -704,13 +708,15 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
             if not d.domain_acc or d.domain_acc in seen_accs:
                 continue
             seen_accs.add(d.domain_acc)
-            domain_hits.append({
-                "ibgc_id": vibgc.neg_id,
-                "domain_acc": d.domain_acc,
-                "domain_name": d.domain_name,
-                "domain_description": d.domain_description or d.domain_name,
-                "go_slim": go_slim_for_terms(d.go_terms),
-            })
+            domain_hits.append(
+                {
+                    "ibgc_id": vibgc.neg_id,
+                    "domain_acc": d.domain_acc,
+                    "domain_name": d.domain_name,
+                    "domain_description": d.domain_description or d.domain_name,
+                    "go_slim": go_slim_for_terms(d.go_terms),
+                }
+            )
     asset_cache.write_domain_hits(token, domain_hits)
 
     for vibgc in virtual_ibgcs:
@@ -729,7 +735,9 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
         "n_bgcs": sum(len(v.member_bgcs) for v in virtual_ibgcs),
         "assembly_accession": first.assembly_accession,
         "organism": first.organism_name,
-        "source_label": ", ".join(sorted({b.detector_name for v in virtual_ibgcs for b in v.member_bgcs})),
+        "source_label": ", ".join(
+            sorted({b.detector_name for v in virtual_ibgcs for b in v.member_bgcs})
+        ),
         "clustering_run_id": run.id if run is not None else None,
         "projected": run is not None,
         "n_projected": sum(1 for v in virtual_ibgcs if v.umap_projected),

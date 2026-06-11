@@ -9,10 +9,10 @@ over the limit get HTTP 429 and that disabling the flag bypasses it.
 from __future__ import annotations
 
 import pytest
+from discovery import throttling
+
 from django.core.cache.backends.locmem import LocMemCache
 from django.test import Client
-
-from discovery import throttling
 
 # Open (un-gated) endpoint -> exercises the router-level default throttle.
 URL = "/api/discovery/ibgcs/ids/"

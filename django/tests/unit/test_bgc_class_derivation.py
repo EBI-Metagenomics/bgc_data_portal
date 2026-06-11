@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import pytest
-
 from discovery.models import DashboardBgcClass
 from discovery.services.scores import _rebuild_catalog_tables, recompute_ibgc_classes
 from tests.factories.discovery_models import (

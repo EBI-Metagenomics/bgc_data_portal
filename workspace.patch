@@ -25,11 +25,11 @@ index cb74442..debc81e 100644
 +    && apt-get install -y nodejs \
      && apt-get clean \
      && rm -rf /var/lib/apt/lists/*
- 
+
 @@ -23,6 +30,11 @@ RUN pip install --upgrade pip && pip install -r requirements-web.txt
- 
+
  COPY . .
- 
+
 +# Build the React frontend (outputs to /app/static/dashboard/)
 +WORKDIR /app/frontend
 +RUN npm ci && npm run build
@@ -37,7 +37,7 @@ index cb74442..debc81e 100644
 +
  EXPOSE 8000
  ENV PYTHONUNBUFFERED=0
- 
+
 diff --git a/bgc_data_portal/templates/dashboard.html b/bgc_data_portal/templates/dashboard.html
 new file mode 100644
 index 0000000..1888bdf
@@ -69,12 +69,12 @@ index f7e954b..0780f19 100644
 +++ b/bgc_data_portal/urls.py
 @@ -12,7 +12,7 @@
  # limitations under the License.
- 
+
  from django.contrib import admin
 -from django.urls import path
 +from django.urls import path, re_path
  from debug_toolbar.toolbar import debug_toolbar_urls
- 
+
  from . import views
 @@ -41,5 +41,7 @@ urlpatterns = [
      path(
@@ -90,8 +90,8 @@ index a335ad2..8d7c63e 100644
 +++ b/bgc_data_portal/views.py
 @@ -435,6 +435,14 @@ def download_results_tsv(request):
      return response
- 
- 
+
+
 +def dashboard_spa(request):
 +    """Serve the React SPA for the Discovery Platform."""
 +    return render(request, "dashboard.html", {
@@ -9454,7 +9454,7 @@ index 0000000..447fddd
 +      />
 +      <Label htmlFor="type-strain" className="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
 +        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-+        Type strains only 
++        Type strains only
 +      </Label>
 +    </div>
 +  );
@@ -13793,23 +13793,23 @@ index 0000000..8399a2b
 +    margin-right: `).concat(l,"px ").concat(r,`;
 +    `),n==="padding"&&"padding-right: ".concat(l,"px ").concat(r,";")].filter(Boolean).join(""),`
 +  }
-+  
++
 +  .`).concat(lo,` {
 +    right: `).concat(l,"px ").concat(r,`;
 +  }
-+  
++
 +  .`).concat(co,` {
 +    margin-right: `).concat(l,"px ").concat(r,`;
 +  }
-+  
++
 +  .`).concat(lo," .").concat(lo,` {
 +    right: 0 `).concat(r,`;
 +  }
-+  
++
 +  .`).concat(co," .").concat(co,` {
 +    margin-right: 0 `).concat(r,`;
 +  }
-+  
++
 +  body[`).concat(An,`] {
 +    `).concat(Bv,": ").concat(l,`px;
 +  }
@@ -14062,7 +14062,7 @@ index 0000000..cd0d34d
 +  float G1 = (2.0 * NdotH * VdotN) / VdotH;
 +  float G2 = (2.0 * NdotH * LdotN) / LdotH;
 +  float G = min(1.0, min(G1, G2));
-+  
++
 +  //Distribution term
 +  float D = beckmannDistribution(NdotH, roughness);
 +
@@ -14074,7 +14074,7 @@ index 0000000..cd0d34d
 +}
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14222,7 +14222,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14340,7 +14340,7 @@ index 0000000..cd0d34d
 +  float G1 = (2.0 * NdotH * VdotN) / VdotH;
 +  float G2 = (2.0 * NdotH * LdotN) / LdotH;
 +  float G = min(1.0, min(G1, G2));
-+  
++
 +  //Distribution term
 +  float D = beckmannDistribution(NdotH, roughness);
 +
@@ -14354,7 +14354,7 @@ index 0000000..cd0d34d
 +//#pragma glslify: beckmann = require(glsl-specular-beckmann) // used in gl-surface3d
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14433,7 +14433,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14468,7 +14468,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14542,7 +14542,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14575,7 +14575,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14690,7 +14690,7 @@ index 0000000..cd0d34d
 +}
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14792,7 +14792,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14840,7 +14840,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14897,7 +14897,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -14955,7 +14955,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -15015,7 +15015,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -15051,7 +15051,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -15355,7 +15355,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -15502,7 +15502,7 @@ index 0000000..cd0d34d
 +  float G1 = (2.0 * NdotH * VdotN) / VdotH;
 +  float G2 = (2.0 * NdotH * LdotN) / LdotH;
 +  float G = min(1.0, min(G1, G2));
-+  
++
 +  //Distribution term
 +  float D = beckmannDistribution(NdotH, roughness);
 +
@@ -15514,7 +15514,7 @@ index 0000000..cd0d34d
 +}
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -15625,7 +15625,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -15700,7 +15700,7 @@ index 0000000..cd0d34d
 +#define GLSLIFY 1
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +
@@ -15786,7 +15786,7 @@ index 0000000..cd0d34d
 +}
 +
 +bool outOfRange(float a, float b, float p) {
-+  return ((p > max(a, b)) || 
++  return ((p > max(a, b)) ||
 +          (p < min(a, b)));
 +}
 +

@@ -17,8 +17,11 @@ from .models import (
 @admin.register(DashboardAssembly)
 class DashboardAssemblyAdmin(admin.ModelAdmin):
     list_display = (
-        "assembly_accession", "organism_name",
-        "bgc_count", "bgc_novelty_score", "is_type_strain",
+        "assembly_accession",
+        "organism_name",
+        "bgc_count",
+        "bgc_novelty_score",
+        "is_type_strain",
     )
     search_fields = ("assembly_accession", "organism_name")
     list_filter = ("is_type_strain",)
@@ -33,8 +36,12 @@ class ConsensusBgcAdmin(admin.ModelAdmin):
 @admin.register(IntegratedBgc)
 class IntegratedBgcAdmin(admin.ModelAdmin):
     list_display = (
-        "accession", "cbgc_id", "contig_id", "bgc_range",
-        "source_tools", "gene_cluster_family",
+        "accession",
+        "cbgc_id",
+        "contig_id",
+        "bgc_range",
+        "source_tools",
+        "gene_cluster_family",
     )
     search_fields = ("accession", "gene_cluster_family")
 
@@ -42,8 +49,12 @@ class IntegratedBgcAdmin(admin.ModelAdmin):
 @admin.register(SourceBgcPrediction)
 class SourceBgcPredictionAdmin(admin.ModelAdmin):
     list_display = (
-        "prediction_accession", "detector", "bgc_range",
-        "is_partial", "is_validated", "integrated_bgc_id",
+        "prediction_accession",
+        "detector",
+        "bgc_range",
+        "is_partial",
+        "is_validated",
+        "integrated_bgc_id",
     )
     search_fields = ("prediction_accession",)
     list_filter = ("is_partial", "is_validated", "detector")
@@ -52,8 +63,12 @@ class SourceBgcPredictionAdmin(admin.ModelAdmin):
 @admin.register(DashboardGCF)
 class DashboardGCFAdmin(admin.ModelAdmin):
     list_display = (
-        "family_path", "level", "member_count",
-        "validated_count", "descendant_count", "clustering_run_id",
+        "family_path",
+        "level",
+        "member_count",
+        "validated_count",
+        "descendant_count",
+        "clustering_run_id",
     )
     list_filter = ("level", "clustering_run")
     search_fields = ("family_path", "parent_path")
@@ -62,13 +77,25 @@ class DashboardGCFAdmin(admin.ModelAdmin):
 @admin.register(ClusteringRun)
 class ClusteringRunAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "created_at", "knn_k", "n_levels",
-        "n_ibgcs", "n_leaf_communities",
+        "id",
+        "created_at",
+        "knn_k",
+        "n_levels",
+        "n_ibgcs",
+        "n_leaf_communities",
     )
     readonly_fields = (
-        "created_at", "sha256", "n_proteins", "n_ibgcs",
-        "n_levels", "n_root_communities", "n_leaf_communities",
-        "igraph_version", "leidenalg_version", "umap_version", "scipy_version",
+        "created_at",
+        "sha256",
+        "n_proteins",
+        "n_ibgcs",
+        "n_levels",
+        "n_root_communities",
+        "n_leaf_communities",
+        "igraph_version",
+        "leidenalg_version",
+        "umap_version",
+        "scipy_version",
     )
 
 

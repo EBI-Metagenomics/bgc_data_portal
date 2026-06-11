@@ -2,13 +2,14 @@
 Django settings for bgc_data_portal project.
 """
 
+import os
 import sys
 from pathlib import Path
-import os
-import dj_database_url
-from django.core.exceptions import ImproperlyConfigured
 
+import dj_database_url
 from csp.constants import NONE, SELF
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables from .env file
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -81,6 +82,7 @@ INTERNAL_IPS = [
     "127.0.0.1",
     "0.0.0.0",
 ]
+
 
 def _show_debug_toolbar(request):
     """Gate the debug toolbar so it never interferes with automation.
@@ -197,8 +199,10 @@ CLUSTERING_ARTIFACTS_DIR: Path = Path(
 # — clustering must run on HPC via the bgc-cluster CLI and be imported back
 # with import_clustering_results. Default off so local compose / dev still
 # works against a small seeded DB.
-CLUSTERING_HPC_MODE: bool = (
-    os.environ.get("CLUSTERING_HPC_MODE", "false").lower() in ("1", "true", "yes")
+CLUSTERING_HPC_MODE: bool = os.environ.get("CLUSTERING_HPC_MODE", "false").lower() in (
+    "1",
+    "true",
+    "yes",
 )
 
 # On-disk phmmer protein search DB (FASTA + .ssi + VERSION).
@@ -285,7 +289,9 @@ CACHE_TIMEOUT = 60 * 60 * 24 * 7  # 1 week
 # InChIKey (Redis) so known/repeat compounds skip the network entirely.
 CLASSYFIRE_URL = os.getenv("CLASSYFIRE_URL", "http://classyfire.wishartlab.com")
 CLASSYFIRE_TIMEOUT = float(os.getenv("CLASSYFIRE_TIMEOUT", "30"))  # per HTTP call (s)
-CLASSYFIRE_POLL_TIMEOUT = float(os.getenv("CLASSYFIRE_POLL_TIMEOUT", "90"))  # novel-compound poll budget (s)
+CLASSYFIRE_POLL_TIMEOUT = float(
+    os.getenv("CLASSYFIRE_POLL_TIMEOUT", "90")
+)  # novel-compound poll budget (s)
 CHEMONT_CLASSIFY_CACHE_TTL = int(
     os.getenv("CHEMONT_CLASSIFY_CACHE_TTL", str(60 * 60 * 24 * 30))  # 30 days
 )
@@ -348,9 +354,9 @@ _CSP_DIRECTIVES = {
     "img-src": _csp_img,
     "connect-src": _csp_connect,
     "worker-src": [SELF, "blob:"],  # SPA may spin up web workers from blob URLs
-    "object-src": [NONE],           # no <object>/<embed>/<applet>
-    "base-uri": [SELF],             # block <base> tag hijacking
-    "frame-ancestors": [SELF],      # clickjacking protection
+    "object-src": [NONE],  # no <object>/<embed>/<applet>
+    "base-uri": [SELF],  # block <base> tag hijacking
+    "frame-ancestors": [SELF],  # clickjacking protection
 }
 
 if os.getenv("CSP_REPORT_ONLY", "false").lower() == "true":

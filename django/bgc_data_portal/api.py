@@ -11,9 +11,10 @@ the NinjaAPI instance (removed in the v2 refactor).
 
 import logging
 
+from ninja import NinjaAPI
+
 from django.db import connection
 from django.http import JsonResponse
-from ninja import NinjaAPI
 
 log = logging.getLogger(__name__)
 

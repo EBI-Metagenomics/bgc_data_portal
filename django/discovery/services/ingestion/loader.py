@@ -41,10 +41,6 @@ import logging
 import sys
 from pathlib import Path
 
-from django.db.models import Avg, Count, Max
-from django.db.models.expressions import RawSQL
-from django.db.backends.postgresql.psycopg_any import NumericRange
-
 from discovery.models import (
     AssemblySource,
     CdsChemOnt,
@@ -61,9 +57,12 @@ from discovery.models import (
     SourceBgcPrediction,
 )
 from discovery.services.go_slim import go_slim_for_terms
+from django.db.backends.postgresql.psycopg_any import NumericRange
+from django.db.models import Avg, Count, Max
+from django.db.models.expressions import RawSQL
 
 from .cbgc_assigner import CbgcAssigner
-from .tsv_copy import copy_tsv_to_table, truncate_tables
+from .tsv_copy import truncate_tables
 
 logger = logging.getLogger(__name__)
 
@@ -167,9 +166,7 @@ def load_detectors(data_dir: Path) -> dict[str, tuple[int, str]]:
     # Dedup on the (tool, version) conflict key — a duplicate within one
     # bulk_create makes ON CONFLICT DO UPDATE touch a row twice (Postgres
     # rejects it). Last occurrence wins, matching the upsert.
-    rows_to_create = list(
-        {(o.tool, o.version): o for o in rows_to_create}.values()
-    )
+    rows_to_create = list({(o.tool, o.version): o for o in rows_to_create}.values())
     DashboardDetector.objects.bulk_create(
         rows_to_create,
         batch_size=BATCH_SIZE,
@@ -177,10 +174,7 @@ def load_detectors(data_dir: Path) -> dict[str, tuple[int, str]]:
         unique_fields=["tool", "version"],
         update_fields=["name", "tool_name_code", "version_sort_key"],
     )
-    lookup = {
-        d.name: (d.id, d.tool_name_code)
-        for d in DashboardDetector.objects.all()
-    }
+    lookup = {d.name: (d.id, d.tool_name_code) for d in DashboardDetector.objects.all()}
     logger.info("Loaded %d detectors", len(lookup))
     return lookup
 
@@ -214,9 +208,14 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
                     source=source,
                     assembly_type=int(row.get("assembly_type", 2)),
                     biome_path=row.get("biome_path", ""),
-                    is_type_strain=row.get("is_type_strain", "").lower() in ("true", "1"),
+                    is_type_strain=row.get("is_type_strain", "").lower()
+                    in ("true", "1"),
                     type_strain_catalog_url=row.get("type_strain_catalog_url", ""),
-                    assembly_size_mb=float(row["assembly_size_mb"]) if row.get("assembly_size_mb") else None,
+                    assembly_size_mb=(
+                        float(row["assembly_size_mb"])
+                        if row.get("assembly_size_mb")
+                        else None
+                    ),
                     url=row.get("url", ""),
                 )
             )
@@ -228,8 +227,14 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
         update_conflicts=True,
         unique_fields=["assembly_accession"],
         update_fields=[
-            "organism_name", "source", "assembly_type", "biome_path",
-            "is_type_strain", "type_strain_catalog_url", "assembly_size_mb", "url",
+            "organism_name",
+            "source",
+            "assembly_type",
+            "biome_path",
+            "is_type_strain",
+            "type_strain_catalog_url",
+            "assembly_size_mb",
+            "url",
         ],
     )
     lookup = dict(DashboardAssembly.objects.values_list("assembly_accession", "id"))
@@ -256,7 +261,8 @@ def load_contigs(
             if assembly_id is None:
                 logger.warning(
                     "Unknown assembly %s for contig %s, skipping",
-                    assembly_acc, row.get("accession", row["sequence_sha256"]),
+                    assembly_acc,
+                    row.get("accession", row["sequence_sha256"]),
                 )
                 continue
             rows.append(
@@ -312,7 +318,9 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
                 deduped = list({obj.contig_id: obj for obj in batch}.values())
                 ContigSequence.objects.bulk_create(
                     deduped,
-                    update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
+                    update_conflicts=True,
+                    unique_fields=["contig"],
+                    update_fields=["data"],
                     batch_size=SEQUENCE_INSERT_BATCH_SIZE,
                 )
                 total += len(deduped)
@@ -322,7 +330,9 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
         deduped = list({obj.contig_id: obj for obj in batch}.values())
         ContigSequence.objects.bulk_create(
             deduped,
-            update_conflicts=True, unique_fields=["contig"], update_fields=["data"],
+            update_conflicts=True,
+            unique_fields=["contig"],
+            update_fields=["data"],
             batch_size=SEQUENCE_INSERT_BATCH_SIZE,
         )
         total += len(deduped)
@@ -338,7 +348,10 @@ def _build_source_bgc_lookup() -> dict[tuple[str, int, int, str], int]:
     """Return ``{(contig_sha256, start, end, detector_name): source_bgc_id}``."""
     lookup: dict[tuple[str, int, int, str], int] = {}
     qs = SourceBgcPrediction.objects.select_related("contig", "detector").only(
-        "id", "contig__sequence_sha256", "bgc_range", "detector__name",
+        "id",
+        "contig__sequence_sha256",
+        "bgc_range",
+        "detector__name",
     )
     for sbgc in qs.iterator():
         rng = sbgc.bgc_range
@@ -388,13 +401,17 @@ def load_source_bgcs(
             contig_sha = row["contig_sha256"]
             contig_id = contig_lookup.get(contig_sha)
             if contig_id is None:
-                logger.warning("Unknown contig %s, skipping source prediction", contig_sha)
+                logger.warning(
+                    "Unknown contig %s, skipping source prediction", contig_sha
+                )
                 continue
 
             detector_name = row["detector_name"]
             det_info = detector_lookup.get(detector_name)
             if det_info is None:
-                logger.warning("Unknown detector %s, skipping source prediction", detector_name)
+                logger.warning(
+                    "Unknown detector %s, skipping source prediction", detector_name
+                )
                 continue
             detector_id, tool_code = det_info
 
@@ -403,7 +420,8 @@ def load_source_bgcs(
 
             cbgc_id, bgc_number, prediction_accession = assigner.assign(
                 contig_id=contig_id,
-                contig_accession=contig_accession_by_id.get(contig_id, "") or contig_sha,
+                contig_accession=contig_accession_by_id.get(contig_id, "")
+                or contig_sha,
                 start=start,
                 end=end,
                 detector_id=detector_id,
@@ -418,7 +436,9 @@ def load_source_bgcs(
                     contig_id=contig_id,
                     prediction_accession=prediction_accession,
                     bgc_range=_range(start, end),
-                    classification_path=(row.get("classification_path") or "").strip()[:255],
+                    classification_path=(row.get("classification_path") or "").strip()[
+                        :255
+                    ],
                     is_partial=row.get("is_partial", "").lower() in ("true", "1"),
                     is_validated=row.get("is_validated", "").lower() in ("true", "1"),
                     detector_id=detector_id,
@@ -440,7 +460,12 @@ def load_source_bgcs(
     logger.info(
         "Loaded %d source predictions across %d cBGCs",
         total,
-        len({sbgc.cbgc_id for sbgc in SourceBgcPrediction.objects.only("cbgc_id").iterator()}),
+        len(
+            {
+                sbgc.cbgc_id
+                for sbgc in SourceBgcPrediction.objects.only("cbgc_id").iterator()
+            }
+        ),
     )
     return lookup
 
@@ -512,7 +537,9 @@ def load_cds(
     # Lookup keyed by (contig_id, protein_id_str) — the natural per-gene key.
     cds_lookup: dict[tuple[int, str], int] = {}
     for cds_id, contig_id, protein_id in ContigCds.objects.values_list(
-        "id", "contig_id", "protein_id_str",
+        "id",
+        "contig_id",
+        "protein_id_str",
     ):
         cds_lookup[(contig_id, protein_id)] = cds_id
     return cds_lookup
@@ -551,7 +578,9 @@ def load_cds_sequences(
                 deduped = list({obj.cds_id: obj for obj in batch}.values())
                 CdsSequence.objects.bulk_create(
                     deduped,
-                    update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+                    update_conflicts=True,
+                    unique_fields=["cds"],
+                    update_fields=["data"],
                     batch_size=SEQUENCE_INSERT_BATCH_SIZE,
                 )
                 total += len(deduped)
@@ -561,7 +590,9 @@ def load_cds_sequences(
         deduped = list({obj.cds_id: obj for obj in batch}.values())
         CdsSequence.objects.bulk_create(
             deduped,
-            update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+            update_conflicts=True,
+            unique_fields=["cds"],
+            update_fields=["data"],
             batch_size=SEQUENCE_INSERT_BATCH_SIZE,
         )
         total += len(deduped)
@@ -626,7 +657,9 @@ def load_domains(
                     url=row.get("url", ""),
                     go_slim=go_slim_for_terms(go_terms),
                     interpro_entry_acc=row.get("interpro_entry_acc", ""),
-                    interpro_entry_description=row.get("interpro_entry_description", ""),
+                    interpro_entry_description=row.get(
+                        "interpro_entry_description", ""
+                    ),
                     go_terms=go_terms,
                 )
             )
@@ -644,16 +677,14 @@ def load_domains(
     return total
 
 
-def _flush_cds_chemont(batch: list["CdsChemOnt"]) -> int:
+def _flush_cds_chemont(batch: list[CdsChemOnt]) -> int:
     """Upsert a CdsChemOnt batch, deduped on the ``(cds, chemont_id)`` conflict
     key. Without the dedup, a tarball that lists the same ChemOnt class twice
     for one CDS makes ``ON CONFLICT DO UPDATE`` touch a row twice in a single
     statement, which Postgres rejects ("cannot affect row a second time").
     Last occurrence wins, matching the upsert's update semantics.
     """
-    deduped = list(
-        {(obj.cds_id, obj.chemont_id): obj for obj in batch}.values()
-    )
+    deduped = list({(obj.cds_id, obj.chemont_id): obj for obj in batch}.values())
     CdsChemOnt.objects.bulk_create(
         deduped,
         update_conflicts=True,
@@ -759,13 +790,17 @@ def compute_assembly_scores() -> None:
         batch.append(asm)
         if len(batch) >= BATCH_SIZE:
             DashboardAssembly.objects.bulk_update(
-                batch, ["bgc_count", "l1_class_count", "bgc_novelty_score"], batch_size=BATCH_SIZE,
+                batch,
+                ["bgc_count", "l1_class_count", "bgc_novelty_score"],
+                batch_size=BATCH_SIZE,
             )
             batch.clear()
 
     if batch:
         DashboardAssembly.objects.bulk_update(
-            batch, ["bgc_count", "l1_class_count", "bgc_novelty_score"], batch_size=BATCH_SIZE,
+            batch,
+            ["bgc_count", "l1_class_count", "bgc_novelty_score"],
+            batch_size=BATCH_SIZE,
         )
 
     logger.info("Assembly scores computed")
@@ -787,20 +822,19 @@ def compute_catalog_counts() -> None:
     )
     DashboardBgcClass.objects.all().delete()
     DashboardBgcClass.objects.bulk_create(
-        [DashboardBgcClass(name=r["bgc_class"], bgc_count=r["cnt"]) for r in class_counts],
+        [
+            DashboardBgcClass(name=r["bgc_class"], bgc_count=r["cnt"])
+            for r in class_counts
+        ],
         batch_size=BATCH_SIZE,
     )
 
     # Domain counts — distinct iBGC reach per domain acc.
     # ContigDomain.contig is denormalised so the join chain is short.
-    domain_counts = (
-        ContigDomain.objects
-        .values("domain_acc")
-        .annotate(
-            cnt=Count("contig__ibgcs", distinct=True),
-            domain_name=Max("domain_name"),
-            ref_db=Max("ref_db"),
-        )
+    domain_counts = ContigDomain.objects.values("domain_acc").annotate(
+        cnt=Count("contig__ibgcs", distinct=True),
+        domain_name=Max("domain_name"),
+        ref_db=Max("ref_db"),
     )
     DashboardDomain.objects.all().delete()
     DashboardDomain.objects.bulk_create(
@@ -822,7 +856,9 @@ def compute_catalog_counts() -> None:
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 
-def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bool = False) -> None:
+def run_pipeline(
+    data_dir: str | Path, *, truncate: bool = False, skip_stats: bool = False
+) -> None:
     """Execute the full discovery data loading pipeline.
 
     Notes:

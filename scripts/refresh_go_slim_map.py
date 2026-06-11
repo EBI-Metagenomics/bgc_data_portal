@@ -31,7 +31,9 @@ USER_AGENT = "refresh_go_slim_map/1.0 (+https://github.com/Finn-Lab/bgc_data_por
 log = logging.getLogger("refresh_go_slim_map")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_PATH = REPO_ROOT / "django" / "discovery" / "services" / "data" / "go_slim_map.json"
+OUTPUT_PATH = (
+    REPO_ROOT / "django" / "discovery" / "services" / "data" / "go_slim_map.json"
+)
 
 OBO_URLS: dict[str, str] = {
     "go-basic.obo": "http://purl.obolibrary.org/obo/go/go-basic.obo",
@@ -193,7 +195,9 @@ def main(argv: list[str] | None = None) -> int:
     }
     out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
-    log.info("✔ wrote %s — %d/%d GO terms mapped to slim names", out_path, mapped, total)
+    log.info(
+        "✔ wrote %s — %d/%d GO terms mapped to slim names", out_path, mapped, total
+    )
     return 0
 
 

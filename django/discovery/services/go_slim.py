@@ -20,8 +20,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Iterable
 from functools import lru_cache
-from typing import Iterable
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +46,9 @@ def _go_term_to_slims() -> dict[str, list[str]]:
         )
         return {}
     except (OSError, json.JSONDecodeError) as exc:
-        log.warning("Failed to load go_slim_map.json (%s) — GO slims will be empty", exc)
+        log.warning(
+            "Failed to load go_slim_map.json (%s) — GO slims will be empty", exc
+        )
         return {}
 
     payload = raw.get("map", raw) if isinstance(raw, dict) else {}

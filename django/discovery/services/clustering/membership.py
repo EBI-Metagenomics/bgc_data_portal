@@ -33,7 +33,8 @@ so this module can be imported on the web container without ML deps.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import numpy as np
@@ -71,7 +72,7 @@ def build_ibgc_domain_matrix(
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     ibgc_ids_subset: Sequence[int] | None = None,
     domain_accs_subset: Sequence[str] | None = None,
-) -> tuple["sp.csr_matrix", "np.ndarray", "np.ndarray"]:
+) -> tuple[sp.csr_matrix, np.ndarray, np.ndarray]:
     """Build the iBGC × domain-accession binary matrix.
 
     Parameters
@@ -152,8 +153,12 @@ def build_ibgc_domain_matrix(
             continue
         membership.add((row_index[row_id], col))
 
-    rows = np.fromiter((r for r, _ in membership), dtype=np.int64, count=len(membership))
-    cols = np.fromiter((c for _, c in membership), dtype=np.int64, count=len(membership))
+    rows = np.fromiter(
+        (r for r, _ in membership), dtype=np.int64, count=len(membership)
+    )
+    cols = np.fromiter(
+        (c for _, c in membership), dtype=np.int64, count=len(membership)
+    )
     data = np.ones(len(membership), dtype=np.uint8)
 
     M = sp.csr_matrix(
@@ -163,7 +168,10 @@ def build_ibgc_domain_matrix(
     )
     log.info(
         "build_ibgc_domain_matrix: %d rows × %d domains, nnz=%d (sources=%s)",
-        M.shape[0], M.shape[1], M.nnz, upper_sources,
+        M.shape[0],
+        M.shape[1],
+        M.nnz,
+        upper_sources,
     )
     return (
         M,

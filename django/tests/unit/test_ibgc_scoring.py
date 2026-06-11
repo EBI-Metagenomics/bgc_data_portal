@@ -19,12 +19,12 @@ from discovery.services.clustering.ibgc_scoring import (  # noqa: E402
 )
 
 
-def _zeros(n: int) -> "scipy_sparse.csr_matrix":
+def _zeros(n: int) -> scipy_sparse.csr_matrix:
     """An all-zero pairs matrix, to isolate the domain component (w_a=0)."""
     return scipy_sparse.csr_matrix((n, 1), dtype=np.uint8)
 
 
-def _coo(rows: list[list[int]], n_cols: int) -> "scipy_sparse.csr_matrix":
+def _coo(rows: list[list[int]], n_cols: int) -> scipy_sparse.csr_matrix:
     coords_r: list[int] = []
     coords_c: list[int] = []
     for r, cols in enumerate(rows):
@@ -39,7 +39,7 @@ def _coo(rows: list[list[int]], n_cols: int) -> "scipy_sparse.csr_matrix":
     )
 
 
-def _sym_sim(values: dict[tuple[int, int], float], n: int) -> "scipy_sparse.csr_matrix":
+def _sym_sim(values: dict[tuple[int, int], float], n: int) -> scipy_sparse.csr_matrix:
     """Build a symmetric float similarity from upper-triangle entries."""
     rows: list[int] = []
     cols: list[int] = []
@@ -48,9 +48,7 @@ def _sym_sim(values: dict[tuple[int, int], float], n: int) -> "scipy_sparse.csr_
         rows += [i, j]
         cols += [j, i]
         data += [v, v]
-    return scipy_sparse.csr_matrix(
-        (data, (rows, cols)), shape=(n, n), dtype=np.float32
-    )
+    return scipy_sparse.csr_matrix((data, (rows, cols)), shape=(n, n), dtype=np.float32)
 
 
 # ── novelty (deprecated compute_novelty_array — reuses the clustering sim) ─
@@ -103,8 +101,8 @@ def test_validated_row_is_zero_even_with_no_similar_validated_neighbour():
     #   row 1: non-validated, domains {2,3} (no overlap with row 0)
     M = _coo([[0, 1], [2, 3]], n_cols=4)
     out = compute_novelty_against_validated(M, _zeros(2), [0], weights=(1.0, 0.0))
-    assert out[0] == pytest.approx(0.0, abs=1e-6)   # self-match → not novel
-    assert out[1] == pytest.approx(1.0, abs=1e-6)   # genuinely novel
+    assert out[0] == pytest.approx(0.0, abs=1e-6)  # self-match → not novel
+    assert out[1] == pytest.approx(1.0, abs=1e-6)  # genuinely novel
 
 
 def test_validated_self_match_beats_partial_overlap():
@@ -113,9 +111,9 @@ def test_validated_self_match_beats_partial_overlap():
     #   row 2: validated, domains {0,1}
     M = _coo([[0, 1], [1, 2], [0, 1]], n_cols=3)
     out = compute_novelty_against_validated(M, _zeros(3), [2], weights=(1.0, 0.0))
-    assert out[0] == pytest.approx(0.0, abs=1e-6)   # Dice(=1.0) → novelty 0
-    assert out[1] == pytest.approx(0.5, abs=1e-6)   # Dice 0.5  → novelty 0.5
-    assert out[2] == pytest.approx(0.0, abs=1e-6)   # validated self → 0
+    assert out[0] == pytest.approx(0.0, abs=1e-6)  # Dice(=1.0) → novelty 0
+    assert out[1] == pytest.approx(0.5, abs=1e-6)  # Dice 0.5  → novelty 0.5
+    assert out[2] == pytest.approx(0.0, abs=1e-6)  # validated self → 0
 
 
 def test_near_threshold_similarity_is_not_pruned():
@@ -134,10 +132,10 @@ def test_near_threshold_similarity_is_not_pruned():
 def test_composite_blends_domain_and_pair_components():
     # Equal weights over two matrices: domain Dice 1.0, pair Dice 0.0
     # → composite 0.5 → novelty 0.5 for the non-validated row.
-    M_dom = _coo([[0, 1], [0, 1]], n_cols=2)   # rows identical on domains
-    M_pair = _coo([[0], [1]], n_cols=2)        # rows disjoint on pairs
+    M_dom = _coo([[0, 1], [0, 1]], n_cols=2)  # rows identical on domains
+    M_pair = _coo([[0], [1]], n_cols=2)  # rows disjoint on pairs
     out = compute_novelty_against_validated(M_dom, M_pair, [0], weights=(0.5, 0.5))
-    assert out[0] == pytest.approx(0.0, abs=1e-6)   # validated self
+    assert out[0] == pytest.approx(0.0, abs=1e-6)  # validated self
     assert out[1] == pytest.approx(0.5, abs=1e-6)
 
 

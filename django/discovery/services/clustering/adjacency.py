@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import numpy as np
@@ -47,7 +48,7 @@ def build_ibgc_adjacency_pair_matrix(
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     ibgc_ids_subset: Sequence[int] | None = None,
     pair_vocab_subset: Sequence[tuple[str, str]] | None = None,
-) -> tuple["sp.csr_matrix", "np.ndarray", "np.ndarray"]:
+) -> tuple[sp.csr_matrix, np.ndarray, np.ndarray]:
     """Build the iBGC × adjacent-pair binary matrix.
 
     Returns
@@ -173,7 +174,10 @@ def build_ibgc_adjacency_pair_matrix(
 
     log.info(
         "build_ibgc_adjacency_pair_matrix: %d rows × %d pairs, nnz=%d (sources=%s)",
-        M.shape[0], M.shape[1], M.nnz, upper_sources,
+        M.shape[0],
+        M.shape[1],
+        M.nnz,
+        upper_sources,
     )
     return (
         M,

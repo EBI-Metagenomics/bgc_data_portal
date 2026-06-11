@@ -35,15 +35,12 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import Any, Callable, Iterable
-
-from django.db import transaction
-from django.db.backends.postgresql.psycopg_any import NumericRange
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from discovery.models import (
     AccessionEntityType,
     ConsensusBgc,
-    DashboardContig,
     IntegratedBgc,
     SourceBgcPrediction,
 )
@@ -52,6 +49,8 @@ from discovery.services.accession_registry import (
     lookup_or_mint_ibgc,
     tombstone_unused,
 )
+from django.db import transaction
+from django.db.backends.postgresql.psycopg_any import NumericRange
 
 log = logging.getLogger(__name__)
 
@@ -109,23 +108,27 @@ def build_integrated_bgcs(
 
     # Group rows per contig in-memory. Tuple:
     # (sbgc_id, cbgc_id, start, end, tool, is_partial, is_validated, contig_accession)
-    rows_by_contig: dict[int, list[tuple[int, int, int, int, str | None, bool, bool, str]]] = defaultdict(list)
+    rows_by_contig: dict[
+        int, list[tuple[int, int, int, int, str | None, bool, bool, str]]
+    ] = defaultdict(list)
     for sbgc in qs.iterator():
         rng = sbgc.bgc_range
         if rng is None or rng.lower is None or rng.upper is None:
             continue
         start = int(rng.lower)
         end_inclusive = int(rng.upper) - 1
-        rows_by_contig[sbgc.contig_id].append((
-            sbgc.id,
-            sbgc.cbgc_id,
-            start,
-            end_inclusive,
-            sbgc.detector.tool if sbgc.detector_id else None,
-            bool(sbgc.is_partial),
-            bool(sbgc.is_validated),
-            sbgc.contig.accession or "",
-        ))
+        rows_by_contig[sbgc.contig_id].append(
+            (
+                sbgc.id,
+                sbgc.cbgc_id,
+                start,
+                end_inclusive,
+                sbgc.detector.tool if sbgc.detector_id else None,
+                bool(sbgc.is_partial),
+                bool(sbgc.is_validated),
+                sbgc.contig.accession or "",
+            )
+        )
 
     total_contigs = len(rows_by_contig)
     log.info("Building iBGCs for %d contigs", total_contigs)
@@ -146,7 +149,13 @@ def build_integrated_bgcs(
         contig_accession = rows[0][7] if rows else ""
 
         with transaction.atomic():
-            for interval_start, interval_end, source_tools, member_sbgc_ids, absorbed_sbgc_ids in ibgcs:
+            for (
+                interval_start,
+                interval_end,
+                source_tools,
+                member_sbgc_ids,
+                absorbed_sbgc_ids,
+            ) in ibgcs:
                 # Every member shares the same cBGC (overlapping predictions on a
                 # contig land in the same cBGC envelope by construction in the
                 # loader).
@@ -161,7 +170,9 @@ def build_integrated_bgcs(
                 if cbgc_id is None:
                     log.warning(
                         "iBGC at contig=%s [%d,%d] has no cBGC; skipping",
-                        contig_id, interval_start, interval_end,
+                        contig_id,
+                        interval_start,
+                        interval_end,
                     )
                     continue
 
@@ -206,7 +217,10 @@ def build_integrated_bgcs(
     # filters reflect the new iBGCs immediately. The build/cluster flow only
     # triggers a DiscoveryStats refresh otherwise, so without this the catalog
     # counts go stale until a separate recompute_all_scores run.
-    from discovery.services.scores import _rebuild_catalog_tables, recompute_ibgc_classes
+    from discovery.services.scores import (
+        _rebuild_catalog_tables,
+        recompute_ibgc_classes,
+    )
 
     recompute_ibgc_classes()
     _rebuild_catalog_tables()
@@ -250,22 +264,35 @@ def _build_ibgcs_for_contig(
     for sbgc_id, _cbgc_id, start, end, tool, _, _, _ in merge_rows:
         if current is None or start > current["end"]:
             if current is not None:
-                ibgcs.append((
-                    current["start"], current["end"],
-                    sorted(set(current["tools"])),
-                    current["sbgc_ids"], [],
-                ))
-            current = {"start": start, "end": end, "tools": [tool], "sbgc_ids": [sbgc_id]}
+                ibgcs.append(
+                    (
+                        current["start"],
+                        current["end"],
+                        sorted(set(current["tools"])),
+                        current["sbgc_ids"],
+                        [],
+                    )
+                )
+            current = {
+                "start": start,
+                "end": end,
+                "tools": [tool],
+                "sbgc_ids": [sbgc_id],
+            }
         else:
             current["end"] = max(current["end"], end)
             current["tools"].append(tool)
             current["sbgc_ids"].append(sbgc_id)
     if current is not None:
-        ibgcs.append((
-            current["start"], current["end"],
-            sorted(set(current["tools"])),
-            current["sbgc_ids"], [],
-        ))
+        ibgcs.append(
+            (
+                current["start"],
+                current["end"],
+                sorted(set(current["tools"])),
+                current["sbgc_ids"],
+                [],
+            )
+        )
 
     # 3. & 4. antiSMASH: tag chain source_tools where overlapping; set
     # integrated_bgc FK (absorbed_sbgc_ids) for predictions that overlap any
@@ -277,7 +304,11 @@ def _build_ibgcs_for_contig(
             c_start, c_end, c_tools, c_members, c_absorbed = ibgcs[overlapping_idx]
             new_tools = sorted(set(c_tools) | {TOOL_ANTISMASH})
             ibgcs[overlapping_idx] = (
-                c_start, c_end, new_tools, c_members, c_absorbed + [sbgc_id],
+                c_start,
+                c_end,
+                new_tools,
+                c_members,
+                c_absorbed + [sbgc_id],
             )
             n_absorbed += 1
             continue

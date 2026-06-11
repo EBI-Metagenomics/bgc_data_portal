@@ -49,8 +49,8 @@ class Command(BaseCommand):
         self.stdout.write(f"Rebuilding scoring cache for run sha={run.sha256[:12]}…")
         cache_dir = rebuild_scoring_cache_from_db(run)
         if cache_dir is None:
-            self.stdout.write(self.style.WARNING(
-                "No clusterable iBGCs — nothing written."
-            ))
+            self.stdout.write(
+                self.style.WARNING("No clusterable iBGCs — nothing written.")
+            )
             return
         self.stdout.write(self.style.SUCCESS(f"Wrote scoring cache: {cache_dir}"))

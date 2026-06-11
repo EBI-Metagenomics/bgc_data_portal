@@ -53,8 +53,11 @@ def _rewrite(apps, transform, only_prefixed: bool):
         Model = apps.get_model("discovery", model_name)
         qs = Model.objects.exclude(**{field: ""})
         # Touch only rows still in the source format.
-        qs = qs.filter(**{f"{field}__startswith": "cluster"}) if only_prefixed \
+        qs = (
+            qs.filter(**{f"{field}__startswith": "cluster"})
+            if only_prefixed
             else qs.exclude(**{f"{field}__startswith": "cluster"})
+        )
 
         batch = []
         for obj in qs.only("pk", field).iterator(chunk_size=BATCH):

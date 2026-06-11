@@ -4,11 +4,10 @@ Independent of ``run_bgc_clustering``: re-run whenever new partial BGCs
 land or stale assignments need refreshing. Does not reshape the hierarchy.
 """
 
-from django.core.management.base import BaseCommand, CommandError
-
 from discovery.models import ClusteringRun
 from discovery.services.clustering import ALLOWED_SCOPES
 from discovery.tasks import reclassify_bgcs_task
+from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
@@ -73,7 +72,9 @@ class Command(BaseCommand):
             result = reclassify_bgcs_task.apply(kwargs=kwargs).result
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
         else:
-            res = reclassify_bgcs_task.apply_async(kwargs=kwargs, queue=options["queue"])
+            res = reclassify_bgcs_task.apply_async(
+                kwargs=kwargs, queue=options["queue"]
+            )
             self.stdout.write(
                 self.style.SUCCESS(f"Dispatched reclassify_bgcs_task: {res.id}")
             )

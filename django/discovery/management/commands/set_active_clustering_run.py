@@ -35,11 +35,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--sha", required=True,
+            "--sha",
+            required=True,
             help="ClusteringRun.sha256 (full or prefix matching exactly one run).",
         )
         parser.add_argument(
-            "--dry-run", action="store_true",
+            "--dry-run",
+            action="store_true",
             help="Print what would change; no DB writes.",
         )
 
@@ -83,13 +85,11 @@ class Command(BaseCommand):
     @transaction.atomic
     def _apply(self, target) -> int:
         from discovery.models import (
-            IntegratedBgc,
             IbgcClusteringSnapshot,
+            IntegratedBgc,
         )
 
-        snaps = list(
-            IbgcClusteringSnapshot.objects.filter(clustering_run=target)
-        )
+        snaps = list(IbgcClusteringSnapshot.objects.filter(clustering_run=target))
         snap_by_id = {s.ibgc_id: s for s in snaps}
         now = timezone.now()
 
@@ -105,10 +105,13 @@ class Command(BaseCommand):
             ibgc.classification_run = target
             ibgc.classified_at = now
         IntegratedBgc.objects.bulk_update(
-            ibgcs, list(IBGC_RESTORE_FIELDS), batch_size=5_000,
+            ibgcs,
+            list(IBGC_RESTORE_FIELDS),
+            batch_size=5_000,
         )
         log.info(
             "set_active_clustering_run: restored %d iBGCs to run pk=%s",
-            len(ibgcs), target.pk,
+            len(ibgcs),
+            target.pk,
         )
         return len(ibgcs)

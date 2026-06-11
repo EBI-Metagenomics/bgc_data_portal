@@ -17,9 +17,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
-
-from django.db import IntegrityError, connection, transaction
 
 from discovery.models import (
     AccessionAlias,
@@ -28,6 +25,7 @@ from discovery.models import (
     ConsensusBgc,
     IntegratedBgc,
 )
+from django.db import IntegrityError, connection, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +39,7 @@ def encode_crockford(value: int, width: int) -> str:
     """Encode a non-negative integer into a fixed-width Crockford base32 string."""
     if value < 0:
         raise ValueError("Crockford encoding requires a non-negative integer")
-    if value >= 32 ** width:
+    if value >= 32**width:
         raise ValueError(
             f"value {value} exceeds {width}-char Crockford base32 capacity"
         )
@@ -72,7 +70,7 @@ def _ensure_sequences_exist() -> None:
 def _next_cbgc_index() -> int:
     _ensure_sequences_exist()
     with connection.cursor() as cur:
-        cur.execute(f"SELECT nextval(%s)", [_CBGC_SEQUENCE])
+        cur.execute("SELECT nextval(%s)", [_CBGC_SEQUENCE])
         return int(cur.fetchone()[0])
 
 
@@ -102,7 +100,7 @@ def lookup_or_mint_cbgc(
     contig_accession: str,
     start_pos: int,
     end_pos: int,
-    cbgc: Optional[ConsensusBgc] = None,
+    cbgc: ConsensusBgc | None = None,
 ) -> CbgcAccession:
     """Return the stable accession for a cBGC at these coordinates.
 
@@ -170,7 +168,7 @@ def lookup_or_mint_ibgc(
     contig_accession: str,
     start_pos: int,
     end_pos: int,
-    ibgc: Optional[IntegratedBgc] = None,
+    ibgc: IntegratedBgc | None = None,
 ) -> IbgcAccession:
     """Return the stable accession for an iBGC at these coordinates.
 
@@ -191,11 +189,13 @@ def lookup_or_mint_ibgc(
 
     for _ in range(64):
         suffix_idx = _next_ibgc_suffix_index(cbgc.id)
-        if suffix_idx >= 32 ** _IBGC_SUFFIX_WIDTH:
+        if suffix_idx >= 32**_IBGC_SUFFIX_WIDTH:
             raise RuntimeError(
                 f"cBGC {cbgc.accession} has exhausted its 1024-iBGC suffix space"
             )
-        accession = f"{cbgc.accession}-{encode_crockford(suffix_idx, _IBGC_SUFFIX_WIDTH)}"
+        accession = (
+            f"{cbgc.accession}-{encode_crockford(suffix_idx, _IBGC_SUFFIX_WIDTH)}"
+        )
         try:
             with transaction.atomic():
                 row = AccessionRegistry.objects.create(
@@ -237,20 +237,16 @@ def tombstone_unused(entity_type: AccessionEntityType) -> int:
     """
     if entity_type == AccessionEntityType.CBGC:
         live_ids = set(ConsensusBgc.objects.values_list("id", flat=True))
-        qs = (
-            AccessionRegistry.objects
-            .filter(entity_type=entity_type, current_cbgc__isnull=False)
-            .exclude(current_cbgc_id__in=live_ids)
-        )
+        qs = AccessionRegistry.objects.filter(
+            entity_type=entity_type, current_cbgc__isnull=False
+        ).exclude(current_cbgc_id__in=live_ids)
         return qs.update(current_cbgc=None)
 
     if entity_type == AccessionEntityType.IBGC:
         live_ids = set(IntegratedBgc.objects.values_list("id", flat=True))
-        qs = (
-            AccessionRegistry.objects
-            .filter(entity_type=entity_type, current_ibgc__isnull=False)
-            .exclude(current_ibgc_id__in=live_ids)
-        )
+        qs = AccessionRegistry.objects.filter(
+            entity_type=entity_type, current_ibgc__isnull=False
+        ).exclude(current_ibgc_id__in=live_ids)
         return qs.update(current_ibgc=None)
 
     raise ValueError(f"Unknown entity_type: {entity_type!r}")
@@ -261,27 +257,31 @@ def tombstone_unused(entity_type: AccessionEntityType) -> int:
 
 @dataclass(frozen=True)
 class ResolveResult:
-    accession: str        # canonical (registry PK)
-    kind: str             # "cbgc" | "ibgc"
-    current_id: Optional[int]
+    accession: str  # canonical (registry PK)
+    kind: str  # "cbgc" | "ibgc"
+    current_id: int | None
     tombstoned: bool
-    alias_of: Optional[str]  # set when the input was an alias
+    alias_of: str | None  # set when the input was an alias
 
 
-def resolve(accession: str) -> Optional[ResolveResult]:
+def resolve(accession: str) -> ResolveResult | None:
     """Look up an accession (canonical or alias). Returns ``None`` if unknown.
 
     Aliases (e.g. pre-refactor ``MGYB00000001`` style) resolve to their
     current registry row. Tombstoned accessions return a result with
     ``tombstoned=True`` and ``current_id=None``.
     """
-    alias_of: Optional[str] = None
+    alias_of: str | None = None
 
     row = AccessionRegistry.objects.filter(accession=accession).first()
     if row is None:
-        alias = AccessionAlias.objects.select_related("registry").filter(
-            alias_accession=accession,
-        ).first()
+        alias = (
+            AccessionAlias.objects.select_related("registry")
+            .filter(
+                alias_accession=accession,
+            )
+            .first()
+        )
         if alias is None:
             return None
         row = alias.registry

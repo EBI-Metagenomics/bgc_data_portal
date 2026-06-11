@@ -6,7 +6,6 @@ import io
 import tarfile
 
 import pytest
-
 from discovery.services.asset_upload.parse import parse_asset_tar
 from discovery.services.asset_upload.validate import (
     AssetValidationError,

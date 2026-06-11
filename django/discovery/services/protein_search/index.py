@@ -14,8 +14,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from pathlib import Path
-from typing import Optional
 
 from pyhmmer.easel import Alphabet, DigitalSequenceBlock, SequenceFile
 
@@ -37,12 +35,12 @@ class ProteinSearchIndex:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._paths: Optional[IndexPaths] = None
-        self._block: Optional[DigitalSequenceBlock] = None
+        self._paths: IndexPaths | None = None
+        self._block: DigitalSequenceBlock | None = None
         self._loaded_version: int = -1
         # Cached chunk-split of the resident block for parallel scanning,
         # keyed by chunk count; invalidated whenever the block reloads.
-        self._chunks: Optional[list[DigitalSequenceBlock]] = None
+        self._chunks: list[DigitalSequenceBlock] | None = None
         self._chunks_n: int = 0
         self._chunks_version: int = -1
 
@@ -105,7 +103,10 @@ class ProteinSearchIndex:
 
             log.info(
                 "protein_search loaded %d proteins from %s in %.1fs (version=%d)",
-                len(block), paths.fasta, elapsed, disk_version,
+                len(block),
+                paths.fasta,
+                elapsed,
+                disk_version,
             )
             self._block = block
             self._loaded_version = disk_version

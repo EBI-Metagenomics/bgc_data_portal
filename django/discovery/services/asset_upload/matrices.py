@@ -20,19 +20,19 @@ returned matrix corresponds to the Nth ``VirtualIbgc``.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from discovery.services.clustering.membership import project_to_ipr
 
 if TYPE_CHECKING:
-    import numpy as np
     import scipy.sparse as sp
 
     from .project import VirtualIbgc
 
 log = logging.getLogger(__name__)
 
-DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM","TIGRFAM")
+DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM", "TIGRFAM")
 
 
 def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
@@ -40,11 +40,11 @@ def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
 
 
 def build_asset_domain_matrix(
-    virtual_ibgcs: Sequence["VirtualIbgc"],
+    virtual_ibgcs: Sequence[VirtualIbgc],
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     domain_accs: Sequence[str],
-) -> "sp.csr_matrix":
+) -> sp.csr_matrix:
     """Return the asset's iBGC × domain binary matrix on the given vocabulary.
 
     Rows are ordered to match ``virtual_ibgcs``; columns to match
@@ -86,9 +86,7 @@ def build_asset_domain_matrix(
             cols_out.append(col_idx)
 
     if not rows_out:
-        return sp.csr_matrix(
-            (len(virtual_ibgcs), len(domain_accs)), dtype=np.uint8
-        )
+        return sp.csr_matrix((len(virtual_ibgcs), len(domain_accs)), dtype=np.uint8)
 
     # Project the per-anchor entries down to (row, col) binary membership.
     pairs = {(r, c) for r, c, _ in seen}
@@ -110,11 +108,11 @@ def build_asset_domain_matrix(
 
 
 def build_asset_adjacency_pair_matrix(
-    virtual_ibgcs: Sequence["VirtualIbgc"],
+    virtual_ibgcs: Sequence[VirtualIbgc],
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     pair_vocab: Sequence[tuple[str, str]],
-) -> "sp.csr_matrix":
+) -> sp.csr_matrix:
     """Return the asset's iBGC × adjacent-domain-pair binary matrix.
 
     Mirrors :func:`discovery.services.clustering.adjacency.build_ibgc_adjacency_pair_matrix`:
@@ -154,9 +152,7 @@ def build_asset_adjacency_pair_matrix(
                 continue
             if domain.ref_db and domain.ref_db.upper() not in upper_sources:
                 continue
-            cds_start = cds_start_by_id.get(
-                (domain.bgc_key, domain.cds_protein_id)
-            )
+            cds_start = cds_start_by_id.get((domain.bgc_key, domain.cds_protein_id))
             if cds_start is None:
                 # No genomic anchor → can't sit in an adjacency.
                 continue
@@ -189,9 +185,7 @@ def build_asset_adjacency_pair_matrix(
             cols_out.append(col_idx)
 
     if not rows_out:
-        return sp.csr_matrix(
-            (len(virtual_ibgcs), len(pair_vocab)), dtype=np.uint8
-        )
+        return sp.csr_matrix((len(virtual_ibgcs), len(pair_vocab)), dtype=np.uint8)
 
     rows_arr = np.asarray(rows_out, dtype=np.int64)
     cols_arr = np.asarray(cols_out, dtype=np.int64)

@@ -7,9 +7,10 @@ has no imports from mgnify_bgcs.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from celery.result import AsyncResult
+
 from django.conf import settings
 from django.core.cache import cache
 
@@ -17,8 +18,8 @@ from django.core.cache import cache
 def set_job_cache(
     search_key: str,
     task_id: str,
-    results: Optional[dict] = None,
-    timeout: Optional[int] = None,
+    results: dict | None = None,
+    timeout: int | None = None,
 ) -> None:
     """Store task results under consistent cache keys."""
     ttl = timeout if timeout is not None else getattr(settings, "CACHE_TIMEOUT", None)
@@ -30,8 +31,8 @@ def set_job_cache(
 
 
 def get_job_status(
-    search_key: Optional[str] = None, task_id: Optional[str] = None
-) -> Dict[str, Any]:
+    search_key: str | None = None, task_id: str | None = None
+) -> dict[str, Any]:
     """Return a dict with task_id, search_key, status, result (if available)."""
     if task_id:
         search_key = cache.get(task_id)
@@ -44,7 +45,7 @@ def get_job_status(
 
     try:
         res = AsyncResult(task_id)
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "task_id": task_id,
             "search_key": search_key,
             "status": res.status,

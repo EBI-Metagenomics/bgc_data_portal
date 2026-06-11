@@ -38,11 +38,11 @@ class ScoringCache:
     """In-memory primary-iBGC signature cache for the active ClusteringRun."""
 
     sha256: str
-    M_domains: object       # scipy.sparse.csr_matrix
+    M_domains: object  # scipy.sparse.csr_matrix
     M_pairs: object
-    domain_accs: object     # numpy object array
+    domain_accs: object  # numpy object array
     pair_vocab: object
-    ibgc_ids: object         # numpy int64 array
+    ibgc_ids: object  # numpy int64 array
     row_sums_domains: object
     row_sums_pairs: object
     weight_domain: float
@@ -134,7 +134,10 @@ def _load_cache(run) -> ScoringCache:
     id_to_row = {int(x): i for i, x in enumerate(ibgc_ids.tolist())}
     log.info(
         "similarity_on_demand: loaded cache sha=%s n_rows=%d (D=%d, P=%d)",
-        run.sha256[:12], len(ibgc_ids), M_domains.shape[1], M_pairs.shape[1],
+        run.sha256[:12],
+        len(ibgc_ids),
+        M_domains.shape[1],
+        M_pairs.shape[1],
     )
     return ScoringCache(
         sha256=run.sha256,
@@ -171,9 +174,7 @@ def score_against_all(
     """
     import numpy as np
 
-    w_d = (
-        cache.weight_domain if weight_domain is None else float(weight_domain)
-    )
+    w_d = cache.weight_domain if weight_domain is None else float(weight_domain)
     w_a = (
         cache.weight_adjacency if weight_adjacency is None else float(weight_adjacency)
     )
@@ -197,7 +198,9 @@ def score_against_all(
         denom_d = cache.row_sums_domains + float(n_q_dom)
         with np.errstate(divide="ignore", invalid="ignore"):
             dice_d = np.where(
-                denom_d > 0, 2.0 * num_d / denom_d, 0.0,
+                denom_d > 0,
+                2.0 * num_d / denom_d,
+                0.0,
             ).astype(np.float32)
 
     if w_a > 0.0 and n_q_pair > 0:
@@ -209,7 +212,9 @@ def score_against_all(
         denom_a = cache.row_sums_pairs + float(n_q_pair)
         with np.errstate(divide="ignore", invalid="ignore"):
             dice_a = np.where(
-                denom_a > 0, 2.0 * num_a / denom_a, 0.0,
+                denom_a > 0,
+                2.0 * num_a / denom_a,
+                0.0,
             ).astype(np.float32)
 
     return (w_d * dice_d) + (w_a * dice_a)

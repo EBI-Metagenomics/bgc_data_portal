@@ -11,7 +11,6 @@ Covers:
 from __future__ import annotations
 
 import pytest
-
 from discovery.models import (
     AccessionAlias,
     AccessionEntityType,
@@ -26,13 +25,11 @@ from discovery.services.accession_registry import (
     resolve,
     tombstone_unused,
 )
-
 from tests.factories.discovery_models import (
     ConsensusBgcFactory,
     DashboardContigFactory,
     IntegratedBgcFactory,
 )
-
 
 # ── encode_crockford ──────────────────────────────────────────────────────────
 
@@ -41,7 +38,7 @@ class TestEncodeCrockford:
     def test_alphabet_omits_iluo(self):
         # Walk every position to confirm I/L/O/U never appear in output.
         seen = set()
-        for i in range(32 ** 2):
+        for i in range(32**2):
             s = encode_crockford(i, 2)
             seen.update(s)
         assert seen.isdisjoint({"I", "L", "O", "U"})
@@ -61,7 +58,7 @@ class TestEncodeCrockford:
 
     def test_rejects_overflow(self):
         with pytest.raises(ValueError):
-            encode_crockford(32 ** 2, 2)
+            encode_crockford(32**2, 2)
 
 
 # ── cBGC mint ─────────────────────────────────────────────────────────────────
@@ -107,32 +104,40 @@ class TestLookupOrMintCbgc:
         contig = DashboardContigFactory()
         a = lookup_or_mint_cbgc(
             contig_accession=contig.accession,
-            start_pos=1000, end_pos=10_999,
+            start_pos=1000,
+            end_pos=10_999,
         )
         b = lookup_or_mint_cbgc(
             contig_accession=contig.accession,
-            start_pos=20_000, end_pos=30_000,
+            start_pos=20_000,
+            end_pos=30_000,
         )
         assert a.accession != b.accession
 
     def test_relinks_current_cbgc_on_rebuild(self):
         contig = DashboardContigFactory()
         first_cbgc = ConsensusBgc.objects.create(
-            contig=contig, bgc_range=(1000, 11_000), accession="MGYB-PENDING",
+            contig=contig,
+            bgc_range=(1000, 11_000),
+            accession="MGYB-PENDING",
         )
         first = lookup_or_mint_cbgc(
             contig_accession=contig.accession,
-            start_pos=1000, end_pos=10_999,
+            start_pos=1000,
+            end_pos=10_999,
             cbgc=first_cbgc,
         )
         # Simulate rebuild: a brand-new cBGC row for the same identity tuple.
         first_cbgc.delete()
         second_cbgc = ConsensusBgc.objects.create(
-            contig=contig, bgc_range=(1000, 11_000), accession="MGYB-PENDING",
+            contig=contig,
+            bgc_range=(1000, 11_000),
+            accession="MGYB-PENDING",
         )
         second = lookup_or_mint_cbgc(
             contig_accession=contig.accession,
-            start_pos=1000, end_pos=10_999,
+            start_pos=1000,
+            end_pos=10_999,
             cbgc=second_cbgc,
         )
         assert second.accession == first.accession
@@ -150,14 +155,17 @@ class TestLookupOrMintIbgc:
     def test_accession_is_cbgc_dash_two_chars(self):
         cbgc = ConsensusBgcFactory(start_pos=1000, end_pos=11_000)
         ibgc = IntegratedBgc.objects.create(
-            cbgc=cbgc, contig=cbgc.contig,
-            bgc_range=(1500, 4500), accession="MGYB-PENDING-PENDING",
+            cbgc=cbgc,
+            contig=cbgc.contig,
+            bgc_range=(1500, 4500),
+            accession="MGYB-PENDING-PENDING",
             source_tools=["antiSMASH"],
         )
         result = lookup_or_mint_ibgc(
             cbgc=cbgc,
             contig_accession=cbgc.contig.accession,
-            start_pos=1500, end_pos=4499,
+            start_pos=1500,
+            end_pos=4499,
             ibgc=ibgc,
         )
         assert result.minted is True
@@ -178,12 +186,14 @@ class TestLookupOrMintIbgc:
         first = lookup_or_mint_ibgc(
             cbgc=cbgc,
             contig_accession=cbgc.contig.accession,
-            start_pos=1500, end_pos=4499,
+            start_pos=1500,
+            end_pos=4499,
         )
         second = lookup_or_mint_ibgc(
             cbgc=cbgc,
             contig_accession=cbgc.contig.accession,
-            start_pos=1500, end_pos=4499,
+            start_pos=1500,
+            end_pos=4499,
         )
         assert first.accession == second.accession
         assert second.minted is False
@@ -253,7 +263,8 @@ class TestResolve:
         cbgc = ConsensusBgcFactory()
         registry = AccessionRegistry.objects.get(accession=cbgc.accession)
         AccessionAlias.objects.create(
-            alias_accession="MGYB99999999", registry=registry,
+            alias_accession="MGYB99999999",
+            registry=registry,
         )
         result = resolve("MGYB99999999")
         assert result is not None

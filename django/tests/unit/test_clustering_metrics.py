@@ -21,7 +21,7 @@ from discovery.services.clustering.bgc_similarity import (  # noqa: E402
 from discovery.services.clustering.metrics import dice_similarity  # noqa: E402
 
 
-def _build_M(rows: list[list[int]], n_cols: int) -> "scipy_sparse.csr_matrix":
+def _build_M(rows: list[list[int]], n_cols: int) -> scipy_sparse.csr_matrix:
     n_rows = len(rows)
     coords_r: list[int] = []
     coords_c: list[int] = []
@@ -80,7 +80,9 @@ def test_composite_handles_empty_pair_row():
     # Second BGC has no adjacent pairs (e.g. a 1-domain iBGC).
     M_dom = _build_M([[0, 1, 2], [1]], n_cols=4)
     M_pair_data = scipy_sparse.csr_matrix(
-        ([1], ([0], [0])), shape=(2, 1), dtype=np.uint8,
+        ([1], ([0], [0])),
+        shape=(2, 1),
+        dtype=np.uint8,
     )  # only row 0 has any pair
     sim = compute_composite_similarity(M_dom, M_pair_data, weights=(0.5, 0.5)).toarray()
     # Pair-Dice with row-2 is 0 (B has empty pair set).

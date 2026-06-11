@@ -18,7 +18,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from discovery.models import (
     ConsensusBgc,
     ContigCds,
@@ -135,9 +134,7 @@ def test_build_integrated_bgcs_mints_and_wires_ibgcs(ingested):
         assert IBGC_RE.match(acc), acc
 
     # Build wires every (non-orphan) source prediction back onto its iBGC.
-    assert not SourceBgcPrediction.objects.filter(
-        integrated_bgc__isnull=True
-    ).exists()
+    assert not SourceBgcPrediction.objects.filter(integrated_bgc__isnull=True).exists()
 
     # The only tools in play are antiSMASH and GECCO, and the overlapping
     # pair is folded into a single iBGC carrying both tool tags.
@@ -145,9 +142,11 @@ def test_build_integrated_bgcs_mints_and_wires_ibgcs(ingested):
     for tools in IntegratedBgc.objects.values_list("source_tools", flat=True):
         all_tools.update(tools or [])
     assert all_tools == {"antiSMASH", "GECCO"}
-    assert IntegratedBgc.objects.filter(
-        source_tools__contains=["GECCO"]
-    ).filter(source_tools__contains=["antiSMASH"]).exists()
+    assert (
+        IntegratedBgc.objects.filter(source_tools__contains=["GECCO"])
+        .filter(source_tools__contains=["antiSMASH"])
+        .exists()
+    )
 
 
 @pytest.mark.django_db

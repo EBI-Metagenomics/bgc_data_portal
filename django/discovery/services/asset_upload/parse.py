@@ -25,11 +25,11 @@ from .schemas import (
     AssetAssembly,
     AssetBgc,
     AssetCds,
+    AssetCdsChemOnt,
     AssetContig,
     AssetData,
     AssetDetector,
     AssetDomain,
-    AssetCdsChemOnt,
     AssetNaturalProduct,
 )
 from .validate import AssetValidationError, ValidatedTarball
@@ -39,7 +39,9 @@ log = logging.getLogger(__name__)
 
 def _reader(buf: bytes):
     """Wrap raw bytes in a ``csv.DictReader`` over TSV format."""
-    return csv.DictReader(io.StringIO(buf.decode("utf-8", errors="replace")), delimiter="\t")
+    return csv.DictReader(
+        io.StringIO(buf.decode("utf-8", errors="replace")), delimiter="\t"
+    )
 
 
 def _to_bool(value: str | None) -> bool:
@@ -179,9 +181,7 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
             )
         )
         if len(data.bgcs) > MAX_BGC_ROWS:
-            raise AssetValidationError(
-                f"bgcs.tsv has more than {MAX_BGC_ROWS} rows"
-            )
+            raise AssetValidationError(f"bgcs.tsv has more than {MAX_BGC_ROWS} rows")
     if not data.bgcs:
         raise AssetValidationError("bgcs.tsv has no data rows")
 
@@ -212,9 +212,7 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
                 )
             )
             if len(data.cds) > MAX_CDS_ROWS:
-                raise AssetValidationError(
-                    f"cds.tsv has more than {MAX_CDS_ROWS} rows"
-                )
+                raise AssetValidationError(f"cds.tsv has more than {MAX_CDS_ROWS} rows")
 
     # ── cds_sequences (optional) — merged into matching AssetCds rows ───
     if "cds_sequences.tsv" in members and data.cds:
@@ -260,7 +258,9 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
                     score=_to_optional_float(row.get("score")),
                     url=row.get("url", ""),
                     interpro_entry_acc=row.get("interpro_entry_acc", ""),
-                    interpro_entry_description=row.get("interpro_entry_description", ""),
+                    interpro_entry_description=row.get(
+                        "interpro_entry_description", ""
+                    ),
                     go_terms=go_terms,
                 )
             )

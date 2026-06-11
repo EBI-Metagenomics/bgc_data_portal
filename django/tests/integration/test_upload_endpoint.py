@@ -14,6 +14,7 @@ import gzip
 from unittest.mock import patch
 
 import pytest
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 
@@ -35,12 +36,11 @@ def gzip_bytes():
 @pytest.fixture
 def mock_pipeline():
     """Stub the Celery dispatch and the Redis-backed asset cache."""
-    with patch("discovery.tasks.process_asset_upload_task") as task, patch(
-        "discovery.services.asset_upload.cache.stash_upload"
-    ), patch(
-        "discovery.services.asset_upload.cache.mark_pending"
-    ), patch(
-        "discovery.services.asset_upload.cache.read_status", return_value=None
+    with (
+        patch("discovery.tasks.process_asset_upload_task") as task,
+        patch("discovery.services.asset_upload.cache.stash_upload"),
+        patch("discovery.services.asset_upload.cache.mark_pending"),
+        patch("discovery.services.asset_upload.cache.read_status", return_value=None),
     ):
         task.delay.return_value.id = "task-asset-123"
         yield task

@@ -10,7 +10,7 @@ pytest.importorskip("leidenalg")
 from discovery.services.clustering.leiden import run_hierarchical_leiden  # noqa: E402
 
 
-def _two_cliques_graph() -> "igraph.Graph":
+def _two_cliques_graph() -> igraph.Graph:
     """Two strongly connected cliques joined by a single weak bridge."""
     g = igraph.Graph(n=6, directed=False)
     # Clique A: {0,1,2}; Clique B: {3,4,5}; weak bridge 2–3.

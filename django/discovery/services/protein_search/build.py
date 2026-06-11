@@ -17,14 +17,14 @@ import os
 import shutil
 import tempfile
 import time
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, Optional
+
+from pyhmmer.easel import TextSequence
 
 from django.conf import settings
 from django.db import connection
-
-from pyhmmer.easel import TextSequence
 
 log = logging.getLogger(__name__)
 
@@ -47,9 +47,13 @@ class IndexPaths:
     version: Path
 
 
-def index_paths(base_dir: Optional[str | os.PathLike] = None) -> IndexPaths:
+def index_paths(base_dir: str | os.PathLike | None = None) -> IndexPaths:
     """Resolve and return the canonical paths for the on-disk index."""
-    base = Path(base_dir) if base_dir is not None else Path(settings.PROTEIN_SEARCH_INDEX_DIR)
+    base = (
+        Path(base_dir)
+        if base_dir is not None
+        else Path(settings.PROTEIN_SEARCH_INDEX_DIR)
+    )
     return IndexPaths(
         base_dir=base,
         fasta=base / FASTA_NAME,
@@ -91,7 +95,9 @@ def _read_indexed_sha256s(fasta_path: Path) -> set[str]:
 # ── Streaming unique proteins from the DB ───────────────────────────────────────
 
 
-def iter_unique_proteins(exclude: Optional[set[str]] = None) -> Iterator[tuple[str, str]]:
+def iter_unique_proteins(
+    exclude: set[str] | None = None,
+) -> Iterator[tuple[str, str]]:
     """Yield ``(sha256, aa_seq)`` for every unique protein in ContigCds.
 
     Joins ``discovery_cds`` with ``discovery_cds_sequence`` (zlib-compressed AA)
@@ -179,7 +185,7 @@ def bump_version(paths: IndexPaths) -> int:
 # ── Public build / update operations ────────────────────────────────────────────
 
 
-def rebuild_index(base_dir: Optional[str | os.PathLike] = None) -> IndexStats:
+def rebuild_index(base_dir: str | os.PathLike | None = None) -> IndexStats:
     """Full rebuild: write a fresh FASTA from the DB, regenerate SSI, bump version.
 
     Writes to a tempfile in the index dir and atomically swaps to avoid leaving
@@ -189,7 +195,9 @@ def rebuild_index(base_dir: Optional[str | os.PathLike] = None) -> IndexStats:
     paths.base_dir.mkdir(parents=True, exist_ok=True)
 
     t0 = time.perf_counter()
-    fd, tmp_path_str = tempfile.mkstemp(prefix="proteins.", suffix=".faa.tmp", dir=str(paths.base_dir))
+    fd, tmp_path_str = tempfile.mkstemp(
+        prefix="proteins.", suffix=".faa.tmp", dir=str(paths.base_dir)
+    )
     os.close(fd)
     tmp_path = Path(tmp_path_str)
 
@@ -214,12 +222,14 @@ def rebuild_index(base_dir: Optional[str | os.PathLike] = None) -> IndexStats:
     )
     log.info(
         "protein_search rebuild done: wrote=%d elapsed=%.1fs version=%d",
-        written, elapsed, version,
+        written,
+        elapsed,
+        version,
     )
     return stats
 
 
-def update_index(base_dir: Optional[str | os.PathLike] = None) -> IndexStats:
+def update_index(base_dir: str | os.PathLike | None = None) -> IndexStats:
     """Append-only update: stream new proteins (not in FASTA), append, rebuild SSI.
 
     If the FASTA doesn't exist yet, this delegates to :func:`rebuild_index`.
@@ -234,7 +244,9 @@ def update_index(base_dir: Optional[str | os.PathLike] = None) -> IndexStats:
 
     # Stage appends to a sibling tmp file, then concatenate atomically. Avoids
     # leaving the main FASTA half-extended on crash.
-    fd, tmp_path_str = tempfile.mkstemp(prefix="proteins.append.", suffix=".faa", dir=str(paths.base_dir))
+    fd, tmp_path_str = tempfile.mkstemp(
+        prefix="proteins.append.", suffix=".faa", dir=str(paths.base_dir)
+    )
     os.close(fd)
     tmp_path = Path(tmp_path_str)
 
@@ -274,7 +286,10 @@ def update_index(base_dir: Optional[str | os.PathLike] = None) -> IndexStats:
     )
     log.info(
         "protein_search update done: added=%d total=%d elapsed=%.1fs version=%d",
-        newly_added, stats.total_in_db, elapsed, version,
+        newly_added,
+        stats.total_in_db,
+        elapsed,
+        version,
     )
     return stats
 

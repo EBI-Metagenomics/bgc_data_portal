@@ -35,7 +35,12 @@ def keyword_resolve(self, search_key: str, keyword: str) -> bool:
         task_id=task_id,
         timeout=KEYWORD_TTL,
     )
-    log.info("Keyword resolved: %r → %s (task %s)", keyword, result.get("match_type"), task_id)
+    log.info(
+        "Keyword resolved: %r → %s (task %s)",
+        keyword,
+        result.get("match_type"),
+        task_id,
+    )
     return True
 
 
@@ -49,8 +54,12 @@ def recompute_scores_task(self) -> bool:
     return True
 
 
-@shared_task(name="discovery.tasks.chemical_similarity_search", bind=True, acks_late=True)
-def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -> dict[int, float]:
+@shared_task(
+    name="discovery.tasks.chemical_similarity_search", bind=True, acks_late=True
+)
+def chemical_similarity_search(
+    self, smiles: str, similarity_threshold: float
+) -> dict[int, float]:
     """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
 
     The query SMILES is classified into ChemOnt terms via ClassyFire (cached
@@ -69,11 +78,11 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
     from common_core.chemont import classyfire_client as cf
     from common_core.chemont.ontology import get_ontology
     from common_core.chemont.similarity import semantic_similarity
+
+    from discovery.models import PrecomputedStats
     from django.conf import settings
     from django.core.cache import cache
     from django.db import connection
-
-    from discovery.models import PrecomputedStats
 
     ont = get_ontology()
 
@@ -149,7 +158,9 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
 
     log.info(
         "Chemical query (ChemOnt): SMILES=%s threshold=%.2f matches=%d",
-        smiles[:50], similarity_threshold, len(ibgc_similarities),
+        smiles[:50],
+        similarity_threshold,
+        len(ibgc_similarities),
     )
     return ibgc_similarities
 
@@ -235,9 +246,12 @@ def run_bgc_clustering_task(
     sources = tuple(s.upper() for s in (domain_sources or DEFAULT_DOMAIN_SOURCES))
     weights = (
         (float(score_weights[0]), float(score_weights[1]))
-        if score_weights else DEFAULT_SCORE_WEIGHTS
+        if score_weights
+        else DEFAULT_SCORE_WEIGHTS
     )
-    resolutions = tuple(leiden_resolutions) if leiden_resolutions else DEFAULT_RESOLUTIONS
+    resolutions = (
+        tuple(leiden_resolutions) if leiden_resolutions else DEFAULT_RESOLUTIONS
+    )
 
     result = run_clustering_pipeline(
         domain_sources=sources,
@@ -264,12 +278,15 @@ def run_bgc_clustering_task(
                 knn_k=result.get("knn_k") or knn_k or 5,
             ).set(queue="scores")
             async_result = reclassify_bgcs_task.apply_async(
-                kwargs=reclassify_kwargs, queue="scores", link=project_sig,
+                kwargs=reclassify_kwargs,
+                queue="scores",
+                link=project_sig,
             )
             result["project_partial_ibgcs_chained"] = True
         else:
             async_result = reclassify_bgcs_task.apply_async(
-                kwargs=reclassify_kwargs, queue="scores",
+                kwargs=reclassify_kwargs,
+                queue="scores",
             )
         result["reclassify_task_id"] = async_result.id
 
@@ -335,7 +352,9 @@ def reclassify_bgcs_task(
 
 
 @shared_task(
-    name="discovery.tasks.project_partial_ibgcs", bind=True, acks_late=True,
+    name="discovery.tasks.project_partial_ibgcs",
+    bind=True,
+    acks_late=True,
 )
 def project_partial_ibgcs_task(
     self,
@@ -377,13 +396,13 @@ def project_partial_ibgcs_task(
         task_id=task_id,
         timeout=CLUSTERING_TTL,
     )
-    log.info(
-        "project_partial_ibgcs complete (task %s): %s", task_id, result
-    )
+    log.info("project_partial_ibgcs complete (task %s): %s", task_id, result)
     return result
 
 
-@shared_task(name="discovery.tasks.sequence_similarity_search", bind=True, acks_late=True)
+@shared_task(
+    name="discovery.tasks.sequence_similarity_search", bind=True, acks_late=True
+)
 def sequence_similarity_search(
     self,
     sequence: str,
@@ -403,11 +422,10 @@ def sequence_similarity_search(
     A CDS belongs to an iBGC by genomic-range overlap on its contig
     (iBGCs are disjoint within a cBGC, so each CDS overlaps at most one iBGC).
     """
-    from django.conf import settings
-    from django.db import connection
-
     from discovery.services.protein_search import phmmer_search
     from discovery.services.protein_search.index import IndexNotBuiltError
+    from django.conf import settings
+    from django.db import connection
 
     seq = sequence.strip().upper()
     if not seq:
@@ -439,7 +457,9 @@ def sequence_similarity_search(
     if not sha256_metrics:
         log.info(
             "Sequence query: no protein hits (min_bitscore=%g, min_pident=%g, min_qcov=%g)",
-            min_bitscore, min_pident, min_qcov,
+            min_bitscore,
+            min_pident,
+            min_qcov,
         )
         return {}
 
@@ -459,7 +479,7 @@ def sequence_similarity_search(
         )
         rows = cur.fetchall()
 
-    ibgc_best: dict[int, tuple["ProteinHitMetrics", str]] = {}
+    ibgc_best: dict[int, tuple[ProteinHitMetrics, str]] = {}
     for ibgc_id, sha256, protein_id in rows:
         m = sha256_metrics[sha256]
         existing = ibgc_best.get(ibgc_id)
@@ -478,13 +498,19 @@ def sequence_similarity_search(
 
     log.info(
         "Sequence query: len=%d min_bitscore=%g min_pident=%g min_qcov=%g protein_hits=%d ibgc_matches=%d",
-        len(seq), min_bitscore, min_pident, min_qcov,
-        len(sha256_metrics), len(ibgc_scores),
+        len(seq),
+        min_bitscore,
+        min_pident,
+        min_qcov,
+        len(sha256_metrics),
+        len(ibgc_scores),
     )
     return ibgc_scores
 
 
-@shared_task(name="discovery.tasks.update_protein_search_index", bind=True, acks_late=True)
+@shared_task(
+    name="discovery.tasks.update_protein_search_index", bind=True, acks_late=True
+)
 def update_protein_search_index_task(self, rebuild: bool = False) -> dict:
     """Append new proteins to the on-disk phmmer index (or rebuild from scratch).
 
@@ -496,7 +522,10 @@ def update_protein_search_index_task(self, rebuild: bool = False) -> dict:
     stats = rebuild_index() if rebuild else update_index()
     log.info(
         "update_protein_search_index_task: total=%d added=%d elapsed=%.1fs version=%d",
-        stats.total_in_db, stats.newly_added, stats.elapsed_seconds, stats.version,
+        stats.total_in_db,
+        stats.newly_added,
+        stats.elapsed_seconds,
+        stats.version,
     )
     return {
         "total_in_db": stats.total_in_db,
@@ -510,10 +539,9 @@ def update_protein_search_index_task(self, rebuild: bool = False) -> dict:
 @shared_task(name="discovery.tasks.update_discovery_stats", bind=True, acks_late=True)
 def update_discovery_stats_task(self) -> bool:
     """Recompute platform-overview counts and append a new DiscoveryStats row."""
-    from django.db import transaction
-
     from discovery.models import DiscoveryStats
     from discovery.services.stats import generate_discovery_stats
+    from django.db import transaction
 
     stats = generate_discovery_stats()
     with transaction.atomic():
@@ -559,8 +587,12 @@ def process_asset_upload_task(self, token: str) -> dict:
         except AssetValidationError as exc:
             asset_cache.mark_failed(token, task_id=task_id, error=str(exc))
             return {"token": token, "state": "FAILED", "error": str(exc)}
-        except Exception as exc:  # noqa: BLE001 — never let the UI hang on a 5-min poll timeout
-            log.exception("process_asset_upload: unexpected error during validate/parse")
+        except (
+            Exception
+        ) as exc:  # noqa: BLE001 — never let the UI hang on a 5-min poll timeout
+            log.exception(
+                "process_asset_upload: unexpected error during validate/parse"
+            )
             asset_cache.mark_failed(
                 token,
                 task_id=task_id,

@@ -16,8 +16,6 @@ from __future__ import annotations
 import re
 
 import pytest
-from django.test import Client
-
 from discovery.models import CdsChemOnt
 from tests.factories.discovery_models import (
     ContigCdsFactory,
@@ -26,6 +24,8 @@ from tests.factories.discovery_models import (
     IntegratedBgcFactory,
     SourceBgcPredictionFactory,
 )
+
+from django.test import Client
 
 _C = "[0-9ABCDEFGHJKMNPQRSTVWXYZ]"
 IBGC_RE = re.compile(rf"^MGYB-{_C}{{6}}-{_C}{{2}}$")

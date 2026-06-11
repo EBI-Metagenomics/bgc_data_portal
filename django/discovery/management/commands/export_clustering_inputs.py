@@ -21,7 +21,7 @@ from django.db.models import Q
 log = logging.getLogger(__name__)
 
 
-DEFAULT_DOMAIN_SOURCES = ("PFAM", "NCBIFAM","TIGRFAM")
+DEFAULT_DOMAIN_SOURCES = ("PFAM", "NCBIFAM", "TIGRFAM")
 
 
 class Command(BaseCommand):
@@ -97,7 +97,7 @@ class Command(BaseCommand):
         import scipy.sparse as sp
         from common_core.clustering.schema import ClusteringInputs, RunParams
 
-        from discovery.models import SourceBgcPrediction, IntegratedBgc
+        from discovery.models import IntegratedBgc, SourceBgcPrediction
         from discovery.services.clustering.adjacency import (
             build_ibgc_adjacency_pair_matrix,
         )
@@ -124,13 +124,15 @@ class Command(BaseCommand):
             )
 
         M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
-            sources=sources, ibgc_ids_subset=clusterable_ibgc_ids,
+            sources=sources,
+            ibgc_ids_subset=clusterable_ibgc_ids,
         )
         if M_domains.shape[0] == 0:
             raise CommandError("No iBGCs with selected-source domains found.")
 
         M_pairs, ibgc_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
-            sources=sources, ibgc_ids_subset=ibgc_ids.tolist(),
+            sources=sources,
+            ibgc_ids_subset=ibgc_ids.tolist(),
         )
         M_pairs = _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids)
 
@@ -156,23 +158,30 @@ class Command(BaseCommand):
                 ibgc_ids_subset=partial_ibgc_ids,
             )
             partials_M_pairs = _align_rows(
-                partials_M_pairs, partials_pair_row_ids, partials_row_ids,
+                partials_M_pairs,
+                partials_pair_row_ids,
+                partials_row_ids,
             )
             partials_ibgc_ids = partials_row_ids
         else:
             partials_M_domains = sp.csr_matrix(
-                (0, M_domains.shape[1]), dtype=M_domains.dtype,
+                (0, M_domains.shape[1]),
+                dtype=M_domains.dtype,
             )
             partials_M_pairs = sp.csr_matrix(
-                (0, M_pairs.shape[1]), dtype=M_pairs.dtype,
+                (0, M_pairs.shape[1]),
+                dtype=M_pairs.dtype,
             )
             partials_ibgc_ids = np.empty(0, dtype=np.int64)
 
         validated_ibgc_ids = np.asarray(
             sorted(
                 SourceBgcPrediction.objects.filter(
-                    is_validated=True, integrated_bgc__isnull=False,
-                ).values_list("integrated_bgc_id", flat=True).distinct()
+                    is_validated=True,
+                    integrated_bgc__isnull=False,
+                )
+                .values_list("integrated_bgc_id", flat=True)
+                .distinct()
             ),
             dtype=np.int64,
         )

@@ -25,7 +25,10 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
                 ("chemont_id", models.CharField(max_length=30)),
-                ("chemont_name", models.CharField(blank=True, default="", max_length=255)),
+                (
+                    "chemont_name",
+                    models.CharField(blank=True, default="", max_length=255),
+                ),
                 ("inchikey", models.CharField(blank=True, default="", max_length=27)),
                 (
                     "ibgc",

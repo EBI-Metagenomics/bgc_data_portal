@@ -12,8 +12,8 @@ from discovery.services.clustering.paths import build_ltree_paths  # noqa: E402
 def test_two_level_paths_produce_expected_format():
     # 4 vertices: two coarse communities, each with two finer children.
     levels = [
-        [10, 10, 20, 20],          # level 0: communities 10 and 20
-        [100, 200, 300, 300],      # level 1: nested split inside each parent
+        [10, 10, 20, 20],  # level 0: communities 10 and 20
+        [100, 200, 300, 300],  # level 1: nested split inside each parent
     ]
     bgc_ids = [1001, 1002, 1003, 1004]
     paths_per_bgc, nodes = build_ltree_paths(levels, bgc_ids)

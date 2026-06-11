@@ -11,11 +11,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from django.core.management import call_command
-
 from common_core.chemont.classyfire_client import ClassyFireResult
 from discovery.models import IbgcChemOnt, IbgcNaturalProduct
 from tests.factories.discovery_models import IntegratedBgcFactory
+
+from django.core.management import call_command
 
 
 class _FakeOntology:
@@ -64,9 +64,10 @@ def test_command_writes_structure_chemont(patched_classify):
     )
     assert cids == {"CHEMONTID:0000259", "CHEMONTID:0000147"}
     # name resolved from the ontology
-    assert IbgcChemOnt.objects.get(
-        ibgc=ibgc, chemont_id="CHEMONTID:0000259"
-    ).chemont_name == "Prenol lipids"
+    assert (
+        IbgcChemOnt.objects.get(ibgc=ibgc, chemont_id="CHEMONTID:0000259").chemont_name
+        == "Prenol lipids"
+    )
 
 
 @pytest.mark.django_db

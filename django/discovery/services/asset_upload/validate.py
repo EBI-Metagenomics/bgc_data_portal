@@ -110,9 +110,7 @@ def inspect_tarball(raw: bytes) -> ValidatedTarball:
                 or ".." in basename.split("/")
                 or "\\" in basename
             ):
-                raise AssetValidationError(
-                    f"Refusing unsafe member path: {name!r}"
-                )
+                raise AssetValidationError(f"Refusing unsafe member path: {name!r}")
             if "/" in basename:
                 raise AssetValidationError(
                     f"Members must sit at the tarball root; got nested path {name!r}"

@@ -23,17 +23,17 @@ views above.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, Sequence
-
-from django.db.models import F
-from django.db.models.functions import Upper
-from django.db.backends.postgresql.psycopg_any import NumericRange
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
 from discovery.models import ContigDomain, IntegratedBgc, SourceBgcPrediction
 from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES,
     _normalize_sources,
 )
+from django.db.backends.postgresql.psycopg_any import NumericRange
+from django.db.models import F
+from django.db.models.functions import Upper
 
 
 def _interpro_url(entry_acc: str) -> str:
@@ -199,14 +199,15 @@ def _ordered_entries(
     """
     upper_sources = _normalize_sources(sources)
     rows = (
-        ContigDomain.objects
-        .annotate(ref_db_upper=Upper("ref_db"))
+        ContigDomain.objects.annotate(ref_db_upper=Upper("ref_db"))
         .filter(
             contig_id=contig_id,
             cds__cds_range__overlap=bgc_range,
             ref_db_upper__in=upper_sources,
         )
-        .annotate(cds_lower=F("cds__cds_range"))  # row carries cds_range; we read lower from it
+        .annotate(
+            cds_lower=F("cds__cds_range")
+        )  # row carries cds_range; we read lower from it
         .values(
             "domain_acc",
             "domain_name",
@@ -223,7 +224,11 @@ def _ordered_entries(
     ordered: list[tuple[int, int, dict]] = []
     for r in rows:
         cds_range = r.get("cds__cds_range")
-        cds_start = int(cds_range.lower) if cds_range is not None and cds_range.lower is not None else 0
+        cds_start = (
+            int(cds_range.lower)
+            if cds_range is not None and cds_range.lower is not None
+            else 0
+        )
         dom_start = int(r["start_position"] or 0)
         acc = r["domain_acc"]
         if not acc:
@@ -262,9 +267,13 @@ def bgc_architecture(
     Domains are pooled across CDS overlapping the prediction's
     ``bgc_range`` on its contig.
     """
-    sbgc = SourceBgcPrediction.objects.only("contig_id", "bgc_range").filter(
-        id=source_bgc_id,
-    ).first()
+    sbgc = (
+        SourceBgcPrediction.objects.only("contig_id", "bgc_range")
+        .filter(
+            id=source_bgc_id,
+        )
+        .first()
+    )
     if sbgc is None or sbgc.bgc_range is None:
         return []
     return _ordered_entries(sbgc.contig_id, sbgc.bgc_range, sources)
@@ -280,9 +289,13 @@ def ibgc_architecture(
     :func:`discovery.services.clustering.adjacency.build_ibgc_adjacency_pair_matrix`
     so the rendered sequence is the one the clustering pipeline scored.
     """
-    ibgc = IntegratedBgc.objects.only("contig_id", "bgc_range").filter(
-        id=ibgc_id,
-    ).first()
+    ibgc = (
+        IntegratedBgc.objects.only("contig_id", "bgc_range")
+        .filter(
+            id=ibgc_id,
+        )
+        .first()
+    )
     if ibgc is None or ibgc.bgc_range is None:
         return []
     return _ordered_entries(ibgc.contig_id, ibgc.bgc_range, sources)
