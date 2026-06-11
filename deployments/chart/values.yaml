@@ -1,0 +1,122 @@
+# =============================================================================
+# BGC Data Portal — BASE values (intentionally minimal).
+#
+# This file holds only the invariant skeleton shared by every target. Because
+# Helm DEEP-MERGES maps (but REPLACES lists), any map-shaped setting a target
+# needs to fully own — config.data, probes, service — is left empty here and
+# declared in full by the per-target values file. That keeps cloud renders from
+# inheriting laptop defaults (and vice-versa).
+#
+# Render a real deployment by ALWAYS passing a target file:
+#   laptop / self-host : -f chart/values-laptop.yaml
+#   cloud-dev          : -f <deployer>/envs/cloud-dev/values.yaml
+#   cloud-prod         : -f <deployer>/envs/cloud-prod/values.yaml
+# =============================================================================
+
+namespace:
+  name: bgc-data-portal
+  create: false
+
+imagePullSecrets: []
+
+secretName: bgc-data-portal-secret
+
+config:
+  enabled: true
+  name: app-config
+  data: {}
+
+postgres:
+  enabled: true
+  image: ""
+  imagePullPolicy: ""
+  replicas: 1
+  storage: 1Gi
+  storageClassName: ""
+  headlessService: false
+  includeSecret: true
+  includeConfig: false
+  env: []
+  volumes: []
+  volumeMounts: []
+  readinessProbe: {}
+  livenessProbe: {}
+
+redis:
+  enabled: true
+  image: ""
+  imagePullPolicy: ""
+  replicas: 1
+  readinessProbe: {}
+  livenessProbe: {}
+
+rabbitmq:
+  enabled: true
+  image: ""
+  imagePullPolicy: ""
+  replicas: 1
+  podSecurityContext: {}
+  includeSecret: false
+  includeConfig: false
+  readinessProbe: {}
+  livenessProbe: {}
+
+django:
+  enabled: true
+  image: ""
+  imagePullPolicy: ""
+  replicas: 1
+  podSecurityContext: {}
+  containerSecurityContext: {}
+  includeSecret: true
+  includeConfig: true
+  workingDir: ""
+  command: []
+  env: []
+  initContainers: []
+  volumes: []
+  volumeMounts: []
+  readinessProbe: {}
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+
+celery:
+  enabled: true
+  image: ""
+  imagePullPolicy: ""
+  replicas: 1
+  podSecurityContext: {}
+  containerSecurityContext: {}
+  includeSecret: true
+  includeConfig: true
+  workingDir: ""
+  command: []
+  env: []
+  initContainers: []
+  volumes: []
+  volumeMounts: []
+
+staticNginx:
+  enabled: false
+  image: nginx:alpine
+  replicas: 1
+  staticClaimName: ""
+
+ingress:
+  enabled: false
+  annotations: {}
+  rules: []
+
+pvcs: []
+
+tests:
+  enabled: false
+  image: ""
+  jobs: []
+
+# Isolated Claude Code workspace pod (dev only; enabled by the local-full flow).
+workspace:
+  enabled: false
+  image: bgc-data-portal-workspace

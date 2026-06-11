@@ -12,3 +12,7 @@ igraph>=0.9
 leidenalg>=0.10
 pandas>=2.0
 plotly>=5.20
+# common-core with the [chemont] extra (rdkit + pydantic-settings + PyYAML).
+# Lives here (worker-only) so the web image stays rdkit-free; the worker installs
+# this on top of the no-extra spec in requirements-web.txt (pip applies the union).
+mgnify-bgcs-common-core[chemont] @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@mgnify-bgcs-common-core-v1.7.0

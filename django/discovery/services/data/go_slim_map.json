@@ -34,12 +34,6 @@
     "GO:0000034": [
       "Hydrolase activity"
     ],
-    "GO:0000035": [
-      "Molecular_function"
-    ],
-    "GO:0000036": [
-      "Molecular_function"
-    ],
     "GO:0000043": [
       "Transferase activity"
     ],
@@ -96,9 +90,6 @@
     ],
     "GO:0000155": [
       "Kinase activity"
-    ],
-    "GO:0000156": [
-      "Molecular_function"
     ],
     "GO:0000158": [
       "Phosphatase activity"
@@ -171,9 +162,6 @@
     ],
     "GO:0000257": [
       "Hydrolase activity"
-    ],
-    "GO:0000268": [
-      "Molecular_function"
     ],
     "GO:0000269": [
       "Transporter activity"
@@ -280,15 +268,6 @@
     "GO:0000507": [
       "Transferase activity"
     ],
-    "GO:0000510": [
-      "Molecular_function"
-    ],
-    "GO:0000511": [
-      "Molecular_function"
-    ],
-    "GO:0000513": [
-      "Molecular_function"
-    ],
     "GO:0000514": [
       "Transporter activity"
     ],
@@ -313,14 +292,8 @@
     "GO:0000721": [
       "Oxidoreductase activity"
     ],
-    "GO:0000772": [
-      "Molecular_function"
-    ],
     "GO:0000773": [
       "Transferase activity"
-    ],
-    "GO:0000774": [
-      "Molecular_function"
     ],
     "GO:0000810": [
       "Hydrolase activity"
@@ -364,12 +337,6 @@
     "GO:0000834": [
       "Kinase activity"
     ],
-    "GO:0000900": [
-      "Molecular_function"
-    ],
-    "GO:0000901": [
-      "Molecular_function"
-    ],
     "GO:0000906": [
       "Transferase activity"
     ],
@@ -412,9 +379,6 @@
     "GO:0000982": [
       "DNA-binding transcription factor activity"
     ],
-    "GO:0000983": [
-      "Molecular_function"
-    ],
     "GO:0000984": [
       "Nucleic acid binding"
     ],
@@ -436,17 +400,11 @@
     "GO:0000994": [
       "Protein binding"
     ],
-    "GO:0000995": [
-      "Molecular_function"
-    ],
     "GO:0000996": [
       "DNA-binding transcription factor activity"
     ],
     "GO:0000997": [
       "Nucleic acid binding"
-    ],
-    "GO:0000998": [
-      "Molecular_function"
     ],
     "GO:0001000": [
       "Protein binding"
@@ -492,9 +450,6 @@
     ],
     "GO:0001032": [
       "Nucleic acid binding"
-    ],
-    "GO:0001034": [
-      "Molecular_function"
     ],
     "GO:0001037": [
       "Nucleic acid binding"
@@ -544,20 +499,8 @@
     "GO:0001069": [
       "Nucleic acid binding"
     ],
-    "GO:0001070": [
-      "Molecular_function"
-    ],
     "GO:0001071": [
       "DNA-binding transcription factor activity"
-    ],
-    "GO:0001072": [
-      "Molecular_function"
-    ],
-    "GO:0001073": [
-      "Molecular_function"
-    ],
-    "GO:0001075": [
-      "Molecular_function"
     ],
     "GO:0001077": [
       "DNA-binding transcription factor activity"
@@ -595,15 +538,6 @@
     "GO:0001103": [
       "Transcription factor binding"
     ],
-    "GO:0001104": [
-      "Molecular_function"
-    ],
-    "GO:0001105": [
-      "Molecular_function"
-    ],
-    "GO:0001106": [
-      "Molecular_function"
-    ],
     "GO:0001107": [
       "Transcription factor binding"
     ],
@@ -624,15 +558,6 @@
     ],
     "GO:0001141": [
       "DNA-binding transcription factor activity"
-    ],
-    "GO:0001142": [
-      "Molecular_function"
-    ],
-    "GO:0001143": [
-      "Molecular_function"
-    ],
-    "GO:0001144": [
-      "Molecular_function"
     ],
     "GO:0001145": [
       "Nucleic acid binding"
@@ -690,9 +615,6 @@
     ],
     "GO:0001179": [
       "Transcription factor binding"
-    ],
-    "GO:0001181": [
-      "Molecular_function"
     ],
     "GO:0001187": [
       "Nucleic acid binding"
@@ -793,17 +715,11 @@
     "GO:0001513": [
       "Oxidoreductase activity"
     ],
-    "GO:0001515": [
-      "Molecular_function"
-    ],
     "GO:0001517": [
       "Transferase activity"
     ],
     "GO:0001521": [
       "Protein binding"
-    ],
-    "GO:0001530": [
-      "Molecular_function"
     ],
     "GO:0001531": [
       "Protein binding"
@@ -813,9 +729,6 @@
     ],
     "GO:0001537": [
       "Transferase activity"
-    ],
-    "GO:0001540": [
-      "Molecular_function"
     ],
     "GO:0001565": [
       "Signaling receptor activity"
@@ -985,14 +898,8 @@
     "GO:0001670": [
       "Signaling receptor activity"
     ],
-    "GO:0001671": [
-      "Molecular_function"
-    ],
     "GO:0001681": [
       "Hydrolase activity"
-    ],
-    "GO:0001691": [
-      "Molecular_function"
     ],
     "GO:0001716": [
       "Oxidoreductase activity"
@@ -1038,12 +945,6 @@
     ],
     "GO:0001786": [
       "Ion binding"
-    ],
-    "GO:0001790": [
-      "Molecular_function"
-    ],
-    "GO:0001791": [
-      "Molecular_function"
     ],
     "GO:0001792": [
       "Signaling receptor activity"
@@ -1120,20 +1021,8 @@
     "GO:0001875": [
       "Signaling receptor activity"
     ],
-    "GO:0001876": [
-      "Molecular_function"
-    ],
     "GO:0001877": [
       "Signaling receptor activity"
-    ],
-    "GO:0001882": [
-      "Molecular_function"
-    ],
-    "GO:0001883": [
-      "Molecular_function"
-    ],
-    "GO:0001884": [
-      "Molecular_function"
     ],
     "GO:0001888": [
       "Transferase activity"
@@ -1164,30 +1053,6 @@
     ],
     "GO:0002046": [
       "Protein binding"
-    ],
-    "GO:0002054": [
-      "Molecular_function"
-    ],
-    "GO:0002055": [
-      "Molecular_function"
-    ],
-    "GO:0002056": [
-      "Molecular_function"
-    ],
-    "GO:0002057": [
-      "Molecular_function"
-    ],
-    "GO:0002058": [
-      "Molecular_function"
-    ],
-    "GO:0002059": [
-      "Molecular_function"
-    ],
-    "GO:0002060": [
-      "Molecular_function"
-    ],
-    "GO:0002061": [
-      "Molecular_function"
     ],
     "GO:0002112": [
       "Protein binding"
@@ -1263,9 +1128,6 @@
     "GO:0002953": [
       "Phosphatase activity"
     ],
-    "GO:0003674": [
-      "Molecular_function"
-    ],
     "GO:0003676": [
       "Nucleic acid binding"
     ],
@@ -1283,9 +1145,6 @@
     ],
     "GO:0003681": [
       "Nucleic acid binding"
-    ],
-    "GO:0003682": [
-      "Molecular_function"
     ],
     "GO:0003684": [
       "Nucleic acid binding"
@@ -1323,9 +1182,6 @@
     "GO:0003700": [
       "DNA-binding transcription factor activity"
     ],
-    "GO:0003703": [
-      "Molecular_function"
-    ],
     "GO:0003705": [
       "DNA-binding transcription factor activity"
     ],
@@ -1336,18 +1192,6 @@
     "GO:0003708": [
       "DNA-binding transcription factor activity",
       "Signaling receptor activity"
-    ],
-    "GO:0003711": [
-      "Molecular_function"
-    ],
-    "GO:0003712": [
-      "Molecular_function"
-    ],
-    "GO:0003713": [
-      "Molecular_function"
-    ],
-    "GO:0003714": [
-      "Molecular_function"
     ],
     "GO:0003720": [
       "Nucleotidyltransferase activity"
@@ -1400,44 +1244,11 @@
     "GO:0003742": [
       "Structural constituent of ribosome"
     ],
-    "GO:0003743": [
-      "Molecular_function"
-    ],
-    "GO:0003744": [
-      "Molecular_function"
-    ],
-    "GO:0003745": [
-      "Molecular_function"
-    ],
-    "GO:0003746": [
-      "Molecular_function"
-    ],
-    "GO:0003747": [
-      "Molecular_function"
-    ],
-    "GO:0003748": [
-      "Molecular_function"
-    ],
-    "GO:0003749": [
-      "Molecular_function"
-    ],
-    "GO:0003751": [
-      "Molecular_function"
-    ],
-    "GO:0003752": [
-      "Molecular_function"
-    ],
-    "GO:0003753": [
-      "Molecular_function"
-    ],
     "GO:0003755": [
       "Isomerase activity"
     ],
     "GO:0003756": [
       "Isomerase activity"
-    ],
-    "GO:0003774": [
-      "Molecular_function"
     ],
     "GO:0003777": [
       "Isomerase activity"
@@ -1451,20 +1262,11 @@
     "GO:0003786": [
       "Protein binding"
     ],
-    "GO:0003788": [
-      "Molecular_function"
-    ],
-    "GO:0003789": [
-      "Molecular_function"
-    ],
     "GO:0003796": [
       "Hydrolase activity"
     ],
     "GO:0003810": [
       "Transferase activity"
-    ],
-    "GO:0003823": [
-      "Molecular_function"
     ],
     "GO:0003824": [
       "Catalytic activity"
@@ -1938,9 +1740,6 @@
     "GO:0004008": [
       "Transporter activity"
     ],
-    "GO:0004010": [
-      "Molecular_function"
-    ],
     "GO:0004011": [
       "Catalytic activity"
     ],
@@ -2255,6 +2054,7 @@
     ],
     "GO:0004129": [
       "Electron transfer activity",
+      "Oxidoreductase activity",
       "Transporter activity"
     ],
     "GO:0004130": [
@@ -3923,50 +3723,8 @@
     "GO:0004856": [
       "Kinase activity"
     ],
-    "GO:0004857": [
-      "Molecular_function"
-    ],
-    "GO:0004858": [
-      "Molecular_function"
-    ],
-    "GO:0004859": [
-      "Molecular_function"
-    ],
-    "GO:0004860": [
-      "Molecular_function"
-    ],
-    "GO:0004861": [
-      "Molecular_function"
-    ],
-    "GO:0004862": [
-      "Molecular_function"
-    ],
-    "GO:0004863": [
-      "Molecular_function"
-    ],
-    "GO:0004864": [
-      "Molecular_function"
-    ],
-    "GO:0004865": [
-      "Molecular_function"
-    ],
-    "GO:0004866": [
-      "Molecular_function"
-    ],
-    "GO:0004867": [
-      "Molecular_function"
-    ],
-    "GO:0004869": [
-      "Molecular_function"
-    ],
-    "GO:0004870": [
-      "Molecular_function"
-    ],
     "GO:0004872": [
       "Signaling receptor activity"
-    ],
-    "GO:0004873": [
-      "Molecular_function"
     ],
     "GO:0004875": [
       "Signaling receptor activity"
@@ -4304,9 +4062,6 @@
     "GO:0004997": [
       "Signaling receptor activity"
     ],
-    "GO:0004998": [
-      "Molecular_function"
-    ],
     "GO:0004999": [
       "Signaling receptor activity"
     ],
@@ -4407,41 +4162,11 @@
     "GO:0005035": [
       "Signaling receptor activity"
     ],
-    "GO:0005040": [
-      "Molecular_function"
-    ],
-    "GO:0005041": [
-      "Molecular_function"
-    ],
     "GO:0005042": [
       "Signaling receptor activity"
     ],
     "GO:0005043": [
       "Signaling receptor activity"
-    ],
-    "GO:0005044": [
-      "Molecular_function"
-    ],
-    "GO:0005046": [
-      "Molecular_function"
-    ],
-    "GO:0005047": [
-      "Molecular_function"
-    ],
-    "GO:0005048": [
-      "Molecular_function"
-    ],
-    "GO:0005049": [
-      "Molecular_function"
-    ],
-    "GO:0005051": [
-      "Molecular_function"
-    ],
-    "GO:0005052": [
-      "Molecular_function"
-    ],
-    "GO:0005053": [
-      "Molecular_function"
     ],
     "GO:0005055": [
       "Protein binding"
@@ -4458,68 +4183,11 @@
     "GO:0005069": [
       "Protein binding"
     ],
-    "GO:0005078": [
-      "Molecular_function"
-    ],
     "GO:0005080": [
       "Protein binding"
     ],
-    "GO:0005083": [
-      "Molecular_function"
-    ],
     "GO:0005084": [
       "Protein binding"
-    ],
-    "GO:0005085": [
-      "Molecular_function"
-    ],
-    "GO:0005086": [
-      "Molecular_function"
-    ],
-    "GO:0005087": [
-      "Molecular_function"
-    ],
-    "GO:0005088": [
-      "Molecular_function"
-    ],
-    "GO:0005089": [
-      "Molecular_function"
-    ],
-    "GO:0005090": [
-      "Molecular_function"
-    ],
-    "GO:0005091": [
-      "Molecular_function"
-    ],
-    "GO:0005092": [
-      "Molecular_function"
-    ],
-    "GO:0005093": [
-      "Molecular_function"
-    ],
-    "GO:0005094": [
-      "Molecular_function"
-    ],
-    "GO:0005095": [
-      "Molecular_function"
-    ],
-    "GO:0005096": [
-      "Molecular_function"
-    ],
-    "GO:0005097": [
-      "Molecular_function"
-    ],
-    "GO:0005098": [
-      "Molecular_function"
-    ],
-    "GO:0005099": [
-      "Molecular_function"
-    ],
-    "GO:0005100": [
-      "Molecular_function"
-    ],
-    "GO:0005101": [
-      "Molecular_function"
     ],
     "GO:0005102": [
       "Protein binding"
@@ -4580,9 +4248,6 @@
     ],
     "GO:0005124": [
       "Protein binding"
-    ],
-    "GO:0005125": [
-      "Molecular_function"
     ],
     "GO:0005126": [
       "Protein binding"
@@ -4731,42 +4396,6 @@
     "GO:0005178": [
       "Protein binding"
     ],
-    "GO:0005179": [
-      "Molecular_function"
-    ],
-    "GO:0005183": [
-      "Molecular_function"
-    ],
-    "GO:0005184": [
-      "Molecular_function"
-    ],
-    "GO:0005185": [
-      "Molecular_function"
-    ],
-    "GO:0005186": [
-      "Molecular_function"
-    ],
-    "GO:0005198": [
-      "Molecular_function"
-    ],
-    "GO:0005199": [
-      "Molecular_function"
-    ],
-    "GO:0005200": [
-      "Molecular_function"
-    ],
-    "GO:0005201": [
-      "Molecular_function"
-    ],
-    "GO:0005212": [
-      "Molecular_function"
-    ],
-    "GO:0005213": [
-      "Molecular_function"
-    ],
-    "GO:0005214": [
-      "Molecular_function"
-    ],
     "GO:0005215": [
       "Transporter activity"
     ],
@@ -4840,9 +4469,6 @@
     ],
     "GO:0005245": [
       "Transporter activity"
-    ],
-    "GO:0005246": [
-      "Molecular_function"
     ],
     "GO:0005247": [
       "Transporter activity"
@@ -4998,9 +4624,6 @@
     "GO:0005317": [
       "Transporter activity"
     ],
-    "GO:0005319": [
-      "Molecular_function"
-    ],
     "GO:0005324": [
       "Transporter activity"
     ],
@@ -5054,9 +4677,6 @@
     ],
     "GO:0005343": [
       "Transporter activity"
-    ],
-    "GO:0005344": [
-      "Molecular_function"
     ],
     "GO:0005345": [
       "Transporter activity"
@@ -5244,41 +4864,8 @@
     "GO:0005478": [
       "Transporter activity"
     ],
-    "GO:0005483": [
-      "Molecular_function"
-    ],
-    "GO:0005484": [
-      "Molecular_function"
-    ],
-    "GO:0005485": [
-      "Molecular_function"
-    ],
-    "GO:0005486": [
-      "Molecular_function"
-    ],
-    "GO:0005487": [
-      "Molecular_function"
-    ],
-    "GO:0005488": [
-      "Molecular_function"
-    ],
-    "GO:0005496": [
-      "Molecular_function"
-    ],
-    "GO:0005497": [
-      "Molecular_function"
-    ],
-    "GO:0005498": [
-      "Molecular_function"
-    ],
     "GO:0005499": [
       "Vitamin binding"
-    ],
-    "GO:0005500": [
-      "Molecular_function"
-    ],
-    "GO:0005501": [
-      "Molecular_function"
     ],
     "GO:0005502": [
       "Vitamin binding"
@@ -5304,9 +4891,6 @@
     "GO:0005516": [
       "Protein binding"
     ],
-    "GO:0005518": [
-      "Molecular_function"
-    ],
     "GO:0005519": [
       "Protein binding"
     ],
@@ -5330,12 +4914,6 @@
       "Ion binding",
       "Nucleotide binding"
     ],
-    "GO:0005527": [
-      "Molecular_function"
-    ],
-    "GO:0005528": [
-      "Molecular_function"
-    ],
     "GO:0005529": [
       "Carbohydrate binding"
     ],
@@ -5348,9 +4926,6 @@
     "GO:0005537": [
       "Carbohydrate binding"
     ],
-    "GO:0005539": [
-      "Molecular_function"
-    ],
     "GO:0005540": [
       "Ion binding"
     ],
@@ -5358,44 +4933,17 @@
       "Ion binding",
       "Vitamin binding"
     ],
-    "GO:0005543": [
-      "Molecular_function"
-    ],
-    "GO:0005544": [
-      "Molecular_function"
-    ],
-    "GO:0005545": [
-      "Molecular_function"
-    ],
     "GO:0005546": [
       "Ion binding"
     ],
     "GO:0005547": [
       "Ion binding"
     ],
-    "GO:0005549": [
-      "Molecular_function"
-    ],
-    "GO:0005550": [
-      "Molecular_function"
-    ],
-    "GO:0005554": [
-      "Molecular_function"
-    ],
     "GO:0006467": [
       "Isomerase activity"
     ],
     "GO:0008009": [
       "Protein binding"
-    ],
-    "GO:0008010": [
-      "Molecular_function"
-    ],
-    "GO:0008011": [
-      "Molecular_function"
-    ],
-    "GO:0008012": [
-      "Molecular_function"
     ],
     "GO:0008013": [
       "Protein binding"
@@ -5421,32 +4969,11 @@
     "GO:0008030": [
       "Signaling receptor activity"
     ],
-    "GO:0008031": [
-      "Molecular_function"
-    ],
-    "GO:0008032": [
-      "Molecular_function"
-    ],
-    "GO:0008035": [
-      "Molecular_function"
-    ],
     "GO:0008036": [
       "Signaling receptor activity"
     ],
     "GO:0008046": [
       "Signaling receptor activity"
-    ],
-    "GO:0008047": [
-      "Molecular_function"
-    ],
-    "GO:0008048": [
-      "Molecular_function"
-    ],
-    "GO:0008060": [
-      "Molecular_function"
-    ],
-    "GO:0008061": [
-      "Molecular_function"
     ],
     "GO:0008066": [
       "Signaling receptor activity"
@@ -5454,20 +4981,11 @@
     "GO:0008068": [
       "Transporter activity"
     ],
-    "GO:0008073": [
-      "Molecular_function"
-    ],
-    "GO:0008079": [
-      "Molecular_function"
-    ],
     "GO:0008080": [
       "Transferase activity"
     ],
     "GO:0008081": [
       "Hydrolase activity"
-    ],
-    "GO:0008083": [
-      "Molecular_function"
     ],
     "GO:0008084": [
       "Protein binding"
@@ -5477,9 +4995,6 @@
     ],
     "GO:0008092": [
       "Protein binding"
-    ],
-    "GO:0008093": [
-      "Molecular_function"
     ],
     "GO:0008094": [
       "Catalytic activity"
@@ -5543,6 +5058,7 @@
     ],
     "GO:0008121": [
       "Electron transfer activity",
+      "Oxidoreductase activity",
       "Transporter activity"
     ],
     "GO:0008122": [
@@ -5569,45 +5085,28 @@
     "GO:0008134": [
       "Transcription factor binding"
     ],
-    "GO:0008135": [
-      "Molecular_function"
-    ],
     "GO:0008137": [
       "Electron transfer activity",
+      "Oxidoreductase activity",
       "Transporter activity"
     ],
     "GO:0008138": [
       "Phosphatase activity"
     ],
-    "GO:0008139": [
-      "Molecular_function"
-    ],
     "GO:0008140": [
       "Transcription factor binding"
-    ],
-    "GO:0008142": [
-      "Molecular_function"
     ],
     "GO:0008143": [
       "Nucleic acid binding"
     ],
-    "GO:0008145": [
-      "Molecular_function"
-    ],
     "GO:0008146": [
       "Transferase activity"
-    ],
-    "GO:0008147": [
-      "Molecular_function"
     ],
     "GO:0008157": [
       "Protein binding"
     ],
     "GO:0008158": [
       "Signaling receptor activity"
-    ],
-    "GO:0008160": [
-      "Molecular_function"
     ],
     "GO:0008168": [
       "Transferase activity"
@@ -5642,20 +5141,11 @@
     "GO:0008179": [
       "Protein binding"
     ],
-    "GO:0008182": [
-      "Molecular_function"
-    ],
-    "GO:0008183": [
-      "Molecular_function"
-    ],
     "GO:0008184": [
       "Transferase activity"
     ],
     "GO:0008185": [
       "Protein binding"
-    ],
-    "GO:0008186": [
-      "Molecular_function"
     ],
     "GO:0008187": [
       "Nucleic acid binding"
@@ -5665,9 +5155,6 @@
     ],
     "GO:0008190": [
       "Protein binding"
-    ],
-    "GO:0008191": [
-      "Molecular_function"
     ],
     "GO:0008192": [
       "Nucleotidyltransferase activity"
@@ -5681,20 +5168,11 @@
     "GO:0008195": [
       "Phosphatase activity"
     ],
-    "GO:0008196": [
-      "Molecular_function"
-    ],
     "GO:0008198": [
       "Metal ion binding"
     ],
     "GO:0008199": [
       "Metal ion binding"
-    ],
-    "GO:0008200": [
-      "Molecular_function"
-    ],
-    "GO:0008201": [
-      "Molecular_function"
     ],
     "GO:0008226": [
       "Signaling receptor activity"
@@ -5735,9 +5213,6 @@
     "GO:0008244": [
       "Transferase activity"
     ],
-    "GO:0008249": [
-      "Molecular_function"
-    ],
     "GO:0008251": [
       "Hydrolase activity"
     ],
@@ -5750,9 +5225,6 @@
     "GO:0008254": [
       "Phosphatase activity"
     ],
-    "GO:0008255": [
-      "Molecular_function"
-    ],
     "GO:0008256": [
       "Kinase activity"
     ],
@@ -5764,9 +5236,6 @@
     ],
     "GO:0008261": [
       "Signaling receptor activity"
-    ],
-    "GO:0008262": [
-      "Molecular_function"
     ],
     "GO:0008263": [
       "Hydrolase activity"
@@ -5782,9 +5251,6 @@
     ],
     "GO:0008267": [
       "Protein binding"
-    ],
-    "GO:0008269": [
-      "Molecular_function"
     ],
     "GO:0008270": [
       "Metal ion binding"
@@ -5805,9 +5271,6 @@
       "Kinase activity",
       "Signaling receptor activity"
     ],
-    "GO:0008289": [
-      "Molecular_function"
-    ],
     "GO:0008294": [
       "Lyase activity"
     ],
@@ -5819,9 +5282,6 @@
     ],
     "GO:0008301": [
       "Nucleic acid binding"
-    ],
-    "GO:0008307": [
-      "Molecular_function"
     ],
     "GO:0008308": [
       "Transporter activity"
@@ -5838,17 +5298,11 @@
     "GO:0008312": [
       "Nucleic acid binding"
     ],
-    "GO:0008316": [
-      "Molecular_function"
-    ],
     "GO:0008318": [
       "Transferase activity"
     ],
     "GO:0008320": [
       "Transporter activity"
-    ],
-    "GO:0008321": [
-      "Molecular_function"
     ],
     "GO:0008324": [
       "Transporter activity"
@@ -5888,9 +5342,6 @@
       "Kinase activity"
     ],
     "GO:0008373": [
-      "Transferase activity"
-    ],
-    "GO:0008374": [
       "Transferase activity"
     ],
     "GO:0008375": [
@@ -5985,9 +5436,6 @@
     "GO:0008410": [
       "Transferase activity"
     ],
-    "GO:0008411": [
-      "Transferase activity"
-    ],
     "GO:0008412": [
       "Transferase activity"
     ],
@@ -6024,36 +5472,15 @@
     "GO:0008425": [
       "Transferase activity"
     ],
-    "GO:0008426": [
-      "Molecular_function"
-    ],
-    "GO:0008427": [
-      "Molecular_function"
-    ],
-    "GO:0008428": [
-      "Molecular_function"
-    ],
-    "GO:0008429": [
-      "Molecular_function"
-    ],
-    "GO:0008430": [
-      "Molecular_function"
-    ],
     "GO:0008431": [
       "Vitamin binding"
     ],
     "GO:0008432": [
       "Protein binding"
     ],
-    "GO:0008433": [
-      "Molecular_function"
-    ],
     "GO:0008434": [
       "DNA-binding transcription factor activity",
       "Signaling receptor activity"
-    ],
-    "GO:0008437": [
-      "Molecular_function"
     ],
     "GO:0008440": [
       "Kinase activity"
@@ -6186,9 +5613,6 @@
     ],
     "GO:0008493": [
       "Transporter activity"
-    ],
-    "GO:0008494": [
-      "Molecular_function"
     ],
     "GO:0008495": [
       "Transferase activity"
@@ -6349,38 +5773,20 @@
     "GO:0008596": [
       "Phosphatase activity"
     ],
-    "GO:0008597": [
-      "Molecular_function"
-    ],
     "GO:0008598": [
       "Phosphatase activity"
-    ],
-    "GO:0008599": [
-      "Molecular_function"
     ],
     "GO:0008600": [
       "Phosphatase activity"
     ],
-    "GO:0008601": [
-      "Molecular_function"
-    ],
     "GO:0008602": [
       "Kinase activity"
-    ],
-    "GO:0008603": [
-      "Molecular_function"
     ],
     "GO:0008606": [
       "Kinase activity"
     ],
-    "GO:0008607": [
-      "Molecular_function"
-    ],
     "GO:0008609": [
       "Transferase activity"
-    ],
-    "GO:0008613": [
-      "Molecular_function"
     ],
     "GO:0008639": [
       "Transferase activity"
@@ -6399,12 +5805,6 @@
     ],
     "GO:0008650": [
       "Transferase activity"
-    ],
-    "GO:0008656": [
-      "Molecular_function"
-    ],
-    "GO:0008657": [
-      "Molecular_function"
     ],
     "GO:0008658": [
       "Penicillin binding"
@@ -6751,9 +6151,6 @@
     "GO:0008784": [
       "Isomerase activity"
     ],
-    "GO:0008785": [
-      "Oxidoreductase activity"
-    ],
     "GO:0008786": [
       "Isomerase activity"
     ],
@@ -6988,9 +6385,6 @@
       "Oxidoreductase activity"
     ],
     "GO:0008874": [
-      "Oxidoreductase activity"
-    ],
-    "GO:0008875": [
       "Oxidoreductase activity"
     ],
     "GO:0008876": [
@@ -7583,9 +6977,6 @@
     "GO:0010010": [
       "Oxidoreductase activity"
     ],
-    "GO:0010011": [
-      "Molecular_function"
-    ],
     "GO:0010013": [
       "Ion binding"
     ],
@@ -7616,9 +7007,6 @@
     "GO:0010181": [
       "Ion binding",
       "Nucleotide binding"
-    ],
-    "GO:0010209": [
-      "Molecular_function"
     ],
     "GO:0010210": [
       "Hydrolase activity"
@@ -7692,9 +7080,6 @@
     "GO:0010303": [
       "Hydrolase activity"
     ],
-    "GO:0010307": [
-      "Molecular_function"
-    ],
     "GO:0010308": [
       "Oxidoreductase activity"
     ],
@@ -7705,7 +7090,7 @@
       "Protein binding"
     ],
     "GO:0010314": [
-      "Molecular_function"
+      "Ion binding"
     ],
     "GO:0010326": [
       "Transferase activity"
@@ -7821,23 +7206,11 @@
     "GO:0010491": [
       "Nucleotidyltransferase activity"
     ],
-    "GO:0010521": [
-      "Molecular_function"
-    ],
     "GO:0010542": [
       "Transporter activity"
     ],
-    "GO:0010576": [
-      "Molecular_function"
-    ],
-    "GO:0010577": [
-      "Molecular_function"
-    ],
     "GO:0010655": [
       "Signaling receptor activity"
-    ],
-    "GO:0010698": [
-      "Molecular_function"
     ],
     "GO:0010736": [
       "Nucleic acid binding"
@@ -7845,38 +7218,11 @@
     "GO:0010844": [
       "Nucleic acid binding"
     ],
-    "GO:0010851": [
-      "Molecular_function"
-    ],
-    "GO:0010852": [
-      "Molecular_function"
-    ],
-    "GO:0010853": [
-      "Molecular_function"
-    ],
-    "GO:0010854": [
-      "Molecular_function"
-    ],
-    "GO:0010855": [
-      "Molecular_function"
-    ],
-    "GO:0010856": [
-      "Molecular_function"
-    ],
-    "GO:0010858": [
-      "Molecular_function"
-    ],
-    "GO:0010859": [
-      "Molecular_function"
-    ],
     "GO:0010943": [
       "Hydrolase activity"
     ],
     "GO:0010945": [
       "Hydrolase activity"
-    ],
-    "GO:0010997": [
-      "Molecular_function"
     ],
     "GO:0015016": [
       "Transferase activity"
@@ -7907,9 +7253,6 @@
     ],
     "GO:0015028": [
       "Signaling receptor activity"
-    ],
-    "GO:0015033": [
-      "Molecular_function"
     ],
     "GO:0015035": [
       "Oxidoreductase activity"
@@ -7961,9 +7304,6 @@
     ],
     "GO:0015065": [
       "Signaling receptor activity"
-    ],
-    "GO:0015066": [
-      "Molecular_function"
     ],
     "GO:0015067": [
       "Transferase activity"
@@ -8901,9 +8241,6 @@
       "Transferase activity",
       "Transporter activity"
     ],
-    "GO:0015459": [
-      "Molecular_function"
-    ],
     "GO:0015462": [
       "Transporter activity"
     ],
@@ -8933,9 +8270,6 @@
     ],
     "GO:0015483": [
       "Transporter activity"
-    ],
-    "GO:0015485": [
-      "Molecular_function"
     ],
     "GO:0015486": [
       "Transporter activity"
@@ -9312,9 +8646,6 @@
     "GO:0015640": [
       "Transporter activity"
     ],
-    "GO:0015643": [
-      "Molecular_function"
-    ],
     "GO:0015645": [
       "Ligase activity"
     ],
@@ -9426,18 +8757,6 @@
     "GO:0016003": [
       "Ligase activity"
     ],
-    "GO:0016004": [
-      "Molecular_function"
-    ],
-    "GO:0016005": [
-      "Molecular_function"
-    ],
-    "GO:0016015": [
-      "Molecular_function"
-    ],
-    "GO:0016018": [
-      "Molecular_function"
-    ],
     "GO:0016019": [
       "Signaling receptor activity"
     ],
@@ -9455,21 +8774,6 @@
     ],
     "GO:0016041": [
       "Oxidoreductase activity"
-    ],
-    "GO:0016084": [
-      "Molecular_function"
-    ],
-    "GO:0016085": [
-      "Molecular_function"
-    ],
-    "GO:0016087": [
-      "Molecular_function"
-    ],
-    "GO:0016149": [
-      "Molecular_function"
-    ],
-    "GO:0016150": [
-      "Molecular_function"
     ],
     "GO:0016151": [
       "Metal ion binding"
@@ -9529,17 +8833,11 @@
     "GO:0016170": [
       "Protein binding"
     ],
-    "GO:0016172": [
-      "Molecular_function"
-    ],
     "GO:0016174": [
       "Oxidoreductase activity"
     ],
     "GO:0016175": [
       "Oxidoreductase activity"
-    ],
-    "GO:0016176": [
-      "Molecular_function"
     ],
     "GO:0016205": [
       "Transferase activity"
@@ -9581,12 +8879,6 @@
     "GO:0016218": [
       "Catalytic activity"
     ],
-    "GO:0016219": [
-      "Molecular_function"
-    ],
-    "GO:0016220": [
-      "Molecular_function"
-    ],
     "GO:0016223": [
       "Transferase activity"
     ],
@@ -9602,26 +8894,14 @@
     "GO:0016229": [
       "Oxidoreductase activity"
     ],
-    "GO:0016230": [
-      "Molecular_function"
-    ],
     "GO:0016231": [
       "Hydrolase activity"
     ],
     "GO:0016232": [
       "Transferase activity"
     ],
-    "GO:0016247": [
-      "Molecular_function"
-    ],
-    "GO:0016248": [
-      "Molecular_function"
-    ],
     "GO:0016250": [
       "Hydrolase activity"
-    ],
-    "GO:0016251": [
-      "Molecular_function"
     ],
     "GO:0016253": [
       "Transferase activity"
@@ -9730,13 +9010,7 @@
     "GO:0016407": [
       "Transferase activity"
     ],
-    "GO:0016408": [
-      "Transferase activity"
-    ],
     "GO:0016409": [
-      "Transferase activity"
-    ],
-    "GO:0016410": [
       "Transferase activity"
     ],
     "GO:0016411": [
@@ -9752,9 +9026,6 @@
       "Transferase activity"
     ],
     "GO:0016416": [
-      "Transferase activity"
-    ],
-    "GO:0016417": [
       "Transferase activity"
     ],
     "GO:0016418": [
@@ -9838,9 +9109,6 @@
     "GO:0016454": [
       "Transferase activity"
     ],
-    "GO:0016455": [
-      "Molecular_function"
-    ],
     "GO:0016462": [
       "Hydrolase activity"
     ],
@@ -9850,14 +9118,8 @@
     "GO:0016464": [
       "Transporter activity"
     ],
-    "GO:0016483": [
-      "Molecular_function"
-    ],
     "GO:0016489": [
       "Signaling receptor activity"
-    ],
-    "GO:0016490": [
-      "Molecular_function"
     ],
     "GO:0016491": [
       "Oxidoreductase activity"
@@ -9898,12 +9160,6 @@
     "GO:0016503": [
       "Signaling receptor activity"
     ],
-    "GO:0016504": [
-      "Molecular_function"
-    ],
-    "GO:0016505": [
-      "Molecular_function"
-    ],
     "GO:0016509": [
       "Oxidoreductase activity"
     ],
@@ -9922,9 +9178,6 @@
     "GO:0016520": [
       "Signaling receptor activity"
     ],
-    "GO:0016521": [
-      "Molecular_function"
-    ],
     "GO:0016522": [
       "Signaling receptor activity"
     ],
@@ -9934,26 +9187,8 @@
     "GO:0016526": [
       "Signaling receptor activity"
     ],
-    "GO:0016530": [
-      "Molecular_function"
-    ],
-    "GO:0016531": [
-      "Molecular_function"
-    ],
-    "GO:0016532": [
-      "Molecular_function"
-    ],
-    "GO:0016534": [
-      "Molecular_function"
-    ],
-    "GO:0016535": [
-      "Molecular_function"
-    ],
     "GO:0016537": [
       "Kinase activity"
-    ],
-    "GO:0016538": [
-      "Molecular_function"
     ],
     "GO:0016594": [
       "Amino acid binding",
@@ -9963,17 +9198,11 @@
       "Amino acid binding",
       "Ion binding"
     ],
-    "GO:0016596": [
-      "Molecular_function"
-    ],
     "GO:0016597": [
       "Amino acid binding"
     ],
     "GO:0016603": [
       "Transferase activity"
-    ],
-    "GO:0016608": [
-      "Molecular_function"
     ],
     "GO:0016609": [
       "Signaling receptor activity"
@@ -10726,9 +9955,6 @@
     "GO:0016909": [
       "Kinase activity"
     ],
-    "GO:0016913": [
-      "Molecular_function"
-    ],
     "GO:0016917": [
       "Signaling receptor activity"
     ],
@@ -10758,9 +9984,6 @@
     ],
     "GO:0016934": [
       "Transporter activity"
-    ],
-    "GO:0016936": [
-      "Molecular_function"
     ],
     "GO:0016937": [
       "Oxidoreductase activity"
@@ -10814,9 +10037,6 @@
     "GO:0016961": [
       "Oxidoreductase activity"
     ],
-    "GO:0016964": [
-      "Molecular_function"
-    ],
     "GO:0016965": [
       "Ligase activity"
     ],
@@ -10865,9 +10085,6 @@
     "GO:0016987": [
       "DNA-binding transcription factor activity"
     ],
-    "GO:0016989": [
-      "Molecular_function"
-    ],
     "GO:0016990": [
       "Hydrolase activity"
     ],
@@ -10911,9 +10128,6 @@
     "GO:0017019": [
       "Phosphatase activity"
     ],
-    "GO:0017020": [
-      "Molecular_function"
-    ],
     "GO:0017022": [
       "Protein binding"
     ],
@@ -10932,26 +10146,11 @@
     "GO:0017033": [
       "Protein binding"
     ],
-    "GO:0017034": [
-      "Molecular_function"
-    ],
     "GO:0017040": [
       "Hydrolase activity"
     ],
     "GO:0017042": [
       "Hydrolase activity"
-    ],
-    "GO:0017044": [
-      "Molecular_function"
-    ],
-    "GO:0017045": [
-      "Molecular_function"
-    ],
-    "GO:0017046": [
-      "Molecular_function"
-    ],
-    "GO:0017047": [
-      "Molecular_function"
     ],
     "GO:0017048": [
       "Protein binding"
@@ -10961,9 +10160,6 @@
     ],
     "GO:0017051": [
       "Lyase activity"
-    ],
-    "GO:0017056": [
-      "Molecular_function"
     ],
     "GO:0017057": [
       "Hydrolase activity"
@@ -11010,12 +10206,6 @@
     "GO:0017077": [
       "Transporter activity"
     ],
-    "GO:0017080": [
-      "Molecular_function"
-    ],
-    "GO:0017081": [
-      "Molecular_function"
-    ],
     "GO:0017083": [
       "Transferase activity"
     ],
@@ -11061,9 +10251,6 @@
     "GO:0017111": [
       "Ribonucleoside triphosphate phosphatase activity"
     ],
-    "GO:0017112": [
-      "Molecular_function"
-    ],
     "GO:0017113": [
       "Oxidoreductase activity"
     ],
@@ -11075,9 +10262,6 @@
     ],
     "GO:0017118": [
       "Transferase activity"
-    ],
-    "GO:0017123": [
-      "Molecular_function"
     ],
     "GO:0017124": [
       "Protein binding"
@@ -11091,17 +10275,11 @@
     "GO:0017128": [
       "Transporter activity"
     ],
-    "GO:0017129": [
-      "Molecular_function"
-    ],
     "GO:0017130": [
       "Nucleic acid binding"
     ],
     "GO:0017131": [
       "Nucleic acid binding"
-    ],
-    "GO:0017132": [
-      "Molecular_function"
     ],
     "GO:0017134": [
       "Protein binding"
@@ -11208,12 +10386,6 @@
     "GO:0018225": [
       "Transferase activity"
     ],
-    "GO:0018236": [
-      "Molecular_function"
-    ],
-    "GO:0018237": [
-      "Molecular_function"
-    ],
     "GO:0018365": [
       "Isomerase activity"
     ],
@@ -11225,9 +10397,6 @@
     ],
     "GO:0018423": [
       "Transferase activity"
-    ],
-    "GO:0018445": [
-      "Molecular_function"
     ],
     "GO:0018449": [
       "Oxidoreductase activity"
@@ -11455,9 +10624,6 @@
       "Oxidoreductase activity"
     ],
     "GO:0018580": [
-      "Oxidoreductase activity"
-    ],
-    "GO:0018581": [
       "Oxidoreductase activity"
     ],
     "GO:0018582": [
@@ -12152,29 +11318,8 @@
     "GO:0019206": [
       "Kinase activity"
     ],
-    "GO:0019207": [
-      "Molecular_function"
-    ],
-    "GO:0019208": [
-      "Molecular_function"
-    ],
-    "GO:0019209": [
-      "Molecular_function"
-    ],
-    "GO:0019210": [
-      "Molecular_function"
-    ],
-    "GO:0019211": [
-      "Molecular_function"
-    ],
-    "GO:0019212": [
-      "Molecular_function"
-    ],
     "GO:0019213": [
       "Catalytic activity"
-    ],
-    "GO:0019215": [
-      "Molecular_function"
     ],
     "GO:0019237": [
       "Nucleic acid binding"
@@ -12299,9 +11444,6 @@
     "GO:0019807": [
       "Hydrolase activity"
     ],
-    "GO:0019808": [
-      "Molecular_function"
-    ],
     "GO:0019809": [
       "Ion binding"
     ],
@@ -12311,32 +11453,11 @@
     "GO:0019811": [
       "Ion binding"
     ],
-    "GO:0019825": [
-      "Molecular_function"
-    ],
-    "GO:0019826": [
-      "Molecular_function"
-    ],
-    "GO:0019828": [
-      "Molecular_function"
-    ],
     "GO:0019829": [
       "Transporter activity"
     ],
-    "GO:0019833": [
-      "Molecular_function"
-    ],
-    "GO:0019834": [
-      "Molecular_function"
-    ],
     "GO:0019838": [
       "Protein binding"
-    ],
-    "GO:0019839": [
-      "Molecular_function"
-    ],
-    "GO:0019840": [
-      "Molecular_function"
     ],
     "GO:0019841": [
       "Vitamin binding"
@@ -12353,44 +11474,11 @@
     "GO:0019851": [
       "Hydrolase activity"
     ],
-    "GO:0019855": [
-      "Molecular_function"
-    ],
-    "GO:0019862": [
-      "Molecular_function"
-    ],
-    "GO:0019863": [
-      "Molecular_function"
-    ],
-    "GO:0019864": [
-      "Molecular_function"
-    ],
-    "GO:0019865": [
-      "Molecular_function"
-    ],
-    "GO:0019868": [
-      "Molecular_function"
-    ],
-    "GO:0019869": [
-      "Molecular_function"
-    ],
-    "GO:0019870": [
-      "Molecular_function"
-    ],
-    "GO:0019871": [
-      "Molecular_function"
-    ],
     "GO:0019874": [
       "Hydrolase activity"
     ],
     "GO:0019875": [
       "Hydrolase activity"
-    ],
-    "GO:0019887": [
-      "Molecular_function"
-    ],
-    "GO:0019888": [
-      "Molecular_function"
     ],
     "GO:0019894": [
       "Protein binding"
@@ -12418,12 +11506,6 @@
     ],
     "GO:0019906": [
       "Phosphatase activity"
-    ],
-    "GO:0019911": [
-      "Molecular_function"
-    ],
-    "GO:0019914": [
-      "Molecular_function"
     ],
     "GO:0019944": [
       "Ligase activity"
@@ -12523,9 +11605,6 @@
     ],
     "GO:0019986": [
       "Nucleotidyltransferase activity"
-    ],
-    "GO:0019992": [
-      "Molecular_function"
     ],
     "GO:0020037": [
       "Tetrapyrrole binding"
@@ -12730,18 +11809,6 @@
     "GO:0022895": [
       "Transporter activity"
     ],
-    "GO:0023023": [
-      "Molecular_function"
-    ],
-    "GO:0023024": [
-      "Molecular_function"
-    ],
-    "GO:0023025": [
-      "Molecular_function"
-    ],
-    "GO:0023026": [
-      "Molecular_function"
-    ],
     "GO:0023027": [
       "Protein binding"
     ],
@@ -12756,15 +11823,6 @@
     ],
     "GO:0023031": [
       "Protein binding"
-    ],
-    "GO:0030020": [
-      "Molecular_function"
-    ],
-    "GO:0030021": [
-      "Molecular_function"
-    ],
-    "GO:0030023": [
-      "Molecular_function"
     ],
     "GO:0030058": [
       "Oxidoreductase activity"
@@ -12808,17 +11866,8 @@
     "GO:0030158": [
       "Transferase activity"
     ],
-    "GO:0030159": [
-      "Molecular_function"
-    ],
-    "GO:0030160": [
-      "Molecular_function"
-    ],
     "GO:0030165": [
       "Protein binding"
-    ],
-    "GO:0030169": [
-      "Molecular_function"
     ],
     "GO:0030170": [
       "Pyridoxal phosphate binding"
@@ -12835,20 +11884,8 @@
     "GO:0030196": [
       "Lyase activity"
     ],
-    "GO:0030197": [
-      "Molecular_function"
-    ],
     "GO:0030215": [
       "Protein binding"
-    ],
-    "GO:0030226": [
-      "Molecular_function"
-    ],
-    "GO:0030228": [
-      "Molecular_function"
-    ],
-    "GO:0030229": [
-      "Molecular_function"
     ],
     "GO:0030230": [
       "Hydrolase activity"
@@ -12859,12 +11896,6 @@
     "GO:0030233": [
       "Transporter activity"
     ],
-    "GO:0030234": [
-      "Molecular_function"
-    ],
-    "GO:0030235": [
-      "Molecular_function"
-    ],
     "GO:0030246": [
       "Carbohydrate binding"
     ],
@@ -12873,15 +11904,6 @@
     ],
     "GO:0030248": [
       "Carbohydrate binding"
-    ],
-    "GO:0030249": [
-      "Molecular_function"
-    ],
-    "GO:0030250": [
-      "Molecular_function"
-    ],
-    "GO:0030251": [
-      "Molecular_function"
     ],
     "GO:0030266": [
       "Oxidoreductase activity"
@@ -12914,42 +11936,9 @@
     "GO:0030276": [
       "Protein binding"
     ],
-    "GO:0030280": [
-      "Molecular_function"
-    ],
-    "GO:0030281": [
-      "Molecular_function"
-    ],
     "GO:0030284": [
       "DNA-binding transcription factor activity",
       "Signaling receptor activity"
-    ],
-    "GO:0030290": [
-      "Molecular_function"
-    ],
-    "GO:0030291": [
-      "Molecular_function"
-    ],
-    "GO:0030292": [
-      "Molecular_function"
-    ],
-    "GO:0030293": [
-      "Molecular_function"
-    ],
-    "GO:0030294": [
-      "Molecular_function"
-    ],
-    "GO:0030295": [
-      "Molecular_function"
-    ],
-    "GO:0030296": [
-      "Molecular_function"
-    ],
-    "GO:0030297": [
-      "Molecular_function"
-    ],
-    "GO:0030298": [
-      "Molecular_function"
     ],
     "GO:0030305": [
       "Hydrolase activity"
@@ -12962,9 +11951,6 @@
     ],
     "GO:0030332": [
       "Protein binding"
-    ],
-    "GO:0030337": [
-      "Molecular_function"
     ],
     "GO:0030338": [
       "Oxidoreductase activity"
@@ -12986,9 +11972,6 @@
     ],
     "GO:0030344": [
       "Oxidoreductase activity"
-    ],
-    "GO:0030345": [
-      "Molecular_function"
     ],
     "GO:0030346": [
       "Protein binding"
@@ -13014,26 +11997,17 @@
     "GO:0030353": [
       "Protein binding"
     ],
-    "GO:0030354": [
-      "Molecular_function"
-    ],
     "GO:0030357": [
       "Phosphatase activity"
     ],
     "GO:0030358": [
       "Phosphatase activity"
     ],
-    "GO:0030359": [
-      "Molecular_function"
-    ],
     "GO:0030360": [
       "Phosphatase activity"
     ],
     "GO:0030361": [
       "Phosphatase activity"
-    ],
-    "GO:0030362": [
-      "Molecular_function"
     ],
     "GO:0030366": [
       "Transferase activity"
@@ -13050,17 +12024,11 @@
     "GO:0030370": [
       "Protein binding"
     ],
-    "GO:0030371": [
-      "Molecular_function"
-    ],
     "GO:0030372": [
       "Protein binding"
     ],
     "GO:0030373": [
       "Signaling receptor activity"
-    ],
-    "GO:0030376": [
-      "Molecular_function"
     ],
     "GO:0030377": [
       "Signaling receptor activity"
@@ -13101,12 +12069,6 @@
     "GO:0030412": [
       "Lyase activity"
     ],
-    "GO:0030413": [
-      "Molecular_function"
-    ],
-    "GO:0030414": [
-      "Molecular_function"
-    ],
     "GO:0030429": [
       "Hydrolase activity"
     ],
@@ -13125,9 +12087,6 @@
     "GO:0030515": [
       "Nucleic acid binding"
     ],
-    "GO:0030519": [
-      "Molecular_function"
-    ],
     "GO:0030523": [
       "Transferase activity"
     ],
@@ -13137,32 +12096,11 @@
     "GO:0030525": [
       "Signaling receptor activity"
     ],
-    "GO:0030527": [
-      "Molecular_function"
-    ],
     "GO:0030533": [
       "Nucleic acid binding"
     ],
     "GO:0030544": [
       "Protein binding"
-    ],
-    "GO:0030545": [
-      "Molecular_function"
-    ],
-    "GO:0030546": [
-      "Molecular_function"
-    ],
-    "GO:0030547": [
-      "Molecular_function"
-    ],
-    "GO:0030548": [
-      "Molecular_function"
-    ],
-    "GO:0030549": [
-      "Molecular_function"
-    ],
-    "GO:0030550": [
-      "Molecular_function"
     ],
     "GO:0030551": [
       "Nucleotide binding"
@@ -13297,18 +12235,6 @@
     ],
     "GO:0030629": [
       "Nucleic acid binding"
-    ],
-    "GO:0030674": [
-      "Molecular_function"
-    ],
-    "GO:0030675": [
-      "Molecular_function"
-    ],
-    "GO:0030676": [
-      "Molecular_function"
-    ],
-    "GO:0030695": [
-      "Molecular_function"
     ],
     "GO:0030697": [
       "Transferase activity"
@@ -13523,38 +12449,14 @@
     "GO:0030881": [
       "Protein binding"
     ],
-    "GO:0030882": [
-      "Molecular_function"
-    ],
-    "GO:0030883": [
-      "Molecular_function"
-    ],
-    "GO:0030884": [
-      "Molecular_function"
-    ],
     "GO:0030898": [
       "Isomerase activity"
-    ],
-    "GO:0030899": [
-      "Molecular_function"
     ],
     "GO:0030911": [
       "Protein binding"
     ],
     "GO:0030928": [
       "Lyase activity"
-    ],
-    "GO:0030941": [
-      "Molecular_function"
-    ],
-    "GO:0030942": [
-      "Molecular_function"
-    ],
-    "GO:0030943": [
-      "Molecular_function"
-    ],
-    "GO:0030944": [
-      "Molecular_function"
     ],
     "GO:0030946": [
       "Phosphatase activity"
@@ -13667,9 +12569,6 @@
     "GO:0031220": [
       "Transferase activity"
     ],
-    "GO:0031249": [
-      "Protein binding"
-    ],
     "GO:0031267": [
       "Protein binding"
     ],
@@ -13688,9 +12587,6 @@
     "GO:0031370": [
       "Protein binding"
     ],
-    "GO:0031386": [
-      "Molecular_function"
-    ],
     "GO:0031402": [
       "Metal ion binding"
     ],
@@ -13705,9 +12601,6 @@
     ],
     "GO:0031406": [
       "Ion binding"
-    ],
-    "GO:0031409": [
-      "Molecular_function"
     ],
     "GO:0031418": [
       "Carbohydrate binding",
@@ -13751,9 +12644,6 @@
     "GO:0031490": [
       "Nucleic acid binding"
     ],
-    "GO:0031491": [
-      "Molecular_function"
-    ],
     "GO:0031492": [
       "Nucleic acid binding"
     ],
@@ -13793,9 +12683,6 @@
     "GO:0031625": [
       "Protein binding"
     ],
-    "GO:0031626": [
-      "Molecular_function"
-    ],
     "GO:0031628": [
       "Protein binding"
     ],
@@ -13810,9 +12697,6 @@
     ],
     "GO:0031682": [
       "Protein binding"
-    ],
-    "GO:0031683": [
-      "Molecular_function"
     ],
     "GO:0031685": [
       "Protein binding"
@@ -14475,12 +13359,6 @@
     "GO:0031964": [
       "Hydrolase activity"
     ],
-    "GO:0031992": [
-      "Molecular_function"
-    ],
-    "GO:0031993": [
-      "Molecular_function"
-    ],
     "GO:0031994": [
       "Protein binding"
     ],
@@ -14634,9 +13512,6 @@
     "GO:0032217": [
       "Transporter activity"
     ],
-    "GO:0032266": [
-      "Molecular_function"
-    ],
     "GO:0032267": [
       "Ligase activity"
     ],
@@ -14669,24 +13544,6 @@
     ],
     "GO:0032399": [
       "Protein binding"
-    ],
-    "GO:0032403": [
-      "Molecular_function"
-    ],
-    "GO:0032404": [
-      "Molecular_function"
-    ],
-    "GO:0032405": [
-      "Molecular_function"
-    ],
-    "GO:0032406": [
-      "Molecular_function"
-    ],
-    "GO:0032407": [
-      "Molecular_function"
-    ],
-    "GO:0032408": [
-      "Molecular_function"
     ],
     "GO:0032422": [
       "Nucleic acid binding"
@@ -14745,27 +13602,6 @@
     "GO:0032542": [
       "Antioxidant activity",
       "Oxidoreductase activity"
-    ],
-    "GO:0032546": [
-      "Molecular_function"
-    ],
-    "GO:0032547": [
-      "Molecular_function"
-    ],
-    "GO:0032548": [
-      "Molecular_function"
-    ],
-    "GO:0032549": [
-      "Molecular_function"
-    ],
-    "GO:0032550": [
-      "Molecular_function"
-    ],
-    "GO:0032551": [
-      "Molecular_function"
-    ],
-    "GO:0032552": [
-      "Molecular_function"
     ],
     "GO:0032553": [
       "Nucleotide binding"
@@ -14842,17 +13678,11 @@
     "GO:0032794": [
       "Protein binding"
     ],
-    "GO:0032795": [
-      "Molecular_function"
-    ],
     "GO:0032810": [
       "Nucleic acid binding"
     ],
     "GO:0032813": [
       "Protein binding"
-    ],
-    "GO:0032841": [
-      "Molecular_function"
     ],
     "GO:0032866": [
       "Oxidoreductase activity"
@@ -14866,20 +13696,8 @@
     "GO:0032931": [
       "Transferase activity"
     ],
-    "GO:0032934": [
-      "Molecular_function"
-    ],
-    "GO:0032935": [
-      "Molecular_function"
-    ],
     "GO:0032942": [
       "Kinase activity"
-    ],
-    "GO:0032947": [
-      "Molecular_function"
-    ],
-    "GO:0032977": [
-      "Molecular_function"
     ],
     "GO:0033038": [
       "Signaling receptor activity"
@@ -14948,9 +13766,6 @@
     "GO:0033204": [
       "Nucleic acid binding"
     ],
-    "GO:0033219": [
-      "Molecular_function"
-    ],
     "GO:0033221": [
       "Transporter activity"
     ],
@@ -14962,9 +13777,6 @@
     ],
     "GO:0033225": [
       "Transporter activity"
-    ],
-    "GO:0033226": [
-      "Molecular_function"
     ],
     "GO:0033229": [
       "Transporter activity"
@@ -15013,9 +13825,6 @@
     ],
     "GO:0033300": [
       "Transporter activity"
-    ],
-    "GO:0033328": [
-      "Molecular_function"
     ],
     "GO:0033401": [
       "Nucleic acid binding"
@@ -15220,9 +14029,6 @@
     ],
     "GO:0033560": [
       "Oxidoreductase activity"
-    ],
-    "GO:0033568": [
-      "Molecular_function"
     ],
     "GO:0033569": [
       "Transporter activity"
@@ -16239,17 +15045,11 @@
     "GO:0034228": [
       "Transporter activity"
     ],
-    "GO:0034235": [
-      "Molecular_function"
-    ],
     "GO:0034236": [
       "Protein binding"
     ],
     "GO:0034237": [
       "Protein binding"
-    ],
-    "GO:0034246": [
-      "Molecular_function"
     ],
     "GO:0034256": [
       "Oxidoreductase activity"
@@ -16278,15 +15078,6 @@
     "GO:0034283": [
       "Lyase activity"
     ],
-    "GO:0034290": [
-      "Molecular_function"
-    ],
-    "GO:0034291": [
-      "Molecular_function"
-    ],
-    "GO:0034292": [
-      "Molecular_function"
-    ],
     "GO:0034318": [
       "Transferase activity"
     ],
@@ -16306,7 +15097,7 @@
       "Signaling receptor activity"
     ],
     "GO:0034353": [
-      "Hydrolase activity"
+      "Phosphatase activity"
     ],
     "GO:0034386": [
       "Transferase activity"
@@ -16395,9 +15186,6 @@
     "GO:0034598": [
       "Lyase activity"
     ],
-    "GO:0034617": [
-      "Molecular_function"
-    ],
     "GO:0034618": [
       "Amino acid binding",
       "Ion binding"
@@ -16422,9 +15210,6 @@
     ],
     "GO:0034701": [
       "Peptidase activity"
-    ],
-    "GO:0034710": [
-      "Molecular_function"
     ],
     "GO:0034711": [
       "Protein binding"
@@ -16492,9 +15277,6 @@
     "GO:0034979": [
       "Transferase activity"
     ],
-    "GO:0034986": [
-      "Molecular_function"
-    ],
     "GO:0034987": [
       "Protein binding"
     ],
@@ -16510,23 +15292,11 @@
     "GO:0035013": [
       "Signaling receptor activity"
     ],
-    "GO:0035014": [
-      "Molecular_function"
-    ],
-    "GO:0035033": [
-      "Molecular_function"
-    ],
-    "GO:0035034": [
-      "Molecular_function"
-    ],
     "GO:0035035": [
       "Protein binding"
     ],
     "GO:0035091": [
       "Ion binding"
-    ],
-    "GO:0035100": [
-      "Molecular_function"
     ],
     "GO:0035173": [
       "Kinase activity"
@@ -16597,12 +15367,6 @@
     "GO:0035273": [
       "Ion binding"
     ],
-    "GO:0035274": [
-      "Molecular_function"
-    ],
-    "GO:0035275": [
-      "Molecular_function"
-    ],
     "GO:0035276": [
       "Ion binding"
     ],
@@ -16626,9 +15390,6 @@
     ],
     "GO:0035373": [
       "Protein binding"
-    ],
-    "GO:0035374": [
-      "Molecular_function"
     ],
     "GO:0035375": [
       "Protein binding"
@@ -16672,9 +15433,6 @@
     ],
     "GO:0035473": [
       "Protein binding"
-    ],
-    "GO:0035478": [
-      "Molecular_function"
     ],
     "GO:0035484": [
       "Nucleic acid binding"
@@ -16736,12 +15494,6 @@
     "GO:0035586": [
       "Signaling receptor activity"
     ],
-    "GO:0035591": [
-      "Molecular_function"
-    ],
-    "GO:0035594": [
-      "Molecular_function"
-    ],
     "GO:0035595": [
       "Hydrolase activity"
     ],
@@ -16760,17 +15512,11 @@
     "GO:0035605": [
       "Transferase activity"
     ],
-    "GO:0035612": [
-      "Molecular_function"
-    ],
     "GO:0035613": [
       "Nucleic acid binding"
     ],
     "GO:0035614": [
       "Nucleic acid binding"
-    ],
-    "GO:0035615": [
-      "Molecular_function"
     ],
     "GO:0035620": [
       "Transporter activity"
@@ -16783,12 +15529,6 @@
     ],
     "GO:0035643": [
       "Signaling receptor activity"
-    ],
-    "GO:0035650": [
-      "Molecular_function"
-    ],
-    "GO:0035651": [
-      "Molecular_function"
     ],
     "GO:0035662": [
       "Protein binding"
@@ -16820,9 +15560,6 @@
     "GO:0035730": [
       "Ion binding"
     ],
-    "GO:0035731": [
-      "Molecular_function"
-    ],
     "GO:0035755": [
       "Hydrolase activity"
     ],
@@ -16837,12 +15574,6 @@
     ],
     "GO:0035798": [
       "Oxidoreductase activity"
-    ],
-    "GO:0035800": [
-      "Molecular_function"
-    ],
-    "GO:0035804": [
-      "Molecular_function"
     ],
     "GO:0035851": [
       "Protein binding"
@@ -16871,9 +15602,6 @@
     "GO:0035979": [
       "Kinase activity"
     ],
-    "GO:0035991": [
-      "Molecular_function"
-    ],
     "GO:0036002": [
       "Nucleic acid binding"
     ],
@@ -16882,9 +15610,6 @@
     ],
     "GO:0036009": [
       "Transferase activity"
-    ],
-    "GO:0036033": [
-      "Molecular_function"
     ],
     "GO:0036041": [
       "Ion binding"
@@ -16906,15 +15631,6 @@
     ],
     "GO:0036082": [
       "Transporter activity"
-    ],
-    "GO:0036094": [
-      "Molecular_function"
-    ],
-    "GO:0036105": [
-      "Molecular_function"
-    ],
-    "GO:0036106": [
-      "Molecular_function"
     ],
     "GO:0036121": [
       "Isomerase activity"
@@ -17101,9 +15817,6 @@
     "GO:0036356": [
       "Catalytic activity"
     ],
-    "GO:0036370": [
-      "Molecular_function"
-    ],
     "GO:0036373": [
       "Isomerase activity"
     ],
@@ -17200,9 +15913,6 @@
     "GO:0036459": [
       "Peptidase activity"
     ],
-    "GO:0036461": [
-      "Molecular_function"
-    ],
     "GO:0036463": [
       "Signaling receptor activity"
     ],
@@ -17214,18 +15924,6 @@
     ],
     "GO:0036469": [
       "Lyase activity"
-    ],
-    "GO:0036470": [
-      "Molecular_function"
-    ],
-    "GO:0036478": [
-      "Molecular_function"
-    ],
-    "GO:0036479": [
-      "Molecular_function"
-    ],
-    "GO:0036487": [
-      "Molecular_function"
     ],
     "GO:0036505": [
       "Signaling receptor activity"
@@ -17244,9 +15942,6 @@
     ],
     "GO:0038023": [
       "Signaling receptor activity"
-    ],
-    "GO:0038024": [
-      "Molecular_function"
     ],
     "GO:0038025": [
       "Signaling receptor activity"
@@ -17294,12 +15989,6 @@
     "GO:0038100": [
       "Protein binding"
     ],
-    "GO:0038102": [
-      "Molecular_function"
-    ],
-    "GO:0038106": [
-      "Molecular_function"
-    ],
     "GO:0038117": [
       "Signaling receptor activity"
     ],
@@ -17326,9 +16015,6 @@
     ],
     "GO:0038174": [
       "Signaling receptor activity"
-    ],
-    "GO:0038177": [
-      "Molecular_function"
     ],
     "GO:0038182": [
       "Signaling receptor activity"
@@ -17357,12 +16043,6 @@
     ],
     "GO:0039556": [
       "Protein binding"
-    ],
-    "GO:0039630": [
-      "Molecular_function"
-    ],
-    "GO:0039660": [
-      "Molecular_function"
     ],
     "GO:0039706": [
       "Protein binding"
@@ -17415,17 +16095,11 @@
     "GO:0042028": [
       "Isomerase activity"
     ],
-    "GO:0042030": [
-      "Molecular_function"
-    ],
     "GO:0042043": [
       "Protein binding"
     ],
     "GO:0042054": [
       "Transferase activity"
-    ],
-    "GO:0042056": [
-      "Molecular_function"
     ],
     "GO:0042071": [
       "Signaling receptor activity"
@@ -17480,9 +16154,6 @@
     ],
     "GO:0042263": [
       "Signaling receptor activity"
-    ],
-    "GO:0042277": [
-      "Molecular_function"
     ],
     "GO:0042279": [
       "Oxidoreductase activity"
@@ -17541,9 +16212,6 @@
     "GO:0042301": [
       "Ion binding"
     ],
-    "GO:0042302": [
-      "Molecular_function"
-    ],
     "GO:0042314": [
       "Tetrapyrrole binding"
     ],
@@ -17555,12 +16223,6 @@
     ],
     "GO:0042328": [
       "Transferase activity"
-    ],
-    "GO:0042329": [
-      "Molecular_function"
-    ],
-    "GO:0042349": [
-      "Molecular_function"
     ],
     "GO:0042356": [
       "Oxidoreductase activity"
@@ -17589,26 +16251,11 @@
     "GO:0042469": [
       "Oxidoreductase activity"
     ],
-    "GO:0042497": [
-      "Molecular_function"
-    ],
-    "GO:0042498": [
-      "Molecular_function"
-    ],
     "GO:0042500": [
       "Peptidase activity"
     ],
-    "GO:0042556": [
-      "Molecular_function"
-    ],
-    "GO:0042557": [
-      "Molecular_function"
-    ],
     "GO:0042561": [
       "Isomerase activity"
-    ],
-    "GO:0042562": [
-      "Molecular_function"
     ],
     "GO:0042569": [
       "Protein binding"
@@ -17624,15 +16271,6 @@
     ],
     "GO:0042602": [
       "Oxidoreductase activity"
-    ],
-    "GO:0042605": [
-      "Molecular_function"
-    ],
-    "GO:0042606": [
-      "Molecular_function"
-    ],
-    "GO:0042607": [
-      "Molecular_function"
     ],
     "GO:0042608": [
       "Protein binding"
@@ -17712,9 +16350,6 @@
     "GO:0042826": [
       "Protein binding"
     ],
-    "GO:0042834": [
-      "Molecular_function"
-    ],
     "GO:0042835": [
       "Nucleic acid binding"
     ],
@@ -17774,12 +16409,6 @@
     ],
     "GO:0042922": [
       "Protein binding"
-    ],
-    "GO:0042923": [
-      "Molecular_function"
-    ],
-    "GO:0042924": [
-      "Molecular_function"
     ],
     "GO:0042925": [
       "Xenobiotic transmembrane transporter activity"
@@ -17859,12 +16488,6 @@
     "GO:0042975": [
       "Protein binding"
     ],
-    "GO:0042978": [
-      "Molecular_function"
-    ],
-    "GO:0042979": [
-      "Molecular_function"
-    ],
     "GO:0042988": [
       "Protein binding"
     ],
@@ -17876,24 +16499,6 @@
     ],
     "GO:0043015": [
       "Protein binding"
-    ],
-    "GO:0043021": [
-      "Molecular_function"
-    ],
-    "GO:0043022": [
-      "Molecular_function"
-    ],
-    "GO:0043023": [
-      "Molecular_function"
-    ],
-    "GO:0043024": [
-      "Molecular_function"
-    ],
-    "GO:0043027": [
-      "Molecular_function"
-    ],
-    "GO:0043028": [
-      "Molecular_function"
     ],
     "GO:0043035": [
       "Nucleic acid binding"
@@ -17958,15 +16563,6 @@
     "GO:0043175": [
       "Protein binding"
     ],
-    "GO:0043176": [
-      "Molecular_function"
-    ],
-    "GO:0043177": [
-      "Molecular_function"
-    ],
-    "GO:0043178": [
-      "Molecular_function"
-    ],
     "GO:0043183": [
       "Protein binding"
     ],
@@ -17978,9 +16574,6 @@
     ],
     "GO:0043199": [
       "Ion binding"
-    ],
-    "GO:0043208": [
-      "Molecular_function"
     ],
     "GO:0043210": [
       "Ion binding"
@@ -18014,9 +16607,6 @@
     ],
     "GO:0043274": [
       "Protein binding"
-    ],
-    "GO:0043287": [
-      "Molecular_function"
     ],
     "GO:0043295": [
       "Ion binding"
@@ -18069,17 +16659,8 @@
     "GO:0043426": [
       "Transcription factor binding"
     ],
-    "GO:0043472": [
-      "Molecular_function"
-    ],
     "GO:0043492": [
       "Transporter activity"
-    ],
-    "GO:0043495": [
-      "Molecular_function"
-    ],
-    "GO:0043515": [
-      "Molecular_function"
     ],
     "GO:0043522": [
       "Protein binding"
@@ -18096,15 +16677,6 @@
     ],
     "GO:0043533": [
       "Ion binding"
-    ],
-    "GO:0043539": [
-      "Molecular_function"
-    ],
-    "GO:0043544": [
-      "Molecular_function"
-    ],
-    "GO:0043546": [
-      "Molecular_function"
     ],
     "GO:0043548": [
       "Protein binding"
@@ -18126,9 +16698,6 @@
     ],
     "GO:0043712": [
       "Transferase activity"
-    ],
-    "GO:0043713": [
-      "Oxidoreductase activity"
     ],
     "GO:0043714": [
       "Transferase activity"
@@ -18240,9 +16809,6 @@
     ],
     "GO:0043762": [
       "Ligase activity"
-    ],
-    "GO:0043763": [
-      "Molecular_function"
     ],
     "GO:0043764": [
       "Transferase activity"
@@ -18475,9 +17041,6 @@
     "GO:0043855": [
       "Transporter activity"
     ],
-    "GO:0043856": [
-      "Molecular_function"
-    ],
     "GO:0043857": [
       "Transferase activity"
     ],
@@ -18558,9 +17121,6 @@
     ],
     "GO:0043885": [
       "Oxidoreductase activity"
-    ],
-    "GO:0043886": [
-      "Molecular_function"
     ],
     "GO:0043887": [
       "Transporter activity"
@@ -18739,9 +17299,6 @@
     "GO:0044105": [
       "Oxidoreductase activity"
     ],
-    "GO:0044183": [
-      "Molecular_function"
-    ],
     "GO:0044197": [
       "Protein binding"
     ],
@@ -18759,9 +17316,6 @@
     ],
     "GO:0044325": [
       "Protein binding"
-    ],
-    "GO:0044373": [
-      "Molecular_function"
     ],
     "GO:0044374": [
       "Nucleic acid binding"
@@ -18844,9 +17398,6 @@
     "GO:0044610": [
       "Transporter activity"
     ],
-    "GO:0044620": [
-      "Molecular_function"
-    ],
     "GO:0044667": [
       "Transporter activity"
     ],
@@ -18879,9 +17430,6 @@
     ],
     "GO:0044689": [
       "Lyase activity"
-    ],
-    "GO:0044692": [
-      "Molecular_function"
     ],
     "GO:0044693": [
       "Transporter activity"
@@ -18927,12 +17475,6 @@
     ],
     "GO:0044875": [
       "Oxidoreductase activity"
-    ],
-    "GO:0044877": [
-      "Molecular_function"
-    ],
-    "GO:0045015": [
-      "Molecular_function"
     ],
     "GO:0045027": [
       "Nucleic acid binding"
@@ -18999,10 +17541,12 @@
     ],
     "GO:0045153": [
       "Electron transfer activity",
+      "Oxidoreductase activity",
       "Transporter activity"
     ],
     "GO:0045154": [
       "Electron transfer activity",
+      "Oxidoreductase activity",
       "Transporter activity"
     ],
     "GO:0045159": [
@@ -19011,12 +17555,6 @@
     "GO:0045174": [
       "Antioxidant activity",
       "Oxidoreductase activity"
-    ],
-    "GO:0045182": [
-      "Molecular_function"
-    ],
-    "GO:0045183": [
-      "Molecular_function"
     ],
     "GO:0045215": [
       "Kinase activity"
@@ -19132,12 +17670,6 @@
     "GO:0045486": [
       "Oxidoreductase activity"
     ],
-    "GO:0045499": [
-      "Molecular_function"
-    ],
-    "GO:0045502": [
-      "Molecular_function"
-    ],
     "GO:0045503": [
       "Protein binding"
     ],
@@ -19222,9 +17754,6 @@
     "GO:0045549": [
       "Oxidoreductase activity"
     ],
-    "GO:0045550": [
-      "Oxidoreductase activity"
-    ],
     "GO:0045551": [
       "Oxidoreductase activity"
     ],
@@ -19236,9 +17765,6 @@
     ],
     "GO:0045703": [
       "Oxidoreductase activity"
-    ],
-    "GO:0045735": [
-      "Molecular_function"
     ],
     "GO:0046025": [
       "Transferase activity"
@@ -19408,9 +17934,6 @@
     "GO:0046577": [
       "Oxidoreductase activity"
     ],
-    "GO:0046582": [
-      "Molecular_function"
-    ],
     "GO:0046583": [
       "Transporter activity"
     ],
@@ -19432,12 +17955,6 @@
     "GO:0046624": [
       "Transporter activity"
     ],
-    "GO:0046625": [
-      "Molecular_function"
-    ],
-    "GO:0046659": [
-      "Molecular_function"
-    ],
     "GO:0046702": [
       "Transferase activity"
     ],
@@ -19447,44 +17964,17 @@
     "GO:0046714": [
       "Ion binding"
     ],
-    "GO:0046715": [
-      "Transporter activity"
-    ],
-    "GO:0046789": [
-      "Molecular_function"
-    ],
     "GO:0046790": [
       "Protein binding"
-    ],
-    "GO:0046810": [
-      "Molecular_function"
-    ],
-    "GO:0046811": [
-      "Molecular_function"
-    ],
-    "GO:0046812": [
-      "Molecular_function"
-    ],
-    "GO:0046817": [
-      "Molecular_function"
     ],
     "GO:0046820": [
       "Transferase activity"
     ],
-    "GO:0046848": [
-      "Molecular_function"
-    ],
     "GO:0046857": [
       "Oxidoreductase activity"
     ],
-    "GO:0046863": [
-      "Molecular_function"
-    ],
     "GO:0046870": [
       "Metal ion binding"
-    ],
-    "GO:0046871": [
-      "Molecular_function"
     ],
     "GO:0046872": [
       "Metal ion binding"
@@ -19494,9 +17984,6 @@
     ],
     "GO:0046875": [
       "Protein binding"
-    ],
-    "GO:0046876": [
-      "Molecular_function"
     ],
     "GO:0046899": [
       "Kinase activity"
@@ -19509,9 +17996,6 @@
     ],
     "GO:0046906": [
       "Tetrapyrrole binding"
-    ],
-    "GO:0046910": [
-      "Molecular_function"
     ],
     "GO:0046911": [
       "Metal ion binding"
@@ -19543,9 +18027,6 @@
     "GO:0046922": [
       "Transferase activity"
     ],
-    "GO:0046923": [
-      "Molecular_function"
-    ],
     "GO:0046932": [
       "Ligase activity",
       "Transporter activity"
@@ -19556,9 +18037,6 @@
     ],
     "GO:0046934": [
       "Kinase activity"
-    ],
-    "GO:0046935": [
-      "Molecular_function"
     ],
     "GO:0046936": [
       "Hydrolase activity"
@@ -20820,9 +19298,6 @@
     "GO:0047406": [
       "Hydrolase activity"
     ],
-    "GO:0047407": [
-      "Hydrolase activity"
-    ],
     "GO:0047408": [
       "Hydrolase activity"
     ],
@@ -20983,9 +19458,6 @@
       "Isomerase activity"
     ],
     "GO:0047466": [
-      "Isomerase activity"
-    ],
-    "GO:0047468": [
       "Isomerase activity"
     ],
     "GO:0047469": [
@@ -22509,12 +20981,6 @@
     "GO:0048001": [
       "Oxidoreductase activity"
     ],
-    "GO:0048018": [
-      "Molecular_function"
-    ],
-    "GO:0048019": [
-      "Molecular_function"
-    ],
     "GO:0048020": [
       "Protein binding"
     ],
@@ -22535,12 +21001,6 @@
     ],
     "GO:0048032": [
       "Ion binding"
-    ],
-    "GO:0048038": [
-      "Molecular_function"
-    ],
-    "GO:0048039": [
-      "Molecular_function"
     ],
     "GO:0048040": [
       "Lyase activity"
@@ -22566,9 +21026,6 @@
     "GO:0048156": [
       "Protein binding"
     ],
-    "GO:0048185": [
-      "Molecular_function"
-    ],
     "GO:0048186": [
       "Protein binding"
     ],
@@ -22592,9 +21049,6 @@
     ],
     "GO:0048257": [
       "Hydrolase activity"
-    ],
-    "GO:0048270": [
-      "Molecular_function"
     ],
     "GO:0048273": [
       "Protein binding"
@@ -22646,9 +21100,6 @@
     ],
     "GO:0048531": [
       "Transferase activity"
-    ],
-    "GO:0048551": [
-      "Molecular_function"
     ],
     "GO:0048602": [
       "Protein binding"
@@ -23877,9 +22328,6 @@
     "GO:0050431": [
       "Protein binding"
     ],
-    "GO:0050436": [
-      "Molecular_function"
-    ],
     "GO:0050437": [
       "Lyase activity"
     ],
@@ -24549,9 +22997,6 @@
     "GO:0050797": [
       "Transferase activity"
     ],
-    "GO:0050809": [
-      "Molecular_function"
-    ],
     "GO:0050811": [
       "Protein binding"
     ],
@@ -24561,26 +23006,14 @@
     "GO:0050816": [
       "Protein binding"
     ],
-    "GO:0050825": [
-      "Molecular_function"
-    ],
-    "GO:0050827": [
-      "Molecular_function"
-    ],
     "GO:0050833": [
       "Transporter activity"
     ],
     "GO:0050839": [
       "Protein binding"
     ],
-    "GO:0050840": [
-      "Molecular_function"
-    ],
     "GO:0050897": [
       "Metal ion binding"
-    ],
-    "GO:0050997": [
-      "Molecular_function"
     ],
     "GO:0050998": [
       "Protein binding"
@@ -24659,9 +23092,6 @@
       "Isomerase activity",
       "Transferase activity"
     ],
-    "GO:0051082": [
-      "Protein binding"
-    ],
     "GO:0051087": [
       "Protein binding"
     ],
@@ -24688,9 +23118,6 @@
     ],
     "GO:0051183": [
       "Transporter activity"
-    ],
-    "GO:0051192": [
-      "Molecular_function"
     ],
     "GO:0051212": [
       "Metal ion binding"
@@ -24776,9 +23203,6 @@
     "GO:0051408": [
       "Transporter activity"
     ],
-    "GO:0051424": [
-      "Molecular_function"
-    ],
     "GO:0051425": [
       "Protein binding"
     ],
@@ -24808,12 +23232,6 @@
     ],
     "GO:0051435": [
       "Protein binding"
-    ],
-    "GO:0051448": [
-      "Molecular_function"
-    ],
-    "GO:0051449": [
-      "Molecular_function"
     ],
     "GO:0051471": [
       "Transporter activity"
@@ -24865,9 +23283,6 @@
     ],
     "GO:0051539": [
       "Iron-sulfur cluster binding"
-    ],
-    "GO:0051540": [
-      "Molecular_function"
     ],
     "GO:0051566": [
       "Transferase activity"
@@ -24941,14 +23356,8 @@
     "GO:0051737": [
       "Kinase activity"
     ],
-    "GO:0051738": [
-      "Molecular_function"
-    ],
     "GO:0051739": [
       "Transporter activity"
-    ],
-    "GO:0051740": [
-      "Molecular_function"
     ],
     "GO:0051741": [
       "Transferase activity"
@@ -25003,9 +23412,6 @@
     ],
     "GO:0051800": [
       "Phosphatase activity"
-    ],
-    "GO:0051861": [
-      "Molecular_function"
     ],
     "GO:0051864": [
       "Oxidoreductase activity"
@@ -25769,21 +24175,6 @@
     "GO:0055100": [
       "Protein binding"
     ],
-    "GO:0055102": [
-      "Molecular_function"
-    ],
-    "GO:0055103": [
-      "Molecular_function"
-    ],
-    "GO:0055104": [
-      "Molecular_function"
-    ],
-    "GO:0055105": [
-      "Molecular_function"
-    ],
-    "GO:0055106": [
-      "Molecular_function"
-    ],
     "GO:0055131": [
       "Protein binding"
     ],
@@ -25796,60 +24187,12 @@
     "GO:0060072": [
       "Transporter activity"
     ],
-    "GO:0060089": [
-      "Molecular_function"
-    ],
-    "GO:0060090": [
-      "Molecular_function"
-    ],
     "GO:0060175": [
       "Kinase activity",
       "Signaling receptor activity"
     ],
     "GO:0060182": [
       "Signaling receptor activity"
-    ],
-    "GO:0060228": [
-      "Molecular_function"
-    ],
-    "GO:0060229": [
-      "Molecular_function"
-    ],
-    "GO:0060230": [
-      "Molecular_function"
-    ],
-    "GO:0060241": [
-      "Molecular_function"
-    ],
-    "GO:0060308": [
-      "Molecular_function"
-    ],
-    "GO:0060422": [
-      "Molecular_function"
-    ],
-    "GO:0060589": [
-      "Molecular_function"
-    ],
-    "GO:0060590": [
-      "Molecular_function"
-    ],
-    "GO:0060698": [
-      "Molecular_function"
-    ],
-    "GO:0060703": [
-      "Molecular_function"
-    ],
-    "GO:0060961": [
-      "Molecular_function"
-    ],
-    "GO:0061133": [
-      "Molecular_function"
-    ],
-    "GO:0061134": [
-      "Molecular_function"
-    ],
-    "GO:0061135": [
-      "Molecular_function"
     ],
     "GO:0061459": [
       "Transporter activity"
@@ -25887,9 +24230,6 @@
     ],
     "GO:0061547": [
       "Transferase activity"
-    ],
-    "GO:0061575": [
-      "Molecular_function"
     ],
     "GO:0061578": [
       "Peptidase activity"
@@ -25930,17 +24270,11 @@
     "GO:0061607": [
       "Transferase activity"
     ],
-    "GO:0061608": [
-      "Molecular_function"
-    ],
     "GO:0061609": [
       "Lyase activity"
     ],
     "GO:0061627": [
       "Transferase activity"
-    ],
-    "GO:0061628": [
-      "Molecular_function"
     ],
     "GO:0061629": [
       "Transcription factor binding"
@@ -25951,20 +24285,8 @@
     "GO:0061631": [
       "Transferase activity"
     ],
-    "GO:0061632": [
-      "Molecular_function"
-    ],
     "GO:0061634": [
       "Hydrolase activity"
-    ],
-    "GO:0061636": [
-      "Molecular_function"
-    ],
-    "GO:0061637": [
-      "Molecular_function"
-    ],
-    "GO:0061649": [
-      "Molecular_function"
     ],
     "GO:0061650": [
       "Transferase activity"
@@ -26052,12 +24374,6 @@
     ],
     "GO:0061711": [
       "Transferase activity"
-    ],
-    "GO:0061714": [
-      "Molecular_function"
-    ],
-    "GO:0061717": [
-      "Molecular_function"
     ],
     "GO:0061730": [
       "Nucleic acid binding"
@@ -26158,9 +24474,6 @@
     "GO:0061863": [
       "Transferase activity"
     ],
-    "GO:0061891": [
-      "Molecular_function"
-    ],
     "GO:0061896": [
       "Oxidoreductase activity"
     ],
@@ -26224,53 +24537,8 @@
     "GO:0062057": [
       "Transporter activity"
     ],
-    "GO:0062058": [
-      "Molecular_function"
-    ],
-    "GO:0062059": [
-      "Molecular_function"
-    ],
-    "GO:0062060": [
-      "Molecular_function"
-    ],
-    "GO:0062061": [
-      "Molecular_function"
-    ],
-    "GO:0062062": [
-      "Molecular_function"
-    ],
-    "GO:0062063": [
-      "Molecular_function"
-    ],
-    "GO:0062064": [
-      "Molecular_function"
-    ],
-    "GO:0062065": [
-      "Molecular_function"
-    ],
-    "GO:0062066": [
-      "Molecular_function"
-    ],
-    "GO:0062067": [
-      "Molecular_function"
-    ],
-    "GO:0062068": [
-      "Molecular_function"
-    ],
-    "GO:0062069": [
-      "Molecular_function"
-    ],
-    "GO:0062070": [
-      "Molecular_function"
-    ],
-    "GO:0062072": [
-      "Molecular_function"
-    ],
     "GO:0062076": [
       "Oxidoreductase activity"
-    ],
-    "GO:0062078": [
-      "Molecular_function"
     ],
     "GO:0062080": [
       "Signaling receptor activity"
@@ -26322,9 +24590,6 @@
     ],
     "GO:0062152": [
       "Transferase activity"
-    ],
-    "GO:0062153": [
-      "Molecular_function"
     ],
     "GO:0062154": [
       "Hydrolase activity"
@@ -26392,15 +24657,6 @@
     "GO:0062213": [
       "Isomerase activity"
     ],
-    "GO:0062239": [
-      "Molecular_function"
-    ],
-    "GO:0062240": [
-      "Molecular_function"
-    ],
-    "GO:0062241": [
-      "Molecular_function"
-    ],
     "GO:0070001": [
       "Peptidase activity"
     ],
@@ -26417,6 +24673,9 @@
       "Peptidase activity"
     ],
     "GO:0070006": [
+      "Peptidase activity"
+    ],
+    "GO:0070007": [
       "Peptidase activity"
     ],
     "GO:0070008": [
@@ -26436,15 +24695,6 @@
     ],
     "GO:0070016": [
       "Protein binding"
-    ],
-    "GO:0070025": [
-      "Molecular_function"
-    ],
-    "GO:0070026": [
-      "Molecular_function"
-    ],
-    "GO:0070027": [
-      "Molecular_function"
     ],
     "GO:0070034": [
       "Nucleic acid binding"
@@ -26469,12 +24719,6 @@
     ],
     "GO:0070043": [
       "Transferase activity"
-    ],
-    "GO:0070051": [
-      "Molecular_function"
-    ],
-    "GO:0070052": [
-      "Molecular_function"
     ],
     "GO:0070053": [
       "Signaling receptor activity"
@@ -26534,9 +24778,6 @@
     "GO:0070182": [
       "Protein binding"
     ],
-    "GO:0070186": [
-      "Molecular_function"
-    ],
     "GO:0070204": [
       "Transferase activity"
     ],
@@ -26581,20 +24822,11 @@
     "GO:0070284": [
       "Lyase activity"
     ],
-    "GO:0070287": [
-      "Molecular_function"
-    ],
     "GO:0070290": [
       "Hydrolase activity"
     ],
     "GO:0070300": [
       "Ion binding"
-    ],
-    "GO:0070320": [
-      "Molecular_function"
-    ],
-    "GO:0070324": [
-      "Molecular_function"
     ],
     "GO:0070325": [
       "Protein binding"
@@ -26677,9 +24909,6 @@
     "GO:0070457": [
       "Phosphatase activity"
     ],
-    "GO:0070463": [
-      "Molecular_function"
-    ],
     "GO:0070491": [
       "Transcription factor binding"
     ],
@@ -26688,9 +24917,6 @@
     ],
     "GO:0070497": [
       "Lyase activity"
-    ],
-    "GO:0070506": [
-      "Molecular_function"
     ],
     "GO:0070513": [
       "Protein binding"
@@ -26754,9 +24980,6 @@
     ],
     "GO:0070626": [
       "Lyase activity"
-    ],
-    "GO:0070628": [
-      "Molecular_function"
     ],
     "GO:0070635": [
       "Hydrolase activity"
@@ -26867,9 +25090,6 @@
     "GO:0070835": [
       "Transporter activity"
     ],
-    "GO:0070840": [
-      "Molecular_function"
-    ],
     "GO:0070851": [
       "Protein binding"
     ],
@@ -26900,9 +25120,6 @@
     "GO:0070890": [
       "Transporter activity"
     ],
-    "GO:0070891": [
-      "Molecular_function"
-    ],
     "GO:0070892": [
       "Signaling receptor activity"
     ],
@@ -26925,9 +25142,6 @@
     "GO:0070915": [
       "Signaling receptor activity"
     ],
-    "GO:0070917": [
-      "Molecular_function"
-    ],
     "GO:0070967": [
       "Ion binding"
     ],
@@ -26945,9 +25159,6 @@
     ],
     "GO:0070984": [
       "Protein binding"
-    ],
-    "GO:0070990": [
-      "Molecular_function"
     ],
     "GO:0070991": [
       "Oxidoreductase activity"
@@ -27024,9 +25235,6 @@
     "GO:0071568": [
       "Transferase activity"
     ],
-    "GO:0071576": [
-      "Molecular_function"
-    ],
     "GO:0071614": [
       "Oxidoreductase activity"
     ],
@@ -27045,9 +25253,6 @@
     "GO:0071714": [
       "Transporter activity"
     ],
-    "GO:0071723": [
-      "Molecular_function"
-    ],
     "GO:0071771": [
       "Lyase activity"
     ],
@@ -27062,15 +25267,6 @@
     ],
     "GO:0071796": [
       "Protein binding"
-    ],
-    "GO:0071813": [
-      "Molecular_function"
-    ],
-    "GO:0071814": [
-      "Molecular_function"
-    ],
-    "GO:0071815": [
-      "Molecular_function"
     ],
     "GO:0071820": [
       "Nucleic acid binding"
@@ -27099,17 +25295,8 @@
     "GO:0071861": [
       "Protein binding"
     ],
-    "GO:0071862": [
-      "Molecular_function"
-    ],
-    "GO:0071884": [
-      "Molecular_function"
-    ],
     "GO:0071885": [
       "Transferase activity"
-    ],
-    "GO:0071886": [
-      "Molecular_function"
     ],
     "GO:0071889": [
       "Protein binding"
@@ -27128,9 +25315,6 @@
     ],
     "GO:0071917": [
       "Transporter activity"
-    ],
-    "GO:0071933": [
-      "Molecular_function"
     ],
     "GO:0071949": [
       "Ion binding",
@@ -27164,12 +25348,6 @@
     "GO:0072320": [
       "Transporter activity"
     ],
-    "GO:0072328": [
-      "Molecular_function"
-    ],
-    "GO:0072341": [
-      "Molecular_function"
-    ],
     "GO:0072345": [
       "Transporter activity"
     ],
@@ -27202,12 +25380,6 @@
     ],
     "GO:0072541": [
       "Peroxidase activity"
-    ],
-    "GO:0072542": [
-      "Molecular_function"
-    ],
-    "GO:0072543": [
-      "Molecular_function"
     ],
     "GO:0072544": [
       "Amino acid binding",
@@ -27250,20 +25422,11 @@
     "GO:0072571": [
       "Ion binding"
     ],
-    "GO:0072572": [
-      "Molecular_function"
-    ],
     "GO:0072582": [
       "Oxidoreductase activity"
     ],
     "GO:0072585": [
       "Hydrolase activity"
-    ],
-    "GO:0072586": [
-      "Molecular_function"
-    ],
-    "GO:0072587": [
-      "Molecular_function"
     ],
     "GO:0072590": [
       "Ligase activity"
@@ -27475,9 +25638,6 @@
     "GO:0080133": [
       "Oxidoreductase activity"
     ],
-    "GO:0080138": [
-      "Transporter activity"
-    ],
     "GO:0080139": [
       "Transporter activity"
     ],
@@ -27592,17 +25752,8 @@
     "GO:0090302": [
       "Transferase activity"
     ],
-    "GO:0090353": [
-      "Molecular_function"
-    ],
-    "GO:0090369": [
-      "Molecular_function"
-    ],
     "GO:0090409": [
       "Ligase activity"
-    ],
-    "GO:0090411": [
-      "Molecular_function"
     ],
     "GO:0090415": [
       "Oxidoreductase activity"
@@ -27778,17 +25929,11 @@
     "GO:0090624": [
       "Hydrolase activity"
     ],
-    "GO:0090631": [
-      "Molecular_function"
-    ],
     "GO:0090632": [
       "Nucleotidyltransferase activity"
     ],
     "GO:0090633": [
       "Nucleotidyltransferase activity"
-    ],
-    "GO:0090645": [
-      "Molecular_function"
     ],
     "GO:0090655": [
       "Nucleic acid binding"
@@ -27820,20 +25965,11 @@
     "GO:0090722": [
       "Protein binding"
     ],
-    "GO:0090729": [
-      "Molecular_function"
-    ],
     "GO:0090736": [
       "Protein binding"
     ],
-    "GO:0097001": [
-      "Molecular_function"
-    ],
     "GO:0097003": [
       "Signaling receptor activity"
-    ],
-    "GO:0097004": [
-      "Molecular_function"
     ],
     "GO:0097005": [
       "Protein binding"
@@ -27847,26 +25983,11 @@
     "GO:0097016": [
       "Protein binding"
     ],
-    "GO:0097020": [
-      "Molecular_function"
-    ],
     "GO:0097023": [
       "Lyase activity"
     ],
     "GO:0097024": [
       "Protein binding"
-    ],
-    "GO:0097027": [
-      "Molecular_function"
-    ],
-    "GO:0097030": [
-      "Molecular_function"
-    ],
-    "GO:0097063": [
-      "Molecular_function"
-    ],
-    "GO:0097077": [
-      "Molecular_function"
     ],
     "GO:0097079": [
       "Transporter activity"
@@ -27874,9 +25995,6 @@
     "GO:0097098": [
       "Isomerase activity",
       "Nucleic acid binding"
-    ],
-    "GO:0097099": [
-      "Molecular_function"
     ],
     "GO:0097100": [
       "Nucleic acid binding"
@@ -27896,39 +26014,18 @@
     "GO:0097158": [
       "Nucleic acid binding"
     ],
-    "GO:0097160": [
-      "Molecular_function"
-    ],
     "GO:0097161": [
       "Protein binding"
     ],
     "GO:0097162": [
       "Protein binding"
     ],
-    "GO:0097163": [
-      "Molecular_function"
-    ],
-    "GO:0097177": [
-      "Molecular_function"
-    ],
     "GO:0097216": [
       "Ion binding",
       "Nucleotide binding"
     ],
-    "GO:0097243": [
-      "Molecular_function"
-    ],
     "GO:0097244": [
       "Ion binding"
-    ],
-    "GO:0097245": [
-      "Molecular_function"
-    ],
-    "GO:0097246": [
-      "Molecular_function"
-    ],
-    "GO:0097247": [
-      "Molecular_function"
     ],
     "GO:0097253": [
       "Transporter activity"
@@ -27966,17 +26063,11 @@
     "GO:0097322": [
       "Nucleic acid binding"
     ],
-    "GO:0097351": [
-      "Molecular_function"
-    ],
     "GO:0097358": [
       "Hydrolase activity"
     ],
     "GO:0097363": [
       "Transferase activity"
-    ],
-    "GO:0097367": [
-      "Molecular_function"
     ],
     "GO:0097371": [
       "Protein binding"
@@ -27995,9 +26086,6 @@
     ],
     "GO:0097472": [
       "Kinase activity"
-    ],
-    "GO:0097493": [
-      "Molecular_function"
     ],
     "GO:0097506": [
       "Hydrolase activity"
@@ -28054,12 +26142,6 @@
     "GO:0097643": [
       "Signaling receptor activity"
     ],
-    "GO:0097644": [
-      "Molecular_function"
-    ],
-    "GO:0097645": [
-      "Molecular_function"
-    ],
     "GO:0097655": [
       "Protein binding"
     ],
@@ -28078,14 +26160,8 @@
     "GO:0097689": [
       "Transporter activity"
     ],
-    "GO:0097690": [
-      "Molecular_function"
-    ],
     "GO:0097697": [
       "Transferase activity"
-    ],
-    "GO:0097713": [
-      "Molecular_function"
     ],
     "GO:0097718": [
       "Protein binding"
@@ -28184,9 +26260,6 @@
     "GO:0098632": [
       "Protein binding"
     ],
-    "GO:0098633": [
-      "Molecular_function"
-    ],
     "GO:0098634": [
       "Protein binding"
     ],
@@ -28211,15 +26284,6 @@
     "GO:0098695": [
       "Transporter activity"
     ],
-    "GO:0098699": [
-      "Molecular_function"
-    ],
-    "GO:0098744": [
-      "Molecular_function"
-    ],
-    "GO:0098748": [
-      "Molecular_function"
-    ],
     "GO:0098750": [
       "Protein binding"
     ],
@@ -28228,9 +26292,6 @@
     ],
     "GO:0098770": [
       "Protein binding"
-    ],
-    "GO:0098772": [
-      "Molecular_function"
     ],
     "GO:0098782": [
       "Transporter activity"
@@ -28254,23 +26315,8 @@
     "GO:0098851": [
       "Nucleic acid binding"
     ],
-    "GO:0098879": [
-      "Molecular_function"
-    ],
-    "GO:0098882": [
-      "Molecular_function"
-    ],
-    "GO:0098918": [
-      "Molecular_function"
-    ],
-    "GO:0098919": [
-      "Molecular_function"
-    ],
     "GO:0098960": [
       "Signaling receptor activity"
-    ],
-    "GO:0098973": [
-      "Molecular_function"
     ],
     "GO:0098988": [
       "Signaling receptor activity"
@@ -28299,32 +26345,11 @@
     "GO:0099101": [
       "Transporter activity"
     ],
-    "GO:0099103": [
-      "Molecular_function"
-    ],
-    "GO:0099104": [
-      "Molecular_function"
-    ],
-    "GO:0099106": [
-      "Molecular_function"
-    ],
     "GO:0099122": [
       "Protein binding"
     ],
-    "GO:0099130": [
-      "Molecular_function"
-    ],
     "GO:0099142": [
       "Transporter activity"
-    ],
-    "GO:0099181": [
-      "Molecular_function"
-    ],
-    "GO:0099184": [
-      "Molecular_function"
-    ],
-    "GO:0099186": [
-      "Molecular_function"
     ],
     "GO:0099507": [
       "Transporter activity"
@@ -28355,9 +26380,6 @@
     ],
     "GO:0099600": [
       "Signaling receptor activity"
-    ],
-    "GO:0099602": [
-      "Molecular_function"
     ],
     "GO:0099604": [
       "Transporter activity"
@@ -29445,9 +27467,6 @@
     "GO:0102908": [
       "Transporter activity"
     ],
-    "GO:0102910": [
-      "Molecular_function"
-    ],
     "GO:0102913": [
       "Transferase activity"
     ],
@@ -29673,9 +27692,6 @@
     "GO:0103118": [
       "Transferase activity"
     ],
-    "GO:0106006": [
-      "Molecular_function"
-    ],
     "GO:0106008": [
       "Hydrolase activity"
     ],
@@ -29718,9 +27734,6 @@
     "GO:0106078": [
       "Transferase activity"
     ],
-    "GO:0106080": [
-      "Molecular_function"
-    ],
     "GO:0106099": [
       "Lyase activity"
     ],
@@ -29732,15 +27745,6 @@
     ],
     "GO:0106130": [
       "Transferase activity"
-    ],
-    "GO:0106137": [
-      "Molecular_function"
-    ],
-    "GO:0106138": [
-      "Molecular_function"
-    ],
-    "GO:0106140": [
-      "Molecular_function"
     ],
     "GO:0106141": [
       "Transferase activity"
@@ -29775,17 +27779,11 @@
     "GO:0106162": [
       "Transferase activity"
     ],
-    "GO:0106166": [
-      "Molecular_function"
-    ],
     "GO:0106177": [
       "Hydrolase activity"
     ],
     "GO:0106211": [
       "Hydrolase activity"
-    ],
-    "GO:0106219": [
-      "Molecular_function"
     ],
     "GO:0106222": [
       "Nucleic acid binding"
@@ -29837,9 +27835,6 @@
     ],
     "GO:0106251": [
       "Hydrolase activity"
-    ],
-    "GO:0106254": [
-      "Molecular_function"
     ],
     "GO:0106255": [
       "Isomerase activity"
@@ -30213,15 +28208,6 @@
     "GO:0120021": [
       "Transporter activity"
     ],
-    "GO:0120022": [
-      "Molecular_function"
-    ],
-    "GO:0120023": [
-      "Molecular_function"
-    ],
-    "GO:0120024": [
-      "Molecular_function"
-    ],
     "GO:0120048": [
       "Transferase activity"
     ],
@@ -30243,9 +28229,6 @@
     "GO:0120136": [
       "Kinase activity"
     ],
-    "GO:0120146": [
-      "Molecular_function"
-    ],
     "GO:0120147": [
       "Oxidoreductase activity"
     ],
@@ -30258,12 +28241,6 @@
     "GO:0120159": [
       "Isomerase activity"
     ],
-    "GO:0120160": [
-      "Molecular_function"
-    ],
-    "GO:0120170": [
-      "Molecular_function"
-    ],
     "GO:0120204": [
       "Oxidoreductase activity"
     ],
@@ -30275,9 +28252,6 @@
     ],
     "GO:0120227": [
       "Ion binding"
-    ],
-    "GO:0120230": [
-      "Molecular_function"
     ],
     "GO:0120233": [
       "Ion binding",
@@ -30305,12 +28279,6 @@
       "Amino acid binding",
       "Ion binding"
     ],
-    "GO:0120285": [
-      "Molecular_function"
-    ],
-    "GO:0120286": [
-      "Molecular_function"
-    ],
     "GO:0120294": [
       "Transferase activity"
     ],
@@ -30337,9 +28305,6 @@
     ],
     "GO:0120319": [
       "Oxidoreductase activity"
-    ],
-    "GO:0120325": [
-      "Molecular_function"
     ],
     "GO:0120328": [
       "Transferase activity"
@@ -30527,41 +28492,8 @@
     "GO:0120573": [
       "Hydrolase activity"
     ],
-    "GO:0140002": [
-      "Molecular_function"
-    ],
-    "GO:0140003": [
-      "Molecular_function"
-    ],
-    "GO:0140004": [
-      "Molecular_function"
-    ],
-    "GO:0140005": [
-      "Molecular_function"
-    ],
-    "GO:0140006": [
-      "Molecular_function"
-    ],
-    "GO:0140008": [
-      "Molecular_function"
-    ],
     "GO:0140010": [
       "Transporter activity"
-    ],
-    "GO:0140011": [
-      "Molecular_function"
-    ],
-    "GO:0140012": [
-      "Molecular_function"
-    ],
-    "GO:0140015": [
-      "Molecular_function"
-    ],
-    "GO:0140017": [
-      "Molecular_function"
-    ],
-    "GO:0140019": [
-      "Molecular_function"
     ],
     "GO:0140030": [
       "Protein binding"
@@ -30578,33 +28510,6 @@
     "GO:0140034": [
       "Protein binding"
     ],
-    "GO:0140035": [
-      "Molecular_function"
-    ],
-    "GO:0140036": [
-      "Molecular_function"
-    ],
-    "GO:0140037": [
-      "Molecular_function"
-    ],
-    "GO:0140038": [
-      "Molecular_function"
-    ],
-    "GO:0140044": [
-      "Molecular_function"
-    ],
-    "GO:0140046": [
-      "Molecular_function"
-    ],
-    "GO:0140054": [
-      "Molecular_function"
-    ],
-    "GO:0140055": [
-      "Molecular_function"
-    ],
-    "GO:0140063": [
-      "Molecular_function"
-    ],
     "GO:0140064": [
       "Transferase activity"
     ],
@@ -30619,15 +28524,6 @@
     ],
     "GO:0140070": [
       "Transporter activity"
-    ],
-    "GO:0140071": [
-      "Molecular_function"
-    ],
-    "GO:0140072": [
-      "Molecular_function"
-    ],
-    "GO:0140073": [
-      "Molecular_function"
     ],
     "GO:0140078": [
       "Lyase activity"
@@ -30653,12 +28549,6 @@
     "GO:0140088": [
       "Oxidoreductase activity"
     ],
-    "GO:0140090": [
-      "Molecular_function"
-    ],
-    "GO:0140094": [
-      "Molecular_function"
-    ],
     "GO:0140096": [
       "Catalytic activity"
     ],
@@ -30680,65 +28570,20 @@
     "GO:0140103": [
       "Catalytic activity"
     ],
-    "GO:0140104": [
-      "Molecular_function"
-    ],
     "GO:0140107": [
       "Transporter activity"
     ],
     "GO:0140108": [
       "Transporter activity"
     ],
-    "GO:0140109": [
-      "Molecular_function"
-    ],
-    "GO:0140110": [
-      "Molecular_function"
-    ],
     "GO:0140111": [
       "Oxidoreductase activity"
-    ],
-    "GO:0140117": [
-      "Molecular_function"
-    ],
-    "GO:0140118": [
-      "Molecular_function"
-    ],
-    "GO:0140119": [
-      "Molecular_function"
-    ],
-    "GO:0140120": [
-      "Molecular_function"
-    ],
-    "GO:0140126": [
-      "Molecular_function"
-    ],
-    "GO:0140127": [
-      "Molecular_function"
-    ],
-    "GO:0140128": [
-      "Molecular_function"
-    ],
-    "GO:0140129": [
-      "Molecular_function"
-    ],
-    "GO:0140130": [
-      "Molecular_function"
-    ],
-    "GO:0140132": [
-      "Molecular_function"
     ],
     "GO:0140135": [
       "Transporter activity"
     ],
-    "GO:0140142": [
-      "Molecular_function"
-    ],
     "GO:0140161": [
       "Transporter activity"
-    ],
-    "GO:0140164": [
-      "Molecular_function"
     ],
     "GO:0140169": [
       "Oxidoreductase activity"
@@ -30749,23 +28594,11 @@
     "GO:0140171": [
       "Oxidoreductase activity"
     ],
-    "GO:0140172": [
-      "Molecular_function"
-    ],
-    "GO:0140173": [
-      "Molecular_function"
-    ],
     "GO:0140174": [
       "Oxidoreductase activity"
     ],
     "GO:0140175": [
       "Oxidoreductase activity"
-    ],
-    "GO:0140177": [
-      "Molecular_function"
-    ],
-    "GO:0140180": [
-      "Molecular_function"
     ],
     "GO:0140186": [
       "Transferase activity"
@@ -30800,9 +28633,6 @@
     "GO:0140219": [
       "Catalytic activity"
     ],
-    "GO:0140223": [
-      "Molecular_function"
-    ],
     "GO:0140226": [
       "Isomerase activity"
     ],
@@ -30820,24 +28650,6 @@
     ],
     "GO:0140248": [
       "Transferase activity"
-    ],
-    "GO:0140254": [
-      "Molecular_function"
-    ],
-    "GO:0140257": [
-      "Molecular_function"
-    ],
-    "GO:0140258": [
-      "Molecular_function"
-    ],
-    "GO:0140259": [
-      "Molecular_function"
-    ],
-    "GO:0140260": [
-      "Molecular_function"
-    ],
-    "GO:0140262": [
-      "Molecular_function"
     ],
     "GO:0140272": [
       "Protein binding"
@@ -30857,17 +28669,11 @@
     "GO:0140294": [
       "Transferase activity"
     ],
-    "GO:0140295": [
-      "Molecular_function"
-    ],
     "GO:0140296": [
       "Transcription factor binding"
     ],
     "GO:0140297": [
       "Transcription factor binding"
-    ],
-    "GO:0140299": [
-      "Molecular_function"
     ],
     "GO:0140303": [
       "Transporter activity"
@@ -30881,32 +28687,8 @@
     "GO:0140306": [
       "Transporter activity"
     ],
-    "GO:0140309": [
-      "Molecular_function"
-    ],
-    "GO:0140311": [
-      "Molecular_function"
-    ],
-    "GO:0140312": [
-      "Molecular_function"
-    ],
-    "GO:0140313": [
-      "Molecular_function"
-    ],
-    "GO:0140314": [
-      "Molecular_function"
-    ],
-    "GO:0140315": [
-      "Molecular_function"
-    ],
     "GO:0140318": [
       "Transporter activity"
-    ],
-    "GO:0140319": [
-      "Molecular_function"
-    ],
-    "GO:0140320": [
-      "Molecular_function"
     ],
     "GO:0140322": [
       "Hydrolase activity"
@@ -30986,20 +28768,11 @@
     "GO:0140360": [
       "Transporter activity"
     ],
-    "GO:0140362": [
-      "Molecular_function"
-    ],
-    "GO:0140369": [
-      "Molecular_function"
-    ],
     "GO:0140375": [
       "Signaling receptor activity"
     ],
     "GO:0140376": [
       "Signaling receptor activity"
-    ],
-    "GO:0140378": [
-      "Molecular_function"
     ],
     "GO:0140379": [
       "Transferase activity"
@@ -31018,9 +28791,6 @@
     ],
     "GO:0140386": [
       "Transferase activity"
-    ],
-    "GO:0140388": [
-      "Molecular_function"
     ],
     "GO:0140393": [
       "Oxidoreductase activity"
@@ -31043,6 +28813,9 @@
     "GO:0140399": [
       "Oxidoreductase activity"
     ],
+    "GO:0140401": [
+      "Phosphatase activity"
+    ],
     "GO:0140407": [
       "Transporter activity"
     ],
@@ -31055,14 +28828,11 @@
     "GO:0140413": [
       "Transporter activity"
     ],
-    "GO:0140414": [
-      "Molecular_function"
-    ],
-    "GO:0140416": [
-      "Molecular_function"
-    ],
     "GO:0140417": [
       "Transporter activity"
+    ],
+    "GO:0140427": [
+      "Transferase activity"
     ],
     "GO:0140431": [
       "Nucleic acid binding"
@@ -31079,59 +28849,14 @@
     "GO:0140441": [
       "Transferase activity"
     ],
-    "GO:0140442": [
-      "Molecular_function"
-    ],
-    "GO:0140443": [
-      "Molecular_function"
-    ],
-    "GO:0140444": [
-      "Molecular_function"
-    ],
-    "GO:0140449": [
-      "Molecular_function"
-    ],
     "GO:0140457": [
       "Catalytic activity"
-    ],
-    "GO:0140463": [
-      "Molecular_function"
-    ],
-    "GO:0140473": [
-      "Molecular_function"
-    ],
-    "GO:0140474": [
-      "Molecular_function"
-    ],
-    "GO:0140475": [
-      "Molecular_function"
     ],
     "GO:0140481": [
       "Transporter activity"
     ],
-    "GO:0140482": [
-      "Molecular_function"
-    ],
-    "GO:0140483": [
-      "Molecular_function"
-    ],
     "GO:0140485": [
       "Transporter activity"
-    ],
-    "GO:0140486": [
-      "Molecular_function"
-    ],
-    "GO:0140487": [
-      "Molecular_function"
-    ],
-    "GO:0140488": [
-      "Molecular_function"
-    ],
-    "GO:0140489": [
-      "Molecular_function"
-    ],
-    "GO:0140490": [
-      "Molecular_function"
     ],
     "GO:0140491": [
       "Peptidase activity"
@@ -31139,29 +28864,8 @@
     "GO:0140492": [
       "Peptidase activity"
     ],
-    "GO:0140496": [
-      "Molecular_function"
-    ],
-    "GO:0140506": [
-      "Molecular_function"
-    ],
-    "GO:0140517": [
-      "Molecular_function"
-    ],
-    "GO:0140522": [
-      "Molecular_function"
-    ],
     "GO:0140523": [
       "Ribonucleoside triphosphate phosphatase activity"
-    ],
-    "GO:0140537": [
-      "Molecular_function"
-    ],
-    "GO:0140545": [
-      "Molecular_function"
-    ],
-    "GO:0140550": [
-      "Molecular_function"
     ],
     "GO:0140554": [
       "Oxidoreductase activity"
@@ -31181,21 +28885,12 @@
     "GO:0140564": [
       "Nucleic acid binding"
     ],
-    "GO:0140566": [
-      "Molecular_function"
-    ],
-    "GO:0140567": [
-      "Molecular_function"
-    ],
     "GO:0140571": [
       "Oxidoreductase activity",
       "Transporter activity"
     ],
     "GO:0140575": [
       "Oxidoreductase activity"
-    ],
-    "GO:0140580": [
-      "Molecular_function"
     ],
     "GO:0140581": [
       "Transporter activity"
@@ -31215,27 +28910,6 @@
     "GO:0140592": [
       "Transferase activity"
     ],
-    "GO:0140594": [
-      "Molecular_function"
-    ],
-    "GO:0140597": [
-      "Molecular_function"
-    ],
-    "GO:0140598": [
-      "Molecular_function"
-    ],
-    "GO:0140605": [
-      "Molecular_function"
-    ],
-    "GO:0140608": [
-      "Molecular_function"
-    ],
-    "GO:0140610": [
-      "Molecular_function"
-    ],
-    "GO:0140612": [
-      "Molecular_function"
-    ],
     "GO:0140613": [
       "Transporter activity"
     ],
@@ -31245,26 +28919,11 @@
     "GO:0140618": [
       "Oxidoreductase activity"
     ],
-    "GO:0140619": [
-      "Molecular_function"
-    ],
-    "GO:0140620": [
-      "Molecular_function"
-    ],
     "GO:0140625": [
       "Signaling receptor activity"
     ],
-    "GO:0140628": [
-      "Molecular_function"
-    ],
-    "GO:0140629": [
-      "Molecular_function"
-    ],
     "GO:0140630": [
       "Hydrolase activity"
-    ],
-    "GO:0140631": [
-      "Molecular_function"
     ],
     "GO:0140640": [
       "Catalytic activity"
@@ -31272,29 +28931,8 @@
     "GO:0140643": [
       "Oxidoreductase activity"
     ],
-    "GO:0140656": [
-      "Molecular_function"
-    ],
-    "GO:0140657": [
-      "Molecular_function"
-    ],
     "GO:0140658": [
       "Catalytic activity"
-    ],
-    "GO:0140659": [
-      "Molecular_function"
-    ],
-    "GO:0140660": [
-      "Molecular_function"
-    ],
-    "GO:0140661": [
-      "Molecular_function"
-    ],
-    "GO:0140662": [
-      "Molecular_function"
-    ],
-    "GO:0140663": [
-      "Molecular_function"
     ],
     "GO:0140664": [
       "Catalytic activity"
@@ -31314,12 +28952,6 @@
     ],
     "GO:0140675": [
       "Catalytic activity"
-    ],
-    "GO:0140677": [
-      "Molecular_function"
-    ],
-    "GO:0140678": [
-      "Molecular_function"
     ],
     "GO:0140679": [
       "Transporter activity"
@@ -31342,14 +28974,8 @@
     "GO:0140685": [
       "Oxidoreductase activity"
     ],
-    "GO:0140691": [
-      "Molecular_function"
-    ],
     "GO:0140692": [
       "Oxidoreductase activity"
-    ],
-    "GO:0140693": [
-      "Molecular_function"
     ],
     "GO:0140696": [
       "Oxidoreductase activity"
@@ -31373,20 +28999,8 @@
     "GO:0140704": [
       "Ion binding"
     ],
-    "GO:0140707": [
-      "Molecular_function"
-    ],
-    "GO:0140713": [
-      "Molecular_function"
-    ],
-    "GO:0140721": [
-      "Molecular_function"
-    ],
     "GO:0140728": [
       "Nucleic acid binding"
-    ],
-    "GO:0140733": [
-      "Molecular_function"
     ],
     "GO:0140740": [
       "Lyase activity",
@@ -31410,9 +29024,6 @@
     "GO:0140753": [
       "Transferase activity"
     ],
-    "GO:0140756": [
-      "Molecular_function"
-    ],
     "GO:0140757": [
       "Peptidase activity"
     ],
@@ -31431,17 +29042,8 @@
     "GO:0140762": [
       "Oxidoreductase activity"
     ],
-    "GO:0140764": [
-      "Molecular_function"
-    ],
     "GO:0140765": [
       "Transferase activity"
-    ],
-    "GO:0140767": [
-      "Molecular_function"
-    ],
-    "GO:0140768": [
-      "Molecular_function"
     ],
     "GO:0140769": [
       "Transferase activity"
@@ -31460,27 +29062,6 @@
     ],
     "GO:0140774": [
       "Transferase activity"
-    ],
-    "GO:0140775": [
-      "Molecular_function"
-    ],
-    "GO:0140776": [
-      "Molecular_function"
-    ],
-    "GO:0140777": [
-      "Molecular_function"
-    ],
-    "GO:0140778": [
-      "Molecular_function"
-    ],
-    "GO:0140784": [
-      "Molecular_function"
-    ],
-    "GO:0140785": [
-      "Molecular_function"
-    ],
-    "GO:0140786": [
-      "Molecular_function"
     ],
     "GO:0140787": [
       "Transporter activity"
@@ -31570,7 +29151,7 @@
       "Transferase activity"
     ],
     "GO:0140818": [
-      "Hydrolase activity"
+      "Phosphatase activity"
     ],
     "GO:0140819": [
       "Transporter activity"
@@ -31589,9 +29170,6 @@
     ],
     "GO:0140826": [
       "Transporter activity"
-    ],
-    "GO:0140827": [
-      "Molecular_function"
     ],
     "GO:0140828": [
       "Transporter activity"
@@ -31692,15 +29270,6 @@
     "GO:0140869": [
       "Nucleic acid binding"
     ],
-    "GO:0140870": [
-      "Molecular_function"
-    ],
-    "GO:0140871": [
-      "Molecular_function"
-    ],
-    "GO:0140890": [
-      "Molecular_function"
-    ],
     "GO:0140892": [
       "Transporter activity"
     ],
@@ -31733,12 +29302,6 @@
     ],
     "GO:0140908": [
       "Transferase activity"
-    ],
-    "GO:0140911": [
-      "Molecular_function"
-    ],
-    "GO:0140912": [
-      "Molecular_function"
     ],
     "GO:0140926": [
       "Transporter activity"
@@ -31833,9 +29396,6 @@
     "GO:0140968": [
       "Transporter activity"
     ],
-    "GO:0140978": [
-      "Molecular_function"
-    ],
     "GO:0140981": [
       "Oxidoreductase activity"
     ],
@@ -31893,23 +29453,11 @@
     "GO:0141035": [
       "Kinase activity"
     ],
-    "GO:0141038": [
-      "Molecular_function"
-    ],
-    "GO:0141039": [
-      "Molecular_function"
-    ],
     "GO:0141040": [
       "Oxidoreductase activity"
     ],
     "GO:0141046": [
       "Transferase activity"
-    ],
-    "GO:0141047": [
-      "Molecular_function"
-    ],
-    "GO:0141048": [
-      "Molecular_function"
     ],
     "GO:0141049": [
       "Oxidoreductase activity"
@@ -31941,12 +29489,6 @@
     "GO:0141058": [
       "Catalytic activity"
     ],
-    "GO:0141069": [
-      "Molecular_function"
-    ],
-    "GO:0141089": [
-      "Molecular_function"
-    ],
     "GO:0141090": [
       "Transferase activity"
     ],
@@ -31973,21 +29515,6 @@
     ],
     "GO:0141102": [
       "Transferase activity"
-    ],
-    "GO:0141106": [
-      "Molecular_function"
-    ],
-    "GO:0141107": [
-      "Molecular_function"
-    ],
-    "GO:0141108": [
-      "Molecular_function"
-    ],
-    "GO:0141109": [
-      "Molecular_function"
-    ],
-    "GO:0141110": [
-      "Molecular_function"
     ],
     "GO:0141118": [
       "Oxidoreductase activity"
@@ -32022,14 +29549,8 @@
     "GO:0141165": [
       "Transporter activity"
     ],
-    "GO:0141175": [
-      "Molecular_function"
-    ],
     "GO:0141180": [
       "Nucleic acid binding"
-    ],
-    "GO:0141185": [
-      "Molecular_function"
     ],
     "GO:0141192": [
       "Nucleotidyltransferase activity"
@@ -32060,12 +29581,6 @@
     ],
     "GO:0141223": [
       "Transferase activity"
-    ],
-    "GO:0150025": [
-      "Molecular_function"
-    ],
-    "GO:0150043": [
-      "Molecular_function"
     ],
     "GO:0150100": [
       "Nucleic acid binding"
@@ -32105,9 +29620,6 @@
       "Signaling receptor activity",
       "Transporter activity"
     ],
-    "GO:0160041": [
-      "Molecular_function"
-    ],
     "GO:0160042": [
       "Transporter activity"
     ],
@@ -32120,14 +29632,8 @@
     "GO:0160047": [
       "Kinase activity"
     ],
-    "GO:0160050": [
-      "Molecular_function"
-    ],
     "GO:0160053": [
       "Catalytic activity"
-    ],
-    "GO:0160072": [
-      "Molecular_function"
     ],
     "GO:0160079": [
       "Signaling receptor activity"
@@ -32140,9 +29646,6 @@
     ],
     "GO:0160082": [
       "Oxidoreductase activity"
-    ],
-    "GO:0160089": [
-      "Molecular_function"
     ],
     "GO:0160090": [
       "Transferase activity"
@@ -32180,12 +29683,6 @@
     "GO:0160121": [
       "Transferase activity"
     ],
-    "GO:0160123": [
-      "Molecular_function"
-    ],
-    "GO:0160124": [
-      "Molecular_function"
-    ],
     "GO:0160125": [
       "Transporter activity"
     ],
@@ -32200,9 +29697,6 @@
     ],
     "GO:0160133": [
       "Transporter activity"
-    ],
-    "GO:0160134": [
-      "Molecular_function"
     ],
     "GO:0160136": [
       "Isomerase activity"
@@ -32267,26 +29761,11 @@
     "GO:0160182": [
       "Oxidoreductase activity"
     ],
-    "GO:0160183": [
-      "Molecular_function"
-    ],
-    "GO:0160185": [
-      "Molecular_function"
-    ],
-    "GO:0160186": [
-      "Molecular_function"
-    ],
     "GO:0160187": [
       "Transporter activity"
     ],
-    "GO:0160190": [
-      "Molecular_function"
-    ],
     "GO:0160191": [
       "Oxidoreductase activity"
-    ],
-    "GO:0160193": [
-      "Molecular_function"
     ],
     "GO:0160196": [
       "Oxidoreductase activity"
@@ -32296,9 +29775,6 @@
     ],
     "GO:0160198": [
       "Oxidoreductase activity"
-    ],
-    "GO:0160204": [
-      "Molecular_function"
     ],
     "GO:0160205": [
       "Transferase activity"
@@ -32312,9 +29788,6 @@
     "GO:0160212": [
       "Signaling receptor activity",
       "Transporter activity"
-    ],
-    "GO:0160214": [
-      "Molecular_function"
     ],
     "GO:0160215": [
       "Catalytic activity"
@@ -32337,14 +29810,8 @@
     "GO:0160228": [
       "Transporter activity"
     ],
-    "GO:0160229": [
-      "Molecular_function"
-    ],
     "GO:0160230": [
       "Transferase activity"
-    ],
-    "GO:0160233": [
-      "Molecular_function"
     ],
     "GO:0160236": [
       "Transferase activity"
@@ -32367,9 +29834,6 @@
     "GO:0160246": [
       "Oxidoreductase activity"
     ],
-    "GO:0160247": [
-      "Molecular_function"
-    ],
     "GO:0160248": [
       "Transferase activity"
     ],
@@ -32391,12 +29855,6 @@
     "GO:0160265": [
       "Transferase activity"
     ],
-    "GO:0160267": [
-      "Molecular_function"
-    ],
-    "GO:0160268": [
-      "Molecular_function"
-    ],
     "GO:0160270": [
       "Transporter activity"
     ],
@@ -32417,12 +29875,6 @@
     ],
     "GO:0160291": [
       "Transporter activity"
-    ],
-    "GO:0160296": [
-      "Molecular_function"
-    ],
-    "GO:0160297": [
-      "Molecular_function"
     ],
     "GO:0160298": [
       "Nucleotidyltransferase activity"
@@ -32451,30 +29903,12 @@
     "GO:0170004": [
       "Transporter activity"
     ],
-    "GO:0170005": [
-      "Molecular_function"
-    ],
-    "GO:0170007": [
-      "Molecular_function"
-    ],
-    "GO:0170008": [
-      "Molecular_function"
-    ],
-    "GO:0170009": [
-      "Molecular_function"
-    ],
-    "GO:0170011": [
-      "Molecular_function"
-    ],
     "GO:0170012": [
       "Hydrolase activity",
       "Transferase activity"
     ],
     "GO:0170015": [
       "Signaling receptor activity"
-    ],
-    "GO:0170016": [
-      "Molecular_function"
     ],
     "GO:0170020": [
       "Signaling receptor activity",
@@ -32495,12 +29929,6 @@
     "GO:0170045": [
       "Transporter activity"
     ],
-    "GO:0170053": [
-      "Molecular_function"
-    ],
-    "GO:0170054": [
-      "Molecular_function"
-    ],
     "GO:0170055": [
       "Transporter activity"
     ],
@@ -32510,17 +29938,8 @@
     "GO:0170057": [
       "Ligase activity"
     ],
-    "GO:0170060": [
-      "Molecular_function"
-    ],
-    "GO:0170061": [
-      "Molecular_function"
-    ],
     "GO:0170068": [
       "Transferase activity"
-    ],
-    "GO:0180000": [
-      "Molecular_function"
     ],
     "GO:0180001": [
       "Nucleotide binding"
@@ -32549,23 +29968,11 @@
     "GO:0180013": [
       "Transporter activity"
     ],
-    "GO:0180014": [
-      "Molecular_function"
-    ],
-    "GO:0180016": [
-      "Molecular_function"
-    ],
     "GO:0180017": [
       "Peptidase activity"
     ],
-    "GO:0180020": [
-      "Molecular_function"
-    ],
     "GO:0180021": [
       "Transferase activity"
-    ],
-    "GO:0180024": [
-      "Molecular_function"
     ],
     "GO:0180030": [
       "Kinase activity"
@@ -32579,35 +29986,14 @@
     "GO:0180041": [
       "Transferase activity"
     ],
-    "GO:0180043": [
-      "Molecular_function"
-    ],
     "GO:0180044": [
       "Transporter activity"
-    ],
-    "GO:0180050": [
-      "Molecular_function"
-    ],
-    "GO:0180051": [
-      "Molecular_function"
     ],
     "GO:0180054": [
       "Ribonucleoside triphosphate phosphatase activity"
     ],
     "GO:0180056": [
       "Transporter activity"
-    ],
-    "GO:0180065": [
-      "Molecular_function"
-    ],
-    "GO:0180066": [
-      "Molecular_function"
-    ],
-    "GO:1900750": [
-      "Molecular_function"
-    ],
-    "GO:1900995": [
-      "Molecular_function"
     ],
     "GO:1901149": [
       "Ion binding"
@@ -32639,17 +30025,8 @@
     "GO:1901243": [
       "Transporter activity"
     ],
-    "GO:1901265": [
-      "Molecular_function"
-    ],
-    "GO:1901338": [
-      "Molecular_function"
-    ],
     "GO:1901359": [
       "Ion binding"
-    ],
-    "GO:1901363": [
-      "Molecular_function"
     ],
     "GO:1901368": [
       "Transporter activity"
@@ -32687,9 +30064,6 @@
     "GO:1901549": [
       "Transporter activity"
     ],
-    "GO:1901567": [
-      "Molecular_function"
-    ],
     "GO:1901584": [
       "Transporter activity"
     ],
@@ -32719,9 +30093,6 @@
     "GO:1901677": [
       "Transporter activity"
     ],
-    "GO:1901681": [
-      "Molecular_function"
-    ],
     "GO:1901682": [
       "Transporter activity"
     ],
@@ -32743,9 +30114,6 @@
     ],
     "GO:1901974": [
       "Transporter activity"
-    ],
-    "GO:1901981": [
-      "Molecular_function"
     ],
     "GO:1901982": [
       "Carbohydrate binding"
@@ -32784,12 +30152,6 @@
     "GO:1902301": [
       "Transporter activity"
     ],
-    "GO:1902314": [
-      "Molecular_function"
-    ],
-    "GO:1902379": [
-      "Molecular_function"
-    ],
     "GO:1902387": [
       "Ion binding"
     ],
@@ -32811,9 +30173,6 @@
     ],
     "GO:1902557": [
       "Transporter activity"
-    ],
-    "GO:1902670": [
-      "Molecular_function"
     ],
     "GO:1902936": [
       "Ion binding"
@@ -32842,30 +30201,6 @@
     "GO:1903777": [
       "Carbohydrate binding"
     ],
-    "GO:1903794": [
-      "Molecular_function"
-    ],
-    "GO:1903875": [
-      "Molecular_function"
-    ],
-    "GO:1903876": [
-      "Molecular_function"
-    ],
-    "GO:1903877": [
-      "Molecular_function"
-    ],
-    "GO:1903878": [
-      "Molecular_function"
-    ],
-    "GO:1903879": [
-      "Molecular_function"
-    ],
-    "GO:1903880": [
-      "Molecular_function"
-    ],
-    "GO:1903924": [
-      "Molecular_function"
-    ],
     "GO:1903962": [
       "Transporter activity"
     ],
@@ -32874,9 +30209,6 @@
     ],
     "GO:1904047": [
       "Ion binding"
-    ],
-    "GO:1904067": [
-      "Molecular_function"
     ],
     "GO:1904091": [
       "Catalytic activity"
@@ -32890,9 +30222,6 @@
     "GO:1904265": [
       "Peptidase activity"
     ],
-    "GO:1904288": [
-      "Molecular_function"
-    ],
     "GO:1904315": [
       "Signaling receptor activity",
       "Transporter activity"
@@ -32900,38 +30229,20 @@
     "GO:1904399": [
       "Ion binding"
     ],
-    "GO:1904408": [
-      "Molecular_function"
-    ],
     "GO:1904454": [
       "Peptidase activity"
     ],
     "GO:1904455": [
       "Peptidase activity"
     ],
-    "GO:1904483": [
-      "Molecular_function"
-    ],
     "GO:1904492": [
       "Ion binding"
-    ],
-    "GO:1904493": [
-      "Molecular_function"
-    ],
-    "GO:1904593": [
-      "Molecular_function"
-    ],
-    "GO:1904599": [
-      "Molecular_function"
     ],
     "GO:1904678": [
       "Nucleic acid binding"
     ],
     "GO:1904680": [
       "Transporter activity"
-    ],
-    "GO:1904713": [
-      "Molecular_function"
     ],
     "GO:1904767": [
       "Ion binding"
@@ -32945,18 +30256,6 @@
     "GO:1904822": [
       "Transferase activity"
     ],
-    "GO:1904841": [
-      "Molecular_function"
-    ],
-    "GO:1904854": [
-      "Molecular_function"
-    ],
-    "GO:1904855": [
-      "Molecular_function"
-    ],
-    "GO:1904931": [
-      "Molecular_function"
-    ],
     "GO:1905030": [
       "Transporter activity"
     ],
@@ -32969,26 +30268,14 @@
     "GO:1905060": [
       "Transporter activity"
     ],
-    "GO:1905108": [
-      "Molecular_function"
-    ],
     "GO:1905131": [
       "Transporter activity"
-    ],
-    "GO:1905172": [
-      "Molecular_function"
     ],
     "GO:1905201": [
       "Transporter activity"
     ],
-    "GO:1905334": [
-      "Molecular_function"
-    ],
     "GO:1905361": [
       "Transporter activity"
-    ],
-    "GO:1905394": [
-      "Molecular_function"
     ],
     "GO:1905502": [
       "Ion binding"
@@ -33007,18 +30294,6 @@
     ],
     "GO:1905577": [
       "Ion binding"
-    ],
-    "GO:1905594": [
-      "Molecular_function"
-    ],
-    "GO:1905761": [
-      "Molecular_function"
-    ],
-    "GO:1905762": [
-      "Molecular_function"
-    ],
-    "GO:1905763": [
-      "Molecular_function"
     ],
     "GO:1905773": [
       "Nucleic acid binding"
@@ -33059,9 +30334,6 @@
     "GO:1990107": [
       "Transferase activity"
     ],
-    "GO:1990119": [
-      "Molecular_function"
-    ],
     "GO:1990135": [
       "Transferase activity"
     ],
@@ -33089,9 +30361,6 @@
     "GO:1990175": [
       "Protein binding"
     ],
-    "GO:1990188": [
-      "Molecular_function"
-    ],
     "GO:1990189": [
       "Transferase activity"
     ],
@@ -33107,20 +30376,11 @@
     "GO:1990238": [
       "Hydrolase activity"
     ],
-    "GO:1990239": [
-      "Molecular_function"
-    ],
     "GO:1990240": [
       "Transporter activity"
     ],
     "GO:1990244": [
       "Kinase activity"
-    ],
-    "GO:1990247": [
-      "Molecular_function"
-    ],
-    "GO:1990254": [
-      "Molecular_function"
     ],
     "GO:1990259": [
       "Transferase activity"
@@ -33131,17 +30391,8 @@
     "GO:1990272": [
       "Signaling receptor activity"
     ],
-    "GO:1990275": [
-      "Molecular_function"
-    ],
     "GO:1990276": [
       "Transferase activity"
-    ],
-    "GO:1990300": [
-      "Molecular_function"
-    ],
-    "GO:1990301": [
-      "Molecular_function"
     ],
     "GO:1990308": [
       "Protein binding"
@@ -33179,12 +30430,6 @@
     "GO:1990405": [
       "Protein binding"
     ],
-    "GO:1990407": [
-      "Molecular_function"
-    ],
-    "GO:1990409": [
-      "Molecular_function"
-    ],
     "GO:1990411": [
       "Lyase activity"
     ],
@@ -33203,20 +30448,8 @@
     "GO:1990444": [
       "Protein binding"
     ],
-    "GO:1990446": [
-      "Molecular_function"
-    ],
-    "GO:1990447": [
-      "Molecular_function"
-    ],
-    "GO:1990448": [
-      "Molecular_function"
-    ],
     "GO:1990450": [
       "Protein binding"
-    ],
-    "GO:1990458": [
-      "Molecular_function"
     ],
     "GO:1990459": [
       "Protein binding"
@@ -33236,9 +30469,6 @@
     "GO:1990472": [
       "Nucleic acid binding"
     ],
-    "GO:1990473": [
-      "Molecular_function"
-    ],
     "GO:1990482": [
       "Transferase activity"
     ],
@@ -33257,14 +30487,8 @@
     "GO:1990576": [
       "Signaling receptor activity"
     ],
-    "GO:1990583": [
-      "Molecular_function"
-    ],
     "GO:1990585": [
       "Transferase activity"
-    ],
-    "GO:1990593": [
-      "Molecular_function"
     ],
     "GO:1990594": [
       "Lyase activity"
@@ -33275,9 +30499,6 @@
     "GO:1990599": [
       "Hydrolase activity"
     ],
-    "GO:1990600": [
-      "Molecular_function"
-    ],
     "GO:1990601": [
       "Hydrolase activity"
     ],
@@ -33287,15 +30508,6 @@
     "GO:1990606": [
       "Ribonucleoside triphosphate phosphatase activity"
     ],
-    "GO:1990609": [
-      "Molecular_function"
-    ],
-    "GO:1990610": [
-      "Molecular_function"
-    ],
-    "GO:1990624": [
-      "Molecular_function"
-    ],
     "GO:1990631": [
       "Protein binding"
     ],
@@ -33304,9 +30516,6 @@
     ],
     "GO:1990640": [
       "Phosphatase activity"
-    ],
-    "GO:1990644": [
-      "Molecular_function"
     ],
     "GO:1990648": [
       "Phosphatase activity"
@@ -33326,9 +30535,6 @@
     "GO:1990663": [
       "Oxidoreductase activity"
     ],
-    "GO:1990681": [
-      "Molecular_function"
-    ],
     "GO:1990698": [
       "Transferase activity"
     ],
@@ -33346,15 +30552,6 @@
     ],
     "GO:1990738": [
       "Phosphatase activity"
-    ],
-    "GO:1990749": [
-      "Molecular_function"
-    ],
-    "GO:1990756": [
-      "Molecular_function"
-    ],
-    "GO:1990757": [
-      "Molecular_function"
     ],
     "GO:1990760": [
       "Signaling receptor activity",
@@ -33385,20 +30582,11 @@
     "GO:1990829": [
       "Nucleic acid binding"
     ],
-    "GO:1990833": [
-      "Molecular_function"
-    ],
     "GO:1990837": [
       "Nucleic acid binding"
     ],
     "GO:1990838": [
       "Hydrolase activity"
-    ],
-    "GO:1990841": [
-      "Molecular_function"
-    ],
-    "GO:1990846": [
-      "Molecular_function"
     ],
     "GO:1990856": [
       "Nucleic acid binding"
@@ -33412,17 +30600,8 @@
     "GO:1990888": [
       "Transferase activity"
     ],
-    "GO:1990889": [
-      "Molecular_function"
-    ],
     "GO:1990890": [
       "Protein binding"
-    ],
-    "GO:1990915": [
-      "Molecular_function"
-    ],
-    "GO:1990919": [
-      "Molecular_function"
     ],
     "GO:1990929": [
       "Hydrolase activity"
@@ -33441,9 +30620,6 @@
     ],
     "GO:1990939": [
       "Isomerase activity"
-    ],
-    "GO:1990948": [
-      "Molecular_function"
     ],
     "GO:1990955": [
       "Nucleic acid binding"
@@ -33468,9 +30644,6 @@
     ],
     "GO:2001065": [
       "Carbohydrate binding"
-    ],
-    "GO:2001066": [
-      "Molecular_function"
     ],
     "GO:2001067": [
       "Carbohydrate binding"
@@ -33499,9 +30672,6 @@
     "GO:2001078": [
       "Carbohydrate binding"
     ],
-    "GO:2001079": [
-      "Molecular_function"
-    ],
     "GO:2001080": [
       "Ion binding"
     ],
@@ -33519,9 +30689,6 @@
     ],
     "GO:2001085": [
       "Carbohydrate binding"
-    ],
-    "GO:2001147": [
-      "Molecular_function"
     ],
     "GO:2001227": [
       "Ion binding"
@@ -33559,26 +30726,26 @@
     "GO:7770027": [
       "Transporter activity"
     ],
-    "GO:7770028": [
-      "Molecular_function"
-    ],
     "GO:7770029": [
       "Signaling receptor activity"
     ],
-    "GO:7770031": [
-      "Molecular_function"
-    ],
     "GO:7770036": [
       "Transferase activity"
-    ],
-    "GO:7770043": [
-      "Molecular_function"
     ],
     "GO:7770044": [
       "Oxidoreductase activity"
     ],
     "GO:7770054": [
       "Transferase activity"
+    ],
+    "GO:7770068": [
+      "Oxidoreductase activity"
+    ],
+    "GO:7770072": [
+      "Signaling receptor activity"
+    ],
+    "GO:7770073": [
+      "Signaling receptor activity"
     ]
   },
   "slim": "goslim_metagenomics",

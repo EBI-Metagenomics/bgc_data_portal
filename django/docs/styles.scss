@@ -17,3 +17,71 @@ $link-color:            #3b6fb6 !default;
 $link-hover-color:      #193f90 !default;
 $link-decoration:       none !default;
 $link-hover-decoration: underline !default;
+
+/*-- scss:rules --*/
+
+// ──────────────────────────────────────────────────────────────────────
+// Sidebar: a collapsible accordion with clear section / page hierarchy.
+// Sections are collapsed by default (see `collapse-level: 1`); each is a
+// distinct uppercase group header with a chevron, and its pages sit
+// indented under a left rail. The active page is highlighted in brand green.
+// ──────────────────────────────────────────────────────────────────────
+#quarto-sidebar {
+
+  // ── Section headers (group labels) ──────────────────────────────────
+  .sidebar-item-section > .sidebar-item-container {
+    margin-top: 0.35rem;
+    padding: 0.3rem 0.25rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+
+    &:hover { background-color: rgba($brand-primary, 0.06); }
+
+    .sidebar-item-text {
+      text-transform: uppercase;
+      font-weight: 700;
+      font-size: 0.72rem;
+      letter-spacing: 0.055em;
+      color: #4a5a68;
+    }
+
+    // Chevron sits to the right and rotates when the section opens.
+    .sidebar-item-toggle .bi {
+      font-size: 0.72rem;
+      color: #93a1ad;
+      transition: transform 0.15s ease;
+    }
+    &:hover .sidebar-item-toggle .bi { color: $brand-primary; }
+  }
+
+  // ── Page items (nested under a section) ─────────────────────────────
+  .sidebar-section.depth1 {
+    margin: 0.1rem 0 0.5rem 0.55rem;
+    padding-left: 0.6rem;
+    border-left: 1px solid rgba(0, 0, 0, 0.09);
+
+    .sidebar-link {
+      padding: 0.2rem 0.45rem;
+      margin: 0.05rem 0;
+      border-radius: 5px;
+      font-size: 0.86rem;
+      color: #46535f;
+      transition: background-color 0.12s ease, color 0.12s ease;
+
+      &:hover {
+        background-color: rgba($brand-primary, 0.07);
+        color: $brand-primary;
+        text-decoration: none;
+      }
+
+      // Current page.
+      &.active {
+        color: $brand-primary;
+        font-weight: 600;
+        background-color: rgba($brand-primary, 0.10);
+        box-shadow: inset 2px 0 0 $brand-primary;
+      }
+    }
+  }
+}

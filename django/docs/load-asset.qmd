@@ -1,0 +1,40 @@
+---
+title: "Load Asset"
+subtitle: "Compare your own assembly against the catalogue"
+---
+
+**Load Asset** lets you bring your own data into the discovery platform. You upload a packaged analysis of an assembly, and the platform projects its clusters into the catalogue so you can see them in the roster and on the maps alongside everything else — scored and positioned the same way as catalogue iBGCs.
+
+This replaces the older "upload and evaluate" workflow: instead of a separate evaluation page, your clusters become first-class iBGCs in the same discovery platform you already use.
+
+## What you upload
+
+A **packaged assembly analysis** as a `.tar.gz` (or `.tgz`) archive. This is the bundle produced by the annotation pipeline ([How the Data Is Built](how-data-is-built.qmd)) for a single assembly — the same per-assembly output that catalogue data is loaded from. If you have run your genome or metagenome through that pipeline, the package is ready to upload.
+
+The upload is small and intended for one assembly at a time.
+
+## What happens after upload
+
+1. The file uploads and the projection runs as a background job — the chip shows **queued** then **projecting**. Large assets can take a few minutes; keep the tab open.
+2. When it finishes, your clusters appear as iBGCs flagged **SUBMITTED** (shown in amber) at the top of the [roster](bgc-roster.qmd) and as points on the [Variables map](variables-map.qmd) and [UMAP](umap.qmd).
+3. Each submitted iBGC is **projected** against the catalogue's clustering: it is assigned to the nearest gene cluster family and given novelty and domain-novelty scores, so you can read it against catalogue clusters directly.
+
+The chip shows the assembly accession and the number of iBGCs projected. Hover it for the organism name.
+
+## Working with a loaded asset
+
+- Submitted iBGCs behave like any other: left-click to inspect, right-click to set as reference, find similar, or add to a shortlist.
+- The asset stays loaded as you switch result tabs and **survives Run Query**, so you can filter and search the catalogue while keeping your clusters in view for comparison.
+- A natural workflow is to **set one of your submitted iBGCs as the reference**, then [Find similar iBGCs](similar-ibgc.qmd) to pull up the catalogue clusters most like it.
+
+## Limits and privacy
+
+- **One asset at a time.** Loading a new file replaces the previous one.
+- **Ephemeral.** The upload is held only for your session and is evicted when you remove it (the **×** on the chip) or after it expires. It is never added to the public catalogue or shared with other users.
+- If the platform has no clustering run available to project against, the asset still loads but its clusters are shown un-projected (the chip notes this).
+
+## Related pages
+
+- [How the Data Is Built](how-data-is-built.qmd) — the pipeline that produces the package
+- [Find Similar iBGCs](similar-ibgc.qmd)
+- [BGC Roster](bgc-roster.qmd) · [Shortlists](shortlists.qmd)

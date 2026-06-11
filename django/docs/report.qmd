@@ -1,0 +1,54 @@
+---
+title: "The Report"
+subtitle: "A standalone summary of your shortlist"
+---
+
+The **report** is a full, self-contained summary of the iBGCs in your [shortlist](shortlists.qmd). You reach it with **Generate Report**; it opens on its own page, has a shareable link, and is where all the downloads live. Think of it as the deliverable you hand to collaborators or take into experimental planning.
+
+![The report: download buttons, the iBGC results table, and the summary charts (domain composition, GO-slim heatmap, GCF and score distributions).](images/report.png)
+
+## What's in it
+
+### Header
+
+The number of iBGCs and assemblies in the shortlist, and the [download buttons](export-formats.qmd).
+
+### iBGC results table
+
+One row per iBGC with the fields you need to act on it: accession (with Validated / Type Strain / Partial badges), parent assembly, organism, phylum, biome, size, **novelty**, **domain novelty**, GCF, class, source tools, and contig coordinates.
+
+### BGC stats
+
+A panel of charts summarising the shortlist as a whole:
+
+- **Domain composition** — every protein domain in the shortlist, tiered as **core** (in most iBGCs), **variable**, or **rare**. This tells you what machinery your candidates share versus what is unusual.
+- **Domain composition × GO slim** — the same domains crossed with coarse functional categories, as a heatmap.
+- **GCF distribution** — how the shortlist spreads across gene cluster families (sunburst).
+- **Score distributions** — histograms of novelty and domain novelty across the shortlist.
+- **Completeness** — complete vs partial clusters.
+- **BGC classes** — the mix of biosynthetic classes.
+- **Length distribution** — cluster sizes.
+- **Predictor distribution** — which detection tools contributed.
+- **Source distribution** — iBGCs per source collection.
+
+### Biome & taxonomy
+
+Sunburst charts showing the environments and lineages your candidates come from — useful for judging how ecologically or phylogenetically broad your shortlist is.
+
+### Assembly roster and stats
+
+The assemblies behind the shortlist, each with its organism, phylum, biome, source, size, total BGC count, and how many of its iBGCs are in your shortlist — plus assembly-level biome/taxonomy/source breakdowns.
+
+## Sharing and reloading
+
+The report URL carries a token. Bookmark or share it to return to the same materialised report. It remains available for a period after generation; if the link has expired, generate the report again from your shortlist to mint a fresh one.
+
+## Downloads
+
+From the header you can export the report as **JSON**, an **iBGC table (TSV)**, a **GenBank zip**, or a self-contained **HTML** file. See [Export Formats](export-formats.qmd) for what each contains and when to use it.
+
+## Related pages
+
+- [Shortlists](shortlists.qmd)
+- [Export Formats](export-formats.qmd)
+- [Scores & Metrics](scores-metrics.qmd) · [Gene Cluster Families](gcf-explained.qmd)

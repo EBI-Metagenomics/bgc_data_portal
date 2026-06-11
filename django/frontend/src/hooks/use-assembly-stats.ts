@@ -1,9 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchAssemblyStats, type AssemblyStatsParams } from "@/api/assemblies";
+import { classifyAccession } from "@/lib/accession";
 import { useFilterStore } from "@/stores/filter-store";
 
 export function useAssemblyStats(assemblyIds?: string, enabled: boolean = true) {
   const filters = useFilterStore();
+
+  // Route the single smart accession field to the legacy split params the
+  // assembly endpoints expect (see use-assembly-roster for the rationale).
+  const acc = filters.accession.trim();
+  const accIsAssembly = acc !== "" && classifyAccession(acc) === "assembly";
 
   const params: AssemblyStatsParams = {
     search: filters.search || undefined,
@@ -13,8 +19,8 @@ export function useAssemblyStats(assemblyIds?: string, enabled: boolean = true) 
     assembly_type: filters.assemblyType || undefined,
     bgc_class: filters.bgcClass || undefined,
     biome_lineage: filters.biomeLineage || undefined,
-    bgc_accession: filters.bgcAccession || undefined,
-    assembly_accession: filters.assemblyAccession || undefined,
+    bgc_accession: acc && !accIsAssembly ? acc : undefined,
+    assembly_accession: accIsAssembly ? acc : undefined,
     assembly_ids: assemblyIds,
   };
 

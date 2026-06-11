@@ -321,6 +321,10 @@ export interface RegionCds {
   chemont_name: string | null;
   chemont_probability: number | null;
   chemont_weight: number | null;
+  // Source tools whose prediction range covers this CDS within the owning
+  // iBGC (range-overlap attribution). Populated by the iBGC region endpoint;
+  // empty for the per-prediction BGC region endpoint.
+  claimed_by_tools: string[];
 }
 
 export interface RegionDomain {
@@ -349,6 +353,19 @@ export interface BgcRegionData {
   cds_list: RegionCds[];
   domain_list: RegionDomain[];
   cluster_list: RegionCluster[];
+}
+
+/**
+ * Merged region payload for an iBGC (``GET /ibgcs/{id}/region/``): the union
+ * of every CDS overlapping the iBGC's genomic span, with per-CDS
+ * ``claimed_by_tools`` attribution. Superset of {@link BgcRegionData} so it
+ * drops straight into ``RegionPlot``.
+ */
+export interface IbgcRegionData extends BgcRegionData {
+  ibgc_id: number;
+  ibgc_accession: string;
+  cbgc_accession: string;
+  contig_accession: string | null;
 }
 
 // ── Stats schemas ─────────────────────────────────────────────────────────
@@ -385,6 +402,7 @@ export interface AssemblyStatsResponse {
   mean_bgc_per_assembly: number;
   mean_l1_class_per_assembly: number;
   total_assemblies: number;
+  biome_sunburst: SunburstNode[];
 }
 
 export interface BgcStatsResponse {
@@ -575,8 +593,14 @@ export interface BgcAssessmentResult {
 
 export interface IbgcRosterItem {
   id: number;
+  /** Stable iBGC accession (MGYB-XXXXXX-YY); "" for ephemeral asset iBGCs. */
+  accession: string;
   label: string;
+  /** Parent cBGC accession (MGYB-XXXXXX). */
+  cbgc_accession: string | null;
   classification_path: string;
+  /** Normalised product class (Polyketide, NRP, RiPP, …, Hybrid(P+N), Hybrid). */
+  bgc_class: string;
   size_kb: number;
   n_source_bgcs: number;
   source_tools: string[];
@@ -588,6 +612,8 @@ export interface IbgcRosterItem {
   umap_projected: boolean;
   parent_assembly_id: number | null;
   parent_assembly_accession: string | null;
+  /** Collection / data source of the parent assembly (e.g. GTDB, MIBiG). */
+  parent_assembly_collection: string | null;
   organism_name: string | null;
   contig_accession: string | null;
   similarity_score: number | null;
@@ -614,8 +640,16 @@ export interface IbgcMemberBgc {
 
 export interface IbgcDetail {
   id: number;
+  /** Stable iBGC accession (MGYB-XXXXXX-YY); "" for ephemeral asset iBGCs. */
+  accession: string;
+  /** Parent cBGC accession (MGYB-XXXXXX). */
+  cbgc_accession: string | null;
   label: string;
+  /** GCF lineage / leaf path, e.g. "42.7.3" ("" when unclassified). The
+   *  first segment is the coarsest group; copy-paste matches the GCF filter. */
   classification_path: string;
+  /** Normalised product class (Polyketide, NRP, RiPP, …, Hybrid(P+N), Hybrid). */
+  bgc_class: string;
   size_kb: number;
   start_position: number;
   end_position: number;
@@ -630,7 +664,8 @@ export interface IbgcDetail {
   umap_x: number | null;
   umap_y: number | null;
   parent_assembly: ParentAssemblySummary | null;
-  representative_bgc_id: number | null;
+  /** Relative URL of the merged region payload (GET /ibgcs/{id}/region/). */
+  region_endpoint_url: string | null;
   member_bgcs: IbgcMemberBgc[];
   domain_architecture: DomainArchitectureItem[];
   natural_products: NaturalProductSummary[];
@@ -642,6 +677,8 @@ export interface IbgcScatterPoint {
   x: number;
   y: number;
   classification_path: string;
+  /** Normalised product class (Polyketide, NRP, RiPP, …, Hybrid(P+N), Hybrid). */
+  bgc_class: string;
   novelty_score: number | null;
   domain_novelty: number | null;
   is_partial: boolean;
@@ -672,6 +709,12 @@ export interface IbgcCountResponse {
   exact_count: number;
   cap: number;
   will_sample: boolean;
+}
+
+export interface IbgcIdsResponse {
+  ids: number[];
+  total_count: number;
+  truncated: boolean;
 }
 
 export type IbgcScatterAxis =
@@ -748,7 +791,10 @@ export interface ReportIbgcRow {
   id: number;
   label: string;
   classification_path: string;
+  bgc_class: string;
   size_kb: number;
+  start: number | null;
+  end: number | null;
   novelty_score: number | null;
   domain_novelty: number | null;
   n_source_bgcs: number;
@@ -792,8 +838,9 @@ export interface ReportPayload {
   ibgc_rows: ReportIbgcRow[];
   domain_composition: DomainCompositionSummary;
   gcf_distribution: GcfDistributionEntry[];
+  gcf_sunburst: SunburstNode[];
   score_distributions: ReportScoreDistribution[];
-  completeness_pie: CategoryCount[];
+  completeness_bar: CategoryCount[];
   bgc_class_pie: CategoryCount[];
   length_histogram: LengthBucket[];
   predictor_distribution: CategoryCount[];
@@ -801,5 +848,6 @@ export interface ReportPayload {
   assembly_rows: ReportAssemblyRow[];
   assembly_stats: Record<string, unknown>;
   taxonomy_sunburst: SunburstNode[];
+  biome_sunburst: SunburstNode[];
   domain_goslim_matrix: DomainGoslimMatrix;
 }

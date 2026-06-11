@@ -14,8 +14,14 @@ scipy_sparse = pytest.importorskip("scipy.sparse")
 
 from discovery.services.clustering.ibgc_scoring import (  # noqa: E402
     compute_domain_novelty_array,
+    compute_novelty_against_validated,
     compute_novelty_array,
 )
+
+
+def _zeros(n: int) -> "scipy_sparse.csr_matrix":
+    """An all-zero pairs matrix, to isolate the domain component (w_a=0)."""
+    return scipy_sparse.csr_matrix((n, 1), dtype=np.uint8)
 
 
 def _coo(rows: list[list[int]], n_cols: int) -> "scipy_sparse.csr_matrix":
@@ -47,7 +53,9 @@ def _sym_sim(values: dict[tuple[int, int], float], n: int) -> "scipy_sparse.csr_
     )
 
 
-# ── novelty ──────────────────────────────────────────────────────────────
+# ── novelty (deprecated compute_novelty_array — reuses the clustering sim) ─
+# These lock the *old* math of the retained-for-compat helper; the corrected
+# behaviour lives in the compute_novelty_against_validated tests below.
 
 
 def test_novelty_no_validated_columns_returns_nans():
@@ -76,6 +84,61 @@ def test_novelty_validated_vs_other_validated_uses_diagonal_zero():
     assert out[0] == pytest.approx(1.0 - 0.6, abs=1e-6)
     assert out[1] == pytest.approx(1.0 - 0.6, abs=1e-6)
     assert out[2] == pytest.approx(1.0 - 0.4, abs=1e-6)
+
+
+# ── novelty against validated (decoupled, diagonal-intact) ────────────────
+
+
+def test_validated_against_validated_block_no_validated_returns_nan():
+    M = _coo([[0, 1], [1, 2]], n_cols=3)
+    out = compute_novelty_against_validated(M, _zeros(2), [], weights=(1.0, 0.0))
+    assert out.shape == (2,)
+    assert np.all(np.isnan(out))
+
+
+def test_validated_row_is_zero_even_with_no_similar_validated_neighbour():
+    # Regression: the bug gave such a row novelty 1.0 because the clustering
+    # sim matrix zeroes the diagonal, dropping its self-match.
+    #   row 0: validated, domains {0,1}
+    #   row 1: non-validated, domains {2,3} (no overlap with row 0)
+    M = _coo([[0, 1], [2, 3]], n_cols=4)
+    out = compute_novelty_against_validated(M, _zeros(2), [0], weights=(1.0, 0.0))
+    assert out[0] == pytest.approx(0.0, abs=1e-6)   # self-match → not novel
+    assert out[1] == pytest.approx(1.0, abs=1e-6)   # genuinely novel
+
+
+def test_validated_self_match_beats_partial_overlap():
+    #   row 0: domains {0,1}            (identical to validated row 2)
+    #   row 1: domains {1,2}            (half-overlap with row 2)
+    #   row 2: validated, domains {0,1}
+    M = _coo([[0, 1], [1, 2], [0, 1]], n_cols=3)
+    out = compute_novelty_against_validated(M, _zeros(3), [2], weights=(1.0, 0.0))
+    assert out[0] == pytest.approx(0.0, abs=1e-6)   # Dice(=1.0) → novelty 0
+    assert out[1] == pytest.approx(0.5, abs=1e-6)   # Dice 0.5  → novelty 0.5
+    assert out[2] == pytest.approx(0.0, abs=1e-6)   # validated self → 0
+
+
+def test_near_threshold_similarity_is_not_pruned():
+    # Regression: with the old pruned (>=0.05) clustering matrix this edge
+    # would vanish and the row would read novelty 1.0. The decoupled block is
+    # unpruned, so the true 0.033 similarity survives.
+    #   row 0: validated, 30 domains {0..29}
+    #   row 1: 30 domains {29..58} — overlap is exactly {29}: Dice = 2/60 ≈ 0.033
+    M = _coo([list(range(0, 30)), list(range(29, 59))], n_cols=59)
+    out = compute_novelty_against_validated(M, _zeros(2), [0], weights=(1.0, 0.0))
+    assert out[0] == pytest.approx(0.0, abs=1e-6)
+    assert out[1] == pytest.approx(1.0 - (2.0 / 60.0), abs=1e-4)
+    assert out[1] < 1.0  # the sub-0.05 edge was NOT pruned away
+
+
+def test_composite_blends_domain_and_pair_components():
+    # Equal weights over two matrices: domain Dice 1.0, pair Dice 0.0
+    # → composite 0.5 → novelty 0.5 for the non-validated row.
+    M_dom = _coo([[0, 1], [0, 1]], n_cols=2)   # rows identical on domains
+    M_pair = _coo([[0], [1]], n_cols=2)        # rows disjoint on pairs
+    out = compute_novelty_against_validated(M_dom, M_pair, [0], weights=(0.5, 0.5))
+    assert out[0] == pytest.approx(0.0, abs=1e-6)   # validated self
+    assert out[1] == pytest.approx(0.5, abs=1e-6)
 
 
 # ── domain novelty ───────────────────────────────────────────────────────

@@ -39,13 +39,25 @@ export function IbgcDashboard() {
         >
           <ResultsCard />
         </div>
-        <div data-testid="reference-detail-slot" className="col-span-2 min-h-0">
+        <div
+          data-testid="reference-detail-slot"
+          data-tour="reference-detail"
+          className="col-span-2 min-h-0"
+        >
           <ReferenceDetailSlot />
         </div>
-        <div data-testid="compare-detail-slot" className="col-span-2 min-h-0">
+        <div
+          data-testid="compare-detail-slot"
+          data-tour="compare-detail"
+          className="col-span-2 min-h-0"
+        >
           <CompareDetailSlot />
         </div>
-        <div data-testid="protein-info-slot" className="col-span-2 min-h-0">
+        <div
+          data-testid="protein-info-slot"
+          data-tour="protein-info"
+          className="col-span-2 min-h-0"
+        >
           <ProteinInfoPanel />
         </div>
       </div>

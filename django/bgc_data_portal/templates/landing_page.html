@@ -20,10 +20,9 @@ limitations under the License.
             <h1 class="vf-hero__heading">Biosynthetic Gene Clusters</h1>
             <p class="vf-hero__subheading">Explore, analyse, and download metagenomic biosynthetic gene clusters</p>
             <form id="keyword-form"
-                  action="{% url 'search' %}"
+                  action="{% url 'keyword_search' %}"
                   method="get"
                   class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
-                <input type="hidden" name="form_type" value="keyword">
                 <div class="vf-sidebar__inner">
                     <div class="vf-form__item">
                         <input type="search"

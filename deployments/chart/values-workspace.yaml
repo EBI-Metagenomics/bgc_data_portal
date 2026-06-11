@@ -1,0 +1,5 @@
+# Overlay for the `local-full` dev flow: layer on top of values-laptop.yaml to
+# add the isolated Claude Code workspace pod.
+#   helm ... -f values-laptop.yaml -f values-workspace.yaml
+workspace:
+  enabled: true

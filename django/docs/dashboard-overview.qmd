@@ -1,0 +1,64 @@
+---
+title: "Discovery Platform Overview"
+subtitle: "How the single-screen discovery platform is laid out"
+---
+
+The discovery platform works on one screen: you build a query, run it, and triage the results in the same view. This page covers the layout and how its panels connect.
+
+## Layout
+
+The screen has a top strip and two working columns: results on the left, detail on the right.
+
+![Top strip with the filter chips and Run Query; the results panel (left) with its three tabs; and the stacked detail panels (right).](images/overview.png)
+
+### Top strip
+
+Holds the database stat badges (validated, integrated, and predicted BGC counts; genome and metagenome counts), the **filter chips** that make up your query, the [Load Asset](load-asset.qmd) control, and the action buttons: **Clear query**, **Generate Report**, and **Run Query**. See [Filtering](filtering.qmd).
+
+### Results panel (left)
+
+One panel, three tabs over the same result set:
+
+- **[BGC roster](bgc-roster.qmd)** — a sortable table, one row per iBGC.
+- **[Variables map](variables-map.qmd)** — a scatter plot of any two metrics you choose.
+- **[UMAP](umap.qmd)** — a 2-D map where similar iBGCs cluster together.
+
+Switching tabs does not change which iBGCs are shown — only how they're displayed.
+
+### Detail panels (right)
+
+Two iBGC detail cards stacked above a protein panel:
+
+- **Reference** (top) — the iBGC you pin to compare others against.
+- **Compare** (middle) — updates each time you left-click a result.
+- **[Protein Information](protein-panel.qmd)** (bottom, collapsible) — the gene you last clicked, with its domain annotations and sequence.
+
+Both detail cards share the same layout; see [iBGC Detail](ibgc-detail.qmd).
+
+## The core interactions
+
+The discovery platform is driven by clicks on iBGCs, whether in the roster or on a map:
+
+| Action | Result |
+|--------|--------|
+| **Left-click** an iBGC | Loads it into the **Compare** panel |
+| **Right-click → Set as reference iBGC** | Pins it to the **Reference** panel |
+| **Right-click → Find similar iBGCs** | Runs a [similarity search](similar-ibgc.qmd) around it |
+| **Right-click → Add to shortlist** | Adds it to your [shortlist](shortlists.qmd) |
+| **Click a gene (CDS)** in a detail card | Loads its protein into the **Protein Information** panel |
+
+The reference stays pinned while you left-click through other candidates, so you can compare many iBGCs against one anchor.
+
+## Nothing loads until you Run Query
+
+The result panels stay empty until you press **Run Query**. This lets you assemble a complete query — several filters, perhaps an advanced search chip — before anything is fetched. The badges in the top strip always reflect the full catalogue, not your current filters; the match count appears in a banner after you run.
+
+## Result caps and sampling
+
+A query can match more iBGCs than the maps can plot at once. When the result set exceeds the display cap, the maps show a representative sample and the banner reports the true total. Narrow the filters to see every match, or work from your shortlist — the [report](report.qmd) export uses the iBGCs you selected, not the sampled view.
+
+## Related pages
+
+- [BGC Roster](bgc-roster.qmd) · [Variables Map](variables-map.qmd) · [UMAP](umap.qmd)
+- [iBGC Detail](ibgc-detail.qmd) · [Protein Panel](protein-panel.qmd)
+- [Filtering](filtering.qmd) · [Search Overview](search-overview.qmd)

@@ -1,0 +1,35 @@
+---
+title: "Accessions Field"
+subtitle: "One smart field for any identifier"
+---
+
+The **Accessions** filter is a single text field that accepts any identifier the platform knows about — you do not have to say what kind it is. As you type, the field detects the kind and routes the query accordingly. Use it to jump straight to a specific cluster, assembly, contig, or protein, or to restrict the catalogue to one of them.
+
+## What it accepts
+
+| You type | Detected as | Example |
+|----------|-------------|---------|
+| `MGYB-XXXXXX-YY` | **iBGC / region** | `MGYB-AB12CD-0A` |
+| `MGYB-XXXXXX` | **BGC (consensus region)** | `MGYB-AB12CD` |
+| `MGYB…` with a dot | **BGC prediction** (a single tool's call) | — |
+| `ERZ…`, `GCA_…`, `GCF_…` | **Assembly** | `GCA_000003925.1` |
+| `MGYP…` | **Protein** | — |
+| anything else | treated as a **contig** identifier | — |
+
+The field shows a "Detected: …" hint so you can confirm it recognised the identifier before you run.
+
+## How it resolves identifiers
+
+Identifiers change over time — clusters are re-integrated, assemblies are re-versioned. The platform keeps an alias record, so an older accession still resolves to the current entity. You can paste an accession from an earlier export or a colleague's report and it will find the right iBGC.
+
+## Typical uses
+
+- **Go to one cluster.** Paste an iBGC accession to filter the discovery platform down to that single cluster, then inspect it in the detail panel.
+- **See everything in an assembly.** Paste an assembly accession to list all of that genome's iBGCs in the roster.
+- **Follow a protein.** Paste a protein accession to find the iBGC(s) it belongs to.
+- **Combine with other filters.** Like any chip, the accessions field combines with metadata and search chips — though pinning a single identifier usually narrows the result to that one entity.
+
+## Related pages
+
+- [Filtering](filtering.qmd)
+- [Key Concepts](key-concepts.qmd) — what iBGC, assembly, and contig mean

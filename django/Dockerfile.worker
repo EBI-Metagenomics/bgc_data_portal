@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     make \
     git \
+    curl \
+    unzip \
     libxrender1 \
     libxext6 \
     libsm6 \
@@ -16,15 +18,27 @@ RUN apt-get update && apt-get install -y \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# ChemOnt ontology for chemical-structure similarity search. The chemical
+# query task and the ChemOnt IC precompute both run in this worker. Baked in
+# at build time (same source as the ETL image) at the default path expected by
+# common_core.chemont.ontology. ``/data/<subdir>`` volume mounts don't shadow
+# this, so no PVC/mount is needed.
+RUN mkdir -p /data/chemont \
+ && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip  \
+      "http://classyfire.wishartlab.com/system/downloads/1_0/chemont/ChemOnt_2_1.obo.zip" \
+ && unzip /tmp/ChemOnt_2_1.obo.zip -d /data/chemont/ \
+ && rm /tmp/ChemOnt_2_1.obo.zip
+ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
+
 WORKDIR /app
 
 # ── Layer A: heavy ML packages (rarely change → maximise cache) ─────────────
-COPY requirements-ml.txt .
-RUN pip install --upgrade pip && pip install -r requirements-ml.txt
+COPY requirements-ml.lock .
+RUN pip install --upgrade pip && pip install -r requirements-ml.lock
 
-# ── Layer B: remaining deps ──────────────────────────────────────────────────
-COPY requirements-web.txt requirements-worker.txt ./
-RUN pip install -r requirements-worker.txt
+# ── Layer B: remaining deps (full resolved set; ML already satisfied) ────────
+COPY requirements-worker.lock .
+RUN pip install -r requirements-worker.lock
 
 # ── Layer C: application code (changes often) ───────────────────────────────
 COPY . .

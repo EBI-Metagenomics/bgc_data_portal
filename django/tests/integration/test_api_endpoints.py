@@ -1,211 +1,253 @@
-import json
-from types import SimpleNamespace
+"""API-level integration tests for the iBGC discovery endpoints.
 
-import pandas as pd
+Hits the real ``/api/discovery/*`` routes through the Django test client
+against a factory-seeded DB. This is the layer that was missing: the Phase 2f
+rename left stale field references in api.py (``bgcs`` vs ``source_bgcs``,
+``cds__bgc`` on the now-contig-anchored CDS, ``ibgc_architecture([list])``,
+dropped ``representative_bgc_id``), and nothing exercised these endpoints with
+data — the schema-less dev DB had masked every one.
+
+Covers the endpoints the v2 dashboard loads on the golden path:
+roster, detail, region, and the detector / chemont-class filter dropdowns.
+"""
+
+from __future__ import annotations
+
+import re
+
 import pytest
 from django.test import Client
-from django.conf import settings
+
+from discovery.models import CdsChemOnt
+from tests.factories.discovery_models import (
+    ContigCdsFactory,
+    ContigDomainFactory,
+    DashboardDetectorFactory,
+    IntegratedBgcFactory,
+    SourceBgcPredictionFactory,
+)
+
+_C = "[0-9ABCDEFGHJKMNPQRSTVWXYZ]"
+IBGC_RE = re.compile(rf"^MGYB-{_C}{{6}}-{_C}{{2}}$")
+CBGC_RE = re.compile(rf"^MGYB-{_C}{{6}}$")
 
 
-def _dummy_async_result(task_id: str = "test-task-id"):
-    return SimpleNamespace(id=task_id)
-
-
-@pytest.fixture(scope="module")
+@pytest.fixture
 def client():
     return Client()
 
 
-def _with_prefix(path: str) -> str:
-    # When SCRIPT_NAME is set, Django combines it with PATH_INFO internally.
-    # Do not prefix the path here to avoid duplicate segments.
-    return path
+@pytest.fixture
+def seeded_ibgc(db):
+    """A clustered iBGC: validated antiSMASH source prediction, an overlapping
+    CDS with a PFAM domain + a ChemOnt class — enough to drive every endpoint
+    under test through its real (range-overlap) query paths."""
+    ibgc = IntegratedBgcFactory(start_pos=1000, end_pos=5000)
+    ibgc.gene_cluster_family = "cluster.0001.0000.0000"
+    ibgc.save(update_fields=["gene_cluster_family"])
 
-
-def _extra_environ():
-    base = (getattr(settings, "FORCE_SCRIPT_NAME", "") or "").rstrip("/")
-    return {"SCRIPT_NAME": base} if base else {}
-
-
-def test_health_ok(monkeypatch, client):
-    # Avoid hitting a real database in production-like test env
-    import mgnify_bgcs.api as api_module
-
-    class _FakeCursor:
-        def execute(self, *_a, **_k):
-            return None
-
-    monkeypatch.setattr(
-        api_module,
-        "connection",
-        SimpleNamespace(cursor=lambda: _FakeCursor()),
+    detector = DashboardDetectorFactory(
+        name="antiSMASH v7", tool="antiSMASH", tool_name_code="ANT"
     )
-
-    resp = client.get(_with_prefix("/api/health"), **_extra_environ())
-    assert resp.status_code == 200
-    data = json.loads(resp.content.decode("utf-8"))
-    assert data.get("status") == "ok"
-
-
-def test_search_endpoints_return_task_ids(monkeypatch, client):
-    # Patch Celery task stubs to avoid touching broker/worker
-    import mgnify_bgcs.api as api_module
-
-    class _DummyTask:
-        def __init__(self, name):
-            self._name = name
-
-        def delay(self, *args, **kwargs):
-            return _dummy_async_result(task_id=f"{self._name}-123")
-
-    monkeypatch.setattr(
-        api_module,
-        "task_module",
-        SimpleNamespace(
-            keyword_search=_DummyTask("kw"),
-            advanced_search=_DummyTask("adv"),
-            sequence_search=_DummyTask("seq"),
-            compound_search=_DummyTask("chem"),
-        ),
+    SourceBgcPredictionFactory(
+        contig=ibgc.contig,
+        integrated_bgc=ibgc,
+        detector=detector,
+        is_validated=True,
+        is_partial=False,
+        start_pos=1000,
+        end_pos=5000,
     )
-
-    # keyword search
-    r1 = client.post(
-        _with_prefix("/api/search/keyword"),
-        data=json.dumps({"keyword": "glycosyltransferase"}),
-        content_type="application/json",
-        **_extra_environ(),
+    cds = ContigCdsFactory(contig=ibgc.contig, start_pos=1100, end_pos=1400)
+    ContigDomainFactory(cds=cds, ref_db="PFAM", domain_acc="PF00001")
+    CdsChemOnt.objects.create(
+        cds=cds,
+        chemont_id="CHEMONTID:0001",
+        chemont_name="Terpenes",
+        probability=0.9,
+        weight=0.5,
     )
-    assert r1.status_code == 202
-    assert json.loads(r1.content.decode("utf-8")).get("task_id").startswith("kw-")
-
-    # advanced search (empty body is allowed; all fields optional)
-    r2 = client.post(
-        _with_prefix("/api/search/advanced"),
-        data=json.dumps({}),
-        content_type="application/json",
-        **_extra_environ(),
-    )
-    assert r2.status_code == 202
-    assert json.loads(r2.content.decode("utf-8")).get("task_id").startswith("adv-")
-
-    # sequence search (provide minimal required field 'sequence')
-    r3 = client.post(
-        _with_prefix("/api/search/sequence"),
-        data=json.dumps({"sequence": "ATGAAATTTGGG"}),
-        content_type="application/json",
-        **_extra_environ(),
-    )
-    assert r3.status_code == 202
-    assert json.loads(r3.content.decode("utf-8")).get("task_id").startswith("seq-")
-
-    # chemical search
-    r4 = client.post(
-        _with_prefix("/api/search/chemical"),
-        data=json.dumps({"smiles": "CCO"}),
-        content_type="application/json",
-        **_extra_environ(),
-    )
-    assert r4.status_code == 202
-    assert json.loads(r4.content.decode("utf-8")).get("task_id").startswith("chem-")
+    return ibgc
 
 
-def test_download_bgc_variants(monkeypatch, client):
-    # Build a minimal valid GenBank text using Biopython for robust parsing
-    from Bio.Seq import Seq
-    from Bio.SeqRecord import SeqRecord
-    from Bio.SeqFeature import SeqFeature, FeatureLocation
-    from Bio import SeqIO
-    from io import StringIO
+@pytest.mark.django_db
+def test_roster_emits_stable_accessions(client, seeded_ibgc):
+    resp = client.get("/api/discovery/ibgcs/roster/", {"page": 1, "page_size": 50})
+    assert resp.status_code == 200, resp.content
+    items = resp.json()["items"]
+    row = next((it for it in items if it["id"] == seeded_ibgc.id), None)
+    assert row is not None, "seeded iBGC missing from roster"
+    # The regression: these used to be "" / None because the serializer never
+    # set them.
+    assert IBGC_RE.match(row["accession"]), row["accession"]
+    assert CBGC_RE.match(row["cbgc_accession"]), row["cbgc_accession"]
+    assert row["accession"] == seeded_ibgc.accession
 
-    seq = Seq("ATGAAATTTGGG")
-    rec = SeqRecord(seq, id="ctg1", name="ctg1")
-    rec.annotations["molecule_type"] = "DNA"
-    # Add a CDS with a translation so FAA export has content
-    cds = SeqFeature(
-        FeatureLocation(0, 9),
-        type="CDS",
-        qualifiers={
-            "ID": ["prot1"],
-            "translation": ["MKF"],
+
+@pytest.mark.django_db
+def test_detail_returns_200_with_accessions_and_architecture(client, seeded_ibgc):
+    # Previously 500: ibgc_architecture([member ids]) passed a list where a
+    # single id was expected, and the response carried a dropped field.
+    resp = client.get(f"/api/discovery/ibgcs/{seeded_ibgc.id}/")
+    assert resp.status_code == 200, resp.content
+    d = resp.json()
+    assert d["accession"] == seeded_ibgc.accession
+    assert CBGC_RE.match(d["cbgc_accession"]), d["cbgc_accession"]
+    assert d["region_endpoint_url"] == f"/api/discovery/ibgcs/{seeded_ibgc.id}/region/"
+    assert "representative_bgc_id" not in d
+    # Range-overlap domain architecture picked up the PFAM domain.
+    accs = {item["domain_acc"] for item in d["domain_architecture"]}
+    assert "PF00001" in accs
+    assert len(d["member_bgcs"]) == 1
+
+
+@pytest.mark.django_db
+def test_region_endpoint_attributes_tools_per_cds(client, seeded_ibgc):
+    resp = client.get(f"/api/discovery/ibgcs/{seeded_ibgc.id}/region/")
+    assert resp.status_code == 200, resp.content
+    d = resp.json()
+    assert d["ibgc_accession"] == seeded_ibgc.accession
+    assert CBGC_RE.match(d["cbgc_accession"])
+    assert len(d["cds_list"]) >= 1
+    # The overlapping CDS is claimed by the antiSMASH source prediction.
+    assert any("antiSMASH" in cds["claimed_by_tools"] for cds in d["cds_list"])
+
+
+def test_asset_region_endpoint_serves_negative_id_from_cache():
+    """Uploaded-asset iBGCs use negative ids and live in the Redis asset
+    cache, not the DB. The region endpoint must branch on ``ibgc_id < 0``
+    and read the cached payload via the ``X-Asset-Token`` header — without it
+    the genes/CDS plot stays blank (the bug this guards)."""
+    from discovery.services.asset_upload import cache as asset_cache
+
+    token = "tok_region_test"
+    neg_id = -1
+    asset_cache.write_region(
+        token,
+        neg_id,
+        {
+            "region_length": 4000,
+            "window_start": 0,
+            "window_end": 4000,
+            "cds_list": [
+                {
+                    "protein_id": "ASSET_CDS_1",
+                    "start": 100,
+                    "end": 400,
+                    "strand": 1,
+                    "protein_length": 100,
+                }
+            ],
+            "domain_list": [],
+            "cluster_list": [],
         },
     )
-    rec.features.append(cds)
-    buf = StringIO()
-    SeqIO.write(rec, buf, "genbank")
-    gbk_text = buf.getvalue()
 
-    # Patch cache to indicate success and provide our GBK text
-    import mgnify_bgcs.api as api_module
+    c = Client()
+    # Without the token → 404 (can't resolve an asset iBGC from the DB).
+    assert c.get(f"/api/discovery/ibgcs/{neg_id}/region/").status_code == 404
 
-    def fake_get_job_status(*, search_key=None, task_id=None):
-        return {"status": "SUCCESS", "result": {"record_genebank_text": gbk_text}}
-
-    monkeypatch.setattr(api_module, "get_job_status", fake_get_job_status)
-
-    # Test each output type; filename based on input id when source meta absent
-    for out_type, ctype in [
-        ("gbk", "application/genbank"),
-        ("fna", "text/x-fasta"),
-        ("faa", "text/x-fasta"),
-        ("json", "application/json"),
-    ]:
-        body = json.dumps({"bgc_id": "5544", "output_type": out_type})
-        resp = client.generic(
-            "GET",
-            _with_prefix("/api/download/bgc"),
-            body,
-            content_type="application/json",
-            **_extra_environ(),
-        )
-        assert resp.status_code == 200
-        assert resp["Content-Type"] == ctype
-        # Basic content checks
-        payload = resp.content.decode("utf-8")
-        if out_type in ("fna", "faa"):
-            assert payload.startswith(">")
-        elif out_type == "gbk":
-            assert "LOCUS" in payload
-        else:  # json
-            data = json.loads(payload)
-            assert data.get("id") == "ctg1"
-
-
-def test_download_results_tsv(monkeypatch, client):
-    # Provide a tiny DataFrame with the expected display columns
-    df = pd.DataFrame(
-        [
-            {
-                "accession": "MGYB00000001",
-                "assembly_accession": "GCA_000001",
-                "contig_accession": "contig_1",
-                "start_position_plus_one": 1,
-                "end_position": 100,
-                "detector_names": "antiSMASH",
-                "class_names": "NRPS",
-            }
-        ]
+    resp = c.get(
+        f"/api/discovery/ibgcs/{neg_id}/region/",
+        HTTP_X_ASSET_TOKEN=token,
     )
+    assert resp.status_code == 200, resp.content
+    d = resp.json()
+    assert d["ibgc_id"] == neg_id
+    assert [cds["protein_id"] for cds in d["cds_list"]] == ["ASSET_CDS_1"]
 
-    import mgnify_bgcs.api as api_module
 
-    def fake_get_job_status(*, task_id=None, search_key=None):
-        return {"status": "SUCCESS", "result": {"df": df}}
+@pytest.mark.django_db
+def test_roster_with_asset_token_and_filter_returns_db_rows_pinned(client, seeded_ibgc):
+    """With an asset loaded, a bare roster is asset-only — but applying a
+    filter must re-engage the DB query while keeping the asset pinned on top.
 
-    monkeypatch.setattr(api_module, "get_job_status", fake_get_job_status)
+    Regression: previously any asset token forced ``IntegratedBgc.none()`` and
+    chip/slider filters were silently dropped, so 'Run Query' showed only the
+    asset."""
+    from discovery.services.asset_upload import cache as asset_cache
 
-    body = json.dumps({"task_id": "abc123"})
-    resp = client.generic(
-        "GET",
-        _with_prefix("/api/download/results-tsv"),
-        body,
-        content_type="application/json",
-        **_extra_environ(),
+    token = "tok_roster_filter"
+    asset_cache.write_ibgc_list(token, [{"id": -1, "label": "iBGC-A1"}])
+
+    # Bare load → asset-only: the seeded DB iBGC must NOT appear.
+    bare = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {"page": 1, "page_size": 50, "asset_token": token},
     )
-    assert resp.status_code == 200
-    # Content type header for TSV
-    assert resp["Content-Type"].startswith("text/tab-separated-values")
-    text = resp.content.decode("utf-8")
-    # Ensure known header and value are present
-    assert "assembly_accession" in text
-    assert "GCA_000001" in text
+    assert bare.status_code == 200, bare.content
+    bare_ids = [it["id"] for it in bare.json()["items"]]
+    assert bare_ids == [-1], bare_ids
+
+    # Filter applied (validated_only matches the seeded iBGC) → DB re-engages,
+    # asset still pinned first.
+    filtered = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {
+            "page": 1,
+            "page_size": 50,
+            "asset_token": token,
+            "validated_only": "true",
+        },
+    )
+    assert filtered.status_code == 200, filtered.content
+    ids = [it["id"] for it in filtered.json()["items"]]
+    assert ids[0] == -1, f"asset must stay pinned on top: {ids}"
+    assert seeded_ibgc.id in ids, f"filtered DB iBGC missing: {ids}"
+
+
+@pytest.mark.django_db
+def test_filter_detectors_endpoint(client, seeded_ibgc):
+    # Previously 500: Count("bgcs") — the reverse relation is source_bgcs.
+    resp = client.get("/api/discovery/filters/detectors/", {"page": 1, "page_size": 20})
+    assert resp.status_code == 200, resp.content
+    tools = {it["tool"]: it["count"] for it in resp.json()["items"]}
+    assert tools.get("antiSMASH", 0) >= 1
+
+
+@pytest.mark.django_db
+def test_filter_chemont_classes_endpoint(client, seeded_ibgc):
+    # Previously 500: Count("cds__bgc") — CDS are contig-anchored in v2.
+    resp = client.get("/api/discovery/filters/chemont-classes/")
+    assert resp.status_code == 200, resp.content
+    ids = {node["chemont_id"] for node in resp.json()}
+    assert "CHEMONTID:0001" in ids
+
+
+@pytest.fixture
+def polyketide_ibgc(db):
+    """An iBGC whose contig carries a domain annotated as a polyketide
+    synthase — the data target for the landing-page free-text keyword
+    fallback (``domain_text``)."""
+    ibgc = IntegratedBgcFactory(start_pos=1000, end_pos=5000)
+    cds = ContigCdsFactory(contig=ibgc.contig, start_pos=1100, end_pos=1400)
+    ContigDomainFactory(
+        cds=cds,
+        domain_acc="PF00109",
+        domain_name="ketoacyl-synt",
+        domain_description="Beta-ketoacyl synthase, polyketide synthase domain",
+    )
+    return ibgc
+
+
+@pytest.mark.django_db
+def test_roster_domain_text_matches_domain_annotations(client, polyketide_ibgc):
+    # Free-text keyword like "Polyketide" must match via the iBGC's domain
+    # annotations (name / description / InterPro), not just organism name.
+    resp = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {"page": 1, "page_size": 50, "domain_text": "polyketide"},
+    )
+    assert resp.status_code == 200, resp.content
+    ids = {it["id"] for it in resp.json()["items"]}
+    assert polyketide_ibgc.id in ids
+
+
+@pytest.mark.django_db
+def test_roster_domain_text_excludes_non_matching(client, polyketide_ibgc):
+    resp = client.get(
+        "/api/discovery/ibgcs/roster/",
+        {"page": 1, "page_size": 50, "domain_text": "nonexistent-term-xyz"},
+    )
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["items"] == []

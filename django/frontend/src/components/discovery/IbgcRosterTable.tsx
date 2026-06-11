@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchIbgcRoster } from "@/api/ibgcs";
+import { fetchIbgcIds, fetchIbgcRoster } from "@/api/ibgcs";
 import type { IbgcRosterItem } from "@/api/types";
 import {
   Table,
@@ -12,13 +12,14 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
 import {
   appliedFiltersToApiParams,
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
+import { MAX_SHORTLIST, useShortlistStore } from "@/stores/shortlist-store";
 import { IbgcContextMenu } from "./IbgcContextMenu";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
@@ -32,27 +33,34 @@ type SortKey =
 type ColumnKey =
   | SortKey
   | "label"
+  | "bgc_class"
   | "tools"
   | "assembly"
+  | "collection"
   | "similarity"
-  | "bitscore"
   | "best_hit";
 
 const BASE_TAIL_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: "bgc_class", label: "Class" },
   { key: "size_kb", label: "Size (kb)" },
   { key: "novelty_score", label: "Novelty" },
   { key: "domain_novelty", label: "Dom. nov." },
   { key: "tools", label: "Sources" },
   { key: "assembly", label: "Assembly" },
+  { key: "collection", label: "Collection" },
 ];
 
 function columnsFor(searchSource: string | null) {
   // Sequence-search swaps the Sim. column for a Bitscore column and adds
-  // a Best hit column showing the protein_id of the winning CDS.
+  // a Best hit column showing the protein_id of the winning CDS. The
+  // Bitscore column sorts via the shared "similarity" key: the result
+  // allow-list (``ibgc_ids``) is already in bitscore-descending order, and
+  // the server's ``sort_by=similarity`` orders rows by their position in
+  // that list — so it reproduces the bitscore ranking (asc flips it).
   if (searchSource === "sequence") {
     return [
       { key: "label" as ColumnKey, label: "iBGC" },
-      { key: "bitscore" as ColumnKey, label: "Bitscore" },
+      { key: "similarity" as ColumnKey, label: "Bitscore" },
       { key: "best_hit" as ColumnKey, label: "Best hit" },
       ...BASE_TAIL_COLUMNS,
     ];
@@ -79,13 +87,13 @@ export function IbgcRosterTable() {
   const resultIbgcIds = useDiscoveryStore((s) => s.resultIbgcIds);
   const searchSource = useDiscoveryStore((s) => s.searchSource);
 
-  // When a Find-Similar-iBGCs query lands the result allow-list is in
-  // similarity-descending order; default the roster sort to "similarity" so
-  // the table mirrors that rank. The user can still click any other column
-  // header to override. We trigger off ``searchSource`` so the same logic
-  // covers any future similarity-emitting source.
+  // When a Find-Similar-iBGCs or Sequence query lands, the result allow-list
+  // is in score-descending order (Dice / bitscore); default the roster sort
+  // to "similarity" so the table mirrors that rank. The user can still click
+  // any other column header to override. We trigger off ``searchSource`` so
+  // the same logic covers any score-emitting source.
   useEffect(() => {
-    if (searchSource === "similar_ibgc") {
+    if (searchSource === "similar_ibgc" || searchSource === "sequence") {
       setSortBy("similarity");
       setOrder("desc");
     }
@@ -141,6 +149,56 @@ export function IbgcRosterTable() {
   const items = data?.items ?? [];
   const pagination = data?.pagination;
 
+  const addBgcsBulk = useShortlistStore((s) => s.addBgcsBulk);
+  const shortlistCount = useShortlistStore((s) => s.bgcs.length);
+  const [isAddingAll, setIsAddingAll] = useState(false);
+
+  const onAddAllToShortlist = async () => {
+    if (isAddingAll) return;
+    if (shortlistCount >= MAX_SHORTLIST) {
+      toast.warning(`Shortlist is at the ${MAX_SHORTLIST} cap`);
+      return;
+    }
+    setIsAddingAll(true);
+    const toastId = toast.loading("Collecting iBGCs…");
+    try {
+      const resp = await fetchIbgcIds({
+        sort_by: sortBy,
+        order,
+        ...filterParams,
+      });
+      if (resp.ids.length === 0) {
+        toast.message("No iBGCs to add", { id: toastId });
+        return;
+      }
+      const items = resp.ids.map((id) => ({ id, label: `iBGC-${id}` }));
+      const { added, skipped } = addBgcsBulk(items);
+      // ``skipped`` already includes capacity overflow within the returned
+      // id batch; if the backend itself truncated the result set, prefix a
+      // hint so the user knows the filter actually matched more.
+      const truncatedNote = resp.truncated
+        ? ` (filter matched ${resp.total_count.toLocaleString()} — only the top ${resp.ids.length.toLocaleString()} were considered)`
+        : "";
+      if (added === 0) {
+        toast.warning(`Shortlist is at the ${MAX_SHORTLIST} cap`, { id: toastId });
+      } else if (skipped > 0) {
+        toast.success(
+          `Added ${added} iBGCs; ${skipped} skipped — shortlist full${truncatedNote}`,
+          { id: toastId },
+        );
+      } else {
+        toast.success(`Added ${added} iBGCs to shortlist${truncatedNote}`, {
+          id: toastId,
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Add all failed: ${msg}`, { id: toastId });
+    } finally {
+      setIsAddingAll(false);
+    }
+  };
+
   const toggleSort = (key: SortKey) => {
     if (key === sortBy) {
       setOrder(order === "desc" ? "asc" : "desc");
@@ -161,9 +219,8 @@ export function IbgcRosterTable() {
 
   return (
     <div className="flex h-full flex-col" data-testid="ibgc-roster">
-      <ScrollArea className="flex-1">
-        <Table>
-          <TableHeader className="sticky top-0 bg-card z-10">
+      <Table containerClassName="flex-1 min-h-0">
+        <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
               {COLUMNS.map((col) => {
                 const sortable = (
@@ -178,7 +235,9 @@ export function IbgcRosterTable() {
                   <TableHead
                     key={col.key}
                     className={
-                      sortable ? "cursor-pointer select-none" : undefined
+                      sortable
+                        ? "cursor-pointer select-none whitespace-nowrap"
+                        : "whitespace-nowrap"
                     }
                     onClick={
                       sortable
@@ -242,14 +301,21 @@ export function IbgcRosterTable() {
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </ScrollArea>
+      </Table>
 
       <Pagination
         page={page}
         totalPages={pagination?.total_pages ?? 1}
         totalCount={pagination?.total_count ?? 0}
         onChange={setPage}
+        onAddAllToShortlist={onAddAllToShortlist}
+        addAllDisabled={
+          isLoading ||
+          isAddingAll ||
+          (pagination?.total_count ?? 0) === 0 ||
+          shortlistCount >= MAX_SHORTLIST
+        }
+        addAllBusy={isAddingAll}
       />
     </div>
   );
@@ -280,7 +346,7 @@ function IbgcRosterRow({
   return (
     <IbgcContextMenu
       ibgcId={ibgc.id}
-      ibgcLabel={ibgc.label}
+      ibgcLabel={ibgc.accession || ibgc.label}
       isPartial={ibgc.umap_projected}
       isAsset={ibgc.is_asset}
     >
@@ -298,7 +364,7 @@ function IbgcRosterRow({
         }
       >
         <TableCell className="font-mono text-xs">
-          {ibgc.label}
+          {ibgc.accession || ibgc.label}
           {ibgc.is_asset && (
             <Badge
               className="ml-2 h-4 px-1 text-[10px] text-white border-transparent"
@@ -321,9 +387,12 @@ function IbgcRosterRow({
               Type Strain
             </Badge>
           )}
-          {ibgc.umap_projected && (
-            <Badge variant="outline" className="ml-2 h-4 px-1 text-[10px]">
-              projected
+          {ibgc.is_partial && (
+            <Badge
+              variant="outline"
+              className="ml-2 h-4 px-1 text-[10px] border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              Partial
             </Badge>
           )}
         </TableCell>
@@ -341,6 +410,7 @@ function IbgcRosterRow({
             {similarity != null ? similarity.toFixed(3) : "—"}
           </TableCell>
         )}
+        <TableCell className="text-xs">{ibgc.bgc_class || "—"}</TableCell>
         <TableCell>{ibgc.size_kb.toFixed(1)}</TableCell>
         <TableCell>{fmtScore(ibgc.novelty_score)}</TableCell>
         <TableCell>{fmtScore(ibgc.domain_novelty)}</TableCell>
@@ -349,6 +419,9 @@ function IbgcRosterRow({
         </TableCell>
         <TableCell className="text-xs">
           {ibgc.parent_assembly_accession ?? "—"}
+        </TableCell>
+        <TableCell className="text-xs text-muted-foreground">
+          {ibgc.parent_assembly_collection ?? "—"}
         </TableCell>
       </TableRow>
     </IbgcContextMenu>
@@ -360,15 +433,41 @@ interface PaginationProps {
   totalPages: number;
   totalCount: number;
   onChange: (page: number) => void;
+  onAddAllToShortlist: () => void;
+  addAllDisabled: boolean;
+  addAllBusy: boolean;
 }
 
-function Pagination({ page, totalPages, totalCount, onChange }: PaginationProps) {
+function Pagination({
+  page,
+  totalPages,
+  totalCount,
+  onChange,
+  onAddAllToShortlist,
+  addAllDisabled,
+  addAllBusy,
+}: PaginationProps) {
   return (
     <div className="flex items-center justify-between border-t px-3 py-1.5 text-xs">
       <span className="text-muted-foreground">
         {totalCount.toLocaleString()} iBGCs · page {page}/{totalPages}
       </span>
       <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs"
+          disabled={addAllDisabled}
+          onClick={onAddAllToShortlist}
+          data-testid="add-all-to-shortlist"
+        >
+          {addAllBusy ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Plus className="h-3 w-3" />
+          )}
+          Add all to shortlist
+        </Button>
         <Button
           variant="ghost"
           size="icon"

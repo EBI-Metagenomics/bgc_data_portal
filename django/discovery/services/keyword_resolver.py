@@ -14,9 +14,54 @@ from django.conf import settings
 
 
 # Compiled patterns for accession detection
-_BGC_ACCESSION_RE = re.compile(r"^MGYB\d+$", re.IGNORECASE)
-_ASSEMBLY_ACCESSION_RE = re.compile(r"^(ERZ|GCA_|GCF_)\w+$", re.IGNORECASE)
+# New format: MGYB-XXXXXX (cBGC) or MGYB-XXXXXX-YY (iBGC). Crockford base32.
+_BGC_ACCESSION_RE = re.compile(r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}(-[0-9A-HJKMNP-TV-Z]{2})?$", re.IGNORECASE)
+# Legacy format: MGYBNNNNNNNN (pre-refactor cBGC; resolved via AccessionAlias).
+_BGC_LEGACY_RE = re.compile(r"^MGYB\d+$", re.IGNORECASE)
+# Allow a trailing version segment (e.g. ``GCA_000001405.1``) — GCA/GCF
+# accessions are commonly carried with their ``.N`` version.
+_ASSEMBLY_ACCESSION_RE = re.compile(r"^(ERZ|GCA_|GCF_)[\w.]+$", re.IGNORECASE)
 _DOMAIN_ACCESSION_RE = re.compile(r"^(PF\d{5}|TIGR\d{5})$", re.IGNORECASE)
+
+# Narrow variants used by the unified roster "accession" filter, which must
+# distinguish iBGC (MGYB-XXXXXX-YY) from bare cBGC (MGYB-XXXXXX).
+_IBGC_ACCESSION_RE = re.compile(
+    r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}-[0-9A-HJKMNP-TV-Z]{2}$", re.IGNORECASE
+)
+_CBGC_ACCESSION_RE = re.compile(r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}$", re.IGNORECASE)
+# Mgnify protein identifier (ContigCds.protein_id_str may also carry free-form
+# source ids — those fall through to the "unknown" bucket).
+_PROTEIN_ACCESSION_RE = re.compile(r"^MGYP\d+$", re.IGNORECASE)
+
+
+def classify_accession(value: str) -> str:
+    """Classify an accession string into a roster-filter kind.
+
+    Returns one of ``"ibgc"``, ``"prediction"``, ``"cbgc"``, ``"assembly"``,
+    ``"protein"`` or ``"unknown"``. ``"unknown"`` covers free-form contig
+    accessions and non-MGYP protein identifiers, which carry no
+    distinguishing prefix and are matched by substring at the call site.
+
+    Detection mirrors the semantics already used in ``_apply_ibgc_filters``:
+    an MGYB accession carrying a ``.`` is a source-detector *prediction*
+    (e.g. ``MGYB-AB12CD.ANT.01``); the bare form is a cBGC; the ``-YY``
+    suffixed form is an iBGC.
+    """
+    v = (value or "").strip()
+    if not v:
+        return "unknown"
+    if _IBGC_ACCESSION_RE.match(v):
+        return "ibgc"
+    upper = v.upper()
+    if upper.startswith("MGYB") and "." in upper:
+        return "prediction"
+    if _CBGC_ACCESSION_RE.match(v) or _BGC_LEGACY_RE.match(v):
+        return "cbgc"
+    if _ASSEMBLY_ACCESSION_RE.match(v):
+        return "assembly"
+    if _PROTEIN_ACCESSION_RE.match(v):
+        return "protein"
+    return "unknown"
 
 
 def _build_result(
@@ -44,7 +89,7 @@ def resolve_keyword(keyword: str) -> dict:
     """
     keyword = (keyword or "").strip()
     if not keyword:
-        return _build_result("search", "", "fallback")
+        return _build_result("domain_text", "", "fallback")
 
     # Try each resolver in priority order; first match wins.
     for resolver in _RESOLVERS:
@@ -52,20 +97,33 @@ def resolve_keyword(keyword: str) -> dict:
         if result is not None:
             return result
 
-    # Fallback: pass the raw keyword to the dashboard search box.
-    return _build_result("search", keyword, "fallback")
+    # Fallback: a free-text biology term (e.g. "Polyketide") that matched no
+    # accession/class/biome. Route it to the dashboard's ``domain_text``
+    # filter, which searches the iBGC's domain annotations (name /
+    # description / InterPro description) — the ``search`` param only matches
+    # organism + assembly accession, so chemistry/product terms found nothing.
+    return _build_result("domain_text", keyword, "fallback")
 
 
 # ── Individual resolvers (private) ───────────────────────────────────────────
 
 
 def _try_bgc_accession(keyword: str) -> Optional[dict]:
-    if not _BGC_ACCESSION_RE.match(keyword):
-        return None
-    from discovery.models import DashboardBgc
+    # Matches MGYB-XXXXXX (cBGC), MGYB-XXXXXX-YY (iBGC), and legacy MGYBNNNNNNNN.
+    # Resolution goes through the accession registry + alias table.
+    from discovery.models import AccessionAlias, AccessionRegistry
 
-    if DashboardBgc.objects.filter(bgc_accession__iexact=keyword).exists():
-        return _build_result("search", keyword.upper(), "bgc_accession")
+    if _BGC_ACCESSION_RE.match(keyword) or _BGC_LEGACY_RE.match(keyword):
+        canonical = keyword.upper()
+        if AccessionRegistry.objects.filter(accession=canonical).exists():
+            return _build_result("search", canonical, "accession")
+        alias = (
+            AccessionAlias.objects.filter(alias_accession=canonical)
+            .values_list("registry_id", flat=True)
+            .first()
+        )
+        if alias:
+            return _build_result("search", alias, "accession_alias")
     return None
 
 
@@ -203,9 +261,9 @@ def _try_organism_name(keyword: str) -> Optional[dict]:
 
 
 def _try_natural_product(keyword: str) -> Optional[dict]:
-    from discovery.models import DashboardNaturalProduct
+    from discovery.models import IbgcNaturalProduct
 
-    if DashboardNaturalProduct.objects.filter(name__icontains=keyword).exists():
+    if IbgcNaturalProduct.objects.filter(name__icontains=keyword).exists():
         return _build_result("search", keyword, "natural_product")
     return None
 

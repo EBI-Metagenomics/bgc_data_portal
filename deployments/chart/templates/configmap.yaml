@@ -1,0 +1,9 @@
+{{- if .Values.config.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.config.name }}
+  namespace: {{ include "bgc.namespace" . }}
+data:
+{{- toYaml .Values.config.data | nindent 2 }}
+{{- end }}

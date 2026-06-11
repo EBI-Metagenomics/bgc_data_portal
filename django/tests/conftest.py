@@ -1,49 +1,24 @@
-"""
-Root conftest — shared fixtures across unit/, integration/, and e2e/ tests.
+"""Root conftest — shared fixtures across unit/, integration/, and e2e/ tests.
 
-Session-scoped dataset fixtures build once per pytest session and are reused
-across all integration tests, avoiding expensive repeated DB setup.
+The legacy mgnify_bgcs fixtures (BgcFactory, ContigFactory, etc.) were
+retired with the legacy app. v2 fixtures live next to the suites that
+need them; importing here would couple unrelated tests.
 """
-
-from pathlib import Path
 
 import pytest
 
-from tests.factories.builders import DatasetBuilder
-from tests.factories.models import (
-    BgcFactory,
-    CdsFactory,
-    ContigFactory,
-    ProteinDomainFactory,
-    ProteinFactory,
-)
 
-SMALL_MANIFEST = Path(__file__).parent / "factories/manifests/small.yaml"
+@pytest.fixture(autouse=True)
+def _relax_api_guards(settings):
+    """Turn off the first-party API gate and per-IP throttling for the suite.
 
-
-@pytest.fixture(scope="session")
-def small_dataset(django_db_setup, django_db_blocker):
+    The gate (discovery/security.py) admits only same-origin browser traffic,
+    and the throttles (discovery/throttling.py) cap requests per client IP —
+    neither of which the Django test client emulates, and the throttle's Redis
+    counters would otherwise leak across tests. Existing endpoint tests hit the
+    routes directly, so both guards are off by default; their behaviour is
+    covered explicitly in ``tests/unit/test_first_party_gate.py`` and
+    ``tests/unit/test_api_throttling.py``, which re-enable them.
     """
-    Session-scoped: build a small dataset once and reuse across all tests.
-
-    Provides ~24 BGCs (2 studies × 2 assemblies × 1 contig × 3 BGCs).
-    """
-    with django_db_blocker.unblock():
-        return DatasetBuilder(SMALL_MANIFEST).build()
-
-
-@pytest.fixture
-def bgc(db):
-    """Single BGC with auto-generated contig, detector, and assembly chain."""
-    return BgcFactory()
-
-
-@pytest.fixture
-def bgc_with_cds(db):
-    """BGC with 3 CDS entries, each having 2 Pfam domain annotations."""
-    bgc = BgcFactory()
-    proteins = ProteinFactory.create_batch(3)
-    for protein in proteins:
-        CdsFactory(contig=bgc.contig, protein=protein)
-        ProteinDomainFactory.create_batch(2, protein=protein)
-    return bgc
+    settings.API_FIRST_PARTY_GATE_ENABLED = False
+    settings.API_THROTTLE_ENABLED = False

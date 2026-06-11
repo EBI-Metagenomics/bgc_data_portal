@@ -227,6 +227,7 @@ export function LoadAssetChip() {
           className="h-7 gap-1 text-xs"
           onClick={() => inputRef.current?.click()}
           data-testid="load-asset-button"
+          data-tour="load-asset"
         >
           <Upload className="h-3 w-3" />
           Load Asset

@@ -44,36 +44,18 @@ export interface ChemicalQueryRequest {
   similarity_threshold: number;
 }
 
-export interface ChemicalQueryParams {
-  page?: number;
-  page_size?: number;
-  sort_by?: string;
-  order?: "asc" | "desc";
-  search?: string;
-  source_names?: string;
-  detector_tools?: string;
-  taxonomy_path?: string;
-  assembly_type?: string;
-  bgc_class?: string;
-  biome_lineage?: string;
-  assembly_accession?: string;
-  bgc_accession?: string;
-  chemont_ids?: string;
+export interface ChemicalQueryAccepted {
+  task_id: string;
 }
 
-export function postChemicalQuery(
-  body: ChemicalQueryRequest,
-  params: ChemicalQueryParams = {}
-) {
-  const queryString = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) queryString.set(key, String(value));
-  }
-  const qs = queryString.toString();
-  return apiPost<PaginatedQueryResultResponse>(
-    `/query/chemical/${qs ? `?${qs}` : ""}`,
-    body
-  );
+/**
+ * Dispatch a ChemOnt chemical-similarity search. The query SMILES is
+ * classified into ChemOnt terms via ClassyFire (cached by InChIKey) and
+ * scored against each iBGC's annotations. Returns ``202`` + a ``task_id``;
+ * poll ``fetchIbgcChemicalQueryStatus`` for the iBGC roster.
+ */
+export function postChemicalQuery(body: ChemicalQueryRequest) {
+  return apiPost<ChemicalQueryAccepted>("/query/chemical/", body);
 }
 
 export interface SequenceQueryRequest {
@@ -83,49 +65,12 @@ export interface SequenceQueryRequest {
   min_qcov: number;
 }
 
-export interface SequenceQueryParams {
-  page?: number;
-  page_size?: number;
-  sort_by?: string;
-  order?: "asc" | "desc";
-  search?: string;
-  source_names?: string;
-  detector_tools?: string;
-  taxonomy_path?: string;
-  assembly_type?: string;
-  bgc_class?: string;
-  biome_lineage?: string;
-  assembly_accession?: string;
-  bgc_accession?: string;
-}
-
 export interface SequenceQueryAccepted {
   task_id: string;
 }
 
-export interface SequenceQueryStatusResponse {
-  status: "PENDING" | "SUCCESS" | "FAILURE";
-  items: import("./types").QueryResultBgc[];
-  pagination?: import("./types").PaginationMeta;
-}
-
 export function postSequenceQuery(body: SequenceQueryRequest) {
   return apiPost<SequenceQueryAccepted>("/query/sequence/", body);
-}
-
-export function getSequenceQueryStatus(
-  taskId: string,
-  params: SequenceQueryParams = {}
-) {
-  const queryString = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) queryString.set(key, String(value));
-  }
-  const qs = queryString.toString();
-  return apiGet<SequenceQueryStatusResponse>(
-    `/query/sequence/status/${taskId}/${qs ? `?${qs}` : ""}`,
-    {} as Record<string, string | number | boolean | undefined>
-  );
 }
 
 export interface AssemblyAggregationParams {

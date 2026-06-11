@@ -11,6 +11,11 @@ env:
   IMAGE_NAMESPACE: microbiome-informatics
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
+# Least privilege: this workflow only checks out code and pushes images to
+# Quay (via QUAY_* secrets, not GITHUB_TOKEN), so read-only is sufficient.
+permissions:
+  contents: read
+
 jobs:
   docker:
     name: Build & Push Services

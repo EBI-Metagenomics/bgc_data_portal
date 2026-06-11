@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchIbgcDetail } from "@/api/ibgcs";
-import { fetchBgcRegion } from "@/api/bgcs";
+import { fetchIbgcDetail, fetchIbgcRegion } from "@/api/ibgcs";
 import { RegionPlot } from "@/components/bgc/RegionPlot";
 import { IbgcActionsMenu } from "./IbgcActionsMenu";
 import { useDiscoveryStore } from "@/stores/discovery-store";
+import { useFilterStore } from "@/stores/filter-store";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -113,12 +113,9 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           >
             {variantLabel}
           </Badge>
-          <h3 className="font-mono text-sm font-semibold">{ibgc.label}</h3>
-          {ibgc.is_validated && (
-            <Badge variant="default" className="text-[10px]">
-              Validated
-            </Badge>
-          )}
+          <h3 className="font-mono text-sm font-semibold leading-tight">
+            {ibgc.accession || ibgc.label}
+          </h3>
           {ibgc.is_type_strain && (
             <Badge
               className="text-[10px] text-white border-transparent"
@@ -127,15 +124,10 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
               Type Strain
             </Badge>
           )}
-          {ibgc.umap_projected && (
-            <Badge variant="outline" className="text-[10px]">
-              projected
-            </Badge>
-          )}
         </div>
         <IbgcActionsMenu
           ibgcId={ibgc.id}
-          ibgcLabel={ibgc.label}
+          ibgcLabel={ibgc.accession || ibgc.label}
           variant={variant}
           isPartial={ibgc.umap_projected}
           isAsset={ibgc.id < 0}
@@ -147,13 +139,17 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           naturalProducts={ibgc.natural_products}
           chemontTree={ibgc.chemont_tree}
           parentAssembly={ibgc.parent_assembly}
+          bgcClass={ibgc.bgc_class}
+          isValidated={ibgc.is_validated}
+          isPartial={ibgc.is_partial}
+          gcfPath={ibgc.classification_path}
           novelty={ibgc.novelty_score}
           domainNovelty={ibgc.domain_novelty}
         />
 
         <div className="rounded border bg-muted/20 p-2 text-xs text-muted-foreground">
           <div className="font-mono">
-            {ibgc.contig_accession ?? "no contig"} ·{" "}
+            contig: {ibgc.contig_accession ?? "—"} · location:{" "}
             {ibgc.start_position.toLocaleString()}–
             {ibgc.end_position.toLocaleString()} ({ibgc.size_kb.toFixed(1)} kb)
           </div>
@@ -163,38 +159,24 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           </div>
         </div>
 
-        <RegionStrip
-          representativeBgcId={ibgc.representative_bgc_id}
-        />
-
-        <MemberBgcStrip memberBgcs={ibgc.member_bgcs} />
+        <RegionStrip ibgcId={ibgc.id} />
       </CardContent>
     </Card>
   );
 }
 
-function RegionStrip({
-  representativeBgcId,
-}: {
-  representativeBgcId: number | null;
-}) {
+function RegionStrip({ ibgcId }: { ibgcId: number | null }) {
   const setSelectedCds = useDiscoveryStore((s) => s.setSelectedCds);
   const selectedCds = useDiscoveryStore((s) => s.selectedCds);
   const assetToken = useDiscoveryStore((s) => s.assetToken);
-  const isAssetBgc =
-    representativeBgcId !== null && representativeBgcId < 0;
+  const isAssetIbgc = ibgcId !== null && ibgcId < 0;
   const { data, isLoading } = useQuery({
-    queryKey: [
-      "bgc-region",
-      representativeBgcId,
-      isAssetBgc ? assetToken : null,
-    ],
-    queryFn: () =>
-      fetchBgcRegion(representativeBgcId as number, assetToken),
-    enabled: representativeBgcId !== null,
+    queryKey: ["ibgc-region", ibgcId, isAssetIbgc ? assetToken : null],
+    queryFn: () => fetchIbgcRegion(ibgcId as number, assetToken),
+    enabled: ibgcId !== null,
   });
 
-  if (representativeBgcId === null) return null;
+  if (ibgcId === null) return null;
   if (isLoading) {
     return (
       <div className="flex h-12 items-center justify-center rounded border bg-muted/20 text-xs text-muted-foreground">
@@ -220,6 +202,10 @@ interface KpiStripProps {
   naturalProducts: NaturalProductSummary[];
   chemontTree: ChemOntAnnotationNode[];
   parentAssembly: ParentAssemblySummary | null;
+  bgcClass: string;
+  isValidated: boolean;
+  isPartial: boolean;
+  gcfPath: string;
   novelty: number | null;
   domainNovelty: number | null;
 }
@@ -232,6 +218,10 @@ function KpiStrip({
   naturalProducts,
   chemontTree,
   parentAssembly,
+  bgcClass,
+  isValidated,
+  isPartial,
+  gcfPath,
   novelty,
   domainNovelty,
 }: KpiStripProps) {
@@ -242,17 +232,11 @@ function KpiStrip({
   const compoundsCount = naturalProducts.length + leaves.length;
   const firstSmiles = naturalProducts.find((np) => np.smiles)?.smiles;
   const parentAcc = parentAssembly?.accession ?? "—";
+  const setGcfPath = useFilterStore((s) => s.setGcfPath);
 
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <CompoundsChip
-          count={compoundsCount}
-          naturalProducts={naturalProducts}
-          chemontTree={chemontTree}
-          molviewSmiles={firstSmiles}
-        />
-
         {parentAssembly?.url ? (
           <a
             href={parentAssembly.url}
@@ -261,13 +245,53 @@ function KpiStrip({
             title={parentAssembly.organism_name ?? parentAssembly.accession}
             className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
           >
-            <span className="text-muted-foreground">parent</span>
+            <span className="text-muted-foreground">assembly</span>
             <span className="font-semibold">{parentAcc}</span>
           </a>
         ) : (
           <span className={CHIP_BASE}>
-            <span className="text-muted-foreground">parent</span>
+            <span className="text-muted-foreground">assembly</span>
             <span className="font-semibold">{parentAcc}</span>
+          </span>
+        )}
+
+        <span className={CHIP_BASE}>
+          <span className="text-muted-foreground">class</span>
+          <span className="font-semibold">{bgcClass || "—"}</span>
+        </span>
+
+        <span className={CHIP_BASE}>
+          <span className="text-muted-foreground">status</span>
+          <span className="font-semibold">
+            {isValidated ? "validated" : "candidate"}
+          </span>
+        </span>
+
+        {/* Completeness: partial iBGCs are incomplete clusters (e.g. at a
+            contig edge) projected into the map via nearest neighbours. */}
+        <span className={CHIP_BASE}>
+          <span className="text-muted-foreground">completeness</span>
+          <span className="font-semibold">
+            {isPartial ? "partial" : "complete"}
+          </span>
+        </span>
+
+        {/* Group = the iBGC's GCF lineage (e.g. 42.7.3). Click to filter the
+            dashboard to this exact family and its descendants. */}
+        {gcfPath ? (
+          <button
+            type="button"
+            onClick={() => setGcfPath(gcfPath)}
+            title={`Filter by GCF ${gcfPath}`}
+            className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
+          >
+            <span className="text-muted-foreground">GCF</span>
+            <span className="font-semibold">{gcfPath}</span>
+          </button>
+        ) : (
+          <span className={CHIP_BASE}>
+            <span className="text-muted-foreground">GCF</span>
+            <span className="font-semibold">—</span>
           </span>
         )}
 
@@ -280,6 +304,13 @@ function KpiStrip({
           <span className="text-muted-foreground">Domain Novelty</span>
           <span className="font-semibold">{fmt(domainNovelty, 2)}</span>
         </span>
+
+        <CompoundsChip
+          count={compoundsCount}
+          naturalProducts={naturalProducts}
+          chemontTree={chemontTree}
+          molviewSmiles={firstSmiles}
+        />
       </div>
     </TooltipProvider>
   );
@@ -410,28 +441,6 @@ function ChemontGroup({
       {node.children.map((child) => (
         <ChemontGroup key={child.chemont_id} node={child} indent={indent + 1} />
       ))}
-    </div>
-  );
-}
-
-function MemberBgcStrip({
-  memberBgcs,
-}: {
-  memberBgcs: { id: number; accession: string }[];
-}) {
-  if (memberBgcs.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1 overflow-hidden">
-      {memberBgcs.slice(0, 6).map((m) => (
-        <Badge key={m.id} variant="outline" className="font-mono text-[10px]">
-          {m.accession}
-        </Badge>
-      ))}
-      {memberBgcs.length > 6 && (
-        <Badge variant="outline" className="text-[10px]">
-          +{memberBgcs.length - 6}
-        </Badge>
-      )}
     </div>
   );
 }

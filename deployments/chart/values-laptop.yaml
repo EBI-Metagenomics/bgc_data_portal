@@ -1,0 +1,204 @@
+# =============================================================================
+# laptop / self-host target.
+#
+#   helm install bgc ./chart -f ./chart/values-laptop.yaml --namespace bgc-local
+#
+# This is the shape that used to live in deployments/k8s-local/manifests/:
+# public images, NodePort access (no ingress), runserver + watchmedo hot-reload,
+# init-container migrations, and emptyDir/RWO volumes. Self-hosters and the
+# k3d dev loop both render from here.
+#
+# Base values.yaml is intentionally minimal (Helm deep-merges maps, so anything
+# map-shaped a target needs to fully own — config.data, probes, service — must
+# be declared here, not inherited).
+# =============================================================================
+
+# The namespace is created out-of-band — `helm install --create-namespace`,
+# Skaffold's release createNamespace, or `make create-local-namespace` — so the
+# chart does not also render a (cluster-scoped) Namespace object inside the release.
+namespace:
+  name: bgc-local
+  create: false
+
+imagePullSecrets: []
+
+secretName: bgc-data-portal-secret
+
+config:
+  enabled: true
+  name: app-config
+  data:
+    DJANGO_DEBUG: "True"
+    ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,*"
+    LOG_LEVEL: "DEBUG"
+    MATOMO_URL: ""
+    MATOMO_SITE_ID: ""
+    NUMBA_CACHE_DIR: /tmp/numba_cache
+    CLASSYFIRE_URL: "http://classyfire.wishartlab.com"
+
+postgres:
+  image: pgvector/pgvector:pg18-trixie
+  imagePullPolicy: ""
+  storage: 5Gi
+  headlessService: false
+  includeSecret: true
+  includeConfig: false
+  env:
+    - name: PGDATA
+      value: /var/lib/postgresql/data/pgdata
+  volumes: []
+  volumeMounts:
+    - name: db-data
+      mountPath: /var/lib/postgresql
+  readinessProbe:
+    exec:
+      command: [sh, -c, "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  livenessProbe: {}
+
+redis:
+  image: redis:7-alpine
+  imagePullPolicy: ""
+  readinessProbe:
+    exec:
+      command: [redis-cli, ping]
+    initialDelaySeconds: 3
+    periodSeconds: 5
+  livenessProbe: {}
+
+rabbitmq:
+  image: rabbitmq:3-management-alpine
+  imagePullPolicy: ""
+  podSecurityContext: {}
+  includeSecret: false
+  includeConfig: false
+  readinessProbe:
+    exec:
+      command: [rabbitmq-diagnostics, -q, ping]
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  livenessProbe: {}
+
+django:
+  image: bgc-data-portal-django
+  imagePullPolicy: ""
+  podSecurityContext: {}
+  containerSecurityContext: {}
+  includeSecret: true
+  includeConfig: true
+  workingDir: /app
+  command: [python, manage.py, runserver, "0.0.0.0:8000"]
+  env:
+    - name: PROTEIN_SEARCH_INDEX_DIR
+      value: /data/protein_search
+    - name: CLUSTERING_ARTIFACTS_DIR
+      value: /data/clustering_artifacts
+  # init-container images follow django.image (set by the template), so none is
+  # specified here — a single image override covers main + init containers.
+  initContainers:
+    - name: wait-for-postgres
+      command:
+        - sh
+        - -c
+        - |
+          until python -c "import socket; socket.create_connection(('postgres', 5432))" 2>/dev/null; do
+            echo "waiting for postgres..."; sleep 2
+          done
+    - name: migrate
+      workingDir: /app
+      command: [python, manage.py, migrate, --noinput]
+      envFrom:
+        - secretRef:
+            name: bgc-data-portal-secret
+        - configMapRef:
+            name: app-config
+  volumes:
+    - name: packages
+      emptyDir: {}
+    - name: protein-search-index
+      persistentVolumeClaim:
+        claimName: protein-search-index
+    - name: clustering-artifacts
+      persistentVolumeClaim:
+        claimName: clustering-artifacts
+  volumeMounts:
+    - name: packages
+      mountPath: /data/packages
+    - name: protein-search-index
+      mountPath: /data/protein_search
+    - name: clustering-artifacts
+      mountPath: /data/clustering_artifacts
+  readinessProbe:
+    httpGet:
+      path: /api/docs
+      port: 8000
+    initialDelaySeconds: 15
+    periodSeconds: 5
+    failureThreshold: 6
+  service:
+    type: NodePort
+    port: 80
+    targetPort: 8000
+    nodePort: 30080
+
+celery:
+  image: bgc-data-portal-django-worker
+  imagePullPolicy: ""
+  podSecurityContext: {}
+  containerSecurityContext: {}
+  includeSecret: true
+  includeConfig: true
+  workingDir: /app
+  initContainers: []
+  command:
+    - watchmedo
+    - auto-restart
+    - --directory=/app
+    - --pattern=*.py
+    - --recursive
+    - --
+    - celery
+    - -A
+    - bgc_data_portal.celery
+    - worker
+    - --loglevel=info
+    - --concurrency=1
+  env:
+    - name: PROTEIN_SEARCH_INDEX_DIR
+      value: /data/protein_search
+    - name: CLUSTERING_ARTIFACTS_DIR
+      value: /data/clustering_artifacts
+  volumes:
+    - name: packages
+      emptyDir: {}
+    - name: protein-search-index
+      persistentVolumeClaim:
+        claimName: protein-search-index
+    - name: clustering-artifacts
+      persistentVolumeClaim:
+        claimName: clustering-artifacts
+  volumeMounts:
+    - name: packages
+      mountPath: /data/packages
+    - name: protein-search-index
+      mountPath: /data/protein_search
+    - name: clustering-artifacts
+      mountPath: /data/clustering_artifacts
+
+staticNginx:
+  enabled: false
+
+ingress:
+  enabled: false
+
+pvcs:
+  - name: protein-search-index
+    accessModes: [ReadWriteOnce]
+    storage: 5Gi
+  - name: clustering-artifacts
+    accessModes: [ReadWriteOnce]
+    storage: 2Gi
+
+tests:
+  enabled: false

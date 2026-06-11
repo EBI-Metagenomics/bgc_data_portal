@@ -33,7 +33,9 @@ def _stub_slim_map(monkeypatch):
         go_slim_mod, "_go_term_to_slims", lambda: SLIM_MAP, raising=True
     )
     yield
-    go_slim_mod._go_term_to_slims.cache_clear()
+    # monkeypatch restores the real lru_cache function on teardown; the next
+    # test's setup clears it. Calling cache_clear() here would hit the lambda
+    # (monkeypatch undo runs *after* this finalizer) and raise AttributeError.
 
 
 def _vibgc_with_domain(

@@ -146,25 +146,36 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
 
         # Build rows shaped like the persistent path expects, using array
         # indices as transient bgc_ids so we can map back to the source rows.
+        # Row format mirrors integrated._build_ibgcs_for_contig:
+        # (sbgc_id, cbgc_id, start, end, tool, is_partial, is_validated, contig_accession).
+        # The helper ignores cbgc_id and contig_accession, so we pass placeholders.
         id_to_bgc: dict[int, AssetBgc] = {i: b for i, b in enumerate(bgcs)}
         rows = [
             (
                 i,
+                0,  # cbgc_id — unused by the helper
                 b.start_position,
                 b.end_position,
                 detector_tool.get(b.detector_name, ""),
                 b.is_partial,
                 b.is_validated,
+                contig.accession or "",  # contig_accession — unused by the helper
             )
             for i, b in id_to_bgc.items()
         ]
-        ibgc_tuples, _absorbed, _validated_standalones = _build_ibgcs_for_contig(
-            contig_id=0,  # unused
-            rows=rows,
-        )
+        ibgc_tuples, _absorbed, _validated_standalones = _build_ibgcs_for_contig(rows)
 
-        for interval_start, interval_end, source_tools, member_ids in ibgc_tuples:
-            members = [id_to_bgc[i] for i in member_ids]
+        for (
+            interval_start,
+            interval_end,
+            source_tools,
+            member_ids,
+            absorbed_ids,
+        ) in ibgc_tuples:
+            # Absorbed antiSMASH predictions share the iBGC FK in the
+            # persistent path, so fold them in as members here too — their
+            # CDS / domains / NPs belong to this virtual iBGC.
+            members = [id_to_bgc[i] for i in (*member_ids, *absorbed_ids)]
             cds_rows: list[AssetCds] = []
             dom_rows: list[AssetDomain] = []
             np_rows: list[AssetNaturalProduct] = []
@@ -237,7 +248,7 @@ def _project_against_run(
     import numpy as np
     import scipy.sparse as sp
 
-    from discovery.models import DashboardBgc, IntegratedBGC
+    from discovery.models import IntegratedBgc, SourceBgcPrediction
     from discovery.services.clustering.bgc_similarity import (
         compute_composite_similarity,
     )
@@ -272,7 +283,7 @@ def _project_against_run(
     # Primary metadata for coord averaging + leaf voting.
     primary_meta = {
         ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family or "")
-        for ibgc in IntegratedBGC.objects.filter(
+        for ibgc in IntegratedBgc.objects.filter(
             id__in=[int(x) for x in pri_row_ids.tolist()]
         ).only("id", "umap_x", "umap_y", "gene_cluster_family")
     }
@@ -289,7 +300,7 @@ def _project_against_run(
     pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
 
     validated_ibgc_ids = set(
-        DashboardBgc.objects.filter(
+        SourceBgcPrediction.objects.filter(
             is_validated=True, integrated_bgc__isnull=False
         ).values_list("integrated_bgc_id", flat=True)
     )
@@ -384,6 +395,8 @@ def _ordered_architecture(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> list[
     for cds in vibgc.cds:
         cds_start_by_id[(cds.bgc_key, cds.protein_id_str)] = cds.start_position
 
+    from discovery.services.architecture import _interpro_url
+
     seen: set[tuple[int, int, str]] = set()
     ordered: list[tuple[int, int, dict]] = []
     for d in vibgc.domains:
@@ -394,26 +407,34 @@ def _ordered_architecture(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> list[
         cds_start = cds_start_by_id.get((d.bgc_key, d.cds_protein_id))
         if cds_start is None:
             continue
-        key = (cds_start, d.start_position, d.domain_acc)
+        ipr_acc = (d.interpro_entry_acc or "").strip()
+        if ipr_acc:
+            projected = {
+                "domain_acc": ipr_acc,
+                "domain_name": d.interpro_entry_description or d.domain_name,
+                "ref_db": "InterPro",
+                "url": _interpro_url(ipr_acc),
+                "start": 0,
+                "end": 0,
+                "score": None,
+                "go_slim": go_slim_for_terms(d.go_terms),
+            }
+        else:
+            projected = {
+                "domain_acc": d.domain_acc,
+                "domain_name": d.domain_name,
+                "ref_db": d.ref_db,
+                "url": d.url,
+                "start": 0,
+                "end": 0,
+                "score": None,
+                "go_slim": go_slim_for_terms(d.go_terms),
+            }
+        key = (cds_start, d.start_position, projected["domain_acc"])
         if key in seen:
             continue
         seen.add(key)
-        ordered.append(
-            (
-                cds_start,
-                d.start_position,
-                {
-                    "domain_acc": d.domain_acc,
-                    "domain_name": d.domain_name,
-                    "ref_db": d.ref_db,
-                    "url": d.url,
-                    "start": 0,
-                    "end": 0,
-                    "score": None,
-                    "go_slim": go_slim_for_terms(d.go_terms),
-                },
-            )
-        )
+        ordered.append((cds_start, d.start_position, projected))
     ordered.sort(key=lambda t: (t[0], t[1], t[2]["domain_acc"]))
     return [t[2] for t in ordered]
 
@@ -530,7 +551,7 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
     """Region payload matching ``BgcRegionOut`` for the asset iBGC.
 
     Coordinates are translated to be relative to the iBGC interval, like the
-    persistent region view does for DashboardBgc rows.
+    persistent region view does for IntegratedBgc rows.
     """
     window_start = vibgc.start_position
     region_length = vibgc.end_position - vibgc.start_position

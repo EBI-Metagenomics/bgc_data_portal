@@ -8,7 +8,7 @@ import os
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
-# from csp.constants import NONCE, SELF
+from csp.constants import NONE, SELF
 
 # Load environment variables from .env file
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -41,6 +41,32 @@ CORS_TRUSTED_ORIGINS = [
     x.strip() for x in os.getenv("CORS_TRUSTED_ORIGINS", "").split(",") if x.strip()
 ]
 
+# First-party API gate (see discovery/security.py). When enabled, UI-only and
+# abuse-prone Discovery endpoints accept only same-origin browser traffic
+# (the SPA), rejecting external programmatic callers with 403. The curated
+# public API stays open. Disabled automatically in the test suite.
+API_FIRST_PARTY_GATE_ENABLED = (
+    os.getenv("API_FIRST_PARTY_GATE_ENABLED", "true").lower() == "true"
+)
+
+# Per-client-IP rate limiting (see discovery/throttling.py). Rates are
+# "<count>/<period>" with period one of s|m|h|d; tune per deployment via env
+# without code changes. Counters live in the Redis cache (shared across
+# workers/pods). Disabled automatically in the test suite.
+API_THROTTLE_ENABLED = os.getenv("API_THROTTLE_ENABLED", "true").lower() == "true"
+API_THROTTLE_RATES = {
+    "default": os.getenv("API_THROTTLE_DEFAULT", "300/m"),
+    "search": os.getenv("API_THROTTLE_SEARCH", "30/m"),
+    "upload": os.getenv("API_THROTTLE_UPLOAD", "20/h"),
+}
+# Number of trusted reverse proxies in front of Django (e.g. k8s ingress, LB).
+# Lets the throttle read the real client IP from X-Forwarded-For instead of a
+# spoofable left-most value. Leave unset in local dev (no proxy); set to the
+# proxy count in prod. Consumed by Django-Ninja's throttle ident resolver.
+_ninja_num_proxies = os.getenv("NINJA_NUM_PROXIES")
+if _ninja_num_proxies:
+    NINJA_NUM_PROXIES = int(_ninja_num_proxies)
+
 # Allow overriding the externally mounted base path (used for URL reversing, static paths, etc.)
 # Default remains the production prefix to keep existing behaviour, but can be overridden in dev.
 FORCE_SCRIPT_NAME = os.getenv("DJANGO_FORCE_SCRIPT_NAME", "")
@@ -56,7 +82,22 @@ INTERNAL_IPS = [
     "0.0.0.0",
 ]
 
-DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": lambda _request: DEBUG}
+def _show_debug_toolbar(request):
+    """Gate the debug toolbar so it never interferes with automation.
+
+    Off entirely under pytest (the toolbar middleware crashes the Django test
+    client while rendering) and whenever a request opts out via the
+    ``X-No-Debug-Toolbar`` header — the e2e browser context sends it so the
+    toolbar's fixed overlay doesn't swallow Playwright clicks.
+    """
+    if not DEBUG or "pytest" in sys.modules:
+        return False
+    if request.headers.get("X-No-Debug-Toolbar"):
+        return False
+    return True
+
+
+DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": _show_debug_toolbar}
 
 # Application definition
 INSTALLED_APPS = [
@@ -69,8 +110,6 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "ninja",
     "matomo",
-    "rest_framework",
-    "mgnify_bgcs",
     "django_celery_results",
     "pgvector",
     "csp",
@@ -171,16 +210,17 @@ PROTEIN_SEARCH_INDEX_DIR: Path = Path(
     )
 )
 
+# Intra-query parallelism for the phmmer scan. A single sequence query is split
+# across this many threads, each scanning a slice of the resident protein block
+# (pyhmmer releases the GIL during the C search), giving near-linear speedup.
+# This is orthogonal to Celery prefork --concurrency=1: one task at a time, but
+# that task uses all the worker pod's cores. NB: pyhmmer's own `cpus=` param
+# parallelises across *queries*, so it does nothing for a single query — the
+# split is done by us. Defaults to the pod's core count, capped at 8.
+PROTEIN_SEARCH_CPUS: int = int(
+    os.environ.get("PROTEIN_SEARCH_CPUS", str(min((os.cpu_count() or 1), 8)))
+)
 
-# REST Framework
-REST_FRAMEWORK = {
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-    ],
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "20/minute",
-    },
-}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -240,20 +280,83 @@ CACHES = {
 }
 CACHE_TIMEOUT = 60 * 60 * 24 * 7  # 1 week
 
+# ClassyFire — query-side SMILES → ChemOnt classification for chemical search.
+# The public service is used by default; query classifications are cached by
+# InChIKey (Redis) so known/repeat compounds skip the network entirely.
+CLASSYFIRE_URL = os.getenv("CLASSYFIRE_URL", "http://classyfire.wishartlab.com")
+CLASSYFIRE_TIMEOUT = float(os.getenv("CLASSYFIRE_TIMEOUT", "30"))  # per HTTP call (s)
+CLASSYFIRE_POLL_TIMEOUT = float(os.getenv("CLASSYFIRE_POLL_TIMEOUT", "90"))  # novel-compound poll budget (s)
+CHEMONT_CLASSIFY_CACHE_TTL = int(
+    os.getenv("CHEMONT_CLASSIFY_CACHE_TTL", str(60 * 60 * 24 * 30))  # 30 days
+)
+
 # Matomo
 MATOMO_URL = os.getenv("MATOMO_URL")
 MATOMO_SITE_ID = (
     int(os.getenv("MATOMO_SITE_ID")) if os.getenv("MATOMO_SITE_ID") else None
 )
 
-# Content Security Policy (CSP)
-# CONTENT_SECURITY_POLICY = {
-#     "DIRECTIVES": {
-#     "default-src": [SELF],
-#     "script-src":  [SELF, NONCE],
-#     "style-src":   [SELF, NONCE],
-#     },
-# }
+# Content Security Policy (CSP) — enforced by csp.middleware.CSPMiddleware.
+#
+# Scoped to the app's real resource origins:
+#   * 'self'                     — Django pages, the React SPA bundle, /api, static
+#   * assets.emblstatic.net      — EMBL Visual Framework CSS/JS + its woff/svg assets
+#   * code.jquery.com            — jQuery (static portal pages)
+#   * MATOMO_URL                 — analytics tracker + beacon, only when configured
+# Fonts are self-hosted (static/css/fonts.css), so no Google Fonts origins are
+# needed. 'unsafe-inline' is required for styles (VF + Plotly inject <style> blocks
+# and inline style="" attributes) — a known, accepted limitation of those libs.
+# Scripts deliberately avoid 'unsafe-inline'/'unsafe-eval' except for the Matomo
+# inline bootstrap, which is only allowed when Matomo is enabled.
+#
+# Roll-out safety: set CSP_REPORT_ONLY=true to emit the policy as
+# Content-Security-Policy-Report-Only (logs violations without blocking) while
+# validating the dashboard, then unset to enforce.
+_VF_HOST = "https://assets.emblstatic.net"
+_JQUERY_HOST = "https://code.jquery.com"
+
+# The EMBL VF hero/masthead background images (e.g. roundels.png) are served
+# through the embl.org cloudimg proxy, not emblstatic — without these the hero
+# falls back to its bare green background colour.
+_EMBL_IMG_HOSTS = ["https://acxngcvroo.cloudimg.io", "https://www.embl.org"]
+
+# The EMBL VF global header's "content hub" widget fetches notifications and
+# ontology patterns from these EMBL services (with a github.io fallback). Without
+# them the header's notification bell silently fails (no impact on the app data).
+_EMBL_CONNECT_HOSTS = [
+    "https://www.embl.org",
+    "https://wwwdev.embl.org",
+    "https://embl-communications.github.io",
+]
+
+_csp_script = [SELF, _VF_HOST, _JQUERY_HOST]
+_csp_style = [SELF, _VF_HOST, "'unsafe-inline'"]
+_csp_font = [SELF, _VF_HOST]
+_csp_img = [SELF, "data:", _VF_HOST, *_EMBL_IMG_HOSTS]
+_csp_connect = [SELF, *_EMBL_CONNECT_HOSTS]
+
+if MATOMO_URL:
+    _csp_script += [MATOMO_URL, "'unsafe-inline'"]
+    _csp_img.append(MATOMO_URL)
+    _csp_connect.append(MATOMO_URL)
+
+_CSP_DIRECTIVES = {
+    "default-src": [SELF],
+    "script-src": _csp_script,
+    "style-src": _csp_style,
+    "font-src": _csp_font,
+    "img-src": _csp_img,
+    "connect-src": _csp_connect,
+    "worker-src": [SELF, "blob:"],  # SPA may spin up web workers from blob URLs
+    "object-src": [NONE],           # no <object>/<embed>/<applet>
+    "base-uri": [SELF],             # block <base> tag hijacking
+    "frame-ancestors": [SELF],      # clickjacking protection
+}
+
+if os.getenv("CSP_REPORT_ONLY", "false").lower() == "true":
+    CONTENT_SECURITY_POLICY_REPORT_ONLY = {"DIRECTIVES": _CSP_DIRECTIVES}
+else:
+    CONTENT_SECURITY_POLICY = {"DIRECTIVES": _CSP_DIRECTIVES}
 
 # Logging
 

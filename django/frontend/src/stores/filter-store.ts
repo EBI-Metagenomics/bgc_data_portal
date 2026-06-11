@@ -12,10 +12,18 @@ interface FilterState {
   npClassL3: string[];
   chemontIds: string[];
   search: string;
+  /** Free-text term searched against the iBGC's domain annotations
+   *  (domain name / description / InterPro description). Populated by the
+   *  landing-page keyword-search fallback. */
+  domainText: string;
   biomeLineage: string;
-  bgcAccession: string;
-  assemblyAccession: string;
+  /** Single smart accession field — accepts assembly, contig, BGC, iBGC /
+   *  region or protein accessions; the backend auto-detects the kind. */
+  accession: string;
   assemblyIds: string;
+  // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
+  minLengthKb: number | null;
+  maxLengthKb: number | null;
   exploreQueryTriggered: boolean;
 
   setSourceNames: (v: string[]) => void;
@@ -27,10 +35,11 @@ interface FilterState {
   setNpClass: (level: "l1" | "l2" | "l3", values: string[]) => void;
   setChemontIds: (ids: string[]) => void;
   setSearch: (v: string) => void;
+  setDomainText: (v: string) => void;
   setBiomeLineage: (v: string) => void;
-  setBgcAccession: (v: string) => void;
-  setAssemblyAccession: (v: string) => void;
+  setAccession: (v: string) => void;
   setAssemblyIds: (v: string) => void;
+  setLengthRangeKb: (min: number | null, max: number | null) => void;
   runExploreQuery: () => void;
   clearFilters: () => void;
 }
@@ -47,10 +56,12 @@ const initialState = {
   npClassL3: [] as string[],
   chemontIds: [] as string[],
   search: "",
+  domainText: "",
   biomeLineage: "",
-  bgcAccession: "",
-  assemblyAccession: "",
+  accession: "",
   assemblyIds: "",
+  minLengthKb: null as number | null,
+  maxLengthKb: null as number | null,
   exploreQueryTriggered: false,
 };
 
@@ -77,10 +88,12 @@ export const useFilterStore = create<FilterState>((set) => ({
     ),
   setChemontIds: (ids) => set({ chemontIds: ids, exploreQueryTriggered: false }),
   setSearch: (v) => set({ search: v, exploreQueryTriggered: false }),
+  setDomainText: (v) => set({ domainText: v, exploreQueryTriggered: false }),
   setBiomeLineage: (v) => set({ biomeLineage: v, exploreQueryTriggered: false }),
-  setBgcAccession: (v) => set({ bgcAccession: v, exploreQueryTriggered: false }),
-  setAssemblyAccession: (v) => set({ assemblyAccession: v, exploreQueryTriggered: false }),
+  setAccession: (v) => set({ accession: v, exploreQueryTriggered: false }),
   setAssemblyIds: (v) => set({ assemblyIds: v, exploreQueryTriggered: false }),
+  setLengthRangeKb: (min, max) =>
+    set({ minLengthKb: min, maxLengthKb: max, exploreQueryTriggered: false }),
   runExploreQuery: () => set({ exploreQueryTriggered: true }),
   clearFilters: () => set(initialState),
 }));

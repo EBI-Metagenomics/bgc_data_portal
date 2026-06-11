@@ -2,6 +2,8 @@ import { apiGet, apiGetWithHeaders, apiPost } from "./client";
 import type {
   IbgcCountResponse,
   IbgcDetail,
+  IbgcIdsResponse,
+  IbgcRegionData,
   IbgcScatterAxis,
   IbgcScatterPoint,
   IbgcUmapPoint,
@@ -25,7 +27,14 @@ export interface IbgcFilterParams {
   leaf_path_prefix?: string;
   bgc_class?: string;
   chemont_ids?: string;
+  /** CSV of selected NP-class names (any of L1/L2/L3). */
+  np_classes?: string;
+  /** Single smart accession field — backend auto-detects assembly / contig /
+   *  BGC / iBGC / region / protein. */
+  accession?: string;
+  /** @deprecated split BGC-only accession field, kept for saved deep links */
   bgc_accession?: string;
+  /** @deprecated split assembly-only accession field, kept for saved deep links */
   assembly_accession?: string;
   assembly_ids?: string;
   organism?: string;
@@ -61,6 +70,23 @@ export function fetchIbgcRoster(params: IbgcRosterParams = {}) {
 export function fetchIbgcCount(params: IbgcFilterParams & { ibgc_ids?: string } = {}) {
   return apiGet<IbgcCountResponse>(
     "/ibgcs/count/",
+    params as Record<string, string | number | boolean | undefined>,
+  );
+}
+
+export interface IbgcIdsParams extends IbgcFilterParams {
+  sort_by?: IbgcRosterParams["sort_by"];
+  order?: "asc" | "desc";
+  ibgc_ids?: string;
+  asset_token?: string;
+}
+
+/** Bulk iBGC ids matching the active filter surface — capped at 1000
+ *  server-side. Powers the roster's "Add all to shortlist" button so we
+ *  don't have to walk roster pages just to gather ids. */
+export function fetchIbgcIds(params: IbgcIdsParams = {}) {
+  return apiGet<IbgcIdsResponse>(
+    "/ibgcs/ids/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }
@@ -118,6 +144,17 @@ export function fetchIbgcSequenceQueryStatus(
   );
 }
 
+/** Poll a chemical (ChemOnt/ClassyFire) search task → iBGC roster. */
+export function fetchIbgcChemicalQueryStatus(
+  taskId: string,
+  params: IbgcSequenceStatusParams = {},
+) {
+  return apiGet<PaginatedIbgcRosterResponse>(
+    `/query/chemical/status/${taskId}/`,
+    params as Record<string, string | number | boolean | undefined>,
+  );
+}
+
 export function fetchIbgcDetail(ibgcId: number, assetToken?: string | null) {
   // Negative ids belong to ephemeral asset uploads — the backend resolves
   // them through the ``X-Asset-Token`` header so the URL path stays clean.
@@ -128,6 +165,22 @@ export function fetchIbgcDetail(ibgcId: number, assetToken?: string | null) {
     );
   }
   return apiGet<IbgcDetail>(`/ibgcs/${ibgcId}/`);
+}
+
+/**
+ * Merged region payload for an iBGC — the union of every CDS overlapping the
+ * iBGC's genomic span, each carrying ``claimed_by_tools`` attribution. This
+ * is the single round-trip that backs the region plot (replaces the old
+ * per-representative-prediction ``/bgcs/{id}/region/`` call).
+ */
+export function fetchIbgcRegion(ibgcId: number, assetToken?: string | null) {
+  if (ibgcId < 0 && assetToken) {
+    return apiGetWithHeaders<IbgcRegionData>(
+      `/ibgcs/${ibgcId}/region/`,
+      { "X-Asset-Token": assetToken },
+    );
+  }
+  return apiGet<IbgcRegionData>(`/ibgcs/${ibgcId}/region/`);
 }
 
 export interface IbgcUmapParams extends IbgcFilterParams {

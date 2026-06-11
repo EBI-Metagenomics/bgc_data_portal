@@ -25,7 +25,7 @@ export function ResultsCard() {
         className="flex h-full flex-col"
         data-testid="results-tabs"
       >
-        <div className="border-b px-3 pt-2">
+        <div className="border-b px-3 pt-2" data-tour="results-tabs">
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="roster" data-testid="results-tab-roster">
               BGC roster

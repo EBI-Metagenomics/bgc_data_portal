@@ -21,11 +21,18 @@ limitations under the License.
   <meta name="description" content="Discovery Platform for MGnify Biosynthetic Gene Clusters.">
   <title>Discovery Platform - MGnify BGCs</title>
   {% load static %}
-  <!-- VF CSS (loaded first, Tailwind utilities override where needed) -->
-  <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
+  <!-- VF CSS (loaded first, Tailwind utilities override where needed).
+       integrity/crossorigin MUST match base.html exactly: the two templates
+       share this URL, and a mode mismatch (one CORS, one not) makes the browser
+       cache conflicting variants → VF intermittently fails to style on
+       cross-page navigation until a reload. -->
+  <link rel="stylesheet"
+        href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css"
+        integrity="sha384-nn8UWvaLquqbTcj4te/qLw9S3xU+7kfAFuuWxsypI8yg9oxPCPOi8uO58snemCKS"
+        crossorigin="anonymous">
   <link rel="stylesheet" href="{% static 'css/styles.css' %}" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <!-- Self-hosted IBM Plex Sans + Material Icons (see static/css/fonts.css). -->
+  <link rel="stylesheet" href="{% static 'css/fonts.css' %}" />
   <!-- Dashboard CSS (Tailwind-based) -->
   <link rel="stylesheet" href="{% static 'dashboard/assets/index.css' %}" />
   <script type="module" src="{% static 'dashboard/assets/index.js' %}"></script>
@@ -65,6 +72,8 @@ limitations under the License.
 
   <div id="dashboard-root"></div>
 
-  <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
+  <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"
+          integrity="sha384-GCrniii1hvG4mjsZtVFJmlw0BSEf6A7xf8rB6FbDNSdl26Skqf7jURTYftf3chUD"
+          crossorigin="anonymous"></script>
 </body>
 </html>

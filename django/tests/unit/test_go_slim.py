@@ -104,3 +104,21 @@ def test_legacy_pfam_shim_returns_empty_list():
 
     assert go_slim_for("PF00001") == []
     assert go_slim_for("") == []
+
+
+def test_committed_map_drops_namespace_root_only_rollups():
+    """Regression: terms whose only slim ancestor is the namespace root are
+    dropped by ``refresh_go_slim_map.py`` rather than labelled with the bare
+    namespace name. GO:1990610 ('acetolactate synthase regulator activity')
+    rolls up only to GO:0003674 in goslim_metagenomics, so it must be absent
+    from the committed map and resolve to no slim.
+    """
+    _clear_cache()
+    mapping = go_slim_mod._go_term_to_slims()
+    # The map is bundled; if it failed to load this test is meaningless.
+    assert mapping, "committed go_slim_map.json should load"
+    assert "GO:1990610" not in mapping
+    assert go_slim_for_terms(["GO:1990610"]) == []
+    # No entry should resolve to a bare namespace-root label.
+    assert not [k for k, v in mapping.items() if v == ["Molecular_function"]]
+    _clear_cache()

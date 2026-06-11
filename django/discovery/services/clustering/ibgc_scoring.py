@@ -8,9 +8,13 @@ management command after rehydrating the cached matrices from disk
 Score definitions (locked in the v2 redesign):
 
 * ``novelty_score`` = ``1 − max(composite_dice_sim(this, v))`` for ``v`` in
-  the set of validated iBGCs in the same clustering run. Validated iBGCs are
-  scored against the other validated iBGCs (their own self-similarity is
-  zero on the diagonal, so this falls out naturally). When the run has no
+  the set of validated iBGCs in the same clustering run. A validated iBGC is
+  itself in that set, so its self-similarity of 1.0 makes its novelty 0 — it
+  is, by definition, not novel. This is computed against a freshly-built,
+  unpruned, diagonal-intact composite-Dice block (see
+  :func:`compute_novelty_against_validated`), **not** the clustering ``sim``
+  matrix, whose zeroed diagonal and ``prune_below`` would otherwise drop the
+  self-match and inflate near-threshold novelty. When the run has no
   validated iBGCs the value is NULL.
 
 * ``domain_novelty`` = ``|domains unique within leaf GCF| / |domains(this)|``
@@ -18,6 +22,11 @@ Score definitions (locked in the v2 redesign):
   iBGCs whose source-domain count is zero yield NULL (rendered as "—" in
   the UI), to avoid the misleading 1.0 that the formula would otherwise
   return for a one-member community.
+
+Partial-only iBGCs are projected against the primary set in
+:func:`project_partial_ibgcs`: KNN top-K weighted by composite-Dice
+similarity assigns them a leaf path, ``umap_x``/``umap_y`` (averaged from
+neighbours), and the two novelty scores.
 """
 
 from __future__ import annotations
@@ -44,6 +53,7 @@ IBGC_IDS_FILE = "ibgc_ids.npy"
 DOMAIN_ACCS_FILE = "domain_accs.npy"
 PAIR_VOCAB_FILE = "pair_vocab.npy"
 LEAF_PATHS_FILE = "leaf_paths.json"
+SIG_TO_IPR_FILE = "sig_to_ipr.json"
 
 
 def persist_scoring_cache(
@@ -55,13 +65,13 @@ def persist_scoring_cache(
     domain_accs: np.ndarray,
     pair_vocab: np.ndarray,
     leaf_paths: list[str],
+    sig_to_ipr: dict[str, str] | None = None,
 ) -> Path:
     """Write the small per-iBGC signature matrices needed by on-demand similarity.
 
-    The full N×N composite-Dice matrix is no longer persisted — both
-    Find Similar and ARCH compute composite-Dice on demand against
-    ``M_domains`` / ``M_pairs`` via
-    :mod:`discovery.services.clustering.similarity_on_demand`.
+    ``sig_to_ipr`` (signature_acc → ipr_entry_acc) lets the architecture
+    search resolve user-pasted raw Pfam/NCBIFAM/TIGRFAM accessions onto
+    the IPR-projected vocabulary; persisted as JSON next to the matrices.
 
     Returns the cache directory path.
     """
@@ -75,7 +85,7 @@ def persist_scoring_cache(
     np.save(cache_dir / DOMAIN_ACCS_FILE, np.asarray(domain_accs, dtype=object))
     np.save(cache_dir / PAIR_VOCAB_FILE, np.asarray(pair_vocab, dtype=object))
     (cache_dir / LEAF_PATHS_FILE).write_text(json.dumps(list(leaf_paths)))
-    # Purge any sim.npz left over from a previous schema — keeps the PVC tidy.
+    (cache_dir / SIG_TO_IPR_FILE).write_text(json.dumps(sig_to_ipr or {}))
     legacy_sim = cache_dir / "sim.npz"
     if legacy_sim.exists():
         try:
@@ -88,15 +98,13 @@ def persist_scoring_cache(
 
 def load_scoring_cache(artifacts_dir: Path) -> dict:
     """Return ``M_domains``, ``M_pairs``, ``ibgc_ids``, ``domain_accs``,
-    ``pair_vocab``, ``leaf_paths``.
-
-    ``sim`` is no longer materialised — callers should use
-    :mod:`discovery.services.clustering.similarity_on_demand` for similarity
-    queries.
+    ``pair_vocab``, ``leaf_paths``, ``sig_to_ipr``.
     """
     import scipy.sparse as sp
 
     cache_dir = Path(artifacts_dir) / SCORING_CACHE_SUBDIR
+    sig_path = cache_dir / SIG_TO_IPR_FILE
+    sig_to_ipr = json.loads(sig_path.read_text()) if sig_path.exists() else {}
     return {
         "M_domains": sp.load_npz(cache_dir / DOMAINS_FILE),
         "M_pairs": sp.load_npz(cache_dir / PAIRS_FILE),
@@ -104,7 +112,62 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
         "domain_accs": np.load(cache_dir / DOMAIN_ACCS_FILE, allow_pickle=True),
         "pair_vocab": np.load(cache_dir / PAIR_VOCAB_FILE, allow_pickle=True),
         "leaf_paths": json.loads((cache_dir / LEAF_PATHS_FILE).read_text()),
+        "sig_to_ipr": sig_to_ipr,
     }
+
+
+def compute_novelty_against_validated(
+    M_domains: sp.csr_matrix,
+    M_pairs: sp.csr_matrix,
+    validated_cols: list[int],
+    *,
+    weights: tuple[float, float] = (0.5, 0.5),
+) -> np.ndarray:
+    """Return novelty per row: ``1 − max(composite_dice_sim_to_validated)``.
+
+    Computed against a freshly-built composite-Dice block of every row
+    against the validated columns — **unpruned and with the diagonal
+    intact** — rather than the clustering ``sim`` matrix. The clustering
+    matrix zeroes its diagonal and prunes below a threshold so KNN / Leiden
+    see clean edges; reusing it for novelty would (a) drop a validated row's
+    self-match (sim 1.0), scoring it against *other* validated iBGCs and
+    yielding a spurious ``> 0``, and (b) truncate near-threshold
+    similarities to 0, inflating non-validated novelty.
+
+    Here a validated row's self-Dice of 1.0 yields novelty 0 by
+    construction; validated rows are additionally clamped to 0.0 to cover the
+    degenerate empty-signature case (self-Dice undefined → 0). Rows for which
+    ``validated_cols`` is empty receive NaN (caller persists as NULL).
+    """
+    n_rows = M_domains.shape[0]
+    if not validated_cols:
+        return np.full(n_rows, np.nan, dtype=np.float32)
+
+    w_d, w_a = weights
+    total = float(w_d) + float(w_a)
+    if total <= 0:
+        raise ValueError(f"weights must sum > 0, got {weights}")
+    w_d, w_a = w_d / total, w_a / total
+
+    val = np.asarray(sorted(validated_cols), dtype=np.int64)
+
+    block: np.ndarray | None = None
+    for M, w in ((M_domains, w_d), (M_pairs, w_a)):
+        if w <= 0:
+            continue
+        Mf = M.astype(np.float32)
+        sizes = np.asarray(Mf.sum(axis=1), dtype=np.float32).ravel()
+        # rows × |validated| intersection counts (validated set is small).
+        inter = np.asarray((Mf @ Mf[val].T).todense(), dtype=np.float32)
+        denom = sizes[:, None] + sizes[val][None, :]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            dice = np.where(denom > 0.0, 2.0 * inter / denom, 0.0).astype(np.float32)
+        block = w * dice if block is None else block + w * dice
+
+    max_sim = block.max(axis=1)
+    novelty = (1.0 - max_sim).astype(np.float32)
+    novelty[val] = 0.0
+    return novelty
 
 
 def compute_novelty_array(
@@ -113,9 +176,11 @@ def compute_novelty_array(
 ) -> np.ndarray:
     """Return novelty per row: ``1 − max(sim_to_validated)``.
 
-    Rows for which ``validated_cols`` is empty receive NaN (caller persists
-    as NULL). Self-similarity is zero on the diagonal so validated iBGCs are
-    scored against the *other* validated iBGCs naturally.
+    .. deprecated::
+        Reuses the clustering similarity matrix (diagonal zeroed + pruned),
+        which mis-scores validated rows (self-match dropped → spurious
+        ``> 0``) and near-threshold non-validated rows. Use
+        :func:`compute_novelty_against_validated`. Retained for tests only.
     """
     n_rows = sim.shape[0]
     if not validated_cols:
@@ -163,45 +228,61 @@ def compute_domain_novelty_array(
     return out
 
 
+def _validated_ibgc_ids() -> set[int]:
+    """Return the set of IntegratedBgc ids with at least one validated source."""
+    from discovery.models import SourceBgcPrediction
+
+    return set(
+        SourceBgcPrediction.objects.filter(
+            is_validated=True, integrated_bgc__isnull=False,
+        ).values_list("integrated_bgc_id", flat=True)
+    )
+
+
 def score_primary_ibgcs(
     *,
-    sim: sp.csr_matrix,
     M_domains: sp.csr_matrix,
+    M_pairs: sp.csr_matrix,
     ibgc_ids: np.ndarray,
     leaf_paths: list[str],
     run: ClusteringRun,
+    weights: tuple[float, float] = (0.5, 0.5),
+    sim: sp.csr_matrix | None = None,
 ) -> dict:
     """Write ``novelty_score`` and ``domain_novelty`` on the primary iBGCs of ``run``.
 
     Parameters
     ----------
-    sim:
-        Symmetric composite-Dice similarity over the primary iBGC set. Row /
-        column order matches ``ibgc_ids``.
     M_domains:
-        Binary iBGC × domain matrix used to count domain occurrences within
-        leaf-GCF groups. Row order matches ``ibgc_ids``.
+        Binary iBGC × domain matrix. Used both to count domain occurrences
+        within leaf-GCF groups and to build the composite-Dice novelty block.
+        Row order matches ``ibgc_ids``.
+    M_pairs:
+        Binary iBGC × adjacency-pair matrix; the second component of the
+        composite-Dice novelty block. Row order matches ``ibgc_ids``.
     ibgc_ids:
-        Ordering of iBGC primary-key ids for rows of ``sim`` / ``M_domains``.
+        Ordering of iBGC primary-key ids for rows of ``M_domains`` / ``M_pairs``.
     leaf_paths:
         Per-row ``gene_cluster_family`` leaf path (length matches ``ibgc_ids``).
     run:
         The ``ClusteringRun`` whose primary iBGCs are being scored.
+    weights:
+        ``(w_domain, w_adjacency)`` composite-Dice weights for novelty.
+    sim:
+        Unused for scoring (kept for backward compatibility). Novelty is now
+        computed from a dedicated block via
+        :func:`compute_novelty_against_validated`, not this matrix.
     """
-    from discovery.models import DashboardBgc, IntegratedBGC
+    from discovery.models import IntegratedBgc
 
-    n_rows = sim.shape[0]
+    n_rows = M_domains.shape[0]
     if n_rows == 0:
         return {"scored": 0, "validated_count": 0}
 
     ids_list = [int(x) for x in ibgc_ids.tolist()]
     id_to_row = {nid: i for i, nid in enumerate(ids_list)}
 
-    validated_ibgc_ids = set(
-        DashboardBgc.objects.filter(
-            is_validated=True, integrated_bgc__isnull=False
-        ).values_list("integrated_bgc_id", flat=True)
-    )
+    validated_ibgc_ids = _validated_ibgc_ids()
     validated_cols = sorted(
         id_to_row[nid] for nid in validated_ibgc_ids if nid in id_to_row
     )
@@ -212,10 +293,12 @@ def score_primary_ibgcs(
             run.pk,
         )
 
-    novelty = compute_novelty_array(sim, validated_cols)
+    novelty = compute_novelty_against_validated(
+        M_domains, M_pairs, validated_cols, weights=weights,
+    )
     domain_novelty = compute_domain_novelty_array(M_domains, leaf_paths)
 
-    ibgc_rows = list(IntegratedBGC.objects.filter(id__in=ids_list))
+    ibgc_rows = list(IntegratedBgc.objects.filter(id__in=ids_list))
     for ibgc in ibgc_rows:
         i = id_to_row[ibgc.id]
         nv = float(novelty[i])
@@ -224,7 +307,7 @@ def score_primary_ibgcs(
         ibgc.domain_novelty = None if np.isnan(dn) else dn
         ibgc.umap_projected = False
 
-    IntegratedBGC.objects.bulk_update(
+    IntegratedBgc.objects.bulk_update(
         ibgc_rows,
         ["novelty_score", "domain_novelty", "umap_projected"],
         batch_size=5_000,
@@ -258,7 +341,7 @@ def project_partial_ibgcs(
 ) -> dict:
     """Project iBGCs that were not part of the primary clustering pass.
 
-    For every ``IntegratedBGC`` whose ``classification_run_id`` differs from
+    For every ``IntegratedBgc`` whose ``classification_run_id`` differs from
     the run identified by ``clustering_run_pk`` (partial-only iBGCs and stale
     rows from earlier runs), compute composite-Dice similarity to every
     primary iBGC of the run and derive:
@@ -266,26 +349,23 @@ def project_partial_ibgcs(
       * ``umap_x`` / ``umap_y`` — weighted average of the top-K primary
         neighbours' coordinates (similarity-weighted).
       * ``gene_cluster_family`` — leaf path of the weighted-majority primary
-        neighbour vote (mirrors :mod:`discovery.services.clustering.reclassify`).
-      * ``novelty_score`` — ``1 − max(sim to validated primary iBGC)``.
+        neighbour vote.
+      * ``novelty_score`` — ``1 − max(sim to validated primary iBGC)``; forced
+        to 0 when the partial is itself validated (it matches itself).
       * ``domain_novelty`` — fraction of this iBGC's domains not present in any
         primary member of the inherited leaf GCF. NULL when the iBGC carries
         no source-vocabulary domains.
       * ``umap_projected`` = True; ``classification_run`` set to the target
         run; ``classified_at`` updated.
 
-    iBGCs whose top-K similarity sum is below ``min_total_similarity`` (or that
-    have no overlapping vocabulary with the primary set) are left unprojected
-    and counted as ``skipped``.
+    iBGCs whose top-K similarity sum is below ``min_total_similarity`` (or
+    that have no overlapping vocabulary with the primary set) are left
+    unprojected and counted as ``skipped``.
     """
     import scipy.sparse as sp
     from django.utils import timezone
 
-    from discovery.models import (
-        ClusteringRun,
-        DashboardBgc,
-        IntegratedBGC,
-    )
+    from discovery.models import ClusteringRun, IntegratedBgc
     from discovery.services.clustering.adjacency import (
         build_ibgc_adjacency_pair_matrix,
     )
@@ -296,12 +376,12 @@ def project_partial_ibgcs(
     from discovery.services.clustering.reclassify import _align_rows
 
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
-    sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM","TIGRFAM")
+    sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM", "TIGRFAM")
     weights = tuple(run.score_weights) if run.score_weights else (0.5, 0.5)
 
     # ── 1. Identify partials ─────────────────────────────────────────────
     partial_ibgc_ids = list(
-        IntegratedBGC.objects.exclude(classification_run_id=run.pk)
+        IntegratedBgc.objects.exclude(classification_run_id=run.pk)
         .order_by("id")
         .values_list("id", flat=True)
     )
@@ -315,7 +395,7 @@ def project_partial_ibgcs(
         }
 
     primary_ids = list(
-        IntegratedBGC.objects.filter(classification_run_id=run.pk)
+        IntegratedBgc.objects.filter(classification_run_id=run.pk)
         .order_by("id")
         .values_list("id", flat=True)
     )
@@ -353,7 +433,7 @@ def project_partial_ibgcs(
 
     primary_meta = {
         ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family)
-        for ibgc in IntegratedBGC.objects.filter(
+        for ibgc in IntegratedBgc.objects.filter(
             id__in=primary_ids
         ).only("id", "umap_x", "umap_y", "gene_cluster_family")
     }
@@ -369,11 +449,7 @@ def project_partial_ibgcs(
     )
     pri_leaf_paths = [primary_meta[int(x)][2] for x in pri_row_ids.tolist()]
 
-    validated_ids = set(
-        DashboardBgc.objects.filter(
-            is_validated=True, integrated_bgc__isnull=False
-        ).values_list("integrated_bgc_id", flat=True)
-    )
+    validated_ids = _validated_ibgc_ids()
     validated_col_set = {pri_id_to_row[v] for v in validated_ids if v in pri_id_to_row}
 
     # Per-leaf column-sums on the primary domain matrix (for domain_novelty).
@@ -388,7 +464,7 @@ def project_partial_ibgcs(
 
     # ── 3. Walk partials in chunks ───────────────────────────────────────
     now = timezone.now()
-    update_batch: list[IntegratedBGC] = []
+    update_batch: list[IntegratedBgc] = []
 
     for start in range(0, len(partial_ibgc_ids), chunk_size):
         chunk_ids = partial_ibgc_ids[start : start + chunk_size]
@@ -442,13 +518,10 @@ def project_partial_ibgcs(
                 continue
             best_leaf, _ = votes.most_common(1)[0]
 
-            # Novelty: max sim restricted to validated primary cols within this
-            # row's non-zero entries. Diagonal is already zeroed on sim, so
-            # validated-vs-self is naturally excluded for any partial that
-            # happens to also be validated (those are admitted as primary iBGCs
-            # by build_integrated_bgcs, so this shouldn't occur in
-            # practice — guard kept for safety).
-            if validated_col_set:
+            if int(q_ibgc_id) in validated_ids:
+                # A validated iBGC matches itself — by definition not novel.
+                novelty = 0.0
+            elif validated_col_set:
                 max_sim_validated = 0.0
                 for col, val in zip(cols.tolist(), vals.tolist()):
                     if col in validated_col_set and val > max_sim_validated:
@@ -473,7 +546,7 @@ def project_partial_ibgcs(
                     domain_novelty = n_unique / n_dom
 
             update_batch.append(
-                IntegratedBGC(
+                IntegratedBgc(
                     id=int(q_ibgc_id),
                     umap_x=umap_x,
                     umap_y=umap_y,
@@ -494,7 +567,7 @@ def project_partial_ibgcs(
             })
 
     if update_batch:
-        IntegratedBGC.objects.bulk_update(
+        IntegratedBgc.objects.bulk_update(
             update_batch,
             [
                 "umap_x", "umap_y", "umap_projected",

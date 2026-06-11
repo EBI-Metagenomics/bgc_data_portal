@@ -31,14 +31,19 @@ limitations under the License.
         </title>
         <!-- Stylesheets -->
         <link rel="stylesheet"
-              href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
+              href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css"
+              integrity="sha384-nn8UWvaLquqbTcj4te/qLw9S3xU+7kfAFuuWxsypI8yg9oxPCPOi8uO58snemCKS"
+              crossorigin="anonymous">
         <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap"
-              rel="stylesheet" />
-        <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
-              rel="stylesheet">
+        <!-- Self-hosted IBM Plex Sans + Material Icons (see static/css/fonts.css).
+             Replaces the fonts.googleapis.com CDN links: that CSS endpoint serves
+             browser-specific stylesheets so it can't be SRI-pinned; self-hosting
+             removes the third-party dependency and the privacy leak entirely. -->
+        <link rel="stylesheet" href="{% static 'css/fonts.css' %}" />
         <!-- JavaScript -->
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+                integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK"
+                crossorigin="anonymous"></script>
     </head>
     <body class="vf-body | vf-stack vf-stack--200">
         <header class="vf-global-header">
@@ -174,7 +179,9 @@ limitations under the License.
             </div>
         </footer>
         <!-- Scripts -->
-        <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
+        <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"
+                integrity="sha384-GCrniii1hvG4mjsZtVFJmlw0BSEf6A7xf8rB6FbDNSdl26Skqf7jURTYftf3chUD"
+                crossorigin="anonymous"></script>
         <script src="{% static 'js/scripts.js' %}"></script>
         {% block extra_scripts %}
         {% endblock extra_scripts %}

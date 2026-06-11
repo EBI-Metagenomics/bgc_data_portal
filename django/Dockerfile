@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libsm6 \
     curl \
+    unzip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -24,9 +25,22 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# ChemOnt ontology. The web pod needs it to build the hierarchical ChemOnt
+# filter tree (/filters/chemont-classes/) and to expand a selected parent class
+# to its descendants; without it both fall back to flat leaves. Baked in at
+# build time (same source as the worker/ETL images) at the default path expected
+# by common_core.chemont.ontology. ``/data/<subdir>`` volume mounts don't shadow
+# this, so no PVC/mount is needed.
+RUN mkdir -p /data/chemont  \
+ && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip \
+      "http://classyfire.wishartlab.com/system/downloads/1_0/chemont/ChemOnt_2_1.obo.zip" \
+ && unzip /tmp/ChemOnt_2_1.obo.zip -d /data/chemont/ \
+ && rm /tmp/ChemOnt_2_1.obo.zip
+ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
+
 WORKDIR /app
-COPY requirements-web.txt .
-RUN pip install --upgrade pip && pip install -r requirements-web.txt
+COPY requirements-web.lock .
+RUN pip install --upgrade pip && pip install -r requirements-web.lock
 
 COPY . .
 

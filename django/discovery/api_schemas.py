@@ -79,32 +79,14 @@ class DetectorOut(Schema):
     tool_name_code: str
 
 
-class RegionOut(Schema):
+class CbgcOut(Schema):
     id: int
-    accession: str
+    accession: str  # MGYB-XXXXXX
     start_position: int
     end_position: int
 
 
-# ── BGC schemas ───────────────────────────────────────────────────────────────
-
-
-class BgcRosterItem(Schema):
-    id: int
-    accession: str
-    classification_path: str = ""
-    size_kb: float = 0.0
-    novelty_score: float = 0.0
-    domain_novelty: float = 0.0
-    is_partial: bool = False
-    assembly_accession: Optional[str] = None
-    detector: Optional[DetectorOut] = None
-    region_accession: Optional[str] = None
-
-
-class PaginatedBgcRosterResponse(Schema):
-    items: list[BgcRosterItem]
-    pagination: PaginationMeta
+# ── Source BGC prediction (per-tool drill-down) ────────────────────────────
 
 
 class DomainArchitectureItem(Schema):
@@ -146,8 +128,7 @@ class ChemOntAnnotationNode(Schema):
 
 
 class NaturalProductSummary(Schema):
-    """Curated per-BGC natural product (SMILES, structure). No longer carries
-    CHAMOIS-derived ChemOnt classes — those live at the BGC / iBGC level."""
+    """Curated per-iBGC natural product (SMILES, structure)."""
 
     id: int
     name: str
@@ -155,35 +136,6 @@ class NaturalProductSummary(Schema):
     smiles_svg: str = ""
     structure_thumbnail: str = ""
     np_class_path: str = ""
-
-
-class BgcDetail(Schema):
-    id: int
-    accession: str
-    classification_path: str = ""
-    size_kb: float = 0.0
-    novelty_score: float = 0.0
-    domain_novelty: float = 0.0
-    is_partial: bool = False
-    is_validated: bool = False
-    domain_architecture: list[DomainArchitectureItem] = []
-    parent_assembly: Optional[ParentAssemblySummary] = None
-    natural_products: list[NaturalProductSummary] = []
-    chemont_tree: list[ChemOntAnnotationNode] = []
-    detector: Optional[DetectorOut] = None
-    region_accession: Optional[str] = None
-
-
-class BgcScatterPoint(Schema):
-    id: int
-    x: float
-    y: float
-    bgc_class: str = ""
-    is_validated: bool = False
-    compound_name: Optional[str] = None
-    novelty_score: float = 0.0
-    domain_novelty: float = 0.0
-    similarity_score: Optional[float] = None
 
 
 class ValidatedReferencePoint(Schema):
@@ -199,14 +151,17 @@ class ValidatedReferencePoint(Schema):
 class IbgcRosterItem(Schema):
     """Row in the iBGC-level results table.
 
-    iBGCs are the primary unit in the v2 Discovery dashboard. Each iBGC
-    consolidates one or more source ``DashboardBgc`` rows; the table here
-    flattens metadata that the UI needs in the roster view.
+    iBGCs are the primary unit. Each iBGC consolidates one or more
+    ``SourceBgcPrediction`` rows; the table here flattens metadata the
+    UI needs in the roster view.
     """
 
     id: int
+    accession: str = ""  # MGYB-XXXXXX-YY (stable)
     label: str  # human-facing identifier (e.g. "iBGC-12345")
+    cbgc_accession: Optional[str] = None
     classification_path: str = ""  # leaf GCF path (gene_cluster_family)
+    bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     size_kb: float = 0.0  # (end - start) / 1000
     n_source_bgcs: int = 0
     source_tools: list[str] = []
@@ -218,6 +173,7 @@ class IbgcRosterItem(Schema):
     umap_projected: bool = False
     parent_assembly_id: Optional[int] = None
     parent_assembly_accession: Optional[str] = None
+    parent_assembly_collection: Optional[str] = None  # assembly source name
     organism_name: Optional[str] = None
     contig_accession: Optional[str] = None
     similarity_score: Optional[float] = None  # filled by similar-ibgc / query
@@ -236,11 +192,24 @@ class PaginatedIbgcRosterResponse(Schema):
     pagination: PaginationMeta
 
 
+class IbgcIdsResponse(Schema):
+    """Bulk iBGC ids matching the active filter surface.
+
+    Powers the roster's "Add all to shortlist" action. ``truncated`` is
+    True when the underlying filter would have matched more than ``ids``
+    carries — callers should surface that to the user.
+    """
+
+    ids: list[int]
+    total_count: int
+    truncated: bool
+
+
 class IbgcMemberBgc(Schema):
-    """Source DashboardBgc contributing to an iBGC (drill-down list)."""
+    """Source BGC prediction contributing to an iBGC (drill-down list)."""
 
     id: int
-    accession: str
+    accession: str  # prediction_accession
     detector_name: Optional[str] = None
     is_partial: bool = False
     is_validated: bool = False
@@ -249,8 +218,11 @@ class IbgcMemberBgc(Schema):
 
 class IbgcDetail(Schema):
     id: int
+    accession: str = ""  # MGYB-XXXXXX-YY (stable)
+    cbgc_accession: Optional[str] = None
     label: str
     classification_path: str = ""
+    bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     size_kb: float = 0.0
     start_position: int = 0
     end_position: int = 0
@@ -265,7 +237,7 @@ class IbgcDetail(Schema):
     umap_x: Optional[float] = None
     umap_y: Optional[float] = None
     parent_assembly: Optional[ParentAssemblySummary] = None
-    representative_bgc_id: Optional[int] = None  # for region/CDS rendering
+    region_endpoint_url: Optional[str] = None  # /api/discovery/ibgcs/{id}/region/
     member_bgcs: list[IbgcMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
     natural_products: list[NaturalProductSummary] = []
@@ -279,6 +251,7 @@ class IbgcScatterPoint(Schema):
     x: float
     y: float
     classification_path: str = ""
+    bgc_class: str = ""  # normalised product class (Polyketide, NRP, Hybrid(P+N), …)
     novelty_score: Optional[float] = None
     domain_novelty: Optional[float] = None
     is_partial: bool = False
@@ -422,15 +395,21 @@ class LengthBucket(Schema):
 
 class ReportIbgcRow(Schema):
     id: int
+    accession: str = ""  # MGYB-XXXXXX-YY
+    cbgc_accession: Optional[str] = None
     label: str
     classification_path: str = ""
+    bgc_class: str = ""
     size_kb: float = 0.0
+    start: Optional[int] = None
+    end: Optional[int] = None
     novelty_score: Optional[float] = None
     domain_novelty: Optional[float] = None
     n_source_bgcs: int = 0
     source_tools: list[str] = []
     is_partial: bool = False
     is_validated: bool = False
+    is_type_strain: bool = False
     parent_assembly_accession: Optional[str] = None
     parent_assembly_id: Optional[int] = None
     organism_name: Optional[str] = None
@@ -462,18 +441,20 @@ class ReportPayload(Schema):
     ibgc_rows: list[ReportIbgcRow] = []
     domain_composition: DomainCompositionSummary = DomainCompositionSummary()
     gcf_distribution: list[GcfDistributionEntry] = []
+    gcf_sunburst: list[dict] = []
     score_distributions: list[dict] = []
-    completeness_pie: list[CategoryCount] = []
+    completeness_bar: list[CategoryCount] = []
     bgc_class_pie: list[CategoryCount] = []
     length_histogram: list[LengthBucket] = []
     predictor_distribution: list[CategoryCount] = []
     source_distribution: list[CategoryCount] = []
     assembly_rows: list[ReportAssemblyRow] = []
     assembly_stats: dict = {}
-    # iBGC-derived taxonomy sunburst (one count per iBGC). Items follow the
+    # iBGC-derived sunbursts (one count per iBGC). Items follow the
     # ``SunburstNode`` shape ({id, label, parent, count}); typed as ``dict``
     # because SunburstNode is defined further down in this module.
     taxonomy_sunburst: list[dict] = []
+    biome_sunburst: list[dict] = []
     domain_goslim_matrix: DomainGoslimMatrix = DomainGoslimMatrix()
 
     # Inner shape is {label: str, values: list[float]} — kept as raw dict to
@@ -612,10 +593,8 @@ class SequenceQueryAccepted(Schema):
     task_id: str
 
 
-class SequenceQueryStatusResponse(Schema):
-    status: str  # "PENDING" | "SUCCESS" | "FAILURE"
-    items: list[QueryResultBgc] = []
-    pagination: Optional[PaginationMeta] = None
+class ChemicalQueryAccepted(Schema):
+    task_id: str
 
 
 class QueryResultAssemblyAggregation(Schema):
@@ -669,6 +648,7 @@ class AssemblyStatsResponse(Schema):
     mean_l1_class_per_assembly: float = 0.0
     total_assemblies: int = 0
     biome_distribution: list[CategoryCount] = []
+    biome_sunburst: list[SunburstNode] = []
     source_distribution: list[CategoryCount] = []
 
 
@@ -740,15 +720,16 @@ class RegionCdsOut(Schema):
     sequence: str = ""
     pfam: list[PfamAnnotationOut] = []
     # Non-redundant InterPro-entry annotations for the protein info card.
-    # Same source data as ``pfam`` but collapsed by interpro_entry_acc
-    # (falling back to signature accession when no entry is mapped).
     interpro: list[InterproAnnotationOut] = []
-    # Deepest ChemOnt class predicted by CHAMOIS for this CDS (null when no
-    # confident classification — see DashboardCdsChemOnt).
+    # Deepest ChemOnt class predicted by CHAMOIS for this CDS.
     chemont_id: Optional[str] = None
     chemont_name: Optional[str] = None
     chemont_probability: Optional[float] = None
     chemont_weight: Optional[float] = None
+    # Tools whose source-BGC prediction range covers this CDS, within the
+    # owning iBGC. Range-overlap derived at request time; not stored.
+    # Empty for the per-prediction BGC region endpoint.
+    claimed_by_tools: list[str] = []
 
 
 class RegionDomainOut(Schema):
@@ -772,12 +753,55 @@ class RegionClusterOut(Schema):
 
 
 class BgcRegionOut(Schema):
+    """Region payload for a single source-BGC prediction (drill-down)."""
+
     region_length: int
     window_start: int
     window_end: int
     cds_list: list[RegionCdsOut] = []
     domain_list: list[RegionDomainOut] = []
     cluster_list: list[RegionClusterOut] = []
+
+
+class IbgcRegionOut(Schema):
+    """Merged region payload for an iBGC — all CDS overlapping bgc_range.
+
+    Bug fix for the legacy "primary BGC" view: ``cds_list`` is the union of
+    every ``ContigCds`` that overlaps the iBGC's genomic span, regardless
+    of which source tool listed it. ``claimed_by_tools`` on each CDS is the
+    range-overlap attribution against the iBGC's ``SourceBgcPrediction``s.
+    """
+
+    ibgc_id: int
+    ibgc_accession: str
+    cbgc_accession: str
+    region_length: int  # iBGC bgc_range size, in bp
+    window_start: int
+    window_end: int
+    contig_accession: Optional[str] = None
+    cds_list: list[RegionCdsOut] = []
+    domain_list: list[RegionDomainOut] = []
+    # Each source prediction's range, for per-tool tinting in the region plot.
+    cluster_list: list[RegionClusterOut] = []
+
+
+# ── Accession resolve ─────────────────────────────────────────────────────────
+
+
+class AccessionResolveOut(Schema):
+    """Content-negotiated resolution for an MGYB-* accession.
+
+    The default response is HTTP 301 to ``current_url``. Clients sending
+    ``Accept: application/json`` get this struct instead — useful for
+    programmatic lookups without following the redirect.
+    """
+
+    accession: str
+    kind: str  # "cbgc" | "ibgc"
+    current_id: Optional[int] = None
+    current_url: Optional[str] = None
+    tombstoned: bool = False
+    alias_of: Optional[str] = None  # set when the request was for an alias accession
 
 
 # Assessment schemas removed in v2 — the Evaluate Asset feature was

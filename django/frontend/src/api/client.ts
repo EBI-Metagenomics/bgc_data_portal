@@ -2,7 +2,7 @@ const basePath =
   document.querySelector('meta[name="base-path"]')?.getAttribute("content") ??
   "";
 
-const API_BASE = `${basePath}/api/dashboard`;
+const API_BASE = `${basePath}/api/discovery`;
 
 function getCsrfToken(): string | null {
   const match = document.cookie.match(/csrftoken=([^;]+)/);

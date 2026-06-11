@@ -1,0 +1,35 @@
+{{- if .Values.tests.enabled }}
+{{- $ns := include "bgc.namespace" . }}
+{{- range .Values.tests.jobs }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .name }}
+  namespace: {{ $ns }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: tests
+          image: {{ $.Values.tests.image }}
+          command: ["/bin/sh", "-c"]
+          args:
+            {{- toYaml .args | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ $.Values.secretName }}
+            {{- if $.Values.config.enabled }}
+            - configMapRef:
+                name: {{ $.Values.config.name }}
+            {{- end }}
+{{- end }}
+{{- end }}

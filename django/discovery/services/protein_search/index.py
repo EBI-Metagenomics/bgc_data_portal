@@ -40,6 +40,11 @@ class ProteinSearchIndex:
         self._paths: Optional[IndexPaths] = None
         self._block: Optional[DigitalSequenceBlock] = None
         self._loaded_version: int = -1
+        # Cached chunk-split of the resident block for parallel scanning,
+        # keyed by chunk count; invalidated whenever the block reloads.
+        self._chunks: Optional[list[DigitalSequenceBlock]] = None
+        self._chunks_n: int = 0
+        self._chunks_version: int = -1
 
     def _resolve_paths(self) -> IndexPaths:
         if self._paths is None:
@@ -52,6 +57,9 @@ class ProteinSearchIndex:
             self._block = None
             self._loaded_version = -1
             self._paths = None
+            self._chunks = None
+            self._chunks_n = 0
+            self._chunks_version = -1
 
     def current_version(self) -> int:
         """Return the on-disk VERSION stamp (does not load the block)."""
@@ -102,6 +110,50 @@ class ProteinSearchIndex:
             self._block = block
             self._loaded_version = disk_version
             return block
+
+    def get_blocks(self, n_chunks: int) -> list[DigitalSequenceBlock]:
+        """Return the resident DB split into up to ``n_chunks`` sub-blocks for
+        parallel scanning.
+
+        The split is computed once and cached; it is recomputed only when the
+        underlying block reloads (VERSION bump) or a different chunk count is
+        requested. Splitting just re-references the already-loaded sequences,
+        so the memory cost is the chunk wrappers, not a second copy of the DB.
+        """
+        block = self.get_block()  # ensures loaded + version-fresh
+        if n_chunks <= 1:
+            return [block]
+        with self._lock:
+            if (
+                self._chunks is not None
+                and self._chunks_n == n_chunks
+                and self._chunks_version == self._loaded_version
+            ):
+                return self._chunks
+            chunks = _split_block(block, n_chunks)
+            self._chunks = chunks
+            self._chunks_n = n_chunks
+            self._chunks_version = self._loaded_version
+            return chunks
+
+
+def _split_block(
+    block: DigitalSequenceBlock, n_chunks: int
+) -> list[DigitalSequenceBlock]:
+    """Split ``block`` into at most ``n_chunks`` contiguous sub-blocks.
+
+    Returns ``[block]`` unchanged when splitting would be pointless (≤1 chunk
+    or ≤1 sequence). Sub-blocks share the parent's sequences by reference.
+    """
+    n = len(block)
+    if n_chunks <= 1 or n <= 1:
+        return [block]
+    seqs = list(block)
+    size = (n + n_chunks - 1) // n_chunks
+    return [
+        DigitalSequenceBlock(block.alphabet, seqs[i : i + size])
+        for i in range(0, n, size)
+    ]
 
 
 # Process-wide singleton used by the Celery search task.

@@ -27,6 +27,36 @@ interface Props {
   yLabel: string;
 }
 
+// Points are coloured by their GCF *group* — the highest (coarsest) level of
+// the cluster lineage, i.e. the first segment of the classification path
+// (e.g. "42" of "42.7.3"). Shape still encodes status (see buildTraces), so
+// the legend communicates shape only and the legend title notes the colour
+// meaning. A deterministic hash keeps a group's colour stable across the
+// UMAP/Variables tabs and across filter changes.
+const GCF_PALETTE = [
+  "#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
+  "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#86bcb6",
+  "#d37295", "#a0cbe8", "#ffbe7d", "#8cd17d", "#f1ce63",
+  "#b6992d", "#499894", "#fabfd2", "#d4a6c8", "#1f77b4",
+];
+const UNCLASSIFIED_COLOR = "#cbd5e1"; // neutral gray for iBGCs with no GCF
+const LEGEND_SWATCH = "#64748b"; // neutral swatch so the legend reads as shape
+
+function rootGcf(path?: string | null): string {
+  if (!path) return "";
+  return path.split(".")[0] ?? "";
+}
+
+function gcfColor(path?: string | null): string {
+  const root = rootGcf(path);
+  if (!root) return UNCLASSIFIED_COLOR;
+  let h = 0;
+  for (let i = 0; i < root.length; i++) {
+    h = (h * 31 + root.charCodeAt(i)) | 0;
+  }
+  return GCF_PALETTE[Math.abs(h) % GCF_PALETTE.length] ?? UNCLASSIFIED_COLOR;
+}
+
 /**
  * Shared Plotly scatter for both Variables Map and UMAP tabs.
  *
@@ -64,10 +94,22 @@ export function IbgcScatterPlot({ points, xLabel, yLabel }: Props) {
         data={traces}
         layout={{
           autosize: true,
+          // Preserve the user's zoom/pan across re-renders. Without this,
+          // selecting a point (which sets compareIbgcId → rebuilds traces and
+          // recreates this layout object) makes Plotly treat the layout as new
+          // and snap back to autorange. Keying on the axis labels means
+          // switching variables in the Variables Map still resets the view —
+          // it's a genuinely different plot — while a click only refreshes the
+          // halos. Double-click still resets via Plotly's default doubleClick.
+          uirevision: `${xLabel}|${yLabel}`,
           margin: { l: 50, r: 20, t: 12, b: 40 },
           xaxis: { title: { text: xLabel }, zeroline: false },
           yaxis: { title: { text: yLabel }, zeroline: false },
-          legend: { orientation: "h", y: -0.15 },
+          legend: {
+            orientation: "h",
+            y: -0.15,
+            title: { text: "Coloured by GCF", side: "top" },
+          },
           hovermode: "closest",
         }}
         style={{ width: "100%", height: "100%" }}
@@ -146,22 +188,23 @@ function buildTraces(
       : "") +
     "<extra></extra>";
 
+  // Data trace: shape encodes status (the `marker` overrides), colour is a
+  // per-point array keyed on the GCF group. `showlegend: false` because the
+  // neutral-gray legend proxies (below) carry the shape legend instead.
   const toTrace = (
     arr: IbgcPoint[],
-    name: string,
-    color: string,
     marker: Partial<Record<string, unknown>>,
   ) => ({
     type: "scattergl" as const,
     mode: "markers" as const,
-    name,
+    showlegend: false,
     x: arr.map((p) => p.x),
     y: arr.map((p) => p.y),
     customdata: arr.map((p) => p.id),
     text: arr.map(baseHover),
     hovertemplate: "%{text}",
     marker: {
-      color,
+      color: arr.map((p) => gcfColor(p.classification_path)),
       size: 7,
       opacity: 0.75,
       line: { width: 0 },
@@ -169,36 +212,53 @@ function buildTraces(
     },
   });
 
+  // Legend-only proxy: a single off-canvas point so the legend shows the
+  // status shape in a neutral colour (colour itself means GCF group).
+  const legendProxy = (
+    name: string,
+    marker: Partial<Record<string, unknown>>,
+  ) => ({
+    type: "scatter" as const,
+    mode: "markers" as const,
+    name,
+    x: [null],
+    y: [null],
+    hoverinfo: "skip" as const,
+    showlegend: true,
+    marker: { color: LEGEND_SWATCH, size: 9, opacity: 0.95, ...marker },
+  });
+
   // The base scatter traces and the halo traces share a scattergl shape but
   // differ in their `marker` substructure (halos carry `marker.line.color`,
   // which the inferred toTrace return type does not). Widen the element
   // type so both flavours can live in the same array without TS noise.
   const traces: Record<string, unknown>[] = [];
-  // Render order: Other first so the more important classes draw on top.
-  if (other.length) traces.push(toTrace(other, "Other", "#94a3b8", {}));
-  if (typeStrain.length)
-    traces.push(
-      toTrace(typeStrain, "Type Strain", "#018786", {
-        symbol: "square",
-        size: 8,
-      }),
-    );
-  if (validated.length)
-    traces.push(
-      toTrace(validated, "Validated", "#16a34a", {
-        symbol: "diamond",
-        size: 9,
-      }),
-    );
-  if (asset.length)
-    traces.push(
-      toTrace(asset, "Submitted asset", "#b45309", {
+  // Render order: Other first so the more important classes draw on top. Each
+  // status pushes its data trace plus a neutral legend proxy.
+  const buckets: Array<{
+    arr: IbgcPoint[];
+    name: string;
+    marker: Partial<Record<string, unknown>>;
+  }> = [
+    { arr: other, name: "Other", marker: { symbol: "circle", size: 7 } },
+    { arr: typeStrain, name: "Type Strain", marker: { symbol: "square", size: 8 } },
+    { arr: validated, name: "Validated", marker: { symbol: "diamond", size: 9 } },
+    {
+      arr: asset,
+      name: "Submitted asset",
+      marker: {
         symbol: "star",
         size: 13,
         line: { width: 1.5, color: "#1e293b" },
         opacity: 0.95,
-      }),
-    );
+      },
+    },
+  ];
+  for (const b of buckets) {
+    if (!b.arr.length) continue;
+    traces.push(toTrace(b.arr, b.marker));
+    traces.push(legendProxy(b.name, b.marker));
+  }
 
   // Highlight reference / compare points with halo traces on top. The two
   // slots get distinct rings + legend entries so users can tell the pinned

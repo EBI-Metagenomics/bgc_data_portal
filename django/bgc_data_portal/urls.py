@@ -11,38 +11,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from csp.decorators import csp_update
 from django.contrib import admin
 from django.urls import path, re_path
 from debug_toolbar.toolbar import debug_toolbar_urls
+from ninja.openapi.docs import Redoc
 
 from . import views
-from mgnify_bgcs import api as mgnify_api
+from .api import api as ninja_api
 from discovery.api import discovery_router
 
-mgnify_api.api.add_router("/dashboard/", discovery_router)
+ninja_api.add_router("/discovery/", discovery_router)
 
 handler404 = "bgc_data_portal.views.custom_404_view"
+
+
+# ReDoc as an alternative API reference at /api/redoc (Swagger stays at
+# /api/docs). django-ninja self-hosts the ReDoc bundle (script-src 'self'), but
+# its template uses an inline init <script> and the bundle uses eval/new Function
+# and blob web workers — so relax script-src for THIS view only, while the app
+# keeps the strict policy. (worker-src 'self' blob: and style-src 'unsafe-inline'
+# are already allowed globally.)
+@csp_update({"script-src": ["'unsafe-inline'", "'unsafe-eval'"]})
+def redoc_view(request):
+    return Redoc().render_page(request, ninja_api)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("about/", views.about, name="about"),
+    path("search/", views.keyword_search, name="keyword_search"),
     path("docs/", views.DocsView.as_view(), {"path": "index.html"}, name="docs_index"),
     path("docs/<path:path>", views.DocsView.as_view(), name="docs_file"),
     path("docs/<path:path>/", views.DocsView.as_view(), name="docs"),
     path("", views.landing_page, name="landing_page"),
-    path(
-        "bgc/",
-        views.bgc_page,
-        name="bgc_page",
-    ),
-    path("bgc/download/", views.download_bgc, name="download_bgc"),
-    path("search/", views.search, name="search"),
-    path("search/status/", views.job_status, name="job_status"),
-    path("results/", views.results_view, name="results_view"),
-    path(
-        "results/download-tsv/", views.download_results_tsv, name="download_results_tsv"
-    ),
     path("dashboard/", views.dashboard_spa, name="dashboard"),
     re_path(r"^dashboard/.*$", views.dashboard_spa),
-    path("api/", mgnify_api.api.urls, name="api"),
+    # /api/redoc must precede the ninja_api include (which owns the "api/" prefix).
+    path("api/redoc", redoc_view, name="api_redoc"),
+    path("api/", ninja_api.urls, name="api"),
 ] + debug_toolbar_urls()

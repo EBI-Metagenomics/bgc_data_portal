@@ -1,23 +1,23 @@
-"""Integration tests for the ephemeral upload-for-assessment endpoint.
+"""Integration tests for the ephemeral asset-upload endpoint.
 
-Covers the filename-suffix validation added so users can submit archives
-named either ``.tar.gz`` or ``.tgz`` with a clear error for anything else.
-The Celery dispatch is patched out — these tests assert only request
-validation and the 202/400 response contract.
+The v2 endpoint (``POST /api/discovery/assets/upload/``) accepts a single
+gzip-compressed tarball in a ``file`` field, validates it by magic bytes and
+size, stashes the raw bytes in Redis under a content-hash token, and dispatches
+a Celery projection task — returning ``202 {token, task_id}``. The Celery
+dispatch and the Redis cache are patched out here; these tests assert only the
+request-validation and response contract, not the downstream projection.
 """
 
 from __future__ import annotations
 
+import gzip
 from unittest.mock import patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 
-from tests.unit.test_upload_parser import _bgc_archive
-
-
-UPLOAD_URL = "/api/dashboard/assess/upload/"
+UPLOAD_URL = "/api/discovery/assets/upload/"
 
 
 @pytest.fixture
@@ -26,74 +26,62 @@ def api_client():
 
 
 @pytest.fixture
-def archive_bytes():
-    return _bgc_archive()
+def gzip_bytes():
+    """Minimal gzip payload — the endpoint only checks the magic bytes; the
+    tarball contents are parsed later in the (mocked) Celery worker."""
+    return gzip.compress(b"dummy-tarball-contents")
 
 
 @pytest.fixture
-def mock_celery():
-    """Stub out the Celery .delay() call so the test doesn't touch a broker."""
-    with patch("discovery.tasks.assess_uploaded_bgc") as bgc_task, patch(
-        "discovery.tasks.assess_uploaded_assembly"
-    ) as asm_task:
-        bgc_task.delay.return_value.id = "task-bgc-123"
-        asm_task.delay.return_value.id = "task-asm-456"
-        yield bgc_task, asm_task
+def mock_pipeline():
+    """Stub the Celery dispatch and the Redis-backed asset cache."""
+    with patch("discovery.tasks.process_asset_upload_task") as task, patch(
+        "discovery.services.asset_upload.cache.stash_upload"
+    ), patch(
+        "discovery.services.asset_upload.cache.mark_pending"
+    ), patch(
+        "discovery.services.asset_upload.cache.read_status", return_value=None
+    ):
+        task.delay.return_value.id = "task-asset-123"
+        yield task
 
 
 @pytest.mark.django_db
-def test_upload_accepts_tar_gz_filename(api_client, archive_bytes, mock_celery):
+def test_upload_accepts_gzip_tarball(api_client, gzip_bytes, mock_pipeline):
     response = api_client.post(
         UPLOAD_URL,
         {
-            "type": "bgc",
             "file": SimpleUploadedFile(
-                "sample.tar.gz", archive_bytes, content_type="application/gzip"
+                "sample.tar.gz", gzip_bytes, content_type="application/gzip"
             ),
         },
     )
 
     assert response.status_code == 202, response.content
     body = response.json()
-    assert body["task_id"] == "task-bgc-123"
-    assert body["asset_type"] == "bgc"
+    assert body["task_id"] == "task-asset-123"
+    # Token is the content hash (24 hex chars), deterministic for these bytes.
+    assert len(body["token"]) == 24
 
 
 @pytest.mark.django_db
-def test_upload_accepts_tgz_filename(api_client, archive_bytes, mock_celery):
+def test_upload_rejects_non_gzip(api_client, mock_pipeline):
     response = api_client.post(
         UPLOAD_URL,
         {
-            "type": "bgc",
             "file": SimpleUploadedFile(
-                "sample.tgz", archive_bytes, content_type="application/gzip"
-            ),
-        },
-    )
-
-    assert response.status_code == 202, response.content
-    assert response.json()["task_id"] == "task-bgc-123"
-
-
-@pytest.mark.django_db
-def test_upload_rejects_zip_filename(api_client, archive_bytes):
-    response = api_client.post(
-        UPLOAD_URL,
-        {
-            "type": "bgc",
-            "file": SimpleUploadedFile(
-                "sample.zip", archive_bytes, content_type="application/zip"
+                "sample.zip", b"PK\x03\x04 not gzip", content_type="application/zip"
             ),
         },
     )
 
     assert response.status_code == 400
-    assert "File must be a .tar.gz or .tgz archive" in response.json()["detail"]
+    assert "gzip-compressed tarball" in response.json()["detail"]
 
 
 @pytest.mark.django_db
-def test_upload_rejects_missing_file(api_client):
-    response = api_client.post(UPLOAD_URL, {"type": "bgc"})
+def test_upload_rejects_missing_file(api_client, mock_pipeline):
+    response = api_client.post(UPLOAD_URL, {})
 
     assert response.status_code == 400
-    assert "No file provided" in response.json()["detail"]
+    assert "Missing 'file' field" in response.json()["detail"]

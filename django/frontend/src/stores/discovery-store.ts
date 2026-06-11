@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AssetSummary } from "@/api/assets";
 import type { IbgcScatterAxis, RegionCds } from "@/api/types";
+import { useFilterStore } from "@/stores/filter-store";
 
 /**
  * Session state for the v2 Discovery dashboard.
@@ -98,11 +99,19 @@ export interface AppliedIbgcFilters {
   bgcClass: string;
   gcfPath: string;
   chemontIds: string[];
+  // Flattened NP-class names selected across the L1/L2/L3 tree.
+  npClasses: string[];
   biomeLineage: string;
-  bgcAccession: string;
-  assemblyAccession: string;
+  // Single smart accession field (assembly / contig / BGC / iBGC / protein).
+  accession: string;
   assemblyIds: string;
   organism: string;
+  // Free-text term matched against the iBGC's domain annotations. Drives
+  // the landing-page keyword-search fallback (e.g. "Polyketide").
+  domainText: string;
+  // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
+  minLengthKb: number | null;
+  maxLengthKb: number | null;
 }
 
 export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
@@ -113,11 +122,14 @@ export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   bgcClass: "",
   gcfPath: "",
   chemontIds: [],
+  npClasses: [],
   biomeLineage: "",
-  bgcAccession: "",
-  assemblyAccession: "",
+  accession: "",
   assemblyIds: "",
   organism: "",
+  domainText: "",
+  minLengthKb: null,
+  maxLengthKb: null,
 };
 
 /** True when no filter chip is set in the applied snapshot.
@@ -128,15 +140,18 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
     applied.sourceNames.length === 0 &&
     applied.detectorTools.length === 0 &&
     applied.chemontIds.length === 0 &&
+    applied.npClasses.length === 0 &&
     applied.assemblyType === "" &&
     applied.taxonomyPath === "" &&
     applied.bgcClass === "" &&
     applied.gcfPath === "" &&
     applied.biomeLineage === "" &&
-    applied.bgcAccession === "" &&
-    applied.assemblyAccession === "" &&
+    applied.accession === "" &&
     applied.assemblyIds === "" &&
-    applied.organism === ""
+    applied.organism === "" &&
+    applied.domainText === "" &&
+    applied.minLengthKb == null &&
+    applied.maxLengthKb == null
   );
 }
 
@@ -167,13 +182,20 @@ export function appliedFiltersToApiParams(
   if (applied.chemontIds.length > 0) {
     params.chemont_ids = applied.chemontIds.join(",");
   }
-  if (applied.biomeLineage) params.biome_lineage = applied.biomeLineage;
-  if (applied.bgcAccession) params.bgc_accession = applied.bgcAccession;
-  if (applied.assemblyAccession) {
-    params.assembly_accession = applied.assemblyAccession;
+  if (applied.npClasses.length > 0) {
+    params.np_classes = applied.npClasses.join(",");
   }
+  if (applied.biomeLineage) params.biome_lineage = applied.biomeLineage;
+  if (applied.accession) params.accession = applied.accession;
   if (applied.assemblyIds) params.assembly_ids = applied.assemblyIds;
   if (applied.organism) params.organism = applied.organism;
+  if (applied.domainText) params.domain_text = applied.domainText;
+  if (applied.minLengthKb != null) {
+    params.min_length_kb = String(applied.minLengthKb);
+  }
+  if (applied.maxLengthKb != null) {
+    params.max_length_kb = String(applied.maxLengthKb);
+  }
   if (resultIbgcIds && resultIbgcIds.length > 0) {
     params.ibgc_ids = resultIbgcIds.join(",");
   }
@@ -181,6 +203,36 @@ export function appliedFiltersToApiParams(
     params.asset_token = assetToken;
   }
   return params;
+}
+
+/**
+ * Snapshot the live filter-chip store into an ``AppliedIbgcFilters`` object.
+ *
+ * Single source of truth for the filterStore → appliedFilters mapping so the
+ * Run Query button (``use-run-ibgc-query``) and the landing-page keyword
+ * redirect (``use-url-sync`` auto-run) stay in lockstep. Every chip in
+ * ``FilterPanel`` must be represented here, otherwise its value is silently
+ * discarded when a query runs.
+ */
+export function snapshotFiltersToApplied(): AppliedIbgcFilters {
+  const f = useFilterStore.getState();
+  return {
+    sourceNames: f.sourceNames,
+    detectorTools: f.detectorTools,
+    assemblyType: f.assemblyType,
+    taxonomyPath: f.taxonomyPath,
+    bgcClass: f.bgcClass,
+    gcfPath: f.gcfPath,
+    chemontIds: f.chemontIds,
+    npClasses: [...f.npClassL1, ...f.npClassL2, ...f.npClassL3],
+    biomeLineage: f.biomeLineage,
+    accession: f.accession,
+    assemblyIds: f.assemblyIds,
+    organism: f.search,
+    domainText: f.domainText,
+    minLengthKb: f.minLengthKb,
+    maxLengthKb: f.maxLengthKb,
+  };
 }
 
 export const useDiscoveryStore = create<DiscoveryState>((set) => ({

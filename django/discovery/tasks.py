@@ -53,60 +53,105 @@ def recompute_scores_task(self) -> bool:
 def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -> dict[int, float]:
     """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
 
-    Classifies the query SMILES into ChemOnt terms, then computes
-    IC-based (Resnik / Best Match Average) similarity against each BGC's
-    natural product ChemOnt annotations.
+    The query SMILES is classified into ChemOnt terms via ClassyFire (cached
+    by InChIKey so known/repeat compounds skip the network), then compared
+    with IC-based (Resnik / Best Match Average) similarity against each
+    iBGC's pooled ChemOnt annotations. iBGC membership is decided by range
+    overlap: each CDS contributes to the iBGC whose ``bgc_range`` overlaps
+    its ``cds_range`` on the same contig.
 
-    Returns a dict mapping BGC id → max similarity score.
-    Runs in the Celery worker where RDKit is available.
+    Returns a dict mapping iBGC id → max similarity score. Raises if the IC
+    cache is missing or ClassyFire is unreachable, so the failure is visible
+    to the operator/user rather than silently returning an empty roster.
     """
     from collections import defaultdict
 
-    from common_core.chemont.classifier import classify_smiles
+    from common_core.chemont import classyfire_client as cf
     from common_core.chemont.ontology import get_ontology
-    from common_core.chemont.similarity import best_match_average, normalize_similarity
+    from common_core.chemont.similarity import semantic_similarity
+    from django.conf import settings
+    from django.core.cache import cache
+    from django.db import connection
 
-    from discovery.models import DashboardCdsChemOnt, PrecomputedStats
+    from discovery.models import PrecomputedStats
 
     ont = get_ontology()
 
-    # Step 1: Classify query SMILES into ChemOnt terms.
-    query_classes = classify_smiles(smiles.strip(), ontology=ont)
-    if not query_classes:
-        log.warning("No ChemOnt matches for SMILES: %s", smiles[:50])
+    # Classify the query SMILES → ChemOnt terms, cached by InChIKey.
+    inchikey = cf.smiles_to_inchikey(smiles)
+    if inchikey is None:
+        log.warning("Invalid SMILES for chemical search: %s", smiles[:50])
         return {}
-    query_term_ids = [c.chemont_id for c in query_classes]
+    cache_key = f"chemont:classify:{inchikey}"
+    query_term_ids: list[str] | None = cache.get(cache_key)
+    if query_term_ids is None:
+        result = cf.classify(
+            smiles,
+            base_url=getattr(settings, "CLASSYFIRE_URL", cf.DEFAULT_BASE_URL),
+            timeout=getattr(settings, "CLASSYFIRE_TIMEOUT", 30.0),
+            poll_timeout=getattr(settings, "CLASSYFIRE_POLL_TIMEOUT", 90.0),
+        )
+        query_term_ids = result.chemont_ids if result else []
+        # Cache even an empty list: a structure ClassyFire can't classify
+        # won't classify on retry either, and this avoids re-submitting.
+        cache.set(
+            cache_key,
+            query_term_ids,
+            getattr(settings, "CHEMONT_CLASSIFY_CACHE_TTL", 60 * 60 * 24 * 30),
+        )
+    if not query_term_ids:
+        log.info("No ChemOnt terms for SMILES %s — no chemical matches", inchikey)
+        return {}
 
-    # Step 2: Load precomputed IC values.
     ic_row = PrecomputedStats.objects.filter(key="chemont_ic").first()
     if not ic_row or not ic_row.data:
-        log.warning("No precomputed ChemOnt IC values — run recompute_all_scores first")
-        return {}
+        raise RuntimeError(
+            "ChemOnt IC values not precomputed — run recompute_all_scores "
+            "before chemical search can return results"
+        )
     ic_values: dict[str, float] = ic_row.data
 
-    # Step 3: Load all per-CDS ChemOnt annotations grouped by BGC.
-    cds_chemont = (
-        DashboardCdsChemOnt.objects
-        .filter(cds__bgc__isnull=False)
-        .values_list("cds__bgc_id", "chemont_id")
-    )
-    bgc_terms: dict[int, set[str]] = defaultdict(set)
-    for bgc_id, cid in cds_chemont:
-        bgc_terms[bgc_id].add(cid)
+    # Pool each iBGC's ChemOnt terms from two sources:
+    #   1. CHAMOIS gene-based predictions (CdsChemOnt), attributed via range
+    #      overlap — each CDS contributes to the iBGC whose bgc_range overlaps
+    #      its cds_range on the same contig (iBGCs are disjoint per contig).
+    #   2. Structure-derived classes (IbgcChemOnt) — ClassyFire on a known
+    #      compound's SMILES, attached directly to the iBGC.
+    ibgc_terms: dict[int, set[str]] = defaultdict(set)
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT i.id AS ibgc_id, ch.chemont_id
+            FROM discovery_cds_chemont ch
+            JOIN discovery_cds c ON c.id = ch.cds_id
+            JOIN discovery_ibgc i
+              ON i.contig_id = c.contig_id
+             AND i.bgc_range && c.cds_range
+            """
+        )
+        for ibgc_id, cid in cur.fetchall():
+            ibgc_terms[ibgc_id].add(cid)
 
-    # Step 4: Compute similarity per BGC.
-    bgc_similarities: dict[int, float] = {}
-    for bgc_id, np_terms in bgc_terms.items():
-        raw = best_match_average(query_term_ids, list(np_terms), ic_values, ont)
-        score = normalize_similarity(raw, ic_values)
+        cur.execute("SELECT ibgc_id, chemont_id FROM discovery_ibgc_chemont")
+        for ibgc_id, cid in cur.fetchall():
+            ibgc_terms[ibgc_id].add(cid)
+
+    # Symmetric BMA (Lin) over the query and each iBGC's pooled ChemOnt terms.
+    # Asymmetric coverage was evaluated and rejected: a fully-characterised
+    # query "explains" almost every cluster's sparse predicted classes, which
+    # collapses ranking (true producer fell to rank ~766/2560 vs #1 here).
+    # ``coverage_similarity`` remains available in common_core for other uses.
+    ibgc_similarities: dict[int, float] = {}
+    for ibgc_id, np_terms in ibgc_terms.items():
+        score = semantic_similarity(query_term_ids, list(np_terms), ic_values, ont)
         if score >= similarity_threshold:
-            bgc_similarities[bgc_id] = round(score, 4)
+            ibgc_similarities[ibgc_id] = round(score, 4)
 
     log.info(
         "Chemical query (ChemOnt): SMILES=%s threshold=%.2f matches=%d",
-        smiles[:50], similarity_threshold, len(bgc_similarities),
+        smiles[:50], similarity_threshold, len(ibgc_similarities),
     )
-    return bgc_similarities
+    return ibgc_similarities
 
 
 SEQUENCE_QUERY_TTL = 3_600  # 1 hour
@@ -124,7 +169,7 @@ _VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
     acks_late=True,
 )
 def build_integrated_bgcs_task(self) -> dict:
-    """Rebuild the IntegratedBGC table from latest-version BGC predictions."""
+    """Rebuild the IntegratedBgc table from latest-version SourceBgcPrediction rows."""
     task_id = self.request.id
     search_key = "integrated_bgcs"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
@@ -169,13 +214,12 @@ def run_bgc_clustering_task(
 ) -> dict:
     """Domain+adjacency hierarchical-CPM-Leiden clustering over iBGCs.
 
-    Runs the orchestrator in ``services.clustering.pipeline``; if ``apply``
-    is True, writes leaf paths + umap coords to IntegratedBGC and
-    back-propagates to source DashboardBgc rows, upserts DashboardGCF rows,
-    and emits MIBiG validation artifacts under
+    Runs the orchestrator in ``services.clustering.pipeline``. If ``apply``
+    is True, writes leaf paths + umap coords to ``IntegratedBgc``, upserts
+    ``DashboardGCF`` rows, and emits MIBiG validation artifacts under
     ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``. Optionally
-    chains a reclassify task to assign partial / late BGCs and a iBGC
-    projection task that fills umap / leaf path / novelty for partials.
+    chains a reclassify task to assign partial iBGCs and a projection task
+    that fills umap / leaf path / novelty for partials.
     """
     task_id = self.request.id
     search_key = f"bgc_clustering:{task_id}"
@@ -251,10 +295,10 @@ def reclassify_bgcs_task(
     knn_k: int = 5,
     min_total_similarity: float = 0.1,
 ) -> dict:
-    """Assign leaf family paths to non-primary BGCs against an existing run.
+    """Assign leaf family paths to partial / non-primary iBGCs against an existing run.
 
     Re-runnable independently of ``run_bgc_clustering_task``. Updates only
-    classification fields on ``DashboardBgc``; never touches the hierarchy.
+    classification fields on ``IntegratedBgc``; never touches the hierarchy.
     """
     task_id = self.request.id
     search_key = f"bgc_reclassify:{clustering_run_pk}"
@@ -304,7 +348,7 @@ def project_partial_ibgcs_task(
 
     Writes ``umap_x`` / ``umap_y`` (similarity-weighted average of top-K
     primary neighbours), ``gene_cluster_family``, ``novelty_score``, and
-    ``domain_novelty`` on every IntegratedBGC whose ``classification_run``
+    ``domain_novelty`` on every ``IntegratedBgc`` whose ``classification_run``
     differs from the target run. Marks ``umap_projected = True``.
     """
     task_id = self.request.id
@@ -348,15 +392,20 @@ def sequence_similarity_search(
     min_qcov: float = 70.0,
 ) -> dict[int, dict[str, float | str]]:
     """Run phmmer for a query protein against the on-disk reference DB and
-    return BGCs that contain a matching protein passing all three filters.
+    return iBGCs that contain a matching protein passing all three filters.
 
-    Returns ``{bgc_id: {"bitscore": ..., "pident": ..., "qcoverage": ...,
+    Returns ``{ibgc_id: {"bitscore": ..., "pident": ..., "qcoverage": ...,
     "protein_id": ...}}`` where the values come from the highest-bitscore
-    matched protein within that BGC. The existing DESC sort on
-    ``similarity_score`` continues to work — ``similarity_score`` is set to
-    ``bitscore`` at the API layer.
+    matched protein within that iBGC. The DESC sort on ``similarity_score``
+    continues to work — ``similarity_score`` is set to ``bitscore`` at the
+    API layer.
+
+    A CDS belongs to an iBGC by genomic-range overlap on its contig
+    (iBGCs are disjoint within a cBGC, so each CDS overlaps at most one iBGC).
     """
-    from discovery.models import DashboardCds
+    from django.conf import settings
+    from django.db import connection
+
     from discovery.services.protein_search import phmmer_search
     from discovery.services.protein_search.index import IndexNotBuiltError
 
@@ -378,15 +427,9 @@ def sequence_similarity_search(
             min_bitscore=min_bitscore,
             min_pident=min_pident,
             min_qcov=min_qcov,
-            cpus=1,
+            cpus=getattr(settings, "PROTEIN_SEARCH_CPUS", 1),
         )
     except IndexNotBuiltError:
-        # Re-raise so Celery marks the task FAILURE — otherwise the API
-        # returns an empty SUCCESS payload and the dashboard renders
-        # "Query returned 0 iBGC(s)", which is indistinguishable from a
-        # legitimate no-hit run. Surfacing the failure lets the frontend
-        # show a "search service unavailable" toast and prompts the
-        # operator to run ``make build-protein-index``.
         log.error(
             "Protein search index not built; "
             "run `python manage.py build_protein_search_index --rebuild`."
@@ -400,38 +443,45 @@ def sequence_similarity_search(
         )
         return {}
 
-    cds_qs = (
-        DashboardCds.objects
-        .filter(protein_sha256__in=sha256_metrics.keys())
-        .values_list("bgc_id", "protein_sha256", "protein_id_str")
-    )
+    # Join matched CDS to their owning iBGC via contig + range overlap.
+    sha_list = list(sha256_metrics.keys())
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT i.id, c.protein_sha256, c.protein_id_str
+            FROM discovery_cds c
+            JOIN discovery_ibgc i
+              ON i.contig_id = c.contig_id
+             AND i.bgc_range && c.cds_range
+            WHERE c.protein_sha256 = ANY(%s::text[])
+            """,
+            [sha_list],
+        )
+        rows = cur.fetchall()
 
-    # For each BGC, keep the metrics + protein_id of its highest-bitscore
-    # matched protein. The protein_id flows out so the roster can show
-    # "which protein in the iBGC scored the best hit".
-    bgc_best: dict[int, tuple["ProteinHitMetrics", str]] = {}
-    for bgc_id, sha256, protein_id in cds_qs:
+    ibgc_best: dict[int, tuple["ProteinHitMetrics", str]] = {}
+    for ibgc_id, sha256, protein_id in rows:
         m = sha256_metrics[sha256]
-        existing = bgc_best.get(bgc_id)
+        existing = ibgc_best.get(ibgc_id)
         if existing is None or m.bitscore > existing[0].bitscore:
-            bgc_best[bgc_id] = (m, protein_id)
+            ibgc_best[ibgc_id] = (m, protein_id)
 
-    bgc_scores: dict[int, dict[str, float | str]] = {
-        bgc_id: {
+    ibgc_scores: dict[int, dict[str, float | str]] = {
+        ibgc_id: {
             "bitscore": float(m.bitscore),
             "pident": float(m.pident),
             "qcoverage": float(m.qcoverage),
             "protein_id": protein_id,
         }
-        for bgc_id, (m, protein_id) in bgc_best.items()
+        for ibgc_id, (m, protein_id) in ibgc_best.items()
     }
 
     log.info(
-        "Sequence query: len=%d min_bitscore=%g min_pident=%g min_qcov=%g protein_hits=%d bgc_matches=%d",
+        "Sequence query: len=%d min_bitscore=%g min_pident=%g min_qcov=%g protein_hits=%d ibgc_matches=%d",
         len(seq), min_bitscore, min_pident, min_qcov,
-        len(sha256_metrics), len(bgc_scores),
+        len(sha256_metrics), len(ibgc_scores),
     )
-    return bgc_scores
+    return ibgc_scores
 
 
 @shared_task(name="discovery.tasks.update_protein_search_index", bind=True, acks_late=True)
