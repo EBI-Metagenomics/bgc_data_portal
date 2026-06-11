@@ -1,5 +1,87 @@
 # Changelog
 
+## [3.3.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.2.0...bgc_data_portal-v3.3.0) (2026-06-11)
+
+
+### Features
+
+* **bgc clustering:** Support knn-graph/laiden clustering analysis ([4b98d80](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/4b98d80e6969a06f2f177c4ffcea0c0ac03fba58))
+* **bgc clustering:** Support local clustering ([1afea6c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/1afea6ce4d2bf5d30db8342b8dac221152614a61))
+* **BGC detail:** Mark selected NRB ([bdd633a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/bdd633a021947e6298c471926081b0c685c9c58a))
+* **BGC plots:** When IPS domain has GO term that only maps to 'molecular function' emit no GO slim ([8233baf](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/8233baff5ab59184fd1eedef4124604dc12a3a58))
+* **chart:** make self-host turnkey from the public OCI chart ([26736bd](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/26736bdecd9c2e9afab6044ef23e76ff8276d09e))
+* **clustering:** Support clustering pattern using knn graph and leiden CPM approach ([a05caf8](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/a05caf8a8757bf693e387e306c950dfabfdb80ce))
+* **clustering:** Support compact GCF naming convention ([ae5aaa5](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/ae5aaa500a37b2b60c2a80aaae0b5c30847acc69))
+* **clusterin:** Support IPR entry deduplication in domain architecture ([35cf1f6](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/35cf1f628e51cfafad28c6d908b4c42dd2399e02))
+* **dashboard:** Aesthetic changes ([c769ed2](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/c769ed24e86aa3e18cc91ba0f1de32bc901b1161))
+* **dashboard:** New dashboard version ([a1a1a54](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/a1a1a54ea16da8ca559ade5c1f9cccd48076f160))
+* **dashboard:** Support asset submission ([73c4c43](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/73c4c431ba578dc201f5eec8158ff5ae66e6a3dc))
+* **dashboard:** Support domain architechture similarity searches ([6ae3e79](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/6ae3e7954baa0e5733e5ee258bd0b853556d9adb))
+* **dashboard:** Support filters by GCF and kebab menu in NRB cards ([f7eed79](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/f7eed793df3e6d68c845aa23eaa86c9febd8a775))
+* **dashboard:** Support hmmer sequence protein searches ([1f4192e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/1f4192e7d6ab72b313cd63e470f940e90bad6da2))
+* **dashboard:** support query results varibles in maps ([860a56a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/860a56a9ff706e2811d4c7d378b644d61beb2bea))
+* **Dashboard:** Support report generation with ([c3fcce1](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/c3fcce1247d47979fef411075908cc65a3eac79d))
+* **deploy:** add canonical Helm chart for portal (laptop + cloud targets) ([268544b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/268544b7babaf91a2c89c91e1b9753ad58f618d1))
+* **deploy:** build-from-source self-host path (no private registry) ([7c1b39f](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/7c1b39f3598d44e81ce662d9dd741889b6443b4c))
+* **deploy:** migrate dev inner-loop to k3d + Skaffold Helm deployer ([bb730e5](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/bb730e54d8da2a7754fd3190af6b380c831f97e2))
+* **deploy:** retire cloud Skaffold profiles + legacy manifests; publish chart to OCI ([5f011ee](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/5f011eeabcf83e48cc2de76ff280292bceda9f16))
+* **discovery:** Chain async DiscoveryStats refresh after ingestion commands ([a9b1520](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/a9b1520320e050e55c0c52e662b641767d454782))
+* **discovery:** convert sequence search to async POST→202+poll pattern ([ec5b1d9](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/ec5b1d9007d1469f17cd677e4eaf2b320ab5a474))
+* **discovery:** gate UI-only API endpoints and add per-IP rate limiting ([8d51447](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/8d5144777fc48f399693d51f605cee7b8161ff38))
+* **discovery:** iBGC class/status chips, report class bar, roster columns ([02f598b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/02f598bb85994149c14710d61e68a53a916639cc))
+* **discovery:** ingest BGC classification_path + derive normalized iBGC class ([3c71fd7](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/3c71fd783ba595a155f4a64ba84fb18353223eab))
+* **discovery:** unify Accessions filter into a single smart field ([035ade1](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/035ade176911fe293f1f3325ff96623a186127a0))
+* Infor in NRB chips and urls ([9091529](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/909152952b1b5ec9bd1ba77f72843a297d600d2f))
+* **ingestion:** capture InterPro entry + GO terms on BgcDomain ([837f56a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/837f56aeaa1e0f8b014dcb4efb69ccb7a50b8157))
+* **local dev pattern:** Support auto clean of previous versions in `make dev` command ([edadcc4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/edadcc497269e7d2d97cd4205cb4264cdb1bf0df))
+* **local_dev:** Support make command to load real data into local dev cluster ([5c406a4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/5c406a4ce3d9da92c1bede761f921c1025592221))
+* **NP preds:** Support CHEMONT to GENE using CHAMOIS results ([0d00f42](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/0d00f4214c1b563730b7eb1a41dda95efe633d4a))
+* **portal:** Switch frontend to /api/discovery and iBGC accessions ([97e0a67](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/97e0a67671cc368f7104efa693912d3365c0a6da))
+* Support ClassyFire using API ([e240510](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/e240510e1b03c8d62d6a765880de12403b3b8ebf))
+
+
+### Bug Fixes
+
+* **bgc detail plot:** Standardize Go SLIM colors ([6f6e4b0](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/6f6e4b0714ab9532ab635b8fff00679b0cb40ce9))
+* **clusering:** Force is_validated==true iBGC have novelty of 0.0 ([9ba753d](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/9ba753d328ded90637403e09c4a7b40caf4c1f42))
+* **clustering:** Amebd local clustering inputs path ([16b407e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/16b407ee32007335a4d56de4defcdc2849d2bc80))
+* **dashboard:** filters looks ([c1c4268](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/c1c4268a6f7df58355e262cfc5dc0c645700caf3))
+* **dashboard:** Fix filters wiring ([bb3d374](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/bb3d374a2d68557aede9f1d48e8fe032f4a1d032))
+* **dashboard:** GOslim assignment in submitted assets ([00f713c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/00f713ca87c23e43f500ddca55177d92f41efe80))
+* **dashboard:** Load of asset to repport failing ([fa3d970](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/fa3d970bcde9064f9d8e4f2b4954780ffc6b5c6d))
+* **dashboard:** NRB detector overlap on partial BGCs ([146a32c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/146a32c58e9c6b352e736f1152bd7e60e96a3836))
+* **deploy:** pin Helm v3 for the Skaffold dev loop (Helm v4 incompatible) ([63d6f51](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/63d6f51dce86f8f1da25b6dd2b0375d355d9cbff))
+* **deploy:** pin k3d kube-context on the dev loop; repair cluster-create kubeconfig merge ([8cae415](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/8cae415de61b7b0ead164ebace7804aac2fa443e))
+* **deploy:** wire PROTEIN_SEARCH_INDEX_DIR onto hf-cache PVC for celery ([3592564](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/35925646d71c5856f0d9819bdf62f0d47c3d1303))
+* **discovery platform:** Change NRB references for integrated BGCs (iBGC) ([283462b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/283462b357d67a6747db316c1484551240d80d77))
+* **discovery:** add missing NRB scoring columns (umap_projected, novelty_score, domain_novelty) ([6d792dd](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/6d792dd4b75a19ce01ef35a0ce7bb584929d25c3))
+* **discovery:** apply catalogue filters alongside a loaded asset ([c23dfbc](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/c23dfbc6da158e7370a9578e76c5a3ec9af7a4d2))
+* **discovery:** Correct ContigDomain table name in range-overlap SQL ([f549345](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/f5493456da41995a79fb257d3981fb423d3cf369))
+* **discovery:** make the roster Bitscore column sortable ([2287358](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/228735897477a50de976105c79b0272f01ad0b76))
+* **discovery:** map sequence search results by iBGC id ([e654aa5](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/e654aa5fba9fcaf90e64eaa11da04ff589c1985d))
+* **discovery:** Repair iBGC API endpoints broken by the Phase 2f rename ([1f14a7a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/1f14a7ad725a5d621a8f67656bb3faec91cb1920))
+* **discovery:** repair Load Asset end-to-end (tarball validation, projection ([57f3a81](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/57f3a81abad23916735beefc6683d8542d7f00a7))
+* **discovery:** Replace psycopg2 NumericRange import with Django's psycopg_any shim ([3dfd4d4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/3dfd4d4bee16479410228c8742b0eda7a8234c0d))
+* **discovery:** Restore DashboardBgcClass import in api.py ([95800c1](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/95800c1c5742dbf41f7ab3209f765bd4ee61499d))
+* **ingestion:** Dedup upsert batches to avoid ON CONFLICT double-touch ([6993820](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/699382007177299e2eefe840d6b17533eda2c252))
+* **keyword search:** Route free-text keywords to domain annotations and auto-run the v2 query ([887b50a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/887b50a89c4aba0b585cb7c0b5d423dcded6d0f6))
+* **keyword search:** Wiring keyword search pattern ([9088858](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/9088858b765546219835be9b82147e8f263b8983))
+* **migrations:** Migrations error on pair based clustering ([353879e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/353879e76e3207da76fcb903b355c351bd4d331b))
+* Nesting of ChemOnt classes ([a5bb084](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/a5bb08494b2436b4856641321e3b44a5039c8100))
+* **NP predictions:** gene - chemont asociation scores ([c48b9c4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/c48b9c48cdff4243da8d56fe22ef4e590ebb61c9))
+* **NRB plot:** Prevent extremely large regions plot from failing. Add guard ([0f4d22b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/0f4d22b74d3a5c6df4913a91d169b4a599b3b1dd))
+* **portal:** path traversal + info leaks + workflow perms, fix(deps): ([5d20ab6](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/5d20ab6d62fcfa089c16f269917d3e61aba50c82))
+* **portal:** Unblock prod frontend build (BgcScatter mode type) ([872b71d](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/872b71df8539bdf366194bbbe603d0d3522ae752))
+* Render report correcly ([b479900](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/b479900e3c872021b2c797c7fe721b47f544943d))
+* **scoring patter:** Download needed OBO file for classyfire and novelty scoring patterns ([51f7c38](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/51f7c38166865adb850d3f446abedd231377a28e))
+* **security:** Close securityh gaps raise by CodeQL ([2cc3950](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/2cc3950b1ab65751dc6b9bdb787f43c9c8b0cacb))
+
+
+### Performance Improvements
+
+* **api:** Retrive assembly source in first queryset pass ([bb3456c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/bb3456c495f9d94d4a078c9f8ddcabe9f88d594b))
+* **discovery:** Support chunked protein searches to leverage multi threading ([bc72a8e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/bc72a8eefc9131698ea21a66bf35f8e569b7b245))
+
 ## [3.2.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.1.0...bgc_data_portal-v3.2.0) (2026-04-23)
 
 
