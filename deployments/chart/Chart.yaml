@@ -8,9 +8,12 @@ description: >-
 type: application
 # Chart version tracks the deployment topology, not the app. The application
 # version is the container image tag, set per-target in values.
-version: 0.2.0
+version: 0.2.1
 appVersion: "latest"
-kubeVersion: ">=1.25.0-0"
+# Floor is the oldest cluster we deploy to (EBI HL exp/prod run v1.23.x). The chart
+# only uses GA APIs available well before then (apps/v1, networking.k8s.io/v1
+# Ingress, batch/v1 Job), so 1.23 is the true minimum — not 1.25.
+kubeVersion: ">=1.23.0-0"
 maintainers:
   - name: MGnify / Microbiome Informatics
     url: https://github.com/EBI-Metagenomics
