@@ -2,7 +2,7 @@ name: Publish Helm chart
 
 # Packages the canonical chart and pushes it to the Quay OCI registry so the
 # deployer repo can pin a version instead of a sibling checkout:
-#   oci://quay.io/microbiome-informatics/charts/bgc-data-portal:<Chart.yaml version>
+#   oci://quay.io/microbiome-informatics/bgc-data-portal-chart:<Chart.yaml version>
 #
 # Bump `version:` in deployments/chart/Chart.yaml whenever the chart changes
 # (standard Helm practice) — that string becomes the published OCI tag. 
@@ -26,7 +26,7 @@ permissions:
 
 env:
   REGISTRY: quay.io
-  OCI_REPO: oci://quay.io/microbiome-informatics/charts
+  OCI_REPO: oci://quay.io/microbiome-informatics/bgc-data-portal-chart
 
 jobs:
   publish-chart:

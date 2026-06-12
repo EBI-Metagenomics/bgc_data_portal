@@ -35,7 +35,7 @@ No second deployment definition — same chart as the cloud.
 Only if `quay.io/microbiome-informatics` (images + `charts/`) is public:
 
 ```bash
-helm pull oci://quay.io/microbiome-informatics/charts/bgc-data-portal --untar
+helm pull oci://quay.io/microbiome-informatics/bgc-data-portal-chart --untar
 helm install bgc ./bgc-data-portal \
   -f ./bgc-data-portal/values-laptop.yaml \
   -f ./bgc-data-portal/values-selfhost.yaml \

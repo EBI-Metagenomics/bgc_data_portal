@@ -73,10 +73,10 @@ jobs:
       matrix:
         include:
           - folder: django
-            image_name: bgc_dp_web_site
+            image_name: bgc-data-portal-website
             dockerfile: Dockerfile
           - folder: django
-            image_name: bgc_dp_web_site_worker
+            image_name: bgc-data-portal-website-worker
             dockerfile: Dockerfile.worker
           - folder: db
             image_name: pgvector

@@ -2,7 +2,7 @@
 # Self-host overlay — use the PUBLISHED public images instead of locally-built
 # ones. Layer it on top of values-laptop.yaml so no git checkout is needed:
 #
-#   helm pull oci://quay.io/microbiome-informatics/charts/bgc-data-portal --untar
+#   helm pull oci://quay.io/microbiome-informatics/bgc-data-portal-chart --untar
 #   helm install bgc ./bgc-data-portal \
 #     -f ./bgc-data-portal/values-laptop.yaml \
 #     -f ./bgc-data-portal/values-selfhost.yaml \
@@ -13,9 +13,9 @@
 # =============================================================================
 
 django:
-  image: quay.io/microbiome-informatics/bgc_dp_web_site:latest
+  image: quay.io/microbiome-informatics/bgc-data-portal-website:latest
   imagePullPolicy: IfNotPresent
 
 celery:
-  image: quay.io/microbiome-informatics/bgc_dp_web_site_worker:latest
+  image: quay.io/microbiome-informatics/bgc-data-portal-website-worker:latest
   imagePullPolicy: IfNotPresent
