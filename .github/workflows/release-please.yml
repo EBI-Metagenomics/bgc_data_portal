@@ -14,11 +14,12 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      # Single package at "." in the manifest, so release-please prefixes its
-      # per-path outputs with ".--". `release_created` is "true" only when the
-      # release PR was just merged (a release+tag was cut this run).
-      release_created: ${{ steps.release.outputs['.--release_created'] }}
-      tag_name: ${{ steps.release.outputs['.--tag_name'] }}
+      # Single ROOT component (path ".") — release-please exposes its outputs
+      # WITHOUT a path prefix (the "pkg--" prefix is only for non-root paths).
+      # `release_created` is "true" only when the release PR was just merged
+      # (a release+tag was cut this run).
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
