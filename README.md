@@ -229,8 +229,9 @@ reports, downloads).
 
 All environments render from **one Helm chart** (`deployments/chart/`): the
 laptop / self-host targets use `values-laptop.yaml` (+ `values-selfhost.yaml`),
-while cloud dev/prod values and automation live in the private
-`mgnify-bgcs-deployer` repo. Images publish to `quay.io/microbiome-informatics`
+while cloud dev/prod values live in the private `mgnify-bgcs-deployer` repo
+(consumed as a submodule of the `mgnify_bgcs_v2` monorepo, with the deploy
+automation in that monorepo at `deployments/cloud/`). Images publish to `quay.io/microbiome-informatics`
 and the chart to `oci://quay.io/microbiome-informatics/charts/bgc-data-portal`
 via GitHub Actions. Versioning is automated by Release Please from
 [Conventional Commits](https://www.conventionalcommits.org/).

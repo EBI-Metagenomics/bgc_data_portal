@@ -1,15 +1,37 @@
 name: Build and Push Docker Images
 
+# Image tagging contract (see docs/runbooks/.../versioning-and-releases.md):
+#
+#   Event                         Tags pushed
+#   ───────────────────────────   ──────────────────────────────────────────────
+#   release: published            :X.Y.Z  :X.Y.Z-<sha7>  :sha-<sha7>  :latest
+#   push to main (msg ' release ') :sha-<sha7>  :latest
+#   push to dev                   :sha-<sha7>  :dev
+#   workflow_dispatch (ref=tag)   :X.Y.Z  :X.Y.Z-<sha7>  :sha-<sha7>   (backfill)
+#   workflow_dispatch (ref=sha)   :sha-<sha7>
+#
+# Immutable tags (:X.Y.Z, :X.Y.Z-<sha7>, :sha-<sha7>) are what production pins.
+# :latest / :dev are moving convenience pointers for exp/dev only — never pin
+# them in a prod values file. The release tag carries a component prefix
+# (bgc_data_portal-vX.Y.Z); we strip it down to the bare semver for the image
+# tag. `workflow_dispatch` exists to backfill an immutable image for a tag that
+# was cut before this workflow existed, without forcing a new release.
+
 on:
   push:
     branches: [main, dev]
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build (tag like bgc_data_portal-v3.3.1, branch, or full SHA)"
+        required: true
+        type: string
 
 env:
   REGISTRY: quay.io
   IMAGE_NAMESPACE: microbiome-informatics
-  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 # Least privilege: this workflow only checks out code and pushes images to
 # Quay (via QUAY_* secrets, not GITHUB_TOKEN), so read-only is sufficient.
@@ -22,6 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
       github.ref == 'refs/heads/dev' ||
       (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, ' release '))
 
@@ -40,7 +63,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          # On workflow_dispatch, build the requested ref; otherwise the event ref.
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,28 +78,62 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      - name: Set Tags
-        id: set_tags
+      - name: Compute image tags
+        id: tags
         run: |
-          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.image_name }}"
+          SHA7="$(git rev-parse --short=7 HEAD)"
 
-          if [[ "${BRANCH_NAME}" == *dev* ]]; then
-            TAG=dev
-          elif [[ "${BRANCH_NAME}" == *main* ]]; then
-            TAG=latest
-          else
-            TAG=unstable
+          # Is this build anchored to a release tag? Either the release event,
+          # or a workflow_dispatch whose ref is a *-v<semver> tag.
+          REF_NAME=""
+          case "${{ github.event_name }}" in
+            release)           REF_NAME="${{ github.event.release.tag_name }}" ;;
+            workflow_dispatch) REF_NAME="${{ github.event.inputs.ref }}" ;;
+          esac
+
+          # Strip an optional component prefix and leading v: bgc_data_portal-v3.3.1 -> 3.3.1
+          VERSION=""
+          if [[ "${REF_NAME}" =~ v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
           fi
 
-          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          TAGS=()
+          if [[ -n "${VERSION}" ]]; then
+            # Immutable release artefacts — what prod pins.
+            TAGS+=("${IMAGE}:${VERSION}")
+            TAGS+=("${IMAGE}:${VERSION}-${SHA7}")
+            TAGS+=("${IMAGE}:sha-${SHA7}")
+            # A release is always cut from main, so move :latest too — but only
+            # on the actual release event, not a historical backfill.
+            if [[ "${{ github.event_name }}" == "release" ]]; then
+              TAGS+=("${IMAGE}:latest")
+            fi
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAGS+=("${IMAGE}:sha-${SHA7}")
+            TAGS+=("${IMAGE}:latest")
+          elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+            TAGS+=("${IMAGE}:sha-${SHA7}")
+            TAGS+=("${IMAGE}:dev")
+          else
+            # workflow_dispatch on a non-tag ref (e.g. a bare SHA): commit-addressable only.
+            TAGS+=("${IMAGE}:sha-${SHA7}")
+          fi
+
+          printf 'tags<<EOF\n%s\nEOF\n' "$(IFS=$'\n'; echo "${TAGS[*]}")" >> "$GITHUB_OUTPUT"
+          echo "Computed tags:"; printf '  %s\n' "${TAGS[@]}"
 
       - name: Build and Push Docker Image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.folder }}
           file: ./${{ matrix.folder }}/${{ matrix.dockerfile }}
-          # push: ${{ github.event_name == 'release' }}
           push: true
-          tags: |
-            ${{ steps.set_tags.outputs.image }}:${{ steps.set_tags.outputs.tag }}
+          tags: ${{ steps.tags.outputs.tags }}
+
+      - name: Report digest
+        run: |
+          echo "::notice title=${{ matrix.image_name }} digest::${{ steps.build.outputs.digest }}"
+          echo "Pushed ${{ matrix.image_name }} @ ${{ steps.build.outputs.digest }}"

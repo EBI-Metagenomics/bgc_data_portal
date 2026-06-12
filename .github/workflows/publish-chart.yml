@@ -15,6 +15,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Overwrite the chart tag even if it already exists (re-publish)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -43,6 +48,25 @@ jobs:
           helm registry login ${{ env.REGISTRY }} \
             -u "${{ secrets.QUAY_USERNAME }}" \
             -p "${{ secrets.QUAY_PASSWORD }}"
+
+      # Immutability guard: a chart tag is meant to be published once. `helm push`
+      # overwrites by default, so a chart change that forgot to bump
+      # Chart.yaml:version would silently replace an already-published tag that
+      # prod may be pinning. Refuse that — bump the version instead. Re-publishing
+      # the same version on purpose requires workflow_dispatch with force=true.
+      - name: Guard against overwriting a published chart version
+        if: ${{ github.event.inputs.force != 'true' }}
+        run: |
+          set -euo pipefail
+          META=$(helm show chart deployments/chart)
+          NAME=$(echo "$META" | awk '/^name:/{print $2; exit}')
+          VERSION=$(echo "$META" | awk '/^version:/{print $2; exit}')
+          echo "Chart: ${NAME} version ${VERSION}"
+          if helm show chart "${OCI_REPO}/${NAME}" --version "${VERSION}" >/dev/null 2>&1; then
+            echo "::error title=Chart version already published::${NAME}:${VERSION} already exists in ${OCI_REPO}. Bump 'version:' in deployments/chart/Chart.yaml — Helm push would overwrite an immutable tag that production may pin. To re-publish the same version on purpose, run this workflow manually with force=true."
+            exit 1
+          fi
+          echo "OK — ${NAME}:${VERSION} is not yet published."
 
       - name: Package
         id: pkg
