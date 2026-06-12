@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.3](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.2...bgc_data_portal-v3.5.3) (2026-06-12)
+
+
+### Bug Fixes
+
+* **ci:** Reference to OCI chart repo ([3362a4a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/3362a4a01789cc86f17e6e990fcec72b130fa202))
+
 ## [3.5.2](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.1...bgc_data_portal-v3.5.2) (2026-06-12)
 
 
