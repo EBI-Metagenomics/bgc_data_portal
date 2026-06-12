@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.0...bgc_data_portal-v3.5.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* **ci:** Bad path to chain build and push with release-please ([e635d60](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/e635d604f3327d54f77f068e8d3b1afc4985d6f6))
+
 ## [3.5.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.4.0...bgc_data_portal-v3.5.0) (2026-06-12)
 
 
