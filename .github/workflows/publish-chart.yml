@@ -26,7 +26,10 @@ permissions:
 
 env:
   REGISTRY: quay.io
-  OCI_REPO: oci://quay.io/microbiome-informatics/bgc-data-portal-chart
+  # `helm push` always appends the chart's `name:` (bgc-data-portal-chart) as the
+  # final path segment, so the artifact lands at exactly:
+  #   oci://quay.io/microbiome-informatics/bgc-data-portal-chart:<version>
+  OCI_REPO: oci://quay.io/microbiome-informatics
 
 jobs:
   publish-chart:

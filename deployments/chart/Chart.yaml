@@ -1,5 +1,7 @@
 apiVersion: v2
-name: bgc-data-portal
+# Chart name is also the final OCI path segment: `helm push` appends it, so the
+# published artifact is oci://quay.io/microbiome-informatics/bgc-data-portal-chart.
+name: bgc-data-portal-chart
 description: >-
   BGC Data Portal — Django web app, Celery worker, and their backing services
   (PostgreSQL/pgvector, Redis, RabbitMQ). One chart, rendered for three targets:
@@ -8,7 +10,7 @@ description: >-
 type: application
 # Chart version tracks the deployment topology, not the app. Bump it on any
 # change to the chart (templates, defaults, or this metadata) — it becomes the
-# published OCI tag (oci://.../charts/bgc-data-portal:<version>) that prod pins.
+# published OCI tag (oci://.../bgc-data-portal-chart:<version>) that prod pins.
 version: 0.2.3
 # appVersion is the app release this chart revision was published alongside — a
 # reference/default only. The version actually deployed is the container image
