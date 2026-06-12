@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.4.0...bgc_data_portal-v3.5.0) (2026-06-12)
+
+
+### Features
+
+* **ci:** Support contener build & push after release-please action ([306353c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/306353c296aa2cf22de0fcc2a79ebac8267cac7d))
+
 ## [3.4.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.3.1...bgc_data_portal-v3.4.0) (2026-06-12)
 
 
