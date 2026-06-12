@@ -2,26 +2,46 @@ name: Build and Push Docker Images
 
 # Image tagging contract (see docs/runbooks/.../versioning-and-releases.md):
 #
-#   Event                         Tags pushed
-#   ───────────────────────────   ──────────────────────────────────────────────
-#   release: published            :X.Y.Z  :X.Y.Z-<sha7>  :sha-<sha7>  :latest
-#   push to main (msg ' release ') :sha-<sha7>  :latest
-#   push to dev                   :sha-<sha7>  :dev
-#   workflow_dispatch (ref=tag)   :X.Y.Z  :X.Y.Z-<sha7>  :sha-<sha7>   (backfill)
-#   workflow_dispatch (ref=sha)   :sha-<sha7>
+#   Trigger                          Tags pushed
+#   ──────────────────────────────   ─────────────────────────────────────────────
+#   workflow_call (is_release=true)  :X.Y.Z  :X.Y.Z-<sha7>  :sha-<sha7>  :latest
+#   push to dev                      :sha-<sha7>  :dev
+#   workflow_dispatch (ref=tag)      :X.Y.Z  :X.Y.Z-<sha7>  :sha-<sha7>   (backfill)
+#   workflow_dispatch (ref=sha)      :sha-<sha7>
 #
 # Immutable tags (:X.Y.Z, :X.Y.Z-<sha7>, :sha-<sha7>) are what production pins.
 # :latest / :dev are moving convenience pointers for exp/dev only — never pin
-# them in a prod values file. The release tag carries a component prefix
-# (bgc_data_portal-vX.Y.Z); we strip it down to the bare semver for the image
-# tag. `workflow_dispatch` exists to backfill an immutable image for a tag that
-# was cut before this workflow existed, without forcing a new release.
+# them in a prod values file.
+#
+# Production images are built ONLY for a real release: release-please.yml calls
+# this workflow (workflow_call) once it has cut the GitHub release+tag, passing
+# the tag as `ref` and `is_release: true`. We call it rather than listening for
+# `release: published` because release-please creates the release with the
+# default GITHUB_TOKEN, and GitHub does not trigger workflows from GITHUB_TOKEN
+# events — so a `release:` trigger here would never fire. Chaining via
+# workflow_call runs in the same workflow run and sidesteps that entirely.
+#
+# The release tag carries a component prefix (bgc_data_portal-vX.Y.Z); we strip
+# it down to the bare semver for the image tag. `workflow_dispatch` exists to
+# backfill an immutable image for a tag cut before this workflow existed (or
+# whose release build failed), without forcing a new release — it never moves
+# :latest. There is deliberately NO `push: main` build: main lands via the
+# release PR, and the release path above owns prod images.
 
 on:
   push:
-    branches: [main, dev]
-  release:
-    types: [published]
+    branches: [dev]
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref (release tag like bgc_data_portal-vX.Y.Z) to build"
+        required: true
+        type: string
+      is_release:
+        description: "True for a real release — also moves :latest"
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       ref:
@@ -42,11 +62,12 @@ jobs:
   docker:
     name: Build & Push Services
     runs-on: ubuntu-latest
+    # workflow_call / workflow_dispatch always pass `inputs.ref`; a bare dev push
+    # has no inputs but lands on refs/heads/dev. (Under workflow_call the github
+    # context is the CALLER's, so we key off `inputs`, not github.event_name/ref.)
     if: >-
-      github.event_name == 'release' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.ref == 'refs/heads/dev' ||
-      (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, ' release '))
+      inputs.ref != '' ||
+      github.ref == 'refs/heads/dev'
 
     strategy:
       matrix:
@@ -65,8 +86,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # On workflow_dispatch, build the requested ref; otherwise the event ref.
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          # workflow_call/workflow_dispatch build the requested ref; a dev push
+          # builds the pushed ref.
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -85,13 +107,10 @@ jobs:
           IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.image_name }}"
           SHA7="$(git rev-parse --short=7 HEAD)"
 
-          # Is this build anchored to a release tag? Either the release event,
-          # or a workflow_dispatch whose ref is a *-v<semver> tag.
-          REF_NAME=""
-          case "${{ github.event_name }}" in
-            release)           REF_NAME="${{ github.event.release.tag_name }}" ;;
-            workflow_dispatch) REF_NAME="${{ github.event.inputs.ref }}" ;;
-          esac
+          # `inputs.ref` is set for both workflow_call (release) and
+          # workflow_dispatch (backfill); empty for a dev push.
+          REF_NAME="${{ inputs.ref }}"
+          IS_RELEASE="${{ inputs.is_release }}"
 
           # Strip an optional component prefix and leading v: bgc_data_portal-v3.3.1 -> 3.3.1
           VERSION=""
@@ -105,20 +124,19 @@ jobs:
             TAGS+=("${IMAGE}:${VERSION}")
             TAGS+=("${IMAGE}:${VERSION}-${SHA7}")
             TAGS+=("${IMAGE}:sha-${SHA7}")
-            # A release is always cut from main, so move :latest too — but only
-            # on the actual release event, not a historical backfill.
-            if [[ "${{ github.event_name }}" == "release" ]]; then
+            # Move :latest only for a real release call, never a historical backfill.
+            if [[ "${IS_RELEASE}" == "true" ]]; then
               TAGS+=("${IMAGE}:latest")
             fi
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          elif [[ -n "${REF_NAME}" ]]; then
+            # workflow_dispatch on a non-tag ref (e.g. a bare SHA): commit-addressable only.
             TAGS+=("${IMAGE}:sha-${SHA7}")
-            TAGS+=("${IMAGE}:latest")
           elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
             TAGS+=("${IMAGE}:sha-${SHA7}")
             TAGS+=("${IMAGE}:dev")
           else
-            # workflow_dispatch on a non-tag ref (e.g. a bare SHA): commit-addressable only.
-            TAGS+=("${IMAGE}:sha-${SHA7}")
+            echo "::error title=No tagging rule matched::event=${{ github.event_name }} ref=${{ github.ref }} inputs.ref='${REF_NAME}'" >&2
+            exit 1
           fi
 
           printf 'tags<<EOF\n%s\nEOF\n' "$(IFS=$'\n'; echo "${TAGS[*]}")" >> "$GITHUB_OUTPUT"

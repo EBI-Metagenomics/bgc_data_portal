@@ -13,8 +13,29 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      # Single package at "." in the manifest, so release-please prefixes its
+      # per-path outputs with ".--". `release_created` is "true" only when the
+      # release PR was just merged (a release+tag was cut this run).
+      release_created: ${{ steps.release.outputs['.--release_created'] }}
+      tag_name: ${{ steps.release.outputs['.--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Build & push the immutable production images for the release we just cut.
+  # We call release.yml directly (rather than relying on a `release: published`
+  # trigger) because release-please creates the release with the default
+  # GITHUB_TOKEN, and GitHub does not start new workflow runs from GITHUB_TOKEN
+  # events. Running in the same workflow run sidesteps that limitation.
+  build-release-images:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      ref: ${{ needs.release-please.outputs.tag_name }}
+      is_release: true
+    secrets: inherit
