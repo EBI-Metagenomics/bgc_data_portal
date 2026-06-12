@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.4.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.3.1...bgc_data_portal-v3.4.0) (2026-06-12)
+
+
+### Features
+
+* **ci:** Support OCI publishing ([654cf6d](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/654cf6dd6698701828e92e7138c1cdfcb3ce7027))
+
 ## [3.3.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.3.0...bgc_data_portal-v3.3.1) (2026-06-11)
 
 
