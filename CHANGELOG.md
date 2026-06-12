@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.2](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.1...bgc_data_portal-v3.5.2) (2026-06-12)
+
+
+### Bug Fixes
+
+* **ci:** Readability of container tags ([1279031](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/1279031d673485913498a6a90e02b239a287bf8f))
+
 ## [3.5.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.0...bgc_data_portal-v3.5.1) (2026-06-12)
 
 
