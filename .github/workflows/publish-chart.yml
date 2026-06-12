@@ -5,7 +5,7 @@ name: Publish Helm chart
 #   oci://quay.io/microbiome-informatics/charts/bgc-data-portal:<Chart.yaml version>
 #
 # Bump `version:` in deployments/chart/Chart.yaml whenever the chart changes
-# (standard Helm practice) — that string becomes the published OCI tag.
+# (standard Helm practice) — that string becomes the published OCI tag. 
 
 on:
   push:
