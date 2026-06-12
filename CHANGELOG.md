@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.3.0...bgc_data_portal-v3.3.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* Remove "Evaluate Asset" card from landing page ([d52015c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/d52015ce6cbd3ebbdfeed8a25e4c3442c39d0cec))
+
 ## [3.3.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.2.0...bgc_data_portal-v3.3.0) (2026-06-11)
 
 
