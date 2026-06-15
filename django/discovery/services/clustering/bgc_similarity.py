@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import scipy.sparse as sp
 
-from discovery.services.clustering.metrics import dice_similarity
+from discovery.services.clustering.metrics import dice_block, dice_similarity
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +89,73 @@ def compute_composite_similarity(
 
     log.info(
         "compute_composite_similarity: shape=%s nnz=%d weights=(%.3f, %.3f)",
+        sim.shape,
+        sim.nnz,
+        w_d,
+        w_a,
+    )
+    return sim
+
+
+def compute_composite_similarity_block(
+    M_dom_query: sp.csr_matrix,
+    M_dom_ref: sp.csr_matrix,
+    M_pair_query: sp.csr_matrix,
+    M_pair_ref: sp.csr_matrix,
+    *,
+    weights: tuple[float, float] = (0.5, 0.5),
+) -> sp.csr_matrix:
+    """Composite weighted-mean Dice of query rows vs. reference rows only.
+
+    Equivalent to the ``[n_ref:, :n_ref]`` block of::
+
+        compute_composite_similarity(
+            vstack([M_dom_ref, M_dom_query]),
+            vstack([M_pair_ref, M_pair_query]),
+            weights=weights,
+        )
+
+    but computed directly as ``(n_query, n_ref)`` Dice blocks, so the cost is
+    proportional to the (small) query set rather than the (large) reference
+    set squared. The diagonal-zeroing / symmetrisation that
+    ``compute_composite_similarity`` applies do not affect this off-diagonal
+    block (query and reference rows are disjoint, and the closed-form Dice is
+    already symmetric), so the two paths agree to float tolerance.
+
+    Returns a ``(n_query, n_ref)`` CSR matrix.
+    """
+    if M_dom_query.shape[0] != M_pair_query.shape[0]:
+        raise ValueError(
+            f"query row mismatch: M_dom_query={M_dom_query.shape}, "
+            f"M_pair_query={M_pair_query.shape}"
+        )
+    if M_dom_ref.shape[0] != M_pair_ref.shape[0]:
+        raise ValueError(
+            f"ref row mismatch: M_dom_ref={M_dom_ref.shape}, "
+            f"M_pair_ref={M_pair_ref.shape}"
+        )
+
+    w_d, w_a = weights
+    total = float(w_d) + float(w_a)
+    if total <= 0:
+        raise ValueError(f"weights must sum > 0, got {weights}")
+    w_d, w_a = w_d / total, w_a / total
+
+    sim_d = dice_block(M_dom_query, M_dom_ref) if w_d > 0 else None
+    sim_a = dice_block(M_pair_query, M_pair_ref) if w_a > 0 else None
+
+    if sim_d is not None and sim_a is not None:
+        sim = (w_d * sim_d) + (w_a * sim_a)
+    elif sim_d is not None:
+        sim = w_d * sim_d
+    elif sim_a is not None:
+        sim = w_a * sim_a
+    else:  # unreachable due to total>0 guard
+        raise RuntimeError("composite similarity has no contributing components")
+
+    sim = sim.tocsr()
+    log.info(
+        "compute_composite_similarity_block: shape=%s nnz=%d weights=(%.3f, %.3f)",
         sim.shape,
         sim.nnz,
         w_d,

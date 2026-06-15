@@ -245,11 +245,10 @@ def _project_against_run(
         return
 
     import numpy as np
-    import scipy.sparse as sp
 
     from discovery.models import IntegratedBgc, SourceBgcPrediction
     from discovery.services.clustering.bgc_similarity import (
-        compute_composite_similarity,
+        compute_composite_similarity_block,
     )
     from discovery.services.clustering.ibgc_scoring import load_scoring_cache
 
@@ -324,16 +323,18 @@ def _project_against_run(
         virtual_ibgcs, sources=sources, pair_vocab=pair_vocab
     )
 
-    # Cast dom matrices to a common dtype for vstack.
-    M_dom_full = sp.vstack([M_dom_pri.astype(M_dom_q.dtype), M_dom_q], format="csr")
-    M_pair_full = sp.vstack([M_pair_pri.astype(M_pair_q.dtype), M_pair_q], format="csr")
-    sim_full = compute_composite_similarity(
-        M_dom_full,
-        M_pair_full,
+    # Score the asset rows against the (large, fixed) primary set directly.
+    # Stacking under the primary matrix and running the full self-similarity
+    # would recompute the entire n_primary² primary block — already cached from
+    # the clustering run and irrelevant here — on every upload. The asset set is
+    # tiny, so we compute only the (n_asset × n_primary) Dice block.
+    sim_block = compute_composite_similarity_block(
+        M_dom_q,
+        M_dom_pri,
+        M_pair_q,
+        M_pair_pri,
         weights=weights,
-        prune_below=0.0,
     )
-    sim_block = sim_full[n_primary:, :n_primary].tocsr()
     M_dom_q_csr = M_dom_q.tocsr()
 
     for q_row, vibgc in enumerate(virtual_ibgcs):
