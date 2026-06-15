@@ -85,6 +85,10 @@ export function VariablesMapTab() {
   const queryAxesUnplottable = anyQueryAxis && resultSimilarityById == null;
 
   const assetToken = useDiscoveryStore((s) => s.assetToken);
+  // Sample the same top-5k the roster shows (server caps both at 5k). The sort
+  // selects *which* points; the x/y axes only decide where they're plotted.
+  const sortBy = useDiscoveryStore((s) => s.rosterSortBy);
+  const order = useDiscoveryStore((s) => s.rosterOrder);
   const filterParams = appliedFiltersToApiParams(
     applied,
     resultIbgcIds,
@@ -110,11 +114,13 @@ export function VariablesMapTab() {
     : yAxis;
 
   const { data: scatterData, isLoading, isError, error } = useQuery({
-    queryKey: ["ibgc-scatter", scatterX, scatterY, filterParams],
+    queryKey: ["ibgc-scatter", scatterX, scatterY, filterParams, sortBy, order],
     queryFn: () =>
       fetchIbgcScatter({
         x_axis: scatterX,
         y_axis: scatterY,
+        sort_by: sortBy,
+        order,
         ...filterParams,
       }),
     enabled: anyStableAxis && hasActiveScope,

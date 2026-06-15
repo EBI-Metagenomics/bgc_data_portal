@@ -183,8 +183,20 @@ export function fetchIbgcRegion(ibgcId: number, assetToken?: string | null) {
   return apiGet<IbgcRegionData>(`/ibgcs/${ibgcId}/region/`);
 }
 
+/** Sort keys for the maps' top-``max_points`` sampling — a subset of the
+ *  roster's keys, matching the backend ``_apply_ibgc_sort`` helper. */
+export type IbgcMapSortBy =
+  | "novelty_score"
+  | "domain_novelty"
+  | "size_kb"
+  | "id"
+  | "similarity";
+
 export interface IbgcUmapParams extends IbgcFilterParams {
   max_points?: number;
+  /** Pass the roster's active sort so the map samples the same top iBGCs. */
+  sort_by?: IbgcMapSortBy;
+  order?: "asc" | "desc";
   /** Comma-separated iBGC ids — restricts the UMAP to this allow-list. */
   ibgc_ids?: string;
 }
@@ -200,6 +212,10 @@ export interface IbgcScatterParams extends IbgcFilterParams {
   x_axis?: IbgcScatterAxis;
   y_axis?: IbgcScatterAxis;
   max_points?: number;
+  /** Sampling sort (which points), independent of the x/y plot axes. Pass the
+   *  roster's active sort so the map shows the same top iBGCs. */
+  sort_by?: IbgcMapSortBy;
+  order?: "asc" | "desc";
   /** Comma-separated iBGC ids — restricts the scatter to this allow-list. */
   ibgc_ids?: string;
 }

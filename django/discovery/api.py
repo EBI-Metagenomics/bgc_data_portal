@@ -1372,6 +1372,58 @@ def ibgc_count(
     )
 
 
+def _apply_ibgc_sort(qs, sort_by: str, order: str, parsed_ids: list[int] | None):
+    """Order an ``IntegratedBgc`` queryset the way ``/ibgcs/roster/`` does.
+
+    Shared by the roster and the UMAP/scatter map endpoints so the maps'
+    top-``max_points`` sample is exactly the roster's leading rows — not an
+    unrelated ``id``-stride subset. Mirrors the roster's two cases:
+
+      * ``sort_by="similarity"`` with a caller-supplied ``ibgc_ids`` order →
+        rank by ``array_position`` in that list (Find-Similar / sequence query
+        results, which arrive pre-ranked by Dice / bitscore).
+      * otherwise → ``ORDER BY <field> [DESC] NULLS LAST`` over the stored
+        score columns (``size_kb`` via the computed span annotation). Unknown
+        keys fall back to ``novelty_score``.
+    """
+    if sort_by == "similarity" and parsed_ids:
+        from django.db.models import IntegerField
+        from django.db.models.expressions import RawSQL
+
+        ordered_ids = (
+            list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
+        )
+        # Qualify the id column: the queryset may join discovery_bgc /
+        # discovery_assembly when a chip filter is active, which would make a
+        # bare ``id`` ambiguous to Postgres.
+        ibgc_id_col = f"{IntegratedBgc._meta.db_table}.id"
+        return qs.annotate(
+            _sim_pos=RawSQL(
+                f"array_position(%s::int[], {ibgc_id_col})",
+                [ordered_ids],
+                output_field=IntegerField(),
+            )
+        ).order_by("_sim_pos")
+
+    sort_map = {
+        "novelty_score": "novelty_score",
+        "domain_novelty": "domain_novelty",
+        "classification_path": "gene_cluster_family",
+        "id": "id",
+    }
+    if sort_by == "size_kb":
+        qs = qs.annotate(_size=_ibgc_span_bp())
+        order_field = "_size"
+    else:
+        order_field = sort_map.get(sort_by, "novelty_score")
+    # NULLS LAST keeps unscored partials out of the head of the result.
+    return qs.order_by(
+        F(order_field).desc(nulls_last=True)
+        if order == "desc"
+        else F(order_field).asc(nulls_last=True)
+    )
+
+
 @discovery_router.get(
     "/ibgcs/roster/",
     response=PaginatedIbgcRosterResponse,
@@ -1483,47 +1535,11 @@ def ibgc_roster(
             domain_text=domain_text,
         )
 
-    # Special-case: ``sort_by=similarity`` honours the caller-supplied order
-    # of ``ibgc_ids`` (the dashboard passes them in similarity-descending order
-    # after Find Similar iBGCs). Postgres ``array_position`` returns the 1-based
-    # index of each row's id in the input array, so ORDER BY that index gives
-    # us the exact rank we want. ``order=asc`` reverses the list to flip the
-    # sense. Falls back to novelty_score when ibgc_ids is missing.
-    if sort_by == "similarity" and parsed_ids:
-        from django.db.models import IntegerField
-        from django.db.models.expressions import RawSQL
-
-        ordered_ids = list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
-        # The roster queryset may join discovery_bgc / discovery_assembly when
-        # a chip filter is active, so qualify the id column to avoid an
-        # ``ambiguous column "id"`` error from Postgres.
-        ibgc_id_col = f"{IntegratedBgc._meta.db_table}.id"
-        qs = qs.annotate(
-            _sim_pos=RawSQL(
-                f"array_position(%s::int[], {ibgc_id_col})",
-                [ordered_ids],
-                output_field=IntegerField(),
-            )
-        ).order_by("_sim_pos")
-    else:
-        sort_map = {
-            "novelty_score": "novelty_score",
-            "domain_novelty": "domain_novelty",
-            "classification_path": "gene_cluster_family",
-            "id": "id",
-        }
-        if sort_by == "size_kb":
-            qs = qs.annotate(_size=_ibgc_span_bp())
-            order_field = "_size"
-        else:
-            order_field = sort_map.get(sort_by, "novelty_score")
-        descending = order == "desc"
-        # NULLS LAST keeps unscored partials out of the head of the page.
-        qs = qs.order_by(
-            F(order_field).desc(nulls_last=True)
-            if descending
-            else F(order_field).asc(nulls_last=True)
-        )
+    # ``sort_by=similarity`` honours the caller-supplied order of ``ibgc_ids``
+    # (dashboard passes them similarity-descending after Find Similar / Sequence
+    # search); every other key sorts the stored columns NULLS LAST. Shared with
+    # the UMAP/scatter map endpoints so all three surfaces agree on rank.
+    qs = _apply_ibgc_sort(qs, sort_by, order, parsed_ids)
 
     asset_rows = _get_asset_roster_rows(asset_token)
     asset_items = [_asset_row_to_roster_item(r) for r in asset_rows]
@@ -1740,6 +1756,8 @@ def ibgc_umap(
     request,
     include_partials: bool = True,
     max_points: int = DASHBOARD_RESULT_CAP,
+    sort_by: str = "novelty_score",
+    order: str = "desc",
     validated_only: bool = False,
     detector_tools: str | None = None,
     source_tools: str | None = None,  # deprecated alias for detector_tools
@@ -1820,16 +1838,12 @@ def ibgc_umap(
             domain_text=domain_text,
         )
 
-        # Deterministic SQL-side stride: at multi-million-row scale we can't
-        # afford to materialise the full queryset and downsample in Python.
-        # ``id % stride = 0`` runs in the DB, returns the cap directly, and is
-        # reproducible across calls (so the UMAP doesn't flicker between
-        # refreshes).
-        total = qs.count()
-        if total > max_points:
-            stride = total // max_points + 1
-            qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
-        all_ibgcs = list(qs.order_by("id"))
+        # Sample the roster's top ``max_points`` (same sort), not an id-stride
+        # subset — so the map shows exactly the iBGCs the roster surfaces first.
+        # ``ORDER BY <score> NULLS LAST LIMIT`` is the same query shape the
+        # roster runs per page, so it's index-bounded rather than a full sort.
+        qs = _apply_ibgc_sort(qs, sort_by, order, parsed_ids)
+        all_ibgcs = list(qs[:max_points])
 
         facts = _ibgc_member_facts([n.id for n in all_ibgcs])
         db_points = [
@@ -1867,6 +1881,8 @@ def ibgc_scatter(
     y_axis: str = "domain_novelty",
     include_partials: bool = True,
     max_points: int = 5_000,
+    sort_by: str = "novelty_score",
+    order: str = "desc",
     validated_only: bool = False,
     detector_tools: str | None = None,
     source_tools: str | None = None,  # deprecated alias for detector_tools
@@ -1974,15 +1990,11 @@ def ibgc_scatter(
             n_cds=Subquery(n_cds_subq[:1]),
         )
 
-        # Deterministic SQL-side stride (same approach as /ibgcs/umap/) — keeps
-        # the response reproducible across calls and avoids ``ORDER BY ?``,
-        # which is a full table sort at multi-million-row scale.
-        total = qs.count()
-        if total > max_points:
-            stride = total // max_points + 1
-            qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
-
-        ibgc_list = list(qs)
+        # Sample the roster's top ``max_points`` (same sort) so the Variables
+        # map plots exactly the iBGCs the roster surfaces first — the chosen
+        # x/y axes only affect where those points land, not which are shown.
+        qs = _apply_ibgc_sort(qs, sort_by, order, parsed_ids)
+        ibgc_list = list(qs[:max_points])
         facts = _ibgc_member_facts([n.id for n in ibgc_list])
 
         # ``size_kb`` lives on the ``_size_kb`` annotation (the model property of

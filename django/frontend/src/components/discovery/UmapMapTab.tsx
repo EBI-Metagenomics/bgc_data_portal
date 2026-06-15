@@ -17,6 +17,9 @@ export function UmapMapTab() {
   );
   const applied = useDiscoveryStore((s) => s.appliedFilters);
   const assetToken = useDiscoveryStore((s) => s.assetToken);
+  // Sample the same top-5k the roster shows (server caps both at 5k).
+  const sortBy = useDiscoveryStore((s) => s.rosterSortBy);
+  const order = useDiscoveryStore((s) => s.rosterOrder);
 
   const filterParams = appliedFiltersToApiParams(
     applied,
@@ -29,9 +32,14 @@ export function UmapMapTab() {
     assetToken !== null;
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["ibgc-umap", filterParams],
+    queryKey: ["ibgc-umap", filterParams, sortBy, order],
     queryFn: () =>
-      fetchIbgcUmap({ include_partials: true, ...filterParams }),
+      fetchIbgcUmap({
+        include_partials: true,
+        sort_by: sortBy,
+        order,
+        ...filterParams,
+      }),
     enabled: hasActiveScope,
   });
 

@@ -79,8 +79,11 @@ function fmtScore(v: number | null): string {
 export function IbgcRosterTable() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
-  const [sortBy, setSortBy] = useState<SortKey>("novelty_score");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  // Roster sort lives in the discovery store so the UMAP/Variables maps can
+  // sample their top-5k by the same order (see store ``rosterSortBy``).
+  const sortBy = useDiscoveryStore((s) => s.rosterSortBy);
+  const order = useDiscoveryStore((s) => s.rosterOrder);
+  const setRosterSort = useDiscoveryStore((s) => s.setRosterSort);
 
   const setCompareIbgcId = useDiscoveryStore((s) => s.setCompareIbgcId);
   const compareIbgcId = useDiscoveryStore((s) => s.compareIbgcId);
@@ -94,10 +97,9 @@ export function IbgcRosterTable() {
   // the same logic covers any score-emitting source.
   useEffect(() => {
     if (searchSource === "similar_ibgc" || searchSource === "sequence") {
-      setSortBy("similarity");
-      setOrder("desc");
+      setRosterSort("similarity", "desc");
     }
-  }, [searchSource]);
+  }, [searchSource, setRosterSort]);
   const resultSimilarityById = useDiscoveryStore(
     (s) => s.resultSimilarityById,
   );
@@ -201,10 +203,9 @@ export function IbgcRosterTable() {
 
   const toggleSort = (key: SortKey) => {
     if (key === sortBy) {
-      setOrder(order === "desc" ? "asc" : "desc");
+      setRosterSort(sortBy, order === "desc" ? "asc" : "desc");
     } else {
-      setSortBy(key);
-      setOrder("desc");
+      setRosterSort(key, "desc");
     }
     setPage(1);
   };
