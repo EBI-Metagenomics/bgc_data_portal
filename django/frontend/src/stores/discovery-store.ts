@@ -12,6 +12,17 @@ import { useFilterStore } from "@/stores/filter-store";
 
 export type ResultsTab = "roster" | "variables" | "umap";
 
+/** Sort keys shared by the roster and the UMAP/Variables maps. The maps cap
+ *  at 5k points server-side and sample the roster's top rows in this order, so
+ *  "what's in the roster is what's in the plots". Mirrors the backend
+ *  ``_apply_ibgc_sort`` accepted keys. */
+export type RosterSortKey =
+  | "novelty_score"
+  | "domain_novelty"
+  | "size_kb"
+  | "id"
+  | "similarity";
+
 /** Which advanced-query path produced the current ``resultIbgcIds`` set.
  *  Lets the roster swap the "Sim." column for sequence-search-specific
  *  columns. ``null`` = no advanced query (filter-only run or fresh load). */
@@ -45,6 +56,13 @@ interface DiscoveryState {
   variablesAxisX: IbgcScatterAxis;
   variablesAxisY: IbgcScatterAxis;
   setVariablesAxes: (x: IbgcScatterAxis, y: IbgcScatterAxis) => void;
+
+  // Roster sort — lifted out of <IbgcRosterTable> into the store so the
+  // UMAP + Variables maps can sample their top-5k by the SAME order the
+  // roster displays (the server caps and sorts all three identically).
+  rosterSortBy: RosterSortKey;
+  rosterOrder: "asc" | "desc";
+  setRosterSort: (sortBy: RosterSortKey, order: "asc" | "desc") => void;
 
   // Run Query result set — iBGC id allow-list applied by the roster + maps
   // when populated. Null = no active query, show everything.
@@ -251,6 +269,11 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   variablesAxisX: "novelty_score",
   variablesAxisY: "domain_novelty",
   setVariablesAxes: (x, y) => set({ variablesAxisX: x, variablesAxisY: y }),
+
+  rosterSortBy: "novelty_score",
+  rosterOrder: "desc",
+  setRosterSort: (rosterSortBy, rosterOrder) =>
+    set({ rosterSortBy, rosterOrder }),
 
   resultIbgcIds: null,
   resultSimilarityById: null,

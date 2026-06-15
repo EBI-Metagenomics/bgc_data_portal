@@ -195,7 +195,13 @@ function buildTraces(
     arr: IbgcPoint[],
     marker: Partial<Record<string, unknown>>,
   ) => ({
-    type: "scattergl" as const,
+    // SVG `scatter` (not `scattergl`): the dashboard SPA runs under a strict
+    // CSP without `'unsafe-eval'`, and Plotly's WebGL `scattergl` is backed by
+    // regl, which compiles draw commands via `new Function()` — that CSP blocks
+    // it and Plotly then falsely reports "WebGL is not supported". Point counts
+    // are capped server-side at DASHBOARD_RESULT_CAP (5k), well within SVG's
+    // comfortable range. See memory: dashboard_csp_blocks_webgl_eval.
+    type: "scatter" as const,
     mode: "markers" as const,
     showlegend: false,
     x: arr.map((p) => p.x),
@@ -228,7 +234,7 @@ function buildTraces(
     marker: { color: LEGEND_SWATCH, size: 9, opacity: 0.95, ...marker },
   });
 
-  // The base scatter traces and the halo traces share a scattergl shape but
+  // The base scatter traces and the halo traces share a scatter shape but
   // differ in their `marker` substructure (halos carry `marker.line.color`,
   // which the inferred toTrace return type does not). Widen the element
   // type so both flavours can live in the same array without TS noise.
@@ -270,7 +276,7 @@ function buildTraces(
   );
   if (compareOnly.length) {
     traces.push({
-      type: "scattergl",
+      type: "scatter",
       mode: "markers",
       name: "Selected iBGC",
       x: compareOnly.map((p) => p.x),
@@ -289,7 +295,7 @@ function buildTraces(
   const reference = points.filter((p) => p.id === referenceIbgcId);
   if (reference.length) {
     traces.push({
-      type: "scattergl",
+      type: "scatter",
       mode: "markers",
       name: "Reference iBGC",
       x: reference.map((p) => p.x),
