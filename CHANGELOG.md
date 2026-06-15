@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.6.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.4...bgc_data_portal-v3.6.0) (2026-06-15)
+
+
+### Features
+
+* **asset classification:** Support rectangular matrix similarity search ([9d42625](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/9d4262505b7aea6d44683d9b17ddaa9db8ea475f))
+* **prod:** pin portal 3.5.4-12801fe ([9c48f1d](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/9c48f1d65c809c9866763fcc1e24d1f100669f03))
+
+
+### Bug Fixes
+
+* **helm chart:** Bump chart version ([fe944d8](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/fe944d8ee3342e4e30825bf222300c58de6193ba))
+
 ## [3.5.4](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.3...bgc_data_portal-v3.5.4) (2026-06-15)
 
 
