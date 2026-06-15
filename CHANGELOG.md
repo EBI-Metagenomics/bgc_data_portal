@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.5.4](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.3...bgc_data_portal-v3.5.4) (2026-06-15)
+
+
+### Bug Fixes
+
+* **portal:** Drop WebGL for scatterplots to support CSP enforcement ([e5dae5e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/e5dae5e8793d72c583ed66a08a850d2c459ab3db))
+* **portal:** Drop WebGL for scatterplots to support CSP enforcement ([30cbfc9](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/30cbfc94bc9579fe698a078e24a13908ad48e23d))
+
 ## [3.5.3](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.2...bgc_data_portal-v3.5.3) (2026-06-12)
 
 
