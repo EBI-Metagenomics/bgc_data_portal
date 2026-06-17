@@ -21,6 +21,11 @@ _BGC_LEGACY_RE = re.compile(r"^MGYB\d+$", re.IGNORECASE)
 # Allow a trailing version segment (e.g. ``GCA_000001405.1``) — GCA/GCF
 # accessions are commonly carried with their ``.N`` version.
 _ASSEMBLY_ACCESSION_RE = re.compile(r"^(ERZ|GCA_|GCF_)[\w.]+$", re.IGNORECASE)
+# MIBiG entry accession (e.g. ``BGC0000422``). MGnify ingests each MIBiG
+# reference cluster as its own assembly keyed on this accession, so it must
+# classify as ``assembly`` — without this it falls through to ``unknown`` and
+# is mis-matched as a free-form contig/protein substring.
+_MIBIG_ACCESSION_RE = re.compile(r"^BGC\d{7}$", re.IGNORECASE)
 _DOMAIN_ACCESSION_RE = re.compile(r"^(PF\d{5}|TIGR\d{5})$", re.IGNORECASE)
 
 # Narrow variants used by the unified roster "accession" filter, which must
@@ -57,7 +62,7 @@ def classify_accession(value: str) -> str:
         return "prediction"
     if _CBGC_ACCESSION_RE.match(v) or _BGC_LEGACY_RE.match(v):
         return "cbgc"
-    if _ASSEMBLY_ACCESSION_RE.match(v):
+    if _ASSEMBLY_ACCESSION_RE.match(v) or _MIBIG_ACCESSION_RE.match(v):
         return "assembly"
     if _PROTEIN_ACCESSION_RE.match(v):
         return "protein"
@@ -130,7 +135,10 @@ def _try_bgc_accession(keyword: str) -> dict | None:
 
 
 def _try_assembly_accession(keyword: str) -> dict | None:
-    if not _ASSEMBLY_ACCESSION_RE.match(keyword):
+    if not (
+        _ASSEMBLY_ACCESSION_RE.match(keyword)
+        or _MIBIG_ACCESSION_RE.match(keyword)
+    ):
         return None
     from discovery.models import DashboardAssembly
 

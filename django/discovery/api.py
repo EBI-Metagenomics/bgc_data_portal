@@ -1044,8 +1044,8 @@ def _apply_accession_filter(qs, value: str):
       accession.
     * **cBGC** (``MGYB-XXXXXX`` / legacy ``MGYBNNNN``) → resolve via the
       registry, match the parent cBGC.
-    * **assembly** (``ERZ`` / ``GCA_`` / ``GCF_``) → substring on the
-      assembly accession.
+    * **assembly** (``ERZ`` / ``GCA_`` / ``GCF_`` / MIBiG ``BGC#######``) →
+      substring on the assembly accession.
     * **protein** (``MGYP…``) → CDS protein id, clipped to the iBGC span.
     * **unknown** (free-form) → OR over the contig accession and protein id
       (covers contig accessions and non-MGYP protein identifiers).

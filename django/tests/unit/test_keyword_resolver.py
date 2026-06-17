@@ -24,6 +24,9 @@ from discovery.services.keyword_resolver import classify_accession, resolve_keyw
         ("ERZ123456", "assembly"),
         ("GCA_000001405.1", "assembly"),
         ("GCF_000001405", "assembly"),
+        ("BGC0000422", "assembly"),  # MIBiG entry accession
+        ("bgc0000422", "assembly"),
+        ("BGC042", "unknown"),  # too short — not a MIBiG accession
         ("MGYP000123456789", "protein"),
         ("Ga0181741_11_94", "unknown"),  # free-form contig / protein id
         ("", "unknown"),
