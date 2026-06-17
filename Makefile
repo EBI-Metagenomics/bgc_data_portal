@@ -186,24 +186,29 @@ db-shell:
 	kubectl exec -it -n bgc-local statefulset/postgres -- psql -U bgc_dp_pg_user mgnify_bgcs
 
 # ── Cache management ───────────────────────────────────────────────────────────
-# Cache + task queue both live in Postgres now (DatabaseCache + django-tasks-db),
-# so there is no Redis to flush or Celery queue to purge — clearing the Django
-# cache covers it.
+clear-cache-redis:
+	@echo "Flushing Redis..."
+	kubectl exec -n bgc-local deploy/redis -- redis-cli FLUSHALL
+
+clear-cache-celery:
+	@echo "Purging Celery task queues..."
+	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- celery -A bgc_data_portal purge -f
+
 clear-cache-django:
 	@echo "Clearing Django cache..."
 	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
-clear-cache: clear-cache-django
+clear-cache: clear-cache-redis clear-cache-celery clear-cache-django
 
 # ── Protein search index ──────────────────────────────────────────────────────
-# Runs inside the worker pod — that's where the mount lives. Use --rebuild on
+# Runs inside the Celery pod — that's where the mount lives. Use --rebuild on
 # first bootstrap or after a TRUNCATE; the default is incremental append.
 build-protein-index:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
+	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
 	  python manage.py build_protein_search_index --rebuild
 
 update-protein-index:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
+	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
 	  python manage.py build_protein_search_index --append
 
 # ── Real-data seeding ─────────────────────────────────────────────────────────

@@ -30,12 +30,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # to its descendants; without it both fall back to flat leaves. Baked in at
 # build time (same source as the worker/ETL images) at the default path expected
 # by common_core.chemont.ontology. ``/data/<subdir>`` volume mounts don't shadow
-# this, so no PVC/mount is needed.
-RUN mkdir -p /data/chemont  \
- && curl -fsSL -o /tmp/ChemOnt_2_1.obo.zip \
-      "http://classyfire.wishartlab.com/system/downloads/1_0/chemont/ChemOnt_2_1.obo.zip" \
- && unzip /tmp/ChemOnt_2_1.obo.zip -d /data/chemont/ \
- && rm /tmp/ChemOnt_2_1.obo.zip
+# this, so no PVC/mount is needed. Vendored in-repo (vendor/chemont/) rather than
+# fetched from classyfire.wishartlab.com, which is frequently unreachable.
+# ChemOnt is a static ontology (data-version 2.1, 2016), so it never goes stale.
+RUN mkdir -p /data/chemont
+COPY vendor/chemont/ChemOnt_2_1.obo /data/chemont/ChemOnt_2_1.obo
 ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
 
 WORKDIR /app
