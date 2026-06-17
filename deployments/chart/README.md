@@ -43,14 +43,14 @@ helm install bgc ./bgc-data-portal \
 ```
 
 `values-selfhost.yaml` selects the published quay images; override the tag with
-`--set django.image=…:vX --set celery.image=…_worker:vX` to pin a version.
+`--set django.image=…:vX --set worker.image=…_worker:vX` to pin a version.
 
 ### Secret (path B / manual)
 
 `make selfhost` (path A) creates the Secret for you from the env file. For path B
 (or any manual install) a Secret named `bgc-data-portal-secret` must exist first
-(DB creds, tokens, broker/cache URLs). The chart's `values-laptop.yaml` header
-lists the keys; the defaults work for a private instance:
+(DB creds, tokens). The chart's `values-laptop.yaml` header lists the keys; the
+defaults work for a private instance:
 
 ```bash
 kubectl create namespace bgc-local
@@ -59,9 +59,9 @@ kubectl create secret generic bgc-data-portal-secret \
 ```
 
 Keys: `DJANGO_SECRET_KEY ADMIN_API_TOKEN PROJECT_USER_TOKEN POSTGRES_USER
-POSTGRES_PASSWORD POSTGRES_DB DATABASE_URL CELERY_BROKER_URL
-CELERY_RESULT_BACKEND DJANGO_CACHE_BACKEND` (with `DATABASE_URL` pointing at the
-in-cluster `postgres` service, the broker at `rabbitmq`, cache/result at `redis`).
+POSTGRES_PASSWORD POSTGRES_DB DATABASE_URL` (with `DATABASE_URL` pointing at the
+in-cluster `postgres` service — it also backs the cache and the django-tasks-db
+queue; no Redis/RabbitMQ).
 
 The post-install `NOTES` print the access URL and snapshot-load commands.
 

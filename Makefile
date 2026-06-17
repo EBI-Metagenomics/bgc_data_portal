@@ -1,7 +1,7 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
         dev dev-full dev-clean dev-preflight deploy-local delete-local selfhost \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
-        clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
+        clear-cache-django clear-cache \
         seed-real-data reset-db e2e-seed \
         build-protein-index update-protein-index \
         clean-images tidy nuke lock \
@@ -13,7 +13,7 @@ STAGED_FILES_DIR := ../../.SCRATCH/STAGED_FILES_SAMPLES
 
 # ── Secrets validation ─────────────────────────────────────────────────────────
 REQUIRED_VARS := DJANGO_SECRET_KEY DATABASE_URL POSTGRES_USER POSTGRES_PASSWORD \
-                 POSTGRES_DB CELERY_BROKER_URL CELERY_RESULT_BACKEND DJANGO_CACHE_BACKEND
+                 POSTGRES_DB
 
 validate-secrets:
 	@test -f $(ENV_FILE) || \
@@ -125,7 +125,7 @@ selfhost:
 #
 # Heavy clustering libs (igraph/leidenalg/umap) and pyhmmer live only in the
 # worker image, so the clustering + protein-search tests importorskip in the
-# django pod. Run TEST_POD=bgc-data-portal-celery to exercise those too.
+# django pod. Run TEST_POD=bgc-data-portal-worker to exercise those too.
 TEST_POD ?= bgc-data-portal-django
 
 test-unit:
@@ -165,10 +165,10 @@ reset-db:
 
 # Post-load steps that materialise the iBGC table and a clustering run so the
 # dashboard (and the e2e suite) have something to render. Run AFTER loading raw
-# data with `make seed-real-data`. Executes in the celery pod, which has the
+# data with `make seed-real-data`. Executes in the worker pod, which has the
 # clustering libs (igraph/leidenalg/umap); --sync runs in-process.
 e2e-seed:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
 	  env DJANGO_SETTINGS_MODULE=bgc_data_portal.settings \
 	  python manage.py run_bgc_clustering --rebuild-ibgc --apply --sync
 
@@ -176,8 +176,8 @@ e2e-seed:
 logs-django:
 	kubectl logs -f -n bgc-local deploy/bgc-data-portal-django
 
-logs-celery:
-	kubectl logs -f -n bgc-local deploy/bgc-data-portal-celery
+logs-worker:
+	kubectl logs -f -n bgc-local deploy/bgc-data-portal-worker
 
 shell:
 	kubectl exec -it -n bgc-local deploy/bgc-data-portal-django -- bash
@@ -186,29 +186,24 @@ db-shell:
 	kubectl exec -it -n bgc-local statefulset/postgres -- psql -U bgc_dp_pg_user mgnify_bgcs
 
 # ── Cache management ───────────────────────────────────────────────────────────
-clear-cache-redis:
-	@echo "Flushing Redis..."
-	kubectl exec -n bgc-local deploy/redis -- redis-cli FLUSHALL
-
-clear-cache-celery:
-	@echo "Purging Celery task queues..."
-	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- celery -A bgc_data_portal purge -f
-
+# Cache + task queue both live in Postgres now (DatabaseCache + django-tasks-db),
+# so there is no Redis to flush or Celery queue to purge — clearing the Django
+# cache covers it.
 clear-cache-django:
 	@echo "Clearing Django cache..."
 	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
-clear-cache: clear-cache-redis clear-cache-celery clear-cache-django
+clear-cache: clear-cache-django
 
 # ── Protein search index ──────────────────────────────────────────────────────
-# Runs inside the Celery pod — that's where the mount lives. Use --rebuild on
+# Runs inside the worker pod — that's where the mount lives. Use --rebuild on
 # first bootstrap or after a TRUNCATE; the default is incremental append.
 build-protein-index:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
 	  python manage.py build_protein_search_index --rebuild
 
 update-protein-index:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
 	  python manage.py build_protein_search_index --append
 
 # ── Real-data seeding ─────────────────────────────────────────────────────────

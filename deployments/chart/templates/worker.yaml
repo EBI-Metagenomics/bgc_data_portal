@@ -1,23 +1,23 @@
-{{- if .Values.celery.enabled }}
+{{- if .Values.worker.enabled }}
 {{- $ns := include "bgc.namespace" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: bgc-data-portal-celery
+  name: bgc-data-portal-worker
   namespace: {{ $ns }}
   labels:
-    app: bgc-data-portal-celery
+    app: bgc-data-portal-worker
 spec:
-  replicas: {{ .Values.celery.replicas }}
+  replicas: {{ .Values.worker.replicas }}
   selector:
     matchLabels:
-      app: bgc-data-portal-celery
+      app: bgc-data-portal-worker
   template:
     metadata:
       labels:
-        app: bgc-data-portal-celery
+        app: bgc-data-portal-worker
     spec:
-      {{- with .Values.celery.podSecurityContext }}
+      {{- with .Values.worker.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -25,43 +25,43 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.celery.volumes }}
+      {{- with .Values.worker.volumes }}
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.celery.initContainers }}
+      {{- with .Values.worker.initContainers }}
       initContainers:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: celery
-          {{- with .Values.celery.containerSecurityContext }}
+        - name: worker
+          {{- with .Values.worker.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: {{ .Values.celery.image }}
-          {{- with .Values.celery.imagePullPolicy }}
+          image: {{ .Values.worker.image }}
+          {{- with .Values.worker.imagePullPolicy }}
           imagePullPolicy: {{ . }}
           {{- end }}
-          {{- with .Values.celery.workingDir }}
+          {{- with .Values.worker.workingDir }}
           workingDir: {{ . }}
           {{- end }}
           command:
-            {{- toYaml .Values.celery.command | nindent 12 }}
-          {{- with .Values.celery.env }}
+            {{- toYaml .Values.worker.command | nindent 12 }}
+          {{- with .Values.worker.env }}
           env:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           envFrom:
-            {{- if .Values.celery.includeSecret }}
+            {{- if .Values.worker.includeSecret }}
             - secretRef:
                 name: {{ .Values.secretName }}
             {{- end }}
-            {{- if and .Values.config.enabled .Values.celery.includeConfig }}
+            {{- if and .Values.config.enabled .Values.worker.includeConfig }}
             - configMapRef:
                 name: {{ .Values.config.name }}
             {{- end }}
-          {{- with .Values.celery.volumeMounts }}
+          {{- with .Values.worker.volumeMounts }}
           volumeMounts:
             {{- toYaml . | nindent 12 }}
           {{- end }}

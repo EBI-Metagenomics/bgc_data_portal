@@ -1,15 +1,6 @@
 version: "3.9"
 
 services:
-  redis:
-    image: quay.io/microbiome-informatics/redis:7.4
-    ports: ["6379:6379"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   db:
     build: ./db
     env_file: .env
@@ -18,15 +9,6 @@ services:
       - ./db/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      retries: 5
-
-  rabbitmq:
-    image: quay.io/microbiome-informatics/rabbitmq:arm64
-    hostname: rabbitmq
-    env_file: .env
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
       retries: 5
 
@@ -53,6 +35,7 @@ services:
     command: >
       sh -c "
              python manage.py migrate &&
+             python manage.py createcachetable &&
              python manage.py runserver 0.0.0.0:8000"
     volumes:
         - ./django:/app
@@ -60,41 +43,37 @@ services:
         - /Users/fragoso/.cache/huggingface:/data/huggingface # DEBUG
     environment:
       - MEDIA_ROOT=/data/packages
+      # Upload staging shared with the worker via the ingest_packages volume.
+      - UPLOAD_STAGING_DIR=/data/packages/upload_staging
       - HF_HOME=/data/huggingface # DEBUG
     depends_on:
       db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       frontend:
         condition: service_healthy
     ports:
       - "8000:8000"
 
-  celery:
+  worker:
     build:
       context: ./django
       dockerfile: Dockerfile.worker
     env_file: .env
     command: >
         sh -c "
-        # wait for Django to finish its migrations
+        # wait for Django to finish its migrations + cache table
         sleep 15 &&
-        celery -A bgc_data_portal.celery worker --loglevel=info "
+        python manage.py createcachetable &&
+        python manage.py db_worker --queue-name default,scores "
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     volumes:
       - ./django:/app # DEBUG
       - ingest_packages:/data/packages
       - /Users/fragoso/.cache/huggingface:/data/huggingface # DEBUG
     environment:
+      - UPLOAD_STAGING_DIR=/data/packages/upload_staging
       - HF_HOME=/data/huggingface # DEBUG
 
 volumes:

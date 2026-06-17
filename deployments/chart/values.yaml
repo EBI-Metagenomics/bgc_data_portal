@@ -42,25 +42,6 @@ postgres:
   readinessProbe: {}
   livenessProbe: {}
 
-redis:
-  enabled: true
-  image: ""
-  imagePullPolicy: ""
-  replicas: 1
-  readinessProbe: {}
-  livenessProbe: {}
-
-rabbitmq:
-  enabled: true
-  image: ""
-  imagePullPolicy: ""
-  replicas: 1
-  podSecurityContext: {}
-  includeSecret: false
-  includeConfig: false
-  readinessProbe: {}
-  livenessProbe: {}
-
 django:
   enabled: true
   image: ""
@@ -82,7 +63,8 @@ django:
     port: 80
     targetPort: 8000
 
-celery:
+# Background-task worker (django-tasks db_worker). Was the Celery worker.
+worker:
   enabled: true
   image: ""
   imagePullPolicy: ""

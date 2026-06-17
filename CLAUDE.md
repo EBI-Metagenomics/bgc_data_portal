@@ -71,8 +71,8 @@ django/
     models.py             # ORM models (IntegratedBGC, DashboardBgc, ClusteringRun, …)
     api.py                # Django Ninja REST API (OpenAPI at /api/docs)
     api_schemas.py        # Pydantic schemas for API I/O
-    tasks.py              # Celery async tasks
-    cache_utils.py        # Redis caching helpers
+    tasks.py              # django-tasks background tasks
+    cache_utils.py        # cache + job-status helpers
     services/             # Business logic layer
       clustering/         # Domain+adjacency Dice → KNN → hierarchical Leiden
         pipeline.py       # Orchestrator (persists per-run scoring cache)
@@ -105,9 +105,9 @@ django/
 
 **iBGC scoring** — `novelty_score = 1 − max(sim to validated iBGC)` and `domain_novelty = |domains unique within leaf GCF| / |domains|` (NULL for singleton GCFs / iBGCs without source-vocab domains). Computed inline by the pipeline (primary iBGCs) and by `project_partial_ibgcs` (partials, after reclassify).
 
-**Async search** — POST to a search endpoint returns HTTP 202 with a `task_id`; poll the job-status endpoint for results. All search tasks run through Celery (RabbitMQ broker, Redis result backend). Sequence search uses pyhmmer's phmmer.
+**Async search** — POST to a search endpoint returns HTTP 202 with a `task_id`; poll the job-status endpoint for results. All search tasks run through django-tasks (Postgres `django-tasks-db` backend, run by `manage.py db_worker`). Sequence search uses pyhmmer's phmmer.
 
-**Shortlist Report** — Stateless. `POST /report/snapshot/` accepts ≤100 iBGC ids and returns a deterministic `sha256(sorted ids)[:32]` token after materialising the payload in Redis (`report:{token}` with 24h TTL). `GET /report/{token}/` serves the cached payload. No DB table; reload-safe within the TTL window.
+**Shortlist Report** — Stateless. `POST /report/snapshot/` accepts ≤100 iBGC ids and returns a deterministic `sha256(sorted ids)[:32]` token after materialising the payload in the cache (Postgres DatabaseCache, `report:{token}` with 24h TTL). `GET /report/{token}/` serves the cached payload. No DB table; reload-safe within the TTL window.
 
 **Ingestion** — stream-based NDJSON packages; all writes are idempotent upserts keyed on stable identifiers.
 
@@ -119,9 +119,8 @@ django/
 |-----------|-----------|
 | Web framework | Django 5 + Django Ninja |
 | Database | PostgreSQL (pgvector kept for legacy embeddings until P1.4b drops them) |
-| Cache / result backend | Redis |
-| Task broker | RabbitMQ |
-| Async workers | Celery |
+| Cache | PostgreSQL (Django DatabaseCache) |
+| Background tasks | django-tasks + django-tasks-db (`manage.py db_worker`) |
 | Production server | Gunicorn |
 | Local dev | Docker Compose / Kind |
 

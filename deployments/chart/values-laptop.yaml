@@ -57,29 +57,6 @@ postgres:
     periodSeconds: 5
   livenessProbe: {}
 
-redis:
-  image: redis:7-alpine
-  imagePullPolicy: ""
-  readinessProbe:
-    exec:
-      command: [redis-cli, ping]
-    initialDelaySeconds: 3
-    periodSeconds: 5
-  livenessProbe: {}
-
-rabbitmq:
-  image: rabbitmq:3-management-alpine
-  imagePullPolicy: ""
-  podSecurityContext: {}
-  includeSecret: false
-  includeConfig: false
-  readinessProbe:
-    exec:
-      command: [rabbitmq-diagnostics, -q, ping]
-    initialDelaySeconds: 10
-    periodSeconds: 10
-  livenessProbe: {}
-
 django:
   image: bgc-data-portal-django
   imagePullPolicy: ""
@@ -94,6 +71,10 @@ django:
       value: /data/protein_search
     - name: CLUSTERING_ARTIFACTS_DIR
       value: /data/clustering_artifacts
+    # Upload staging shared with the worker pod via the clustering-artifacts PVC
+    # (both pods mount it). Replaces the old Redis hand-off of the upload bytes.
+    - name: UPLOAD_STAGING_DIR
+      value: /data/clustering_artifacts/upload_staging
   # init-container images follow django.image (set by the template), so none is
   # specified here — a single image override covers main + init containers.
   initContainers:
@@ -107,7 +88,12 @@ django:
           done
     - name: migrate
       workingDir: /app
-      command: [python, manage.py, migrate, --noinput]
+      command:
+        - sh
+        - -c
+        - |
+          python manage.py migrate --noinput && \
+          python manage.py createcachetable
       envFrom:
         - secretRef:
             name: bgc-data-portal-secret
@@ -142,7 +128,7 @@ django:
     targetPort: 8000
     nodePort: 30080
 
-celery:
+worker:
   image: bgc-data-portal-django-worker
   imagePullPolicy: ""
   podSecurityContext: {}
@@ -151,24 +137,23 @@ celery:
   includeConfig: true
   workingDir: /app
   initContainers: []
+  # django-tasks db_worker polls the Postgres queue (both queues). --reload
+  # defaults to DEBUG, giving the same hot-reload watchmedo used to provide.
+  # createcachetable is idempotent — safe to run here as well as in the django
+  # init container, and guards against the worker racing ahead of migrations.
   command:
-    - watchmedo
-    - auto-restart
-    - --directory=/app
-    - --pattern=*.py
-    - --recursive
-    - --
-    - celery
-    - -A
-    - bgc_data_portal.celery
-    - worker
-    - --loglevel=info
-    - --concurrency=1
+    - sh
+    - -c
+    - |
+      python manage.py createcachetable && \
+      python manage.py db_worker --queue-name default,scores
   env:
     - name: PROTEIN_SEARCH_INDEX_DIR
       value: /data/protein_search
     - name: CLUSTERING_ARTIFACTS_DIR
       value: /data/clustering_artifacts
+    - name: UPLOAD_STAGING_DIR
+      value: /data/clustering_artifacts/upload_staging
   volumes:
     - name: packages
       emptyDir: {}

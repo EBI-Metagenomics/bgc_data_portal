@@ -65,7 +65,7 @@ helm install bgc ./bgc-data-portal \
 ```
 
 `values-selfhost.yaml` selects the published quay images; pin a version with
-`--set django.image=…:vX --set celery.image=…_worker:vX`.
+`--set django.image=…:vX --set worker.image=…_worker:vX`.
 
 ### Secret
 
@@ -82,12 +82,12 @@ kubectl create secret generic bgc-data-portal-secret \
 ```
 DJANGO_SECRET_KEY      ADMIN_API_TOKEN        PROJECT_USER_TOKEN
 POSTGRES_USER          POSTGRES_PASSWORD      POSTGRES_DB
-DATABASE_URL           CELERY_BROKER_URL      CELERY_RESULT_BACKEND
-DJANGO_CACHE_BACKEND
+DATABASE_URL
 ```
 
-Point `DATABASE_URL` at the in-cluster `postgres` service, `CELERY_BROKER_URL` at
-`rabbitmq`, and the cache/result URLs at `redis`.
+Point `DATABASE_URL` at the in-cluster `postgres` service — it now also backs the
+cache (DatabaseCache) and the background-task queue (django-tasks-db). No Redis
+or RabbitMQ to configure.
 
 ### Access
 
@@ -186,9 +186,8 @@ make test-e2e             # run the browser suite
 |--------------------|-----------------------------------------------------|
 | Web framework      | Django 5 + Django Ninja (OpenAPI)                   |
 | Database           | PostgreSQL + pgvector                               |
-| Cache / results    | Redis                                               |
-| Task broker        | RabbitMQ                                            |
-| Async workers      | Celery                                              |
+| Cache              | PostgreSQL (Django DatabaseCache)                   |
+| Background tasks   | django-tasks + django-tasks-db (`db_worker`)        |
 | Production server  | Gunicorn (static served by NGINX in Kubernetes)    |
 | Packaging / deploy | One Helm chart → k3d (self-host/dev) or cloud k8s  |
 

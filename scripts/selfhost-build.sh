@@ -3,7 +3,7 @@
 # Self-host the BGC Data Portal by BUILDING THE IMAGES FROM SOURCE — no access
 # to a private image registry required. The app images build from the public
 # base images in django/Dockerfile* (python:3.12-slim) and db init; the backing
-# services (postgres/redis/rabbitmq) use public images too.
+# Postgres service uses a public image too.
 #
 # It builds the prod images, imports them into a local k3d cluster, and installs
 # the SAME canonical Helm chart used in the cloud (deployments/chart) — so there
@@ -66,7 +66,7 @@ HELM="${HELM:-helm}"
 "$HELM" --kube-context "$KCTX" upgrade --install bgc "$CHART" \
   -f "$CHART/values-laptop.yaml" \
   --set django.image="$DJANGO_IMG" --set django.imagePullPolicy=IfNotPresent \
-  --set celery.image="$WORKER_IMG" --set celery.imagePullPolicy=IfNotPresent \
+  --set worker.image="$WORKER_IMG" --set worker.imagePullPolicy=IfNotPresent \
   --namespace "$NS"
 
 cat <<EOF
