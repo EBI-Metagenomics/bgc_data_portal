@@ -112,7 +112,8 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "ninja",
     "matomo",
-    "django_celery_results",
+    "django_tasks",
+    "django_tasks_db",
     "pgvector",
     "csp",
     "discovery",
@@ -169,14 +170,18 @@ DATABASES = {
     )
 }
 
-# Celery
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND")
-CELERY_RESULT_EXPIRES = int(os.getenv("CELERY_RESULT_EXPIRES", "3600"))
-CELERY_IGNORE_RESULT = False
-CELERY_STORE_NULL_RESULT = True
-CELERY_TASK_ROUTES = {
-    "discovery.tasks.recompute_scores": {"queue": "scores"},
+# Background tasks — django-tasks with the Postgres-backed django-tasks-db
+# backend (no broker, no Redis result store). The DB-poll worker claims rows
+# with SELECT … FOR UPDATE SKIP LOCKED, so multiple worker pods are safe.
+# Two queues mirror the old Celery routing: "default" and the dedicated
+# "scores" queue. Run a worker with:
+#   python manage.py db_worker --queue-name default,scores
+# Tests override TASKS to the in-process ImmediateBackend (see test settings).
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+        "QUEUES": ["default", "scores"],
+    }
 }
 
 

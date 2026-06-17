@@ -3,7 +3,7 @@
 Guards the regression that made the feature return nothing for a perfect
 match (e.g. searching a protein of BGC0002713):
 
-  * the endpoint must hand off to Celery (202 + task_id) and poll, and
+  * the endpoint must hand off to a background task (202 + task_id) and poll, and
   * the status handler must consume the task's result **as iBGC-keyed**
     metrics — the task already collapses matched CDS to their owning iBGC
     via a contig + range-overlap join. The original bug re-collapsed those
@@ -54,7 +54,7 @@ def test_post_dispatches_and_returns_202(client, monkeypatch):
         id = "task-abc"
 
     monkeypatch.setattr(
-        "discovery.tasks.sequence_similarity_search.delay",
+        "discovery.tasks.sequence_similarity_search.enqueue",
         lambda *a, **k: _Dispatched(),
     )
 
@@ -127,7 +127,7 @@ def test_status_surfaces_ibgc_keyed_hit(client, monkeypatch):
             }
         }
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-xyz"))
 
@@ -188,7 +188,7 @@ def test_status_does_not_recollapse_via_source_predictions(client, monkeypatch):
             }
         }
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-collide"))
 
@@ -212,7 +212,7 @@ def test_status_empty_result_is_empty_roster(client, monkeypatch):
 
         result = {}
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-none"))
 
@@ -232,7 +232,7 @@ def test_status_pending_returns_503(client, monkeypatch):
         def ready(self):
             return False
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-pending"))
     assert resp.status_code == 503
@@ -250,9 +250,10 @@ def test_status_failed_returns_500(client, monkeypatch):
         def ready(self):
             return True
 
-        result = RuntimeError("Protein search index not built")
+        result = None
+        errors = ["Protein search index not built"]
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-failed"))
     assert resp.status_code == 500

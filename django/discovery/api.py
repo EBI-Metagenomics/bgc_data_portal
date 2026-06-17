@@ -3005,14 +3005,14 @@ def ibgc_sequence_query_status(
     as ``similarity_score``. Tasks still PENDING raise 503 so the client can
     poll on a fixed interval; FAILURE raises 500.
     """
-    from celery.result import AsyncResult
+    from discovery.cache_utils import fetch_job
 
-    res = AsyncResult(task_id)
+    res = fetch_job(task_id)
     if res.failed():
         # Log the full exception server-side (the most actionable case is
         # IndexNotBuiltError → the operator must run ``make build-protein-index``);
         # return a generic message so internal detail isn't leaked to the client.
-        logger.error("Sequence search task %s failed", task_id, exc_info=res.result)
+        logger.error("Sequence search task %s failed: %s", task_id, res.errors)
         raise HttpError(500, "Sequence search failed")
     if not res.ready():
         raise HttpError(503, "Sequence search still running")
@@ -3116,11 +3116,11 @@ def ibgc_sequence_query_scores(
     dashboard needs — ranked by bitscore desc and capped at ``max_results``.
     PENDING raises 503 so the client can poll; FAILURE raises 500.
     """
-    from celery.result import AsyncResult
+    from discovery.cache_utils import fetch_job
 
-    res = AsyncResult(task_id)
+    res = fetch_job(task_id)
     if res.failed():
-        logger.error("Sequence search task %s failed", task_id, exc_info=res.result)
+        logger.error("Sequence search task %s failed: %s", task_id, res.errors)
         raise HttpError(500, "Sequence search failed")
     if not res.ready():
         raise HttpError(503, "Sequence search still running")
@@ -3188,7 +3188,7 @@ def chemical_query(request, body: ChemicalQueryRequest):
     from discovery.tasks import chemical_similarity_search
 
     try:
-        result = chemical_similarity_search.delay(smiles, body.similarity_threshold)
+        result = chemical_similarity_search.enqueue(smiles, body.similarity_threshold)
     except Exception as e:
         logger.error("Failed to dispatch chemical search task: %s", e)
         raise HttpError(503, "Search service temporarily unavailable")
@@ -3245,13 +3245,13 @@ def chemical_query_status(
     fixed interval; FAILURE raises 500 (e.g. ClassyFire unreachable, or the
     ChemOnt IC cache not yet built).
     """
-    from celery.result import AsyncResult
+    from discovery.cache_utils import fetch_job
 
-    res = AsyncResult(task_id)
+    res = fetch_job(task_id)
     if res.failed():
         # Log the full exception server-side; return a generic message so
         # internal detail (paths, ClassyFire/host info) isn't leaked.
-        logger.error("Chemical search task %s failed", task_id, exc_info=res.result)
+        logger.error("Chemical search task %s failed: %s", task_id, res.errors)
         raise HttpError(500, "Chemical search failed")
     if not res.ready():
         raise HttpError(503, "Chemical search still running")
@@ -3324,11 +3324,11 @@ def chemical_query_scores(
     ChemOnt BMA score); ranked desc and capped at ``max_results``. PENDING
     raises 503; FAILURE raises 500.
     """
-    from celery.result import AsyncResult
+    from discovery.cache_utils import fetch_job
 
-    res = AsyncResult(task_id)
+    res = fetch_job(task_id)
     if res.failed():
-        logger.error("Chemical search task %s failed", task_id, exc_info=res.result)
+        logger.error("Chemical search task %s failed: %s", task_id, res.errors)
         raise HttpError(500, "Chemical search failed")
     if not res.ready():
         raise HttpError(503, "Chemical search still running")
@@ -3370,7 +3370,7 @@ def sequence_query(request, body: SequenceQueryRequest):
     from discovery.tasks import sequence_similarity_search
 
     try:
-        result = sequence_similarity_search.delay(
+        result = sequence_similarity_search.enqueue(
             cleaned,
             body.min_bitscore,
             body.min_pident,
@@ -4095,14 +4095,14 @@ def asset_upload(request):
 
     token = hashlib.sha256(raw).hexdigest()[:24]
 
-    # Park the bytes in Redis so the Celery worker (separate pod, separate
-    # /tmp) can read them by token. Avoids any shared-filesystem coupling.
+    # Stage the bytes on the shared PVC so the worker (separate pod, separate
+    # /tmp) can read them by token.
     asset_cache.stash_upload(token, raw)
 
     # Mark pending up front so concurrent status polls don't return UNKNOWN
     # in the gap between dispatch and the worker writing RUNNING.
     asset_cache.mark_pending(token, task_id="")
-    async_result = process_asset_upload_task.delay(token)
+    async_result = process_asset_upload_task.enqueue(token)
     # If the cache still says PENDING, fold the actual task_id in. The worker
     # may have already written RUNNING / SUCCESS by now — leave that alone.
     status_payload = asset_cache.read_status(token)

@@ -1,15 +1,17 @@
-"""Cache helper utilities for discovery assessment tasks.
+"""Cache + job-status helpers for discovery background tasks.
 
-Provides the same set_job_cache / get_job_status pattern used by the
-core search tasks, but kept within the discovery package so the module
-has no imports from mgnify_bgcs.
+Progress and final results are mirrored into the default Django cache (Postgres
+``DatabaseCache``) under consistent keys; the django-tasks-db backend is the
+source of truth for terminal status. ``fetch_job`` adapts a django-tasks
+``TaskResult`` to the small ``.ready()/.failed()/.result`` surface the API poll
+endpoints expect (so they need only swap their import + lookup line).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from celery.result import AsyncResult
+from django_tasks import TaskResultStatus, default_task_backend
 
 from django.conf import settings
 from django.core.cache import cache
@@ -30,6 +32,42 @@ def set_job_cache(
     cache.set(search_key, results, ttl)
 
 
+class JobResult:
+    """Thin adapter over a django-tasks ``TaskResult`` exposing the Celery-ish
+    ``.ready()`` / ``.failed()`` / ``.result`` surface used by the API poll
+    endpoints. ``None`` means the backend has no record of the id (treated as
+    still-pending by callers)."""
+
+    def __init__(self, task_result: Any | None) -> None:
+        self._tr = task_result
+
+    def ready(self) -> bool:
+        return self._tr is not None and self._tr.is_finished
+
+    def failed(self) -> bool:
+        return self._tr is not None and self._tr.status == TaskResultStatus.FAILED
+
+    @property
+    def result(self) -> Any:
+        if self._tr is None or self._tr.status != TaskResultStatus.SUCCESSFUL:
+            return None
+        return self._tr.return_value
+
+    @property
+    def errors(self) -> list:
+        return list(getattr(self._tr, "errors", []) or []) if self._tr else []
+
+
+def fetch_job(task_id: str | None) -> JobResult:
+    """Look up a task's result by id; never raises for an unknown id."""
+    if not task_id:
+        return JobResult(None)
+    try:
+        return JobResult(default_task_backend.get_result(task_id))
+    except Exception:
+        return JobResult(None)
+
+
 def get_job_status(
     search_key: str | None = None, task_id: str | None = None
 ) -> dict[str, Any]:
@@ -43,18 +81,14 @@ def get_job_status(
         if result:
             return {"search_key": search_key, "status": "SUCCESS", "result": result}
 
-    try:
-        res = AsyncResult(task_id)
-        data: dict[str, Any] = {
+    job = fetch_job(task_id)
+    if job.failed():
+        return {"task_id": task_id, "search_key": search_key, "status": "FAILURE"}
+    if job.ready():
+        return {
             "task_id": task_id,
             "search_key": search_key,
-            "status": res.status,
+            "status": "SUCCESS",
+            "result": job.result,
         }
-        if res.ready():
-            try:
-                data["result"] = cache.get(search_key)
-            except Exception:
-                data["result"] = None
-        return data
-    except Exception:
-        return {"task_id": task_id, "search_key": search_key, "status": "UNKNOWN"}
+    return {"task_id": task_id, "search_key": search_key, "status": "PENDING"}

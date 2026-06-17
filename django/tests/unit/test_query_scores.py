@@ -90,7 +90,7 @@ def test_sequence_scores_ranks_by_bitscore_and_caps(client, monkeypatch):
         "22": {"bitscore": 300.0, "pident": 100.0, "qcoverage": 100.0, "protein_id": "p2"},
         "33": {"bitscore": 200.0, "pident": 95.0, "qcoverage": 99.0, "protein_id": "p3"},
     }
-    monkeypatch.setattr("celery.result.AsyncResult", _fake_async_result(result))
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", _fake_async_result(result))
 
     resp = client.get(SEQ_URL.format("t") + "?max_results=2")
 
@@ -108,7 +108,7 @@ def test_sequence_scores_ranks_by_bitscore_and_caps(client, monkeypatch):
 
 @pytest.mark.django_db
 def test_sequence_scores_empty_result(client, monkeypatch):
-    monkeypatch.setattr("celery.result.AsyncResult", _fake_async_result({}))
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", _fake_async_result({}))
     resp = client.get(SEQ_URL.format("t"))
     assert resp.status_code == 200
     body = resp.json()
@@ -129,7 +129,7 @@ def test_sequence_scores_pending_returns_503(client, monkeypatch):
         def ready(self):
             return False
 
-    monkeypatch.setattr("celery.result.AsyncResult", _Pending)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", _Pending)
     assert client.get(SEQ_URL.format("t")).status_code == 503
 
 
@@ -139,7 +139,7 @@ def test_sequence_scores_pending_returns_503(client, monkeypatch):
 @pytest.mark.django_db
 def test_chemical_scores_ranks_and_caps(client, monkeypatch):
     result = {"5": 0.2, "6": 0.9, "7": 0.5}
-    monkeypatch.setattr("celery.result.AsyncResult", _fake_async_result(result))
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", _fake_async_result(result))
 
     resp = client.get(CHEM_URL.format("t") + "?max_results=2")
 

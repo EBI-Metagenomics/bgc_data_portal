@@ -54,7 +54,7 @@ def test_task_fails_cleanly_when_upload_key_missing():
 
     token = "tok-missing"
     asset_cache.mark_pending(token, task_id="task-x")
-    result = process_asset_upload_task.run(token)
+    result = process_asset_upload_task.call(token)
 
     assert result["state"] == "FAILED"
     assert "missing" in result["error"].lower()

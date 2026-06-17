@@ -1,7 +1,7 @@
 """Chemical (ChemOnt/ClassyFire) search: async dispatch + result mapping.
 
 Guards the two regressions that made the feature return nothing:
-  * the endpoint must hand off to Celery (202 + task_id) and poll, and
+  * the endpoint must hand off to a background task (202 + task_id) and poll, and
   * the status handler must map the task's **iBGC** ids back to their source
     predictions via ``integrated_bgc_id`` — not filter SourceBgcPrediction by
     iBGC ids (the original bug).
@@ -43,7 +43,7 @@ def test_post_dispatches_and_returns_202(client, monkeypatch):
         id = "task-abc"
 
     monkeypatch.setattr(
-        "discovery.tasks.chemical_similarity_search.delay",
+        "discovery.tasks.chemical_similarity_search.enqueue",
         lambda *a, **k: _Dispatched(),
     )
 
@@ -88,7 +88,7 @@ def test_status_returns_scored_ibgcs(client, monkeypatch):
         # Celery JSON-encodes int keys as strings — mimic that.
         result = {str(ibgc.id): 0.77}
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-xyz"))
 
@@ -114,7 +114,7 @@ def test_status_empty_result_is_empty_roster(client, monkeypatch):
 
         result = {}
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-none"))
 
@@ -134,7 +134,7 @@ def test_status_pending_returns_503(client, monkeypatch):
         def ready(self):
             return False
 
-    monkeypatch.setattr("celery.result.AsyncResult", _FakeResult)
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", lambda tid: _FakeResult(tid))
 
     resp = client.get(STATUS_URL.format("task-pending"))
     assert resp.status_code == 503
@@ -181,7 +181,7 @@ def test_task_scores_overlapping_ibgc_above_threshold(monkeypatch):
     monkeypatch.setattr("django.core.cache.cache.get", lambda *a, **k: None)
     monkeypatch.setattr("django.core.cache.cache.set", lambda *a, **k: None)
 
-    result = chemical_similarity_search.apply(args=["CCO", 0.5]).result
+    result = chemical_similarity_search.call("CCO", 0.5)
 
     assert result == {ibgc.id: 1.0}
 
@@ -204,6 +204,6 @@ def test_task_raises_when_ic_cache_missing(monkeypatch):
     monkeypatch.setattr("django.core.cache.cache.get", lambda *a, **k: None)
     monkeypatch.setattr("django.core.cache.cache.set", lambda *a, **k: None)
 
-    out = chemical_similarity_search.apply(args=["CCO", 0.5])
-    assert out.failed()
-    assert isinstance(out.result, RuntimeError)
+    # Running synchronously surfaces the failure by raising (no result store).
+    with pytest.raises(RuntimeError):
+        chemical_similarity_search.call("CCO", 0.5)

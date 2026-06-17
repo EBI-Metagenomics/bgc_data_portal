@@ -3,8 +3,10 @@
 Each ingestion/loading command (``load_discovery_data``,
 ``build_integrated_bgcs``, ``import_clustering_results``) enqueues a
 platform-overview ``DiscoveryStats`` refresh once the load succeeds, opt-out via
-``--skip-discovery-stats``. These tests mock the Celery tasks (and the heavy
-load functions) and assert the dispatch wiring only — no DB or broker needed.
+``--skip-discovery-stats``. With django-tasks there is no Celery ``link=``: the
+predecessor task enqueues the stats refresh itself on success (a ``then_*``
+flag), so for the async paths these tests assert the flag is passed; for sync
+paths they assert the direct enqueue. No DB or worker needed — tasks are mocked.
 """
 
 from __future__ import annotations
@@ -33,31 +35,30 @@ def _run_load(**opts):
 
 def test_load_chains_stats_onto_protein_index_by_default():
     protein, stats = _run_load()
-    # Stats is chained as the protein-index task's success link.
-    stats.si.assert_called_once_with()
-    link = protein.apply_async.call_args.kwargs["link"]
-    assert link is stats.si.return_value.set.return_value
-    stats.si.return_value.set.assert_called_once_with(queue="celery")
+    # Stats is chained by the protein-index task itself (then_update_stats=True).
+    protein.enqueue.assert_called_once()
+    assert protein.enqueue.call_args.kwargs["then_update_stats"] is True
+    # The command no longer enqueues stats directly in this path.
+    stats.enqueue.assert_not_called()
 
 
-def test_load_skip_discovery_stats_leaves_link_empty():
+def test_load_skip_discovery_stats_leaves_chain_off():
     protein, stats = _run_load(skip_discovery_stats=True)
-    assert protein.apply_async.call_args.kwargs["link"] is None
-    stats.si.assert_not_called()
-    stats.apply_async.assert_not_called()
+    protein.enqueue.assert_called_once()
+    assert protein.enqueue.call_args.kwargs["then_update_stats"] is False
+    stats.enqueue.assert_not_called()
 
 
 def test_load_skip_protein_index_dispatches_stats_directly():
     protein, stats = _run_load(skip_protein_index=True)
-    protein.apply_async.assert_not_called()
-    stats.apply_async.assert_called_once_with(queue="celery")
+    protein.enqueue.assert_not_called()
+    stats.enqueue.assert_called_once_with()
 
 
 def test_load_skip_both_dispatches_nothing():
     protein, stats = _run_load(skip_protein_index=True, skip_discovery_stats=True)
-    protein.apply_async.assert_not_called()
-    stats.apply_async.assert_not_called()
-    stats.si.assert_not_called()
+    protein.enqueue.assert_not_called()
+    stats.enqueue.assert_not_called()
 
 
 # ── build_integrated_bgcs ────────────────────────────────────────────────────
@@ -74,26 +75,27 @@ def _run_build(**opts):
 
 def test_build_async_chains_stats_on_parent_queue():
     build, stats = _run_build(queue="scores")
-    link = build.apply_async.call_args.kwargs["link"]
-    assert link is stats.si.return_value.set.return_value
-    stats.si.return_value.set.assert_called_once_with(queue="scores")
+    build.using.assert_called_once_with(queue_name="scores")
+    enqueue = build.using.return_value.enqueue
+    enqueue.assert_called_once_with(then_update_stats=True, stats_queue="scores")
 
 
 def test_build_async_skip_discovery_stats():
     build, stats = _run_build(skip_discovery_stats=True)
-    assert build.apply_async.call_args.kwargs["link"] is None
-    stats.si.assert_not_called()
+    enqueue = build.using.return_value.enqueue
+    enqueue.assert_called_once_with(then_update_stats=False, stats_queue="scores")
 
 
 def test_build_sync_dispatches_stats_after_success():
     build, stats = _run_build(sync=True, queue="scores")
-    build.apply.assert_called_once()
-    stats.apply_async.assert_called_once_with(queue="scores")
+    build.call.assert_called_once()
+    stats.using.assert_called_once_with(queue_name="scores")
+    stats.using.return_value.enqueue.assert_called_once_with()
 
 
 def test_build_sync_skip_discovery_stats():
     build, stats = _run_build(sync=True, skip_discovery_stats=True)
-    stats.apply_async.assert_not_called()
+    stats.using.assert_not_called()
 
 
 # ── import_clustering_results ────────────────────────────────────────────────
@@ -126,16 +128,17 @@ def _run_import(tmp_path, **opts):
 def test_import_dispatches_stats_after_success(tmp_path):
     apply, stats = _run_import(tmp_path)
     apply.assert_called_once()
-    stats.apply_async.assert_called_once_with(queue="scores")
+    stats.using.assert_called_once_with(queue_name="scores")
+    stats.using.return_value.enqueue.assert_called_once_with()
 
 
 def test_import_dry_run_skips_stats(tmp_path):
     apply, stats = _run_import(tmp_path, dry_run=True)
     apply.assert_not_called()
-    stats.apply_async.assert_not_called()
+    stats.using.assert_not_called()
 
 
 def test_import_skip_discovery_stats(tmp_path):
     apply, stats = _run_import(tmp_path, skip_discovery_stats=True)
     apply.assert_called_once()
-    stats.apply_async.assert_not_called()
+    stats.using.assert_not_called()

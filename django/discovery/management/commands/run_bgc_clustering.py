@@ -100,13 +100,13 @@ class Command(BaseCommand):
         parser.add_argument(
             "--sync",
             action="store_true",
-            help="Run synchronously in the current process instead of dispatching to Celery",
+            help="Run synchronously in the current process instead of dispatching to a worker",
         )
         parser.add_argument(
             "--queue",
             type=str,
             default="scores",
-            help="Celery queue name (default scores)",
+            help="Task queue name (default scores)",
         )
 
     def handle(self, *args, **options):
@@ -149,10 +149,10 @@ class Command(BaseCommand):
         if options["sync"]:
             if options["rebuild_ibgc"]:
                 self.stdout.write("Rebuilding IntegratedBgc table first ...")
-                ibgc_result = build_integrated_bgcs_task.apply().result
+                ibgc_result = build_integrated_bgcs_task.call()
                 self.stdout.write(self.style.SUCCESS(f"iBGC rebuild: {ibgc_result}"))
             self.stdout.write("Running BGC clustering synchronously ...")
-            result = run_bgc_clustering_task.apply(kwargs=kwargs).result
+            result = run_bgc_clustering_task.call(**kwargs)
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
             if isinstance(result, dict) and (
                 artifacts_dir := result.get("artifacts_dir")
@@ -162,20 +162,16 @@ class Command(BaseCommand):
                 )
             return
 
-        # Async + --rebuild-ibgc: chain via Celery so the clustering task only
-        # fires once the rebuild has succeeded. Dispatching both independently
-        # races on the scores queue — the clustering captures iBGC ids at the
-        # start of its run, then the rebuild deletes/recreates them, and the
-        # apply-step bulk_update silently no-ops against stale ids. Using an
-        # immutable signature (.si) keeps the build's return value from being
-        # prepended as a positional arg to the kwargs-only clustering task,
-        # and .set(queue=...) routes the linked task explicitly (link does not
-        # inherit the parent task's queue).
+        # Async + --rebuild-ibgc: the build task chains the clustering run itself
+        # so it only fires once the rebuild has succeeded. Dispatching both
+        # independently races on the scores queue — the clustering captures iBGC
+        # ids at the start of its run, then the rebuild deletes/recreates them,
+        # and the apply-step bulk_update silently no-ops against stale ids. The
+        # clustering kwargs ride along as ``then_run_clustering``.
         if options["rebuild_ibgc"]:
-            cluster_sig = run_bgc_clustering_task.si(**kwargs).set(queue=queue)
-            async_result = build_integrated_bgcs_task.apply_async(
-                queue=queue,
-                link=cluster_sig,
+            async_result = build_integrated_bgcs_task.using(queue_name=queue).enqueue(
+                then_run_clustering=kwargs,
+                clustering_queue=queue,
             )
             self.stdout.write(
                 self.style.SUCCESS(
@@ -185,7 +181,7 @@ class Command(BaseCommand):
             )
             return
 
-        res = run_bgc_clustering_task.apply_async(kwargs=kwargs, queue=queue)
+        res = run_bgc_clustering_task.using(queue_name=queue).enqueue(**kwargs)
         self.stdout.write(
             self.style.SUCCESS(f"Dispatched run_bgc_clustering_task: {res.id}")
         )

@@ -137,7 +137,7 @@ class Command(BaseCommand):
             try:
                 from discovery.tasks import update_discovery_stats_task
 
-                res = update_discovery_stats_task.apply_async(queue="scores")
+                res = update_discovery_stats_task.using(queue_name="scores").enqueue()
                 self.stdout.write(
                     self.style.SUCCESS(f"Enqueued DiscoveryStats refresh: {res.id}")
                 )
