@@ -119,7 +119,9 @@ export function VariablesMapTab() {
       fetchIbgcScatter({
         x_axis: scatterX,
         y_axis: scatterY,
-        sort_by: sortBy,
+        // pident/qcov are client-only roster metrics, not map sort columns;
+        // the allow-list is fully plotted so order is moot — fold to similarity.
+        sort_by: sortBy === "pident" || sortBy === "qcov" ? "similarity" : sortBy,
         order,
         ...filterParams,
       }),

@@ -8,6 +8,7 @@ import type {
   IbgcScatterPoint,
   IbgcUmapPoint,
   PaginatedIbgcRosterResponse,
+  QueryScoresResponse,
 } from "./types";
 
 export interface IbgcFilterParams {
@@ -155,6 +156,42 @@ export function fetchIbgcChemicalQueryStatus(
   );
 }
 
+// ── Compact, capped query "scores" endpoints ────────────────────────────────
+// These return up to `max_results` (server-bounded by DASHBOARD_RESULT_CAP)
+// ranked {id, similarity_score, best_pident, best_qcoverage, best_hit_protein}
+// rows plus the true `total_matched`. The dashboard builds its result
+// allow-list + metric maps from these; the full roster rows are fetched
+// separately via /ibgcs/roster/?ibgc_ids=…
+
+/** Poll a sequence-search task → compact, bitscore-ranked scores (≤ max). */
+export function fetchIbgcSequenceQueryScores(taskId: string, maxResults?: number) {
+  return apiGet<QueryScoresResponse>(
+    `/query/ibgc-sequence/status/${taskId}/scores/`,
+    maxResults !== undefined ? { max_results: maxResults } : {},
+  );
+}
+
+/** Poll a chemical-search task → compact, similarity-ranked scores (≤ max). */
+export function fetchIbgcChemicalQueryScores(taskId: string, maxResults?: number) {
+  return apiGet<QueryScoresResponse>(
+    `/query/chemical/status/${taskId}/scores/`,
+    maxResults !== undefined ? { max_results: maxResults } : {},
+  );
+}
+
+/** Domain query → compact scores (≤ max). Domain match is binary (score 1.0). */
+export function postIbgcDomainQueryScores(
+  body: DomainQueryRequest,
+  maxResults?: number,
+) {
+  const qs = new URLSearchParams();
+  if (maxResults !== undefined) qs.set("max_results", String(maxResults));
+  const path = qs.toString()
+    ? `/query/ibgc-domain/scores/?${qs.toString()}`
+    : "/query/ibgc-domain/scores/";
+  return apiPost<QueryScoresResponse>(path, body);
+}
+
 export function fetchIbgcDetail(ibgcId: number, assetToken?: string | null) {
   // Negative ids belong to ephemeral asset uploads — the backend resolves
   // them through the ``X-Asset-Token`` header so the URL path stays clean.
@@ -286,4 +323,17 @@ export function postIbgcArchitectureQuery(
     `/query/ibgc-architecture/?${qs.toString()}`,
     body,
   );
+}
+
+/** Architecture query → compact, composite-Dice-ranked scores (≤ max). */
+export function postIbgcArchitectureQueryScores(
+  body: IbgcArchitectureQueryRequest,
+  maxResults?: number,
+) {
+  const qs = new URLSearchParams();
+  if (maxResults !== undefined) qs.set("max_results", String(maxResults));
+  const path = qs.toString()
+    ? `/query/ibgc-architecture/scores/?${qs.toString()}`
+    : "/query/ibgc-architecture/scores/";
+  return apiPost<QueryScoresResponse>(path, body);
 }

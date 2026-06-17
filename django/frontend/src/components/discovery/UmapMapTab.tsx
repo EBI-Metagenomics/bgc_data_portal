@@ -36,7 +36,9 @@ export function UmapMapTab() {
     queryFn: () =>
       fetchIbgcUmap({
         include_partials: true,
-        sort_by: sortBy,
+        // pident/qcov are client-only roster metrics, not map sort columns;
+        // the allow-list is fully plotted so order is moot — fold to similarity.
+        sort_by: sortBy === "pident" || sortBy === "qcov" ? "similarity" : sortBy,
         order,
         ...filterParams,
       }),

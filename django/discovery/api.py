@@ -67,6 +67,8 @@ from discovery.api_schemas import (
     ParentAssemblySummary,
     PfamAnnotationOut,
     QueryResultAssemblyAggregation,
+    QueryScoreRow,
+    QueryScoresResponse,
     RegionCdsOut,
     RegionClusterOut,
     RegionDomainOut,
@@ -651,6 +653,44 @@ def _ibgc_span_bp():
 # roster paginates and is *not* capped here. ``/ibgcs/count/`` surfaces this
 # value so the UI can warn before firing the heavier requests.
 DASHBOARD_RESULT_CAP = 5_000
+
+
+def _query_scores_payload(
+    ranked_ids: list[int],
+    *,
+    similarity_lookup: dict[int, float],
+    best_pident_lookup: dict[int, float] | None = None,
+    best_qcoverage_lookup: dict[int, float] | None = None,
+    best_hit_protein_lookup: dict[int, str] | None = None,
+    max_results: int,
+) -> QueryScoresResponse:
+    """Clip a pre-ranked id list to ``max_results`` (hard-bounded by
+    ``DASHBOARD_RESULT_CAP``) and build a compact ``QueryScoresResponse``.
+
+    ``ranked_ids`` must already be in best-first order; ``total_matched`` is
+    its full length so the client can warn when the result set was capped.
+    This is the lightweight payload the dashboard polls to build its result
+    allow-list + per-hit metric maps — the full roster rows are fetched
+    separately via ``/ibgcs/roster/?ibgc_ids=…``.
+    """
+    cap = max(1, min(int(max_results), DASHBOARD_RESULT_CAP))
+    total = len(ranked_ids)
+    pid = best_pident_lookup or {}
+    qcov = best_qcoverage_lookup or {}
+    prot = best_hit_protein_lookup or {}
+    items = [
+        QueryScoreRow(
+            id=i,
+            similarity_score=similarity_lookup.get(i),
+            best_pident=pid.get(i),
+            best_qcoverage=qcov.get(i),
+            best_hit_protein_id=prot.get(i),
+        )
+        for i in ranked_ids[:cap]
+    ]
+    return QueryScoresResponse(
+        items=items, total_matched=total, capped=total > cap, cap=cap
+    )
 
 
 def _ibgc_label(ibgc_id: int) -> str:
@@ -2313,23 +2353,13 @@ def similar_ibgc_query(
     )
 
 
-@discovery_router.post(
-    "/query/ibgc-architecture/",
-    response=PaginatedIbgcRosterResponse,
-    auth=first_party_gate,
-    throttle=search_throttle,
-)
-def ibgc_architecture_query(
-    request,
-    body: IbgcArchitectureQueryRequest,
-    page: int = 1,
-    page_size: int = 25,
-):
-    """Top-K iBGCs by composite-Dice to a user-supplied domain architecture.
+def _architecture_top(body) -> tuple[list[int], list[float]]:
+    """Resolve an architecture query to ``(top_ids, top_scores)`` (best-first).
 
     Scores ``weight·Dice(domain set) + (1-weight)·Dice(adjacency pairs)``
     against the cached primary-iBGC matrices for the latest ClusteringRun.
-    Accessions outside the run's domain vocabulary are silently dropped.
+    ``k`` is bounded by ``DASHBOARD_RESULT_CAP``. Shared by the paginated and
+    scores-only architecture endpoints.
     """
     from discovery.services.clustering.architecture_search import (
         architecture_search,
@@ -2352,7 +2382,7 @@ def ibgc_architecture_query(
         logger.exception("Scoring cache unavailable for architecture query")
         raise HttpError(503, "Similarity index is not available yet")
 
-    k = max(1, min(int(body.k), 500))
+    k = max(1, min(int(body.k), DASHBOARD_RESULT_CAP))
 
     def _compute():
         result = architecture_search(
@@ -2378,7 +2408,53 @@ def ibgc_architecture_query(
             "No supplied accession matched the scoring cache vocabulary — "
             "check the input or rerun clustering against a broader source set.",
         )
+    return top_ids, top_scores
 
+
+@discovery_router.post(
+    "/query/ibgc-architecture/scores/",
+    response=QueryScoresResponse,
+    auth=first_party_gate,
+    throttle=search_throttle,
+)
+def ibgc_architecture_query_scores(
+    request, body: IbgcArchitectureQueryRequest, max_results: int = DASHBOARD_RESULT_CAP
+):
+    """Compact, composite-Dice-ranked scores payload for an architecture query.
+
+    ``top_ids`` is already best-first and bounded by ``DASHBOARD_RESULT_CAP``;
+    ``total_matched`` reflects how many the cache returned (the k bound), so
+    ``capped`` indicates the cut may have hidden lower-scoring hits.
+    """
+    top_ids, top_scores = _architecture_top(body)
+    return _query_scores_payload(
+        top_ids,
+        similarity_lookup={
+            nid: round(s, 4) for nid, s in zip(top_ids, top_scores)
+        },
+        max_results=max_results,
+    )
+
+
+@discovery_router.post(
+    "/query/ibgc-architecture/",
+    response=PaginatedIbgcRosterResponse,
+    auth=first_party_gate,
+    throttle=search_throttle,
+)
+def ibgc_architecture_query(
+    request,
+    body: IbgcArchitectureQueryRequest,
+    page: int = 1,
+    page_size: int = 25,
+):
+    """Top-K iBGCs by composite-Dice to a user-supplied domain architecture.
+
+    Scores ``weight·Dice(domain set) + (1-weight)·Dice(adjacency pairs)``
+    against the cached primary-iBGC matrices for the latest ClusteringRun.
+    Accessions outside the run's domain vocabulary are silently dropped.
+    """
+    top_ids, top_scores = _architecture_top(body)
     sim_lookup = dict(zip(top_ids, top_scores))
     total_count = len(top_ids)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
@@ -2728,6 +2804,38 @@ def _ibgc_roster_page_response(
     )
 
 
+def _resolve_domain_ibgc_ids(body) -> list[int]:
+    """Resolve a ``DomainQueryRequest`` to the matching iBGC id set.
+
+    A required domain counts an iBGC in when any source BGC on its contig
+    carries it (AND logic intersects across all required accs; OR unions);
+    an excluded domain drops the iBGC if any source BGC carries it. Shared by
+    ``/query/ibgc-domain/`` and its scores-only sibling.
+    """
+    required = [d.acc for d in body.domains if d.required]
+    excluded = [d.acc for d in body.domains if not d.required]
+
+    # Resolve the matching iBGC id set via ContigDomain → SourceBgcPrediction → iBGC.
+    bgc_qs = SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
+    if body.logic == "and" and required:
+        for acc in required:
+            bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc=acc)
+    elif required:
+        bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc__in=required)
+    ibgc_ids = list(bgc_qs.values_list("integrated_bgc_id", flat=True).distinct())
+    if excluded and ibgc_ids:
+        excluded_ibgc_ids = set(
+            SourceBgcPrediction.objects.filter(
+                integrated_bgc_id__in=ibgc_ids,
+                contig__cds_list__domains__domain_acc__in=excluded,
+            )
+            .values_list("integrated_bgc_id", flat=True)
+            .distinct()
+        )
+        ibgc_ids = [i for i in ibgc_ids if i not in excluded_ibgc_ids]
+    return ibgc_ids
+
+
 @discovery_router.post(
     "/query/ibgc-domain/",
     response=PaginatedIbgcRosterResponse,
@@ -2774,27 +2882,7 @@ def ibgc_domain_query(
     source BGC carries them). All iBGC-level filters from ``/ibgcs/roster/``
     apply in the same shape.
     """
-    required = [d.acc for d in body.domains if d.required]
-    excluded = [d.acc for d in body.domains if not d.required]
-
-    # Resolve the matching iBGC id set via ContigDomain → SourceBgcPrediction → iBGC.
-    bgc_qs = SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
-    if body.logic == "and" and required:
-        for acc in required:
-            bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc=acc)
-    elif required:
-        bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc__in=required)
-    ibgc_ids = list(bgc_qs.values_list("integrated_bgc_id", flat=True).distinct())
-    if excluded and ibgc_ids:
-        excluded_ibgc_ids = set(
-            SourceBgcPrediction.objects.filter(
-                integrated_bgc_id__in=ibgc_ids,
-                contig__cds_list__domains__domain_acc__in=excluded,
-            )
-            .values_list("integrated_bgc_id", flat=True)
-            .distinct()
-        )
-        ibgc_ids = [i for i in ibgc_ids if i not in excluded_ibgc_ids]
+    ibgc_ids = _resolve_domain_ibgc_ids(body)
 
     if not ibgc_ids:
         return PaginatedIbgcRosterResponse(
@@ -2844,6 +2932,31 @@ def ibgc_domain_query(
         page=page,
         page_size=page_size,
         similarity_lookup=similarity_lookup,
+    )
+
+
+@discovery_router.post(
+    "/query/ibgc-domain/scores/",
+    response=QueryScoresResponse,
+    tags=["Query"],
+    throttle=search_throttle,
+)
+def ibgc_domain_query_scores(
+    request, body: DomainQueryRequest, max_results: int = DASHBOARD_RESULT_CAP
+):
+    """Compact, capped scores payload for a domain query.
+
+    Domain match is binary, so every hit scores 1.0 and the ``max_results``
+    clip is an arbitrary-order cut — ``total_matched`` still reports the true
+    count so the UI can warn. Chip filters are applied downstream by
+    ``/ibgcs/roster/`` (same as the paginated sibling, which the dashboard
+    calls without filters).
+    """
+    ibgc_ids = _resolve_domain_ibgc_ids(body)
+    return _query_scores_payload(
+        ibgc_ids,
+        similarity_lookup={nid: 1.0 for nid in ibgc_ids},
+        max_results=max_results,
     )
 
 
@@ -2985,6 +3098,63 @@ def ibgc_sequence_query_status(
         best_hit_protein_lookup=ibgc_best_protein,
         best_pident_lookup=ibgc_best_pident,
         best_qcoverage_lookup=ibgc_best_qcov,
+    )
+
+
+@discovery_router.get(
+    "/query/ibgc-sequence/status/{task_id}/scores/",
+    response=QueryScoresResponse,
+    tags=["Query"],
+)
+def ibgc_sequence_query_scores(
+    request, task_id: str, max_results: int = DASHBOARD_RESULT_CAP
+):
+    """Compact, bitscore-ranked scores payload for a sequence search.
+
+    Same task as ``/query/ibgc-sequence/status/{task_id}/`` (keyed by iBGC id,
+    best-bitscore protein per iBGC), but returns only the per-hit metrics the
+    dashboard needs — ranked by bitscore desc and capped at ``max_results``.
+    PENDING raises 503 so the client can poll; FAILURE raises 500.
+    """
+    from celery.result import AsyncResult
+
+    res = AsyncResult(task_id)
+    if res.failed():
+        logger.error("Sequence search task %s failed", task_id, exc_info=res.result)
+        raise HttpError(500, "Sequence search failed")
+    if not res.ready():
+        raise HttpError(503, "Sequence search still running")
+
+    # Celery JSON-encodes the task's int iBGC keys as strings; cast back.
+    ibgc_metrics: dict[int, dict] = {int(k): v for k, v in (res.result or {}).items()}
+    ranked = sorted(
+        ibgc_metrics,
+        key=lambda i: float(ibgc_metrics[i].get("bitscore", 0.0)),
+        reverse=True,
+    )
+    return _query_scores_payload(
+        ranked,
+        similarity_lookup={
+            i: float(m["bitscore"])
+            for i, m in ibgc_metrics.items()
+            if m.get("bitscore") is not None
+        },
+        best_pident_lookup={
+            i: float(m["pident"])
+            for i, m in ibgc_metrics.items()
+            if m.get("pident") is not None
+        },
+        best_qcoverage_lookup={
+            i: float(m["qcoverage"])
+            for i, m in ibgc_metrics.items()
+            if m.get("qcoverage") is not None
+        },
+        best_hit_protein_lookup={
+            i: str(m["protein_id"])
+            for i, m in ibgc_metrics.items()
+            if m.get("protein_id")
+        },
+        max_results=max_results,
     )
 
 
@@ -3135,6 +3305,43 @@ def chemical_query_status(
         page=page,
         page_size=page_size,
         similarity_lookup=ibgc_similarities,
+    )
+
+
+@discovery_router.get(
+    "/query/chemical/status/{task_id}/scores/",
+    response=QueryScoresResponse,
+    tags=["Query"],
+    include_in_schema=False,
+    auth=first_party_gate,
+)
+def chemical_query_scores(
+    request, task_id: str, max_results: int = DASHBOARD_RESULT_CAP
+):
+    """Compact, similarity-ranked scores payload for a chemical search.
+
+    Same task as ``/query/chemical/status/{task_id}/`` (keyed by iBGC id →
+    ChemOnt BMA score); ranked desc and capped at ``max_results``. PENDING
+    raises 503; FAILURE raises 500.
+    """
+    from celery.result import AsyncResult
+
+    res = AsyncResult(task_id)
+    if res.failed():
+        logger.error("Chemical search task %s failed", task_id, exc_info=res.result)
+        raise HttpError(500, "Chemical search failed")
+    if not res.ready():
+        raise HttpError(503, "Chemical search still running")
+
+    # Celery JSON-encodes the task's int iBGC keys as strings; cast back.
+    ibgc_similarities: dict[int, float] = {
+        int(k): float(v) for k, v in (res.result or {}).items()
+    }
+    ranked = sorted(
+        ibgc_similarities, key=lambda i: ibgc_similarities[i], reverse=True
+    )
+    return _query_scores_payload(
+        ranked, similarity_lookup=ibgc_similarities, max_results=max_results
     )
 
 

@@ -21,7 +21,13 @@ export type RosterSortKey =
   | "domain_novelty"
   | "size_kb"
   | "id"
-  | "similarity";
+  | "similarity"
+  // Sequence-search per-hit metrics. These are NOT backend sort columns —
+  // the roster ranks the result allow-list client-side by the corresponding
+  // metric map and sends sort_by="similarity" (array_position) so the server
+  // preserves that order. Selectable only while a sequence result is active.
+  | "pident"
+  | "qcov";
 
 /** Which advanced-query path produced the current ``resultIbgcIds`` set.
  *  Lets the roster swap the "Sim." column for sequence-search-specific
@@ -83,6 +89,11 @@ interface DiscoveryState {
   /** Which advanced-query path produced ``resultIbgcIds``; toggles the
    *  bitscore + best-hit-protein columns in the roster. */
   searchSource: SearchSource;
+  /** Full match count before the 5k cap, and whether the result was capped.
+   *  Drives the "showing top N of M" banner above the roster. ``null`` when
+   *  no scored query is active. */
+  resultTotalMatched: number | null;
+  resultCapped: boolean;
   setQueryResult: (
     ids: number[] | null,
     similarity?: Record<number, number> | null,
@@ -90,6 +101,8 @@ interface DiscoveryState {
     bestHitProtein?: Record<number, string> | null,
     pident?: Record<number, number> | null,
     qcoverage?: Record<number, number> | null,
+    totalMatched?: number | null,
+    capped?: boolean,
   ) => void;
 
   // Snapshot of filter-store values taken when the user last pressed Run
@@ -281,6 +294,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   resultPidentById: null,
   resultQcoverageById: null,
   searchSource: null,
+  resultTotalMatched: null,
+  resultCapped: false,
   setQueryResult: (
     ids,
     similarity = null,
@@ -288,6 +303,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
     bestHitProtein = null,
     pident = null,
     qcoverage = null,
+    totalMatched = null,
+    capped = false,
   ) =>
     set({
       resultIbgcIds: ids,
@@ -296,6 +313,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       resultPidentById: pident,
       resultQcoverageById: qcoverage,
       searchSource: source,
+      resultTotalMatched: totalMatched,
+      resultCapped: capped,
       // A fresh query resets compare/protein selections.
       compareIbgcId: null,
       selectedCds: null,
@@ -320,6 +339,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       resultPidentById: null,
       resultQcoverageById: null,
       searchSource: null,
+      resultTotalMatched: null,
+      resultCapped: false,
       appliedFilters: EMPTY_APPLIED_FILTERS,
       // Note: ``assetToken`` is intentionally preserved across Run Query
       // resets — the asset chip stays pinned until the user evicts it.

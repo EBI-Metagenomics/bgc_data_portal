@@ -203,6 +203,38 @@ class IbgcIdsResponse(Schema):
     truncated: bool
 
 
+class QueryScoreRow(Schema):
+    """One scored iBGC hit in a compact query-result payload.
+
+    Carries only the per-hit metrics the dashboard needs to build its
+    result allow-list and metric maps — the full roster rows are fetched
+    separately via ``/ibgcs/roster/?ibgc_ids=…``. ``similarity_score`` is
+    the query's native score (phmmer bitscore for sequence search, Dice for
+    domain/architecture, ChemOnt BMA for chemical). The ``best_*`` fields are
+    populated for sequence search only.
+    """
+
+    id: int
+    similarity_score: float | None = None
+    best_pident: float | None = None
+    best_qcoverage: float | None = None
+    best_hit_protein_id: str | None = None
+
+
+class QueryScoresResponse(Schema):
+    """Compact, ranked query result capped at ``cap`` rows.
+
+    ``items`` is ranked best-first and clipped to ``cap``; ``total_matched``
+    is the full pre-clip count so the UI can warn when results were capped
+    (``capped`` is ``total_matched > cap``).
+    """
+
+    items: list[QueryScoreRow]
+    total_matched: int
+    capped: bool
+    cap: int
+
+
 class IbgcMemberBgc(Schema):
     """Source BGC prediction contributing to an iBGC (drill-down list)."""
 

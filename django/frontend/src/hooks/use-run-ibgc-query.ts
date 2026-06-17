@@ -1,11 +1,12 @@
 import { useState } from "react";
 import {
-  postIbgcDomainQuery,
-  postIbgcArchitectureQuery,
-  fetchIbgcSequenceQueryStatus,
-  fetchIbgcChemicalQueryStatus,
+  postIbgcDomainQueryScores,
+  postIbgcArchitectureQueryScores,
+  fetchIbgcSequenceQueryScores,
+  fetchIbgcChemicalQueryScores,
 } from "@/api/ibgcs";
 import { postSequenceQuery, postChemicalQuery } from "@/api/queries";
+import type { QueryScoresResponse } from "@/api/types";
 import { useQueryStore } from "@/stores/query-store";
 import {
   snapshotFiltersToApplied,
@@ -94,46 +95,56 @@ export function useRunIbgcQuery() {
       const bestHitProtein: Record<number, string> = {};
       const pident: Record<number, number> = {};
       const qcoverage: Record<number, number> = {};
-
-      // ── Domain branch ─────────────────────────────────────────────────
-      if (booleanActive) {
-        const resp = await postIbgcDomainQuery(
-          {
-            domains: domainConditions.map((c) => ({
-              acc: c.acc,
-              required: c.required,
-            })),
-            logic: domainMode === "or" ? "or" : "and",
-          },
-          { page: 1, page_size: 500 },
-        );
-        const ids = resp.items.map((r) => r.id);
-        idSets.push(new Set(ids));
+      // Per-branch (total_matched, capped) so the roster banner can report
+      // how many matched vs the 5k cap. Branches run domain → arch →
+      // sequence → chemical, so the sequence bitscore overwrites a domain
+      // hit's 1.0 when both hit the same iBGC (preferred — more informative).
+      const branchStats: { total: number; capped: boolean }[] = [];
+      const collect = (resp: QueryScoresResponse) => {
+        idSets.push(new Set(resp.items.map((r) => r.id)));
         for (const item of resp.items) {
           if (item.similarity_score != null) {
             similarities[item.id] = item.similarity_score;
           }
+          if (item.best_hit_protein_id) {
+            bestHitProtein[item.id] = item.best_hit_protein_id;
+          }
+          if (item.best_pident != null) pident[item.id] = item.best_pident;
+          if (item.best_qcoverage != null) {
+            qcoverage[item.id] = item.best_qcoverage;
+          }
         }
+        branchStats.push({ total: resp.total_matched, capped: resp.capped });
+      };
+
+      // ── Domain branch ─────────────────────────────────────────────────
+      if (booleanActive) {
+        collect(
+          await postIbgcDomainQueryScores(
+            {
+              domains: domainConditions.map((c) => ({
+                acc: c.acc,
+                required: c.required,
+              })),
+              logic: domainMode === "or" ? "or" : "and",
+            },
+            QUERY_RESULT_CAP,
+          ),
+        );
       }
 
       // ── Architecture branch (composite-Dice) ──────────────────────────
       if (archActive) {
-        const resp = await postIbgcArchitectureQuery(
-          {
-            architecture: archAccs,
-            weight: architectureWeight,
-            k: 500,
-          },
-          1,
-          500,
+        collect(
+          await postIbgcArchitectureQueryScores(
+            {
+              architecture: archAccs,
+              weight: architectureWeight,
+              k: QUERY_RESULT_CAP,
+            },
+            QUERY_RESULT_CAP,
+          ),
         );
-        const ids = resp.items.map((r) => r.id);
-        idSets.push(new Set(ids));
-        for (const item of resp.items) {
-          if (item.similarity_score != null) {
-            similarities[item.id] = item.similarity_score;
-          }
-        }
       }
 
       // ── Sequence branch ───────────────────────────────────────────────
@@ -144,32 +155,13 @@ export function useRunIbgcQuery() {
           min_pident: sequenceMinPident,
           min_qcov: sequenceMinQcov,
         });
-        const taskId = accepted.task_id;
         // Poll with backoff until the task is ready. Budget matches the
         // Celery result TTL (CELERY_RESULT_EXPIRES, default 1h): polling
         // longer is pointless because AsyncResult silently returns
         // PENDING for evicted task ids. Past the slow-notice threshold
         // (~2 min) we surface a cancellable "still searching" toast so
         // the user can let go without keeping the tab open.
-        const seqResp = await pollSequenceTask(taskId, abortController);
-        const ids = seqResp.items.map((r) => r.id);
-        idSets.push(new Set(ids));
-        for (const item of seqResp.items) {
-          if (item.similarity_score != null) {
-            // Domain similarity is 1.0; prefer keeping the sequence
-            // bitscore when both inputs hit the same iBGC.
-            similarities[item.id] = item.similarity_score;
-          }
-          if (item.best_hit_protein_id) {
-            bestHitProtein[item.id] = item.best_hit_protein_id;
-          }
-          if (item.best_pident != null) {
-            pident[item.id] = item.best_pident;
-          }
-          if (item.best_qcoverage != null) {
-            qcoverage[item.id] = item.best_qcoverage;
-          }
-        }
+        collect(await pollSequenceTask(accepted.task_id, abortController));
       }
 
       // ── Chemical branch (ChemOnt via ClassyFire) ──────────────────────
@@ -180,21 +172,13 @@ export function useRunIbgcQuery() {
         });
         // Novel compounds absent from ClassyFire's cache classify slowly, so
         // reuse the same poll-with-backoff path as sequence search.
-        const chemResp = await pollChemicalTask(
-          accepted.task_id,
-          abortController,
-        );
-        const ids = chemResp.items.map((r) => r.id);
-        idSets.push(new Set(ids));
-        for (const item of chemResp.items) {
-          if (item.similarity_score != null) {
-            similarities[item.id] = item.similarity_score;
-          }
-        }
+        collect(await pollChemicalTask(accepted.task_id, abortController));
       }
 
       // Intersect across active branches; if only one branch ran, that's
-      // already the result. (Mirrors legacy intersection semantics.)
+      // already the result. (Mirrors legacy intersection semantics.) Each
+      // branch is already ranked best-first and server-capped at 5k, so the
+      // single-branch allow-list stays in score order.
       let intersection: number[] = [];
       if (idSets.length === 1) {
         intersection = [...idSets[0]!];
@@ -205,14 +189,24 @@ export function useRunIbgcQuery() {
         );
       }
 
-      // Top-K clip by score: similarity-driven queries (architecture,
-      // sequence, similar-iBGC) only carry useful information for the
-      // highest-scoring hits. Sort by score desc and clip to
-      // ``QUERY_RESULT_CAP`` so the downstream roster + maps inherit the
-      // cap via the ``ibgc_ids`` allow-list without the server having to
-      // sample. Boolean-domain queries get similarity_score=1.0 for every
-      // hit so the sort is a no-op — they're effectively unsorted, which
-      // is fine since the cap rarely bites there.
+      // Match count + capped flag for the roster banner. Single branch: take
+      // its server-reported total. Multi-branch intersection: the true total
+      // is unknowable when any branch was itself capped, so report null +
+      // capped so the banner stays honest.
+      const anyBranchCapped = branchStats.some((b) => b.capped);
+      let totalMatched: number | null;
+      let capped: boolean;
+      if (branchStats.length === 1) {
+        totalMatched = branchStats[0]!.total;
+        capped = branchStats[0]!.capped;
+      } else {
+        totalMatched = anyBranchCapped ? null : intersection.length;
+        capped = anyBranchCapped;
+      }
+
+      // Defensive top-K clip (each branch is already ≤ cap server-side, so an
+      // intersection can't exceed it — kept so the allow-list can never blow
+      // past the cap if that ever changes).
       if (intersection.length > QUERY_RESULT_CAP) {
         intersection.sort((a, b) => {
           const sa = similarities[a] ?? -Infinity;
@@ -220,6 +214,7 @@ export function useRunIbgcQuery() {
           return sb - sa;
         });
         intersection = intersection.slice(0, QUERY_RESULT_CAP);
+        capped = true;
       }
 
       // When sequence search is one of the branches, label the result
@@ -248,6 +243,8 @@ export function useRunIbgcQuery() {
         source === "sequence" ? bestHitProtein : null,
         source === "sequence" ? pident : null,
         source === "sequence" ? qcoverage : null,
+        totalMatched,
+        capped,
       );
       toast.success(`Query returned ${intersection.length} iBGC(s)`);
     } catch (e) {
@@ -278,9 +275,7 @@ const SEQUENCE_POLL_SLOW_NOTICE_MS = 2 * 60 * 1000;
 const SEQUENCE_POLL_INITIAL_MS = 1000;
 const SEQUENCE_POLL_MAX_MS = 5000;
 
-type StatusFetcher = (
-  taskId: string,
-) => ReturnType<typeof fetchIbgcSequenceQueryStatus>;
+type StatusFetcher = (taskId: string) => Promise<QueryScoresResponse>;
 
 /**
  * Poll an async iBGC-roster search task with backoff until it's ready.
@@ -346,17 +341,27 @@ async function pollRosterTask(
 }
 
 function pollSequenceTask(taskId: string, abortController: AbortController) {
-  return pollRosterTask(taskId, abortController, fetchIbgcSequenceQueryStatus, {
-    slow: "Still searching… large protein queries can take several minutes. Keep this tab open.",
-    timeout:
-      "Sequence search exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
-  });
+  return pollRosterTask(
+    taskId,
+    abortController,
+    (id) => fetchIbgcSequenceQueryScores(id, QUERY_RESULT_CAP),
+    {
+      slow: "Still searching… large protein queries can take several minutes. Keep this tab open.",
+      timeout:
+        "Sequence search exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
+    },
+  );
 }
 
 function pollChemicalTask(taskId: string, abortController: AbortController) {
-  return pollRosterTask(taskId, abortController, fetchIbgcChemicalQueryStatus, {
-    slow: "Still classifying… novel structures can take a minute to classify in ClassyFire. Keep this tab open.",
-    timeout:
-      "Chemical search exceeded the 1-hour result lifetime — retry, or check that ClassyFire is reachable.",
-  });
+  return pollRosterTask(
+    taskId,
+    abortController,
+    (id) => fetchIbgcChemicalQueryScores(id, QUERY_RESULT_CAP),
+    {
+      slow: "Still classifying… novel structures can take a minute to classify in ClassyFire. Keep this tab open.",
+      timeout:
+        "Chemical search exceeded the 1-hour result lifetime — retry, or check that ClassyFire is reachable.",
+    },
+  );
 }

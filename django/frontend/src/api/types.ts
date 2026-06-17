@@ -629,6 +629,26 @@ export interface PaginatedIbgcRosterResponse {
   pagination: PaginationMeta;
 }
 
+/** One scored hit in a compact query-result payload (see QueryScoresResponse).
+ *  similarity_score is the query's native score (bitscore for sequence, Dice
+ *  for domain/architecture, ChemOnt BMA for chemical); best_* are sequence-only. */
+export interface QueryScoreRow {
+  id: number;
+  similarity_score: number | null;
+  best_pident: number | null;
+  best_qcoverage: number | null;
+  best_hit_protein_id: string | null;
+}
+
+/** Compact, ranked query result capped at `cap`. `total_matched` is the full
+ *  pre-clip count; `capped` is `total_matched > cap`. */
+export interface QueryScoresResponse {
+  items: QueryScoreRow[];
+  total_matched: number;
+  capped: boolean;
+  cap: number;
+}
+
 export interface IbgcMemberBgc {
   id: number;
   accession: string;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchIbgcIds, fetchIbgcRoster } from "@/api/ibgcs";
+import type { IbgcRosterParams } from "@/api/ibgcs";
 import type { IbgcRosterItem } from "@/api/types";
 import {
   Table,
@@ -23,12 +24,18 @@ import { MAX_SHORTLIST, useShortlistStore } from "@/stores/shortlist-store";
 import { IbgcContextMenu } from "./IbgcContextMenu";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
+// Display label for the server/client query-result cap (DASHBOARD_RESULT_CAP
+// / QUERY_RESULT_CAP = 5000). Used only in the "results capped" banner.
+const QUERY_RESULT_CAP_LABEL = "5,000";
+
 type SortKey =
   | "novelty_score"
   | "domain_novelty"
   | "size_kb"
   | "id"
-  | "similarity";
+  | "similarity"
+  | "pident"
+  | "qcov";
 
 type ColumnKey =
   | SortKey
@@ -52,15 +59,17 @@ const BASE_TAIL_COLUMNS: { key: ColumnKey; label: string }[] = [
 
 function columnsFor(searchSource: string | null) {
   // Sequence-search swaps the Sim. column for a Bitscore column and adds
-  // a Best hit column showing the protein_id of the winning CDS. The
-  // Bitscore column sorts via the shared "similarity" key: the result
-  // allow-list (``ibgc_ids``) is already in bitscore-descending order, and
-  // the server's ``sort_by=similarity`` orders rows by their position in
-  // that list — so it reproduces the bitscore ranking (asc flips it).
+  // Identity %, Query cov. % and Best hit columns from the winning CDS.
+  // Bitscore/Identity %/Query cov. % all sort via the same client-side
+  // mechanism: the roster reorders the result allow-list (``ibgc_ids``) by
+  // the chosen metric and the server's ``sort_by=similarity`` preserves that
+  // order (asc flips it). Default stays bitscore.
   if (searchSource === "sequence") {
     return [
       { key: "label" as ColumnKey, label: "iBGC" },
       { key: "similarity" as ColumnKey, label: "Bitscore" },
+      { key: "pident" as ColumnKey, label: "Identity %" },
+      { key: "qcov" as ColumnKey, label: "Query cov. %" },
       { key: "best_hit" as ColumnKey, label: "Best hit" },
       ...BASE_TAIL_COLUMNS,
     ];
@@ -106,6 +115,10 @@ export function IbgcRosterTable() {
   const resultBestHitProteinById = useDiscoveryStore(
     (s) => s.resultBestHitProteinById,
   );
+  const resultPidentById = useDiscoveryStore((s) => s.resultPidentById);
+  const resultQcoverageById = useDiscoveryStore((s) => s.resultQcoverageById);
+  const resultTotalMatched = useDiscoveryStore((s) => s.resultTotalMatched);
+  const resultCapped = useDiscoveryStore((s) => s.resultCapped);
   const applied = useDiscoveryStore((s) => s.appliedFilters);
   const assetToken = useDiscoveryStore((s) => s.assetToken);
 
@@ -116,6 +129,29 @@ export function IbgcRosterTable() {
     resultIbgcIds,
     assetToken,
   );
+
+  // Bitscore/Identity %/Query cov. % are per-hit query metrics, not server
+  // columns. For these we rank the result allow-list client-side by the
+  // chosen metric map and send sort_by="similarity" — the server orders rows
+  // by their position in the (DESC-ranked) ``ibgc_ids`` list, and flips it for
+  // order="asc". Stored-column sorts (novelty/size/…) pass straight through.
+  const METRIC_MAPS: Record<string, Record<number, number> | null> = {
+    similarity: resultSimilarityById,
+    pident: resultPidentById,
+    qcov: resultQcoverageById,
+  };
+  const isMetricSort =
+    sortBy === "similarity" || sortBy === "pident" || sortBy === "qcov";
+  const effectiveSortBy: IbgcRosterParams["sort_by"] = isMetricSort
+    ? "similarity"
+    : (sortBy as IbgcRosterParams["sort_by"]);
+  if (isMetricSort && resultIbgcIds && resultIbgcIds.length > 0) {
+    const scoreMap = METRIC_MAPS[sortBy] ?? {};
+    const ordered = [...resultIbgcIds].sort(
+      (a, b) => (scoreMap?.[b] ?? -Infinity) - (scoreMap?.[a] ?? -Infinity),
+    );
+    filterParams.ibgc_ids = ordered.join(",");
+  }
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
     resultIbgcIds !== null ||
@@ -141,7 +177,7 @@ export function IbgcRosterTable() {
       fetchIbgcRoster({
         page,
         page_size: pageSize,
-        sort_by: sortBy,
+        sort_by: effectiveSortBy,
         order,
         ...filterParams,
       }),
@@ -165,7 +201,7 @@ export function IbgcRosterTable() {
     const toastId = toast.loading("Collecting iBGCs…");
     try {
       const resp = await fetchIbgcIds({
-        sort_by: sortBy,
+        sort_by: effectiveSortBy,
         order,
         ...filterParams,
       });
@@ -220,6 +256,16 @@ export function IbgcRosterTable() {
 
   return (
     <div className="flex h-full flex-col" data-testid="ibgc-roster">
+      {resultCapped && (
+        <div
+          className="border-b bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          data-testid="roster-cap-banner"
+        >
+          {resultTotalMatched != null
+            ? `Showing the top ${(resultIbgcIds?.length ?? 0).toLocaleString()} of ${resultTotalMatched.toLocaleString()} matching iBGCs (ranked by score). Refine your query or filters to narrow the results.`
+            : `Showing the top ${(resultIbgcIds?.length ?? 0).toLocaleString()} matching iBGCs — some query inputs were capped at ${QUERY_RESULT_CAP_LABEL}.`}
+        </div>
+      )}
       <Table containerClassName="flex-1 min-h-0">
         <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
@@ -230,6 +276,8 @@ export function IbgcRosterTable() {
                     "novelty_score",
                     "domain_novelty",
                     "similarity",
+                    "pident",
+                    "qcov",
                   ] as readonly string[]
                 ).includes(col.key);
                 return (
@@ -288,6 +336,8 @@ export function IbgcRosterTable() {
                   bestHitProteinOverride={
                     resultBestHitProteinById?.[ibgc.id] ?? null
                   }
+                  pidentOverride={resultPidentById?.[ibgc.id] ?? null}
+                  qcoverageOverride={resultQcoverageById?.[ibgc.id] ?? null}
                   onSelect={() => setCompareIbgcId(ibgc.id)}
                 />
               ))}
@@ -330,6 +380,10 @@ interface IbgcRosterRowProps {
    *  because ``/ibgcs/roster/`` doesn't carry per-query metrics. */
   similarityOverride: number | null;
   bestHitProteinOverride: string | null;
+  /** % identity / query coverage (0–100) of the winning CDS — sequence
+   *  search only; overlaid for the same reason as similarityOverride. */
+  pidentOverride: number | null;
+  qcoverageOverride: number | null;
   onSelect: () => void;
 }
 
@@ -339,11 +393,15 @@ function IbgcRosterRow({
   searchSource,
   similarityOverride,
   bestHitProteinOverride,
+  pidentOverride,
+  qcoverageOverride,
   onSelect,
 }: IbgcRosterRowProps) {
   const isSeq = searchSource === "sequence";
   const similarity = similarityOverride ?? ibgc.similarity_score;
   const bestHit = bestHitProteinOverride ?? ibgc.best_hit_protein_id;
+  const pident = pidentOverride ?? ibgc.best_pident;
+  const qcoverage = qcoverageOverride ?? ibgc.best_qcoverage;
   return (
     <IbgcContextMenu
       ibgcId={ibgc.id}
@@ -401,6 +459,12 @@ function IbgcRosterRow({
           <>
             <TableCell className="font-mono">
               {similarity != null ? similarity.toFixed(1) : "—"}
+            </TableCell>
+            <TableCell className="font-mono">
+              {pident != null ? pident.toFixed(1) : "—"}
+            </TableCell>
+            <TableCell className="font-mono">
+              {qcoverage != null ? qcoverage.toFixed(1) : "—"}
             </TableCell>
             <TableCell className="font-mono text-xs">
               {bestHit ?? "—"}
