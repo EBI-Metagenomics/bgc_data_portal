@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.7.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.6.0...bgc_data_portal-v3.7.0) (2026-06-17)
+
+
+### Features
+
+* **portal:** cap query results at 5k with banner, add sortable pident/qcov ([19a8f61](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/19a8f611391cf9cabcf832bc1dd2db05ebbc76f6))
+* **worker:** Keep copy of ChemOnt OBO in repo ([f06e6a0](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/f06e6a00da7e2ec7d133a8b0baa218d68587b3e2))
+
+
+### Bug Fixes
+
+* **discovery:** detect MIBiG accessions as assembly and fix filter reset/chip state ([8f07b22](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/8f07b2256e4a973569a8a440f35453947fbc3a98))
+
 ## [3.6.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.5.4...bgc_data_portal-v3.6.0) (2026-06-15)
 
 
