@@ -270,19 +270,28 @@ STATICFILES_DIRS = [
 # Default primary key
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Caching
-DJANGO_CACHE_BACKEND = os.getenv("DJANGO_CACHE_BACKEND")
+# Caching — Postgres-backed DatabaseCache (no Redis). Counters/payloads are
+# small JSON; the table is shared across gunicorn workers and pods, and
+# DatabaseCache culls on write + checks expiry on read. Create the backing
+# table once with `python manage.py createcachetable`.
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": DJANGO_CACHE_BACKEND,
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": os.getenv("DJANGO_CACHE_TABLE", "django_cache"),
         "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
+            # Cap growth; the high-churn keys are asset:*/report:* (TTL-bounded).
+            "MAX_ENTRIES": int(os.getenv("DJANGO_CACHE_MAX_ENTRIES", "50000")),
         },
     }
 }
 CACHE_TIMEOUT = 60 * 60 * 24 * 7  # 1 week
+
+# Staging dir for the large (~100 MB) asset-upload tarball. Parked on the shared
+# RWX PVC (NOT the cache) so the worker pod — a separate pod with its own FS —
+# can read what the web pod wrote. Defaults under MEDIA_ROOT's PVC.
+UPLOAD_STAGING_DIR: Path = Path(
+    os.environ.get("UPLOAD_STAGING_DIR", BASE_DIR / "data" / "upload_staging")
+)
 
 # ClassyFire — query-side SMILES → ChemOnt classification for chemical search.
 # The public service is used by default; query classifications are cached by
