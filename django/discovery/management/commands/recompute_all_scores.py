@@ -27,7 +27,7 @@ class Command(BaseCommand):
         else:
             from discovery.tasks import recompute_scores_task
 
-            result = recompute_scores_task.apply_async(queue="scores")
+            result = recompute_scores_task.enqueue()
             self.stdout.write(
                 self.style.SUCCESS(f"Dispatched recompute_scores_task: {result.id}")
             )

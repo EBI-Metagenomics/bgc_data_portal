@@ -80,30 +80,24 @@ class Command(BaseCommand):
         # Chain the DiscoveryStats refresh onto the protein-index task so it
         # only fires once that succeeds. If the protein index is skipped, the
         # stats refresh is dispatched directly after the (already-succeeded)
-        # synchronous load. Both run on the default ``celery`` queue.
+        # synchronous load. Both run on the default task queue.
         if not skip_protein_index:
             try:
-                from discovery.tasks import (
-                    update_discovery_stats_task,
-                    update_protein_search_index_task,
-                )
-
-                stats_link = None
-                if not skip_discovery_stats:
-                    stats_link = update_discovery_stats_task.si().set(queue="celery")
+                from discovery.tasks import update_protein_search_index_task
 
                 # ``truncate`` means the discovery tables were wiped, so the
                 # protein index must be rebuilt from scratch rather than appended.
-                async_result = update_protein_search_index_task.apply_async(
-                    kwargs={"rebuild": truncate},
-                    queue="celery",
-                    link=stats_link,
+                # The task chains the DiscoveryStats refresh itself on success
+                # (no Celery canvas) when ``then_update_stats`` is set.
+                async_result = update_protein_search_index_task.enqueue(
+                    rebuild=truncate,
+                    then_update_stats=not skip_discovery_stats,
                 )
                 self.stdout.write(
                     f"Enqueued protein search index update "
                     f"(task_id={async_result.id}, rebuild={truncate})"
                 )
-                if stats_link is not None:
+                if not skip_discovery_stats:
                     self.stdout.write(
                         "Chained DiscoveryStats refresh (runs on protein-index success)"
                     )
@@ -117,7 +111,7 @@ class Command(BaseCommand):
             try:
                 from discovery.tasks import update_discovery_stats_task
 
-                async_result = update_discovery_stats_task.apply_async(queue="celery")
+                async_result = update_discovery_stats_task.enqueue()
                 self.stdout.write(
                     f"Enqueued DiscoveryStats refresh (task_id={async_result.id})"
                 )

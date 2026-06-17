@@ -31,6 +31,5 @@ RUN pip install --no-cache-dir -r requirements-worker.txt -r requirements-dev.tx
 # ── Layer C: application code (changes often) ───────────────────────────────
 COPY . .
 
-# watchmedo restarts Celery automatically when Skaffold syncs .py files.
-CMD ["watchmedo", "auto-restart", "--directory=/app", "--pattern=*.py", "--recursive", "--", \
-     "celery", "-A", "bgc_data_portal.celery", "worker", "--loglevel=info"]
+# db_worker --reload (defaults to DEBUG) restarts on .py changes Skaffold syncs.
+CMD ["sh", "-c", "python manage.py createcachetable && python manage.py db_worker --queue-name default,scores"]

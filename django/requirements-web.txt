@@ -3,8 +3,11 @@
 # ML packages (torch, transformers, esm, rdkit, pyhmmer, umap-learn) live in requirements-ml.txt.
 
 Django==5.2.15
-celery==5.4.0
-django-celery-results==2.5.0
+# Background tasks: django-tasks API + the Postgres-backed db backend, run by
+# `manage.py db_worker` (replaces Celery + RabbitMQ + the Redis result store).
+# django-tasks-db is GitHub-only (not on PyPI); pin to a tag.
+django-tasks==0.12.0
+django-tasks-db @ git+https://github.com/RealOrangeOne/django-tasks-db@0.12.0
 gunicorn==23.0.0
 uvicorn[standard]==0.30.1
 psycopg[binary]==3.1.18
@@ -16,7 +19,6 @@ plotly==5.22.0
 tqdm==4.67.1
 pyarrow>=23.0,<24
 pandas
-redis>=4.0.0
 pyrodigal==3.6.3
 numpy==2.0.1
 # scipy.sparse powers the cached composite-Dice scoring matrix loaded by
@@ -31,12 +33,11 @@ django-filter==24.3
 django-matomo==0.1.6
 whitenoise==6.4.0
 django-debug-toolbar==5.0.1
-django-redis
 django-csp
 aiofiles
 python-multipart==0.0.9
 django-ninja==1.4
-# Required for Celery hot-reload in k8s (watchmedo auto-restart)
+# Worker hot-reload in dev (db_worker --reload uses watchdog under DEBUG)
 watchdog==4.0.1
 biopython==1.85
 # Web image installs common-core WITHOUT the [chemont] extra: the web pod never

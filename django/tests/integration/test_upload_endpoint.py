@@ -2,9 +2,9 @@
 
 The v2 endpoint (``POST /api/discovery/assets/upload/``) accepts a single
 gzip-compressed tarball in a ``file`` field, validates it by magic bytes and
-size, stashes the raw bytes in Redis under a content-hash token, and dispatches
-a Celery projection task — returning ``202 {token, task_id}``. The Celery
-dispatch and the Redis cache are patched out here; these tests assert only the
+size, stages the raw bytes on the shared PVC under a content-hash token, and
+dispatches a projection task — returning ``202 {token, task_id}``. The task
+dispatch and the asset cache are patched out here; these tests assert only the
 request-validation and response contract, not the downstream projection.
 """
 
@@ -29,20 +29,20 @@ def api_client():
 @pytest.fixture
 def gzip_bytes():
     """Minimal gzip payload — the endpoint only checks the magic bytes; the
-    tarball contents are parsed later in the (mocked) Celery worker."""
+    tarball contents are parsed later in the (mocked) worker task."""
     return gzip.compress(b"dummy-tarball-contents")
 
 
 @pytest.fixture
 def mock_pipeline():
-    """Stub the Celery dispatch and the Redis-backed asset cache."""
+    """Stub the task dispatch and the asset cache/staging helpers."""
     with (
         patch("discovery.tasks.process_asset_upload_task") as task,
         patch("discovery.services.asset_upload.cache.stash_upload"),
         patch("discovery.services.asset_upload.cache.mark_pending"),
         patch("discovery.services.asset_upload.cache.read_status", return_value=None),
     ):
-        task.delay.return_value.id = "task-asset-123"
+        task.enqueue.return_value.id = "task-asset-123"
         yield task
 
 

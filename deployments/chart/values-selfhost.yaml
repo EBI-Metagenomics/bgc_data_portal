@@ -16,6 +16,6 @@ django:
   image: quay.io/microbiome-informatics/bgc-data-portal-website:latest
   imagePullPolicy: IfNotPresent
 
-celery:
+worker:
   image: quay.io/microbiome-informatics/bgc-data-portal-website-worker:latest
   imagePullPolicy: IfNotPresent

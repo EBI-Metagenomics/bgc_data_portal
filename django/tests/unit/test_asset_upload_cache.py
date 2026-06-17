@@ -1,6 +1,7 @@
-"""Tests for the asset-upload Redis cache helpers, especially the new
-``stash_upload`` / ``read_upload`` / ``evict_upload`` pair that the API and
-the Celery worker use to exchange the uploaded tarball bytes across pods.
+"""Tests for the asset-upload cache + staging helpers, especially the
+``stash_upload`` / ``read_upload`` / ``evict_upload`` trio that the API and the
+worker use to exchange the uploaded tarball bytes across pods (bytes staged on
+the shared PVC; small payloads in the Postgres cache).
 """
 
 from __future__ import annotations
@@ -12,7 +13,10 @@ from django.core.cache import cache
 
 
 @pytest.fixture(autouse=True)
-def _clear_cache():
+def _clear_cache(settings, tmp_path):
+    # Stage uploads under a throwaway dir so round-trip tests don't litter the
+    # real PVC path (settings.UPLOAD_STAGING_DIR).
+    settings.UPLOAD_STAGING_DIR = tmp_path / "upload_staging"
     cache.clear()
     yield
     cache.clear()
@@ -43,17 +47,17 @@ def test_evict_asset_also_drops_upload_key():
 
 
 def test_task_fails_cleanly_when_upload_key_missing():
-    """If the upload TTL elapses (or the key is evicted) before the worker
-    picks the task up, ``process_asset_upload_task`` must mark FAILED with a
-    descriptive error instead of raising."""
+    """If the staged upload is gone (evicted, or the pod restarted) before the
+    worker picks the task up, ``process_asset_upload_task`` must mark FAILED with
+    a descriptive error instead of raising."""
     from discovery.tasks import process_asset_upload_task
 
     token = "tok-missing"
     asset_cache.mark_pending(token, task_id="task-x")
-    result = process_asset_upload_task.run(token)
+    result = process_asset_upload_task.call(token)
 
     assert result["state"] == "FAILED"
-    assert "missing from cache" in result["error"].lower()
+    assert "missing" in result["error"].lower()
     status = asset_cache.read_status(token)
     assert status is not None
     assert status["state"] == "FAILED"

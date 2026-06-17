@@ -115,6 +115,6 @@ def test_task_pools_structure_chemont(monkeypatch):
     monkeypatch.setattr("django.core.cache.cache.get", lambda *a, **k: None)
     monkeypatch.setattr("django.core.cache.cache.set", lambda *a, **k: None)
 
-    result = chemical_similarity_search.apply(args=["CCO", 0.5]).result
+    result = chemical_similarity_search.call("CCO", 0.5)
 
     assert result.get(ibgc.id) == 1.0

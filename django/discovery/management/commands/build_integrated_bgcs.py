@@ -37,31 +37,30 @@ class Command(BaseCommand):
 
         if options["sync"]:
             self.stdout.write("Building IntegratedBgc table synchronously ...")
-            result = build_integrated_bgcs_task.apply().result
+            result = build_integrated_bgcs_task.call()
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
             # The sync build raised on failure, so reaching here means success;
             # dispatch the stats refresh asynchronously as requested.
             if not skip_discovery_stats:
                 self._enqueue_stats(queue)
         else:
-            # Chain stats onto the build task so it only fires on its success.
-            stats_link = (
-                None
-                if skip_discovery_stats
-                else update_discovery_stats_task.si().set(queue=queue)
+            # Chain stats onto the build task so it only fires on its success
+            # (the task enqueues the follow-up itself — no Celery canvas).
+            res = build_integrated_bgcs_task.using(queue_name=queue).enqueue(
+                then_update_stats=not skip_discovery_stats,
+                stats_queue=queue,
             )
-            res = build_integrated_bgcs_task.apply_async(queue=queue, link=stats_link)
             self.stdout.write(
                 self.style.SUCCESS(f"Dispatched build_integrated_bgcs_task: {res.id}")
             )
-            if stats_link is not None:
+            if not skip_discovery_stats:
                 self.stdout.write(
                     "Chained DiscoveryStats refresh (runs on build success)"
                 )
 
     def _enqueue_stats(self, queue):
         try:
-            res = update_discovery_stats_task.apply_async(queue=queue)
+            res = update_discovery_stats_task.using(queue_name=queue).enqueue()
             self.stdout.write(
                 self.style.SUCCESS(f"Enqueued DiscoveryStats refresh: {res.id}")
             )

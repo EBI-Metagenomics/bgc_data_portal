@@ -69,11 +69,11 @@ class Command(BaseCommand):
         }
         if options["sync"]:
             self.stdout.write("Reclassifying BGCs synchronously ...")
-            result = reclassify_bgcs_task.apply(kwargs=kwargs).result
+            result = reclassify_bgcs_task.call(**kwargs)
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
         else:
-            res = reclassify_bgcs_task.apply_async(
-                kwargs=kwargs, queue=options["queue"]
+            res = reclassify_bgcs_task.using(queue_name=options["queue"]).enqueue(
+                **kwargs
             )
             self.stdout.write(
                 self.style.SUCCESS(f"Dispatched reclassify_bgcs_task: {res.id}")

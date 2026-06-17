@@ -1,15 +1,25 @@
-"""Celery tasks for the Evaluate Asset mode.
+"""Background tasks for the Discovery platform (django-tasks).
 
-Each task dispatches to the assessment service, caches the result
-in Redis with a 24-hour TTL, and follows the existing set_job_cache
-/ get_job_status polling pattern.
+Each task dispatches to a service, mirrors its result/progress into the default
+cache under ``set_job_cache``, and returns its result (persisted by the
+django-tasks-db backend as the source of truth for terminal status).
+
+Celery's ``link=`` chaining has no django-tasks equivalent, so chains are
+expressed by enqueuing the successor at the end of the predecessor (guarded by
+a ``then_*`` flag where the task is also runnable on its own).
+
+Tasks are plain ``@task`` callables (no ``takes_context``) so they run
+identically under ``.enqueue()`` (worker) and ``.call()`` (synchronous, used by
+``--sync`` management commands and tests). The diagnostic progress/result cache
+is keyed on a generated id; final status is owned by the django-tasks-db result.
 """
 
 from __future__ import annotations
 
 import logging
+from uuid import uuid4
 
-from celery import shared_task
+from django_tasks import task
 
 from discovery.cache_utils import set_job_cache
 
@@ -19,10 +29,10 @@ KEYWORD_TTL = 300  # 5 minutes
 CHEMICAL_QUERY_TTL = 3_600  # 1 hour
 
 
-@shared_task(name="discovery.tasks.keyword_resolve", bind=True, acks_late=True)
-def keyword_resolve(self, search_key: str, keyword: str) -> bool:
+@task()
+def keyword_resolve(search_key: str, keyword: str) -> bool:
     """Resolve a landing-page keyword to a dashboard filter and cache the redirect URL."""
-    task_id = self.request.id
+    task_id = uuid4().hex
     set_job_cache(search_key=search_key, task_id=task_id, timeout=KEYWORD_TTL)
 
     from discovery.services.keyword_resolver import resolve_keyword
@@ -44,21 +54,19 @@ def keyword_resolve(self, search_key: str, keyword: str) -> bool:
     return True
 
 
-@shared_task(name="discovery.tasks.recompute_scores", bind=True, acks_late=True)
-def recompute_scores_task(self) -> bool:
+@task(queue_name="scores")
+def recompute_scores_task() -> bool:
     """Recompute all discovery scores (novelty, assembly, GCF, catalogs, UMAP)."""
     from discovery.services.scores import recompute_all_scores
 
     recompute_all_scores()
-    log.info("Score recomputation complete (task %s)", self.request.id)
+    log.info("Score recomputation complete (task %s)", uuid4().hex)
     return True
 
 
-@shared_task(
-    name="discovery.tasks.chemical_similarity_search", bind=True, acks_late=True
-)
+@task()
 def chemical_similarity_search(
-    self, smiles: str, similarity_threshold: float
+    smiles: str, similarity_threshold: float
 ) -> dict[int, float]:
     """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
 
@@ -174,14 +182,23 @@ _VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
 # ── Integrated BGC table builder ───────────────────────────────────────────
 
 
-@shared_task(
-    name="discovery.tasks.build_integrated_bgcs",
-    bind=True,
-    acks_late=True,
-)
-def build_integrated_bgcs_task(self) -> dict:
-    """Rebuild the IntegratedBgc table from latest-version SourceBgcPrediction rows."""
-    task_id = self.request.id
+@task()
+def build_integrated_bgcs_task(
+    *,
+    then_update_stats: bool = False,
+    then_run_clustering: dict | None = None,
+    stats_queue: str = "default",
+    clustering_queue: str = "scores",
+) -> dict:
+    """Rebuild the IntegratedBgc table from latest-version SourceBgcPrediction rows.
+
+    On success, optionally enqueues a follow-up: ``then_run_clustering`` (a kwargs
+    dict) chains ``run_bgc_clustering_task``; otherwise ``then_update_stats``
+    chains ``update_discovery_stats_task``. Chaining on success (vs dispatching
+    both up front) preserves the old Celery ``link=`` ordering — the clustering
+    task must not capture iBGC ids before the rebuild recreates them.
+    """
+    task_id = uuid4().hex
     search_key = "integrated_bgcs"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
@@ -202,6 +219,12 @@ def build_integrated_bgcs_task(self) -> dict:
         task_id=task_id,
         timeout=CLUSTERING_TTL,
     )
+    if then_run_clustering is not None:
+        run_bgc_clustering_task.using(queue_name=clustering_queue).enqueue(
+            **then_run_clustering
+        )
+    elif then_update_stats:
+        update_discovery_stats_task.using(queue_name=stats_queue).enqueue()
     log.info("build_integrated_bgcs complete (task %s): %s", task_id, result)
     return result
 
@@ -209,9 +232,8 @@ def build_integrated_bgcs_task(self) -> dict:
 # ── BGC clustering pipeline ───────────────────────────────────────────────────
 
 
-@shared_task(name="discovery.tasks.run_bgc_clustering", bind=True, acks_late=True)
+@task(queue_name="scores")
 def run_bgc_clustering_task(
-    self,
     *,
     domain_sources: list[str] | None = None,
     score_weights: list[float] | None = None,
@@ -232,7 +254,7 @@ def run_bgc_clustering_task(
     chains a reclassify task to assign partial iBGCs and a projection task
     that fills umap / leaf path / novelty for partials.
     """
-    task_id = self.request.id
+    task_id = uuid4().hex
     search_key = f"bgc_clustering:{task_id}"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
@@ -264,31 +286,19 @@ def run_bgc_clustering_task(
     )
 
     if apply and auto_reclassify and "run_pk" in result:
-        reclassify_kwargs = {
-            "clustering_run_pk": result["run_pk"],
-            "scope": reclassify_scope,
-            "knn_k": result.get("knn_k") or knn_k or 5,
-        }
-        # Chain projection after reclassify when scoring is on, so partial
-        # iBGCs get coordinates + leaf paths populated immediately. Using a
-        # link signature keeps the projection task from racing reclassify.
+        knn = result.get("knn_k") or knn_k or 5
+        # Enqueue reclassify on the scores queue; it chains the partial-iBGC
+        # projection itself when ``then_project`` is set (was a Celery link).
+        reclassify_result = reclassify_bgcs_task.enqueue(
+            clustering_run_pk=result["run_pk"],
+            scope=reclassify_scope,
+            knn_k=knn,
+            then_project=score_ibgcs,
+            project_knn_k=knn,
+        )
         if score_ibgcs:
-            project_sig = project_partial_ibgcs_task.si(
-                clustering_run_pk=result["run_pk"],
-                knn_k=result.get("knn_k") or knn_k or 5,
-            ).set(queue="scores")
-            async_result = reclassify_bgcs_task.apply_async(
-                kwargs=reclassify_kwargs,
-                queue="scores",
-                link=project_sig,
-            )
             result["project_partial_ibgcs_chained"] = True
-        else:
-            async_result = reclassify_bgcs_task.apply_async(
-                kwargs=reclassify_kwargs,
-                queue="scores",
-            )
-        result["reclassify_task_id"] = async_result.id
+        result["reclassify_task_id"] = reclassify_result.id
 
     set_job_cache(
         search_key=search_key,
@@ -303,21 +313,24 @@ def run_bgc_clustering_task(
 # ── Reclassification of partial / late BGCs ───────────────────────────────────
 
 
-@shared_task(name="discovery.tasks.reclassify_bgcs", bind=True, acks_late=True)
+@task(queue_name="scores")
 def reclassify_bgcs_task(
-    self,
     *,
     clustering_run_pk: int,
     scope: str = "partial",
     knn_k: int = 5,
     min_total_similarity: float = 0.1,
+    then_project: bool = False,
+    project_knn_k: int = 5,
 ) -> dict:
     """Assign leaf family paths to partial / non-primary iBGCs against an existing run.
 
     Re-runnable independently of ``run_bgc_clustering_task``. Updates only
     classification fields on ``IntegratedBgc``; never touches the hierarchy.
+    When ``then_project`` is set, chains the partial-iBGC UMAP projection on
+    success (replaces the old Celery ``link=`` on the clustering chain).
     """
-    task_id = self.request.id
+    task_id = uuid4().hex
     search_key = f"bgc_reclassify:{clustering_run_pk}"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
@@ -344,6 +357,12 @@ def reclassify_bgcs_task(
         task_id=task_id,
         timeout=CLUSTERING_TTL,
     )
+    if then_project:
+        project_partial_ibgcs_task.enqueue(
+            clustering_run_pk=clustering_run_pk,
+            knn_k=project_knn_k,
+            min_total_similarity=min_total_similarity,
+        )
     log.info("reclassify_bgcs complete (task %s): %s", task_id, result)
     return result
 
@@ -351,13 +370,8 @@ def reclassify_bgcs_task(
 # ── Partial-iBGC projection (umap coords + scores for non-primary iBGCs) ───────
 
 
-@shared_task(
-    name="discovery.tasks.project_partial_ibgcs",
-    bind=True,
-    acks_late=True,
-)
+@task(queue_name="scores")
 def project_partial_ibgcs_task(
-    self,
     *,
     clustering_run_pk: int,
     knn_k: int = 5,
@@ -370,7 +384,7 @@ def project_partial_ibgcs_task(
     ``domain_novelty`` on every ``IntegratedBgc`` whose ``classification_run``
     differs from the target run. Marks ``umap_projected = True``.
     """
-    task_id = self.request.id
+    task_id = uuid4().hex
     search_key = f"bgc_project_partial:{clustering_run_pk}"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
@@ -400,11 +414,8 @@ def project_partial_ibgcs_task(
     return result
 
 
-@shared_task(
-    name="discovery.tasks.sequence_similarity_search", bind=True, acks_late=True
-)
+@task()
 def sequence_similarity_search(
-    self,
     sequence: str,
     min_bitscore: float = 30.0,
     min_pident: float = 70.0,
@@ -508,14 +519,17 @@ def sequence_similarity_search(
     return ibgc_scores
 
 
-@shared_task(
-    name="discovery.tasks.update_protein_search_index", bind=True, acks_late=True
-)
-def update_protein_search_index_task(self, rebuild: bool = False) -> dict:
+@task()
+def update_protein_search_index_task(
+    rebuild: bool = False,
+    then_update_stats: bool = False,
+    stats_queue: str = "default",
+) -> dict:
     """Append new proteins to the on-disk phmmer index (or rebuild from scratch).
 
     Enqueued automatically at the end of ``load_discovery_data``; can also be
     invoked manually via ``python manage.py build_protein_search_index``.
+    Chains ``update_discovery_stats_task`` on success when ``then_update_stats``.
     """
     from discovery.services.protein_search.build import rebuild_index, update_index
 
@@ -527,6 +541,8 @@ def update_protein_search_index_task(self, rebuild: bool = False) -> dict:
         stats.elapsed_seconds,
         stats.version,
     )
+    if then_update_stats:
+        update_discovery_stats_task.using(queue_name=stats_queue).enqueue()
     return {
         "total_in_db": stats.total_in_db,
         "already_indexed": stats.already_indexed,
@@ -536,8 +552,8 @@ def update_protein_search_index_task(self, rebuild: bool = False) -> dict:
     }
 
 
-@shared_task(name="discovery.tasks.update_discovery_stats", bind=True, acks_late=True)
-def update_discovery_stats_task(self) -> bool:
+@task()
+def update_discovery_stats_task() -> bool:
     """Recompute platform-overview counts and append a new DiscoveryStats row."""
     from discovery.models import DiscoveryStats
     from discovery.services.stats import generate_discovery_stats
@@ -553,14 +569,14 @@ def update_discovery_stats_task(self) -> bool:
 # ── Ephemeral asset upload ──────────────────────────────────────────────────
 
 
-@shared_task(name="discovery.tasks.process_asset_upload", bind=True, acks_late=True)
-def process_asset_upload_task(self, token: str) -> dict:
+@task()
+def process_asset_upload_task(token: str) -> dict:
     """Validate, parse, build virtual iBGCs and project an uploaded asset.
 
-    The upload bytes are read from Redis (``asset:{token}:upload``) — the API
-    handler parks them there because the worker runs in a separate pod with
-    its own filesystem. The key is dropped in ``finally`` so a successful
-    run doesn't pin ~100 MB until the TTL elapses.
+    The upload bytes are read from the shared PVC staging dir
+    (``settings.UPLOAD_STAGING_DIR``) — the API handler parks them there
+    because the worker runs in a separate pod with its own filesystem. The
+    file is dropped in ``finally`` so a successful run doesn't pin ~100 MB.
     """
     from discovery.services.asset_upload import cache as asset_cache
     from discovery.services.asset_upload.parse import parse_asset_tar
@@ -570,13 +586,13 @@ def process_asset_upload_task(self, token: str) -> dict:
         inspect_tarball,
     )
 
-    task_id = self.request.id
+    task_id = uuid4().hex
     asset_cache.mark_running(token, task_id=task_id, progress={"step": "validate"})
 
     try:
         raw = asset_cache.read_upload(token)
         if raw is None:
-            error = "Upload bytes missing from cache (token expired or evicted)"
+            error = "Upload bytes missing from staging (file expired or evicted)"
             asset_cache.mark_failed(token, task_id=task_id, error=error)
             return {"token": token, "state": "FAILED", "error": error}
 
