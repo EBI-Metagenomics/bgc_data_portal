@@ -1,4 +1,5 @@
 import type Shepherd from "shepherd.js";
+import { buildDocsUrl } from "@/lib/router-base";
 
 type StepDef = Shepherd.Step.StepOptions;
 
@@ -46,7 +47,7 @@ export function getTourSteps(): StepDef[] {
     {
       id: "load-asset",
       text: `<strong>2. Compare your own assembly</strong>
-<p>Have your own data? <b>Load Asset</b> uploads a packaged assembly analysis (<code>.tar.gz</code>) and projects its clusters into the catalogue — tagged <b>SUBMITTED</b> — so you can compare them against the database alongside everything else. <a href="/docs/" target="_blank" rel="noopener noreferrer">Full documentation →</a></p>`,
+<p>Have your own data? <b>Load Asset</b> uploads a packaged assembly analysis (<code>.tar.gz</code>) and projects its clusters into the catalogue — tagged <b>SUBMITTED</b> — so you can compare them against the database alongside everything else. <a href="${buildDocsUrl()}" target="_blank" rel="noopener noreferrer">Full documentation →</a></p>`,
       attachTo: { element: '[data-tour="load-asset"]', on: "bottom" },
       buttons: [backBtn, nextBtn],
     },

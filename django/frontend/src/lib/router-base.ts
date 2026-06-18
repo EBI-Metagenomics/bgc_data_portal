@@ -18,6 +18,19 @@ const basePath =
 export const APP_BASE = `${basePath}/dashboard`;
 
 /**
+ * Build a URL to a Quarto docs page. The docs are served under
+ * ``<basePath>/docs/`` (a sibling of ``/dashboard/``, NOT under it), so this
+ * must prefix the configured base-path — a bare ``/docs/…`` resolves against
+ * the domain root and breaks behind a reverse-proxy prefix (e.g. prod's
+ * ``/finn-srv/mgnify-bgcs``). Pass a page path like ``"scores-metrics.html#x"``
+ * or ``""`` for the docs index.
+ */
+export function buildDocsUrl(page = ""): string {
+  const clean = page.replace(/^\/+/, "").replace(/^docs\//, "");
+  return `${basePath}/docs/${clean}`;
+}
+
+/**
  * Build an absolute in-app URL.
  *
  *   buildAppUrl("/report", { token: "abc" })

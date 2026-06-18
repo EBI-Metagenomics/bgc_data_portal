@@ -161,7 +161,7 @@ def test_domain_scores_binary_score_and_cap(client, monkeypatch):
     monkeypatch.setattr(
         "discovery.api._resolve_domain_ibgc_ids", lambda body: [10, 20, 30, 40]
     )
-    body = {"domains": [{"acc": "PF00001", "required": True}], "logic": "and"}
+    body = {"domains_text": "PF00001", "logic": "and"}
     resp = client.post(
         DOMAIN_URL + "?max_results=3",
         data=json.dumps(body),

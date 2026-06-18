@@ -26,6 +26,7 @@ from discovery.models import (
     IntegratedBgc,
     SourceBgcPrediction,
 )
+from discovery.services.architecture import _interpro_url, _signature_url
 from django.db import connection
 from django.utils import timezone
 
@@ -64,10 +65,12 @@ def _is_partial(ibgc: IntegratedBgc) -> bool:
 
 
 def _fetch_domain_rows_for_ibgcs(ibgc_ids: list[int]) -> list[tuple]:
-    """Return ``(ibgc_id, domain_acc, domain_name, domain_description, go_slim)``.
+    """Return one tuple per ``ContigDomain`` overlapping an iBGC.
 
-    One row per ``ContigDomain`` whose parent CDS's ``cds_range`` overlaps
-    an iBGC's ``bgc_range`` on the same contig.
+    Shape: ``(ibgc_id, domain_acc, domain_name, domain_description, go_slim,
+    interpro_entry_acc, interpro_entry_description, ref_db)``. One row per
+    ``ContigDomain`` whose parent CDS's ``cds_range`` overlaps an iBGC's
+    ``bgc_range`` on the same contig.
     """
     if not ibgc_ids:
         return []
@@ -76,7 +79,10 @@ def _fetch_domain_rows_for_ibgcs(ibgc_ids: list[int]) -> list[tuple]:
                cd.domain_acc     AS domain_acc,
                cd.domain_name    AS domain_name,
                cd.domain_description AS domain_description,
-               cd.go_slim        AS go_slim
+               cd.go_slim        AS go_slim,
+               cd.interpro_entry_acc AS interpro_entry_acc,
+               cd.interpro_entry_description AS interpro_entry_description,
+               cd.ref_db         AS ref_db
         FROM discovery_domain_hit cd
         JOIN discovery_cds cc ON cc.id = cd.cds_id
         JOIN discovery_ibgc i
@@ -181,6 +187,9 @@ def build_report_payload(
     domain_name_lookup: dict[str, str] = {}
     domain_desc_lookup: dict[str, str] = {}
     domain_goslim_lookup: dict[str, str] = {}
+    domain_ipr_acc_lookup: dict[str, str] = {}
+    domain_ipr_desc_lookup: dict[str, str] = {}
+    domain_refdb_lookup: dict[str, str] = {}
 
     # ContigDomain.go_slim is a JSONField list of slim term names (already
     # sorted/deduped by go_slim_for_terms). The heatmap keys each column by a
@@ -208,7 +217,16 @@ def build_report_payload(
         terms = _slim_terms(value)
         return terms[0] if terms else ""
 
-    for nid, acc, name, desc, slim in _fetch_domain_rows_for_ibgcs(db_ibgc_ids):
+    for (
+        nid,
+        acc,
+        name,
+        desc,
+        slim,
+        ipr_acc,
+        ipr_desc,
+        ref_db,
+    ) in _fetch_domain_rows_for_ibgcs(db_ibgc_ids):
         if not acc:
             continue
         domain_to_ibgcs[acc].add(int(nid))
@@ -219,6 +237,12 @@ def build_report_payload(
         slim_str = _slim_str(slim)
         if slim_str and acc not in domain_goslim_lookup:
             domain_goslim_lookup[acc] = slim_str
+        if ipr_acc and acc not in domain_ipr_acc_lookup:
+            domain_ipr_acc_lookup[acc] = ipr_acc
+        if ipr_desc and acc not in domain_ipr_desc_lookup:
+            domain_ipr_desc_lookup[acc] = ipr_desc
+        if ref_db and acc not in domain_refdb_lookup:
+            domain_refdb_lookup[acc] = ref_db
 
     # Fold in asset domain hits (negative iBGC ids).
     for r in extra_domain_rows:
@@ -236,6 +260,15 @@ def build_report_payload(
         slim = _slim_str(r.get("go_slim"))
         if slim and acc not in domain_goslim_lookup:
             domain_goslim_lookup[acc] = slim
+        ipr_acc = r.get("interpro_entry_acc") or ""
+        if ipr_acc and acc not in domain_ipr_acc_lookup:
+            domain_ipr_acc_lookup[acc] = ipr_acc
+        ipr_desc = r.get("interpro_entry_description") or ""
+        if ipr_desc and acc not in domain_ipr_desc_lookup:
+            domain_ipr_desc_lookup[acc] = ipr_desc
+        ref_db = r.get("ref_db") or ""
+        if ref_db and acc not in domain_refdb_lookup:
+            domain_refdb_lookup[acc] = ref_db
 
     composition_rows: list[dict] = []
     core_count = variable_count = rare_count = 0
@@ -259,12 +292,25 @@ def build_report_payload(
         name = domain_name_lookup.get(acc, "")
         desc = domain_desc_lookup.get(acc, "")
         slim = domain_goslim_lookup.get(acc, "") or NO_GOSLIM
+        ipr_acc = domain_ipr_acc_lookup.get(acc, "")
+        ipr_desc = domain_ipr_desc_lookup.get(acc, "")
+        # InterPro entry page when integrated, else the signature's member-DB
+        # page (via ref_db). Empty when neither resolves — caller renders the
+        # accession unlinked.
+        domain_url = (
+            _interpro_url(ipr_acc)
+            if ipr_acc
+            else _signature_url(domain_refdb_lookup.get(acc, ""), acc)
+        )
         composition_rows.append(
             {
                 "domain_acc": acc,
                 "domain_name": name,
                 "domain_description": desc,
                 "go_slim": slim,
+                "interpro_entry_acc": ipr_acc,
+                "interpro_entry_description": ipr_desc,
+                "domain_url": domain_url,
                 "ibgc_count": c,
                 "fraction": round(frac, 4),
                 "tier": tier,
@@ -275,6 +321,7 @@ def build_report_payload(
                 "domain_acc": acc,
                 "domain_name": name,
                 "domain_description": desc,
+                "interpro_entry_acc": ipr_acc,
             }
         )
         for nid in sorted(hit_ibgcs):
@@ -285,6 +332,9 @@ def build_report_payload(
                     "domain_name": name,
                     "domain_description": desc,
                     "go_slim": slim,
+                    "interpro_entry_acc": ipr_acc,
+                    "interpro_entry_description": ipr_desc,
+                    "domain_url": domain_url,
                     "tier": tier,
                     "occurs_in_n_ibgcs": c,
                     "fraction": round(frac, 4),
@@ -556,8 +606,12 @@ def build_report_payload(
 
 
 # v2: added domain_composition tiers, domain_goslim_matrix, gcf/biome
-# sunbursts, assembly_stats, and start/end/class on each iBGC row.
-ANALYST_SCHEMA_VERSION = "2"
+#     sunbursts, assembly_stats, and start/end/class on each iBGC row.
+# v3: added interpro_entry_acc/interpro_entry_description to domain
+#     composition rows and domains_long.
+# v4: added domain_url (InterPro entry or signature member-DB page) to
+#     domain composition rows and domains_long.
+ANALYST_SCHEMA_VERSION = "4"
 
 
 def build_report_analyst_export(token: str, payload: dict) -> dict:

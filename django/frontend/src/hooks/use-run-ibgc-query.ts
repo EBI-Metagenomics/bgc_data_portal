@@ -40,10 +40,12 @@ export function useRunIbgcQuery() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const domainConditions = useQueryStore((s) => s.domainConditions);
-  const domainMode = useQueryStore((s) => s.domainMode);
+  const domainText = useQueryStore((s) => s.domainText);
+  const domainThreshold = useQueryStore((s) => s.domainThreshold);
+  const domainLogic = useQueryStore((s) => s.domainLogic);
   const architectureText = useQueryStore((s) => s.domainArchitectureText);
   const architectureWeight = useQueryStore((s) => s.architectureWeight);
+  const architectureThreshold = useQueryStore((s) => s.architectureThreshold);
   const sequenceQuery = useQueryStore((s) => s.sequenceQuery);
   const sequenceMinBitscore = useQueryStore((s) => s.sequenceMinBitscore);
   const sequenceMinPident = useQueryStore((s) => s.sequenceMinPident);
@@ -63,16 +65,16 @@ export function useRunIbgcQuery() {
     // ``snapshotFiltersToApplied`` so both paths stay in lockstep.
     setAppliedFilters(snapshotFiltersToApplied());
 
-    // Active "domain" surface depends on which mode the user picked.
-    // In architecture mode we treat the textarea as the active input,
-    // not the chip conditions (the UI hides the chips while in arch mode).
+    // The Boolean (AND/OR token) query and the architecture query are
+    // independent surfaces — whichever has content is applied, and when both
+    // do their result sets are intersected (same as the domain/sequence/
+    // chemical branches below).
     const archAccs = architectureText
       .split(/[,\s]+/)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
-    const archActive = domainMode === "architecture" && archAccs.length > 0;
-    const booleanActive =
-      domainMode !== "architecture" && domainConditions.length > 0;
+    const archActive = archAccs.length > 0;
+    const booleanActive = domainText.trim().length > 0;
 
     if (
       !booleanActive &&
@@ -122,11 +124,9 @@ export function useRunIbgcQuery() {
         collect(
           await postIbgcDomainQueryScores(
             {
-              domains: domainConditions.map((c) => ({
-                acc: c.acc,
-                required: c.required,
-              })),
-              logic: domainMode === "or" ? "or" : "and",
+              domains_text: domainText,
+              logic: domainLogic,
+              threshold: domainThreshold,
             },
             QUERY_RESULT_CAP,
           ),
@@ -140,6 +140,7 @@ export function useRunIbgcQuery() {
             {
               architecture: archAccs,
               weight: architectureWeight,
+              threshold: architectureThreshold,
               k: QUERY_RESULT_CAP,
             },
             QUERY_RESULT_CAP,

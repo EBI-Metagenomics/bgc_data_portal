@@ -5,7 +5,6 @@ import { useReport, useReportSnapshot } from "@/hooks/use-report";
 import { useDiscoveryStore } from "@/stores/discovery-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -14,7 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
+import { Loader2, Copy } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { domainTokenSet } from "@/lib/domains";
 import { ReportDownloadButtons } from "./ReportDownloadButtons";
 import type {
   CategoryCount,
@@ -252,7 +254,7 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
         <CardTitle className="text-base">iBGC Results</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <ScrollArea className="max-h-[420px]">
+        <div className="max-h-[420px] overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
@@ -335,7 +337,7 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
               ))}
             </TableBody>
           </Table>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
@@ -392,6 +394,26 @@ function SourceDistributionPanel({ rows }: { rows: CategoryCount[] }) {
   );
 }
 
+async function copyDomainSet(
+  rows: DomainCompositionSummary["rows"],
+  tier: "core" | "variable" | "rare",
+) {
+  const tierRows = rows.filter((d) => d.tier === tier);
+  const text = domainTokenSet(tierRows);
+  if (!text) {
+    toast.info(`No ${tier} domains to copy`);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(
+      `Copied ${tierRows.length} ${tier} domain${tierRows.length === 1 ? "" : "s"}`,
+    );
+  } catch {
+    toast.error("Clipboard unavailable", { description: text });
+  }
+}
+
 function DomainCompositionPanel({
   composition,
 }: {
@@ -401,8 +423,33 @@ function DomainCompositionPanel({
   const corePct = (composition.core_count / total) * 100;
   const varPct = (composition.variable_count / total) * 100;
   const rarePct = (composition.rare_count / total) * 100;
+  const copyTiers: Array<{
+    tier: "core" | "variable" | "rare";
+    label: string;
+    count: number;
+  }> = [
+    { tier: "core", label: "Core", count: composition.core_count },
+    { tier: "variable", label: "Variable", count: composition.variable_count },
+    { tier: "rare", label: "Rare", count: composition.rare_count },
+  ];
   return (
     <PanelCard title="Domain composition">
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {copyTiers.map(({ tier, label, count }) => (
+          <Button
+            key={tier}
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            disabled={count === 0}
+            onClick={() => copyDomainSet(composition.rows, tier)}
+            title={`Copy ${label.toLowerCase()} domains (InterPro entry where available, else signature)`}
+          >
+            <Copy className="mr-1 h-3 w-3" />
+            Copy {label} ({count})
+          </Button>
+        ))}
+      </div>
       <div className="mb-2 flex h-6 w-full overflow-hidden rounded border">
         <div
           className="bg-emerald-500 text-[10px] text-white"
@@ -426,9 +473,9 @@ function DomainCompositionPanel({
           {rarePct > 6 && `${composition.rare_count} rare`}
         </div>
       </div>
-      <ScrollArea className="h-48 rounded border">
+      <div className="max-h-48 overflow-auto rounded border">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
               <TableHead>Domain</TableHead>
               <TableHead className="text-right">iBGCs</TableHead>
@@ -437,10 +484,26 @@ function DomainCompositionPanel({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {composition.rows.map((d) => (
+            {composition.rows.map((d) => {
+              const token = d.interpro_entry_acc || d.domain_acc;
+              const title =
+                d.interpro_entry_description || d.domain_description || undefined;
+              return (
               <TableRow key={d.domain_acc}>
-                <TableCell className="font-mono text-xs">
-                  {d.domain_acc}
+                <TableCell className="font-mono text-xs whitespace-nowrap">
+                  {d.domain_url ? (
+                    <a
+                      href={d.domain_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                      title={title}
+                    >
+                      {token}
+                    </a>
+                  ) : (
+                    <span title={title}>{token}</span>
+                  )}
                   {d.domain_name && (
                     <span className="ml-1 text-muted-foreground">
                       · {d.domain_name}
@@ -464,10 +527,11 @@ function DomainCompositionPanel({
                   </Badge>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
-      </ScrollArea>
+      </div>
     </PanelCard>
   );
 }
@@ -828,7 +892,7 @@ function AssemblyRosterSection({ rows }: { rows: ReportAssemblyRow[] }) {
         <CardTitle className="text-base">Assembly Roster</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <ScrollArea className="max-h-[360px]">
+        <div className="max-h-[360px] overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
@@ -876,7 +940,7 @@ function AssemblyRosterSection({ rows }: { rows: ReportAssemblyRow[] }) {
               ))}
             </TableBody>
           </Table>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );

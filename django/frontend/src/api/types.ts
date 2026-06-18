@@ -223,14 +223,14 @@ export interface PaginatedDetectorResponse {
 
 // ── Query mode schemas ────────────────────────────────────────────────────
 
-export interface DomainCondition {
-  acc: string;
-  required: boolean;
-}
-
 export interface DomainQueryRequest {
-  domains: DomainCondition[];
+  /** Comma/whitespace-separated accessions (InterPro entries or signature
+   *  accs). A token prefixed with ``-``/``!`` is excluded. */
+  domains_text: string;
   logic: "and" | "or";
+  /** AND-only containment threshold (0–1): min fraction of include tokens
+   *  that must be present. Default 1.0 (all). */
+  threshold?: number;
 }
 
 export interface QueryResultBgc {
@@ -759,6 +759,11 @@ export interface DomainCompositionEntry {
   domain_name: string;
   domain_description: string;
   go_slim: string;
+  interpro_entry_acc: string;
+  interpro_entry_description: string;
+  /** InterPro entry page (if integrated) else the signature's member-DB page;
+   *  "" when neither resolves. */
+  domain_url: string;
   ibgc_count: number;
   fraction: number;
   tier: "core" | "variable" | "rare";
@@ -776,6 +781,7 @@ export interface DomainGoslimDomain {
   domain_acc: string;
   domain_name: string;
   domain_description: string;
+  interpro_entry_acc?: string;
 }
 
 export interface DomainGoslimCell {

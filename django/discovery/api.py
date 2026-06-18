@@ -19,6 +19,7 @@ import csv
 import json
 import logging
 import math
+import re
 from io import StringIO
 
 from ninja import Router
@@ -1034,6 +1035,32 @@ def _protein_overlap_q(acc: str) -> Q:
 
 
 def _apply_accession_filter(qs, value: str):
+    """Filter an ``IntegratedBgc`` queryset by one or more smart accessions.
+
+    The value may carry several comma-separated accessions; they are OR-ed
+    together (an iBGC matches if it matches any one). Each token's kind is
+    auto-detected independently, so a mixed list (e.g. an iBGC accession plus
+    a protein id plus an assembly accession) works. A single token takes the
+    fast path and keeps the queryset's joins intact.
+    """
+    tokens = [t.strip() for t in (value or "").split(",") if t.strip()]
+    if not tokens:
+        return qs
+    if len(tokens) == 1:
+        return _apply_single_accession_filter(qs, tokens[0])
+    # Multiple accessions → OR via a union of per-token id sets. Resolving each
+    # token against a fresh base queryset keeps the smart per-kind semantics.
+    ids: set[int] = set()
+    for tok in tokens:
+        ids.update(
+            _apply_single_accession_filter(
+                IntegratedBgc.objects.all(), tok
+            ).values_list("id", flat=True)
+        )
+    return qs.filter(id__in=ids)
+
+
+def _apply_single_accession_filter(qs, value: str):
     """Filter an ``IntegratedBgc`` queryset by a single smart accession value.
 
     The accession kind is auto-detected (see ``classify_accession``):
@@ -2408,6 +2435,16 @@ def _architecture_top(body) -> tuple[list[int], list[float]]:
             "No supplied accession matched the scoring cache vocabulary — "
             "check the input or rerun clustering against a broader source set.",
         )
+    # Post-filter by the minimum composite-Dice score. Applied after the cache
+    # (which is keyed on accs/weight/k only) so the threshold stays a cheap,
+    # cache-friendly cut. May legitimately return nothing — not an error.
+    threshold = float(getattr(body, "threshold", 0.0) or 0.0)
+    if threshold > 0:
+        filtered = [
+            (i, s) for i, s in zip(top_ids, top_scores) if s >= threshold
+        ]
+        top_ids = [i for i, _ in filtered]
+        top_scores = [s for _, s in filtered]
     return top_ids, top_scores
 
 
@@ -2804,31 +2841,81 @@ def _ibgc_roster_page_response(
     )
 
 
+def _parse_domain_tokens(text: str) -> tuple[list[str], list[str]]:
+    """Split free-text domain input into (include, exclude) token lists.
+
+    Tokens are comma / whitespace separated and upper-cased so pasted input
+    is matched case-insensitively against ``domain_acc`` / ``interpro_entry_acc``
+    (both stored upper-case). A leading ``-`` or ``!`` marks a token excluded.
+    Order-preserving and de-duplicated within each list.
+    """
+    include: list[str] = []
+    exclude: list[str] = []
+    for raw in re.split(r"[,\s]+", text or ""):
+        tok = raw.strip()
+        if not tok:
+            continue
+        bucket = include
+        if tok[0] in "-!":
+            bucket = exclude
+            tok = tok[1:].strip()
+        if not tok:
+            continue
+        tok = tok.upper()
+        if tok not in bucket:
+            bucket.append(tok)
+    return include, exclude
+
+
+def _domain_token_q(tokens: list[str]) -> Q:
+    """Match a ContigDomain by either its signature acc or InterPro entry."""
+    return Q(contig__cds_list__domains__domain_acc__in=tokens) | Q(
+        contig__cds_list__domains__interpro_entry_acc__in=tokens
+    )
+
+
 def _resolve_domain_ibgc_ids(body) -> list[int]:
     """Resolve a ``DomainQueryRequest`` to the matching iBGC id set.
 
-    A required domain counts an iBGC in when any source BGC on its contig
-    carries it (AND logic intersects across all required accs; OR unions);
-    an excluded domain drops the iBGC if any source BGC carries it. Shared by
-    ``/query/ibgc-domain/`` and its scores-only sibling.
+    Tokens may be InterPro entries or raw signature accessions; both columns
+    are matched. OR unions over the include tokens; AND is a *containment*
+    search requiring ``ceil(threshold × N_include)`` distinct include tokens
+    present (``threshold`` default 1.0 = all). Excluded tokens drop an iBGC if
+    any source BGC carries them. Shared by ``/query/ibgc-domain/`` and its
+    scores-only sibling.
     """
-    required = [d.acc for d in body.domains if d.required]
-    excluded = [d.acc for d in body.domains if not d.required]
+    include, exclude = _parse_domain_tokens(body.domains_text)
+    if not include:
+        return []
 
-    # Resolve the matching iBGC id set via ContigDomain → SourceBgcPrediction → iBGC.
-    bgc_qs = SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
-    if body.logic == "and" and required:
-        for acc in required:
-            bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc=acc)
-    elif required:
-        bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc__in=required)
-    ibgc_ids = list(bgc_qs.values_list("integrated_bgc_id", flat=True).distinct())
-    if excluded and ibgc_ids:
-        excluded_ibgc_ids = set(
-            SourceBgcPrediction.objects.filter(
-                integrated_bgc_id__in=ibgc_ids,
-                contig__cds_list__domains__domain_acc__in=excluded,
+    base = SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
+    if getattr(body, "logic", "and") == "and":
+        # Count, per iBGC, how many distinct include tokens it carries — one
+        # cheap id-set query per token (a token can match via either column,
+        # so a single grouped COUNT would double-count). Threshold with ceil.
+        threshold = max(0.0, min(1.0, getattr(body, "threshold", 1.0)))
+        need = max(1, math.ceil(threshold * len(include)))
+        hit_counts: dict[int, int] = {}
+        for tok in include:
+            tok_ids = (
+                base.filter(_domain_token_q([tok]))
+                .values_list("integrated_bgc_id", flat=True)
+                .distinct()
             )
+            for nid in set(tok_ids):
+                hit_counts[nid] = hit_counts.get(nid, 0) + 1
+        ibgc_ids = [nid for nid, c in hit_counts.items() if c >= need]
+    else:
+        ibgc_ids = list(
+            base.filter(_domain_token_q(include))
+            .values_list("integrated_bgc_id", flat=True)
+            .distinct()
+        )
+
+    if exclude and ibgc_ids:
+        excluded_ibgc_ids = set(
+            SourceBgcPrediction.objects.filter(integrated_bgc_id__in=ibgc_ids)
+            .filter(_domain_token_q(exclude))
             .values_list("integrated_bgc_id", flat=True)
             .distinct()
         )

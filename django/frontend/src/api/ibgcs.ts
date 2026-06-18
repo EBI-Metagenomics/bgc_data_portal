@@ -94,14 +94,14 @@ export function fetchIbgcIds(params: IbgcIdsParams = {}) {
 
 // ── iBGC-collapsed query endpoints ─────────────────────────────────────────
 
-export interface DomainCondition {
-  acc: string;
-  required: boolean;
-}
-
 export interface DomainQueryRequest {
-  domains: DomainCondition[];
+  /** Comma/whitespace-separated accessions (InterPro entries or signature
+   *  accs). A token prefixed with ``-``/``!`` is excluded. */
+  domains_text: string;
   logic: "and" | "or";
+  /** AND-only containment threshold (0–1): min fraction of include tokens
+   *  that must be present. Default 1.0 (all). */
+  threshold?: number;
 }
 
 export interface IbgcDomainQueryParams extends IbgcFilterParams {
@@ -308,6 +308,8 @@ export interface IbgcArchitectureQueryRequest {
   architecture: string[];
   weight: number;
   k?: number;
+  /** Minimum composite-Dice score (0–1) to return. Default 0.25 server-side. */
+  threshold?: number;
 }
 
 export function postIbgcArchitectureQuery(

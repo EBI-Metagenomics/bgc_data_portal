@@ -345,13 +345,15 @@ class IbgcArchitectureQueryRequest(Schema):
 
     ``architecture`` is the ordered list of domain accessions; ``weight`` is
     the Sørensen-Dice share (``1.0`` = pure Dice, ``0.0`` = pure adjacency).
-    Unknown accessions (not in the latest ClusteringRun's scoring cache)
-    are silently dropped.
+    ``threshold`` is the minimum composite-Dice score (0–1) an iBGC must reach
+    to be returned. Unknown accessions (not in the latest ClusteringRun's
+    scoring cache) are silently dropped.
     """
 
     architecture: list[str]
     weight: float = 0.5
     k: int = 100
+    threshold: float = 0.25
 
 
 # ── Shortlist Report schemas ─────────────────────────────────────────────────
@@ -375,6 +377,11 @@ class DomainCompositionEntry(Schema):
     domain_name: str = ""
     domain_description: str = ""
     go_slim: str = ""
+    interpro_entry_acc: str = ""
+    interpro_entry_description: str = ""
+    # InterPro entry page (if integrated) else the signature's member-DB page;
+    # "" when neither resolves.
+    domain_url: str = ""
     ibgc_count: int
     fraction: float
     tier: str  # "core" | "variable" | "rare"
@@ -384,6 +391,7 @@ class DomainGoslimDomain(Schema):
     domain_acc: str
     domain_name: str = ""
     domain_description: str = ""
+    interpro_entry_acc: str = ""
 
 
 class DomainGoslimCell(Schema):
@@ -581,14 +589,28 @@ class SequenceQueryRequest(Schema):
     min_qcov: float = 70.0  # percent, 0..100
 
 
-class DomainCondition(Schema):
-    acc: str
-    required: bool = True
-
-
 class DomainQueryRequest(Schema):
-    domains: list[DomainCondition]
+    """Free-text domain containment query.
+
+    ``domains_text`` is comma / whitespace-separated accessions — either
+    InterPro entries (``IPR000873``) or raw signature accessions (``PF00501``,
+    ``G3DSA:3.30.559.30``, ``TIGR01733``, …); the backend matches either form.
+    A token prefixed with ``-`` or ``!`` is *excluded*.
+
+    ``logic``:
+
+    * ``"or"`` — an iBGC matches if it carries **any** include token.
+    * ``"and"`` — *containment*: an iBGC matches if it carries at least
+      ``ceil(threshold × N_include)`` distinct include tokens. ``threshold``
+      is a 0–1 fraction (default ``1.0`` = all include tokens must be present).
+
+    Excluded tokens drop an iBGC if any source BGC carries them, regardless of
+    logic.
+    """
+
+    domains_text: str = ""
     logic: str = "and"  # "and" | "or"
+    threshold: float = 1.0  # AND-only: min fraction of include tokens present
 
 
 class QueryResultBgc(Schema):

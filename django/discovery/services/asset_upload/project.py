@@ -716,6 +716,10 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
                     "domain_name": d.domain_name,
                     "domain_description": d.domain_description or d.domain_name,
                     "go_slim": go_slim_for_terms(d.go_terms),
+                    "interpro_entry_acc": (d.interpro_entry_acc or "").strip(),
+                    "interpro_entry_description": d.interpro_entry_description
+                    or "",
+                    "ref_db": d.ref_db or "",
                 }
             )
     asset_cache.write_domain_hits(token, domain_hits)

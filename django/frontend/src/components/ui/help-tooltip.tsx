@@ -6,6 +6,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TOOLTIP_REGISTRY } from "@/lib/tooltip-registry";
+import { buildDocsUrl } from "@/lib/router-base";
 
 interface HelpTooltipProps {
   tooltipKey: string;
@@ -42,7 +43,7 @@ export function HelpTooltip({
           <p className="text-xs leading-relaxed">{entry.text}</p>
           {entry.docsUrl && (
             <a
-              href={entry.docsUrl}
+              href={buildDocsUrl(entry.docsUrl)}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-1 block text-xs text-primary hover:underline"

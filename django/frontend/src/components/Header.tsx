@@ -1,5 +1,6 @@
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { HelpCircle, BookOpen } from "lucide-react";
+import { buildDocsUrl } from "@/lib/router-base";
 
 export function Header() {
   const openWelcome = useOnboardingStore((s) => s.openWelcome);
@@ -11,7 +12,7 @@ export function Header() {
           Discovery Platform
         </h2>
         <a
-          href="/docs/"
+          href={buildDocsUrl()}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"

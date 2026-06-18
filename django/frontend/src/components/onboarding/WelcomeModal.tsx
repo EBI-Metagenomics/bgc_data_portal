@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { Compass, Search, Pin } from "lucide-react";
+import { buildDocsUrl } from "@/lib/router-base";
 
 interface Slide {
   icon: typeof Compass;
@@ -49,7 +50,7 @@ const slides: Slide[] = [
           exploring.
         </p>
         <a
-          href="/docs/"
+          href={buildDocsUrl()}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
