@@ -11,12 +11,12 @@ type: application
 # Chart version tracks the deployment topology, not the app. Bump it on any
 # change to the chart (templates, defaults, or this metadata) — it becomes the
 # published OCI tag (oci://.../bgc-data-portal-chart:<version>) that prod pins.
-version: 0.2.7
+version: 0.2.8
 # appVersion is the app release this chart revision was published alongside — a
 # reference/default only. The version actually deployed is the container image
 # tag in the per-target values file (immutable :X.Y.Z-<sha> for prod), which
 # overrides any default here. Keep this in step with the latest portal release.
-appVersion: "3.7.0"
+appVersion: "3.8.0"
 # Floor is the oldest cluster we deploy to (EBI HL exp/prod run v1.23.x). The chart
 # only uses GA APIs available well before then (apps/v1, networking.k8s.io/v1
 # Ingress, batch/v1 Job), so 1.23 is the true minimum — not 1.25.
