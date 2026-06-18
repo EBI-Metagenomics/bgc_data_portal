@@ -2,6 +2,7 @@ import { apiGet, apiGetWithHeaders, apiPost } from "./client";
 import type {
   IbgcCountResponse,
   IbgcDetail,
+  IbgcIdSetResponse,
   IbgcIdsResponse,
   IbgcRegionData,
   IbgcScatterAxis,
@@ -56,6 +57,9 @@ export interface IbgcRosterParams extends IbgcFilterParams {
   page_size?: number;
   /** Comma-separated iBGC ids — restricts the roster to this allow-list. */
   ibgc_ids?: string;
+  /** Token for a server-cached allow-list (alternative to ``ibgc_ids`` for
+   *  large result sets — see {@link mintIbgcIdset}). */
+  ibgc_ids_token?: string;
 }
 
 export function fetchIbgcRoster(params: IbgcRosterParams = {}) {
@@ -68,17 +72,29 @@ export function fetchIbgcRoster(params: IbgcRosterParams = {}) {
 /** Cheap COUNT over the iBGC filter surface. Fired before the heavier
  *  roster/UMAP/scatter calls to drive the empty-state guard and the
  *  "Showing X of Y, sampled" banner. */
-export function fetchIbgcCount(params: IbgcFilterParams & { ibgc_ids?: string } = {}) {
+export function fetchIbgcCount(
+  params: IbgcFilterParams & { ibgc_ids?: string; ibgc_ids_token?: string } = {},
+) {
   return apiGet<IbgcCountResponse>(
     "/ibgcs/count/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }
 
+/** Stash a Run Query result allow-list server-side and get back a short token.
+ *  The dashboard references that token via ``ibgc_ids_token`` on the roster /
+ *  map / count GETs so a multi-thousand-id allow-list never has to ride in the
+ *  URL (which would overflow the HTTP request line → 414). Order is preserved
+ *  so ``sort_by=similarity`` keeps the caller's best-first rank. */
+export function mintIbgcIdset(ibgcIds: number[]) {
+  return apiPost<IbgcIdSetResponse>("/ibgcs/idset/", { ibgc_ids: ibgcIds });
+}
+
 export interface IbgcIdsParams extends IbgcFilterParams {
   sort_by?: IbgcRosterParams["sort_by"];
   order?: "asc" | "desc";
   ibgc_ids?: string;
+  ibgc_ids_token?: string;
   asset_token?: string;
 }
 
@@ -236,6 +252,8 @@ export interface IbgcUmapParams extends IbgcFilterParams {
   order?: "asc" | "desc";
   /** Comma-separated iBGC ids — restricts the UMAP to this allow-list. */
   ibgc_ids?: string;
+  /** Token for a server-cached allow-list (alternative to ``ibgc_ids``). */
+  ibgc_ids_token?: string;
 }
 
 export function fetchIbgcUmap(params: IbgcUmapParams = {}) {
@@ -255,6 +273,8 @@ export interface IbgcScatterParams extends IbgcFilterParams {
   order?: "asc" | "desc";
   /** Comma-separated iBGC ids — restricts the scatter to this allow-list. */
   ibgc_ids?: string;
+  /** Token for a server-cached allow-list (alternative to ``ibgc_ids``). */
+  ibgc_ids_token?: string;
 }
 
 export function fetchIbgcScatter(params: IbgcScatterParams = {}) {

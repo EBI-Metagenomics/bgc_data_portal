@@ -6,6 +6,7 @@ import {
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
+import { useIbgcIdsetParam } from "@/hooks/use-ibgc-idset-param";
 import type { IbgcDetail, IbgcScatterAxis, IbgcScatterPoint } from "@/api/types";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 import {
@@ -89,11 +90,12 @@ export function VariablesMapTab() {
   // selects *which* points; the x/y axes only decide where they're plotted.
   const sortBy = useDiscoveryStore((s) => s.rosterSortBy);
   const order = useDiscoveryStore((s) => s.rosterOrder);
-  const filterParams = appliedFiltersToApiParams(
-    applied,
-    resultIbgcIds,
-    assetToken,
-  );
+  const { param: idsetParam, ready: idsetReady } =
+    useIbgcIdsetParam(resultIbgcIds);
+  const filterParams = {
+    ...appliedFiltersToApiParams(applied, assetToken),
+    ...idsetParam,
+  };
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
     resultIbgcIds !== null ||
@@ -125,7 +127,7 @@ export function VariablesMapTab() {
         order,
         ...filterParams,
       }),
-    enabled: anyStableAxis && hasActiveScope,
+    enabled: anyStableAxis && hasActiveScope && idsetReady,
   });
 
   // ── Reference iBGC detail ────────────────────────────────────────────

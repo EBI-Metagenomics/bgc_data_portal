@@ -48,6 +48,8 @@ from discovery.api_schemas import (
     IbgcArchitectureResponse,
     IbgcCountResponse,
     IbgcDetail,
+    IbgcIdSetRequest,
+    IbgcIdSetResponse,
     IbgcIdsResponse,
     IbgcMemberBgc,
     IbgcRegionOut,
@@ -692,6 +694,66 @@ def _query_scores_payload(
     return QueryScoresResponse(
         items=items, total_matched=total, capped=total > cap, cap=cap
     )
+
+
+# A Run Query result allow-list lives this long in the cache. Generous so a
+# user can explore the roster/maps for a full session without the token
+# expiring; the cap mirrors the report snapshot TTL.
+IBGC_IDSET_TTL_SECONDS = 24 * 3600
+
+
+def _ibgc_idset_cache_key(token: str) -> str:
+    return f"ibgcset:{token}"
+
+
+def _cache_ibgc_idset(ids: list[int]) -> tuple[str, int]:
+    """Persist an ordered iBGC id allow-list in the cache and return ``(token, n)``.
+
+    The dashboard's Run Query result can be thousands of ids; threading them
+    back through ``/ibgcs/roster|umap|scatter|count/`` as an ``ibgc_ids`` CSV
+    blows past gunicorn's request-line limit (HTTP 414). Instead we stash the
+    list server-side — the same DatabaseCache + token pattern as the shortlist
+    Report — and the GET endpoints reference it via ``ibgc_ids_token``.
+
+    Order is preserved (not sorted) so ``sort_by=similarity`` ranking by
+    ``array_position`` keeps the caller's best-first order. The token hashes
+    the ordered seed, so an identical ordered list resolves to the same token.
+    """
+    import hashlib
+
+    from django.core.cache import cache
+
+    seed = ",".join(str(i) for i in ids)
+    token = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
+    cache.set(_ibgc_idset_cache_key(token), ids, IBGC_IDSET_TTL_SECONDS)
+    return token, len(ids)
+
+
+def _parse_ibgc_id_scope(
+    ibgc_ids: str | None, ibgc_ids_token: str | None = None
+) -> list[int] | None:
+    """Resolve the iBGC id allow-list shared by the roster / maps / count / ids.
+
+    Prefers ``ibgc_ids_token`` (a server-cached list minted by
+    ``POST /ibgcs/idset/``) over the inline ``ibgc_ids`` CSV. A token that has
+    expired from the cache is a hard 404 so the client re-runs its query rather
+    than silently rendering the unfiltered catalogue.
+    """
+    if ibgc_ids_token:
+        from django.core.cache import cache
+
+        cached = cache.get(_ibgc_idset_cache_key(ibgc_ids_token))
+        if cached is None:
+            raise HttpError(
+                404,
+                "Result set expired — re-run your query to refresh it.",
+            )
+        return list(cached) or None
+    if ibgc_ids:
+        return [
+            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
+        ] or None
+    return None
 
 
 def _ibgc_label(ibgc_id: int) -> str:
@@ -1358,6 +1420,7 @@ def ibgc_count(
     taxonomy_path: str | None = None,
     domain_text: str | None = None,
     ibgc_ids: str | None = None,
+    ibgc_ids_token: str | None = None,
     asset_token: str | None = None,
 ):
     """Cheap COUNT over the iBGC filter surface.
@@ -1367,11 +1430,7 @@ def ibgc_count(
     set and (b) warn the user when the result will be sampled by the maps
     (count > ``DASHBOARD_RESULT_CAP``).
     """
-    parsed_ids: list[int] | None = None
-    if ibgc_ids:
-        parsed_ids = [
-            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
-        ] or None
+    parsed_ids = _parse_ibgc_id_scope(ibgc_ids, ibgc_ids_token)
 
     asset_rows = _get_asset_roster_rows(asset_token)
     filters_active = _ibgc_filters_active(
@@ -1437,6 +1496,31 @@ def ibgc_count(
         cap=DASHBOARD_RESULT_CAP,
         will_sample=total > DASHBOARD_RESULT_CAP,
     )
+
+
+@discovery_router.post(
+    "/ibgcs/idset/",
+    response=IbgcIdSetResponse,
+    include_in_schema=False,
+    auth=first_party_gate,
+)
+def ibgc_idset(request, body: IbgcIdSetRequest):
+    """Stash a Run Query result allow-list server-side and return a short token.
+
+    Lets the dashboard reference a multi-thousand-id result set from the
+    roster / map / count GET endpoints via ``ibgc_ids_token=`` instead of a
+    CSV that would overflow the HTTP request line (gunicorn 414). The id order
+    is preserved so ``sort_by=similarity`` keeps the caller's best-first rank.
+    """
+    ids = [int(i) for i in body.ibgc_ids]
+    if not ids:
+        raise HttpError(400, "ibgc_ids must be non-empty")
+    if len(ids) > DASHBOARD_RESULT_CAP:
+        raise HttpError(
+            400, f"ibgc_ids exceeds the {DASHBOARD_RESULT_CAP} result cap"
+        )
+    token, n = _cache_ibgc_idset(ids)
+    return IbgcIdSetResponse(token=token, n_ibgcs=n)
 
 
 def _apply_ibgc_sort(qs, sort_by: str, order: str, parsed_ids: list[int] | None):
@@ -1528,6 +1612,7 @@ def ibgc_roster(
     taxonomy_path: str | None = None,
     domain_text: str | None = None,
     ibgc_ids: str | None = None,
+    ibgc_ids_token: str | None = None,
     asset_token: str | None = None,
 ):
     """Paginated, filterable iBGC roster (v2 Discovery primary unit).
@@ -1537,11 +1622,7 @@ def ibgc_roster(
     ``asset_token`` pre-pends ephemeral asset iBGCs (negative ids) ahead of
     the DB rows on page 1; they bypass filters and always render.
     """
-    parsed_ids: list[int] | None = None
-    if ibgc_ids:
-        parsed_ids = [
-            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
-        ] or None
+    parsed_ids = _parse_ibgc_id_scope(ibgc_ids, ibgc_ids_token)
 
     filters_active = _ibgc_filters_active(
         include_partials=include_partials,
@@ -1687,6 +1768,7 @@ def ibgc_ids(
     taxonomy_path: str | None = None,
     domain_text: str | None = None,
     ibgc_ids: str | None = None,
+    ibgc_ids_token: str | None = None,
     asset_token: str | None = None,
 ):
     """Bulk iBGC ids matching the same filter surface as ``/ibgcs/roster/``.
@@ -1697,11 +1779,7 @@ def ibgc_ids(
     what the roster would show. ``truncated=True`` when the filter would
     have matched more rows than the cap.
     """
-    parsed_ids: list[int] | None = None
-    if ibgc_ids:
-        parsed_ids = [
-            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
-        ] or None
+    parsed_ids = _parse_ibgc_id_scope(ibgc_ids, ibgc_ids_token)
 
     filters_active = _ibgc_filters_active(
         include_partials=include_partials,
@@ -1843,6 +1921,7 @@ def ibgc_umap(
     taxonomy_path: str | None = None,
     domain_text: str | None = None,
     ibgc_ids: str | None = None,
+    ibgc_ids_token: str | None = None,
     asset_token: str | None = None,
 ):
     """All iBGC UMAP coordinates. ``umap_projected`` marks partial-derived coords.
@@ -1850,11 +1929,7 @@ def ibgc_umap(
     Accepts the same filter surface as ``/ibgcs/roster/`` so the v2 dashboard
     can keep the UMAP map in lockstep with the roster after a Run Query.
     """
-    parsed_ids: list[int] | None = None
-    if ibgc_ids:
-        parsed_ids = [
-            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
-        ] or None
+    parsed_ids = _parse_ibgc_id_scope(ibgc_ids, ibgc_ids_token)
 
     filters_active = _ibgc_filters_active(
         include_partials=include_partials,
@@ -1968,16 +2043,13 @@ def ibgc_scatter(
     taxonomy_path: str | None = None,
     domain_text: str | None = None,
     ibgc_ids: str | None = None,
+    ibgc_ids_token: str | None = None,
     asset_token: str | None = None,
 ):
     if x_axis not in _IBGC_AXES or y_axis not in _IBGC_AXES:
         raise HttpError(400, f"axes must be one of: {', '.join(sorted(_IBGC_AXES))}")
 
-    parsed_ids: list[int] | None = None
-    if ibgc_ids:
-        parsed_ids = [
-            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
-        ] or None
+    parsed_ids = _parse_ibgc_id_scope(ibgc_ids, ibgc_ids_token)
 
     # similarity_score is not a stored column — only meaningful when supplied
     # by a similar-iBGC or domain query. For the bare scatter endpoint, treat

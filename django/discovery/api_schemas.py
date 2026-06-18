@@ -322,6 +322,26 @@ class IbgcCountResponse(Schema):
     will_sample: bool
 
 
+class IbgcIdSetRequest(Schema):
+    """A Run Query result allow-list to stash server-side.
+
+    The dashboard POSTs the resolved id set here when it is too large to ride
+    inline as an ``ibgc_ids`` CSV on the roster / map / count GET requests
+    (which would exceed the HTTP request-line limit). Order is significant —
+    it is preserved so ``sort_by=similarity`` keeps the caller's best-first
+    rank.
+    """
+
+    ibgc_ids: list[int]
+
+
+class IbgcIdSetResponse(Schema):
+    """Short token referencing a cached :class:`IbgcIdSetRequest` list."""
+
+    token: str
+    n_ibgcs: int
+
+
 class SimilarIbgcRequest(Schema):
     ibgc_id: int
     k: int = 25

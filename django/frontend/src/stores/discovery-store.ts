@@ -187,16 +187,21 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
 }
 
 /**
- * Build the iBGC API query-string surface from an applied-filter snapshot
- * plus the optional Run Query allow-list. Empty values are dropped so the
- * resulting object only carries active params (cleaner cache keys and URLs).
+ * Build the iBGC API query-string surface from an applied-filter snapshot.
+ * Empty values are dropped so the resulting object only carries active params
+ * (cleaner cache keys and URLs).
  *
- * Used by ``IbgcRosterTable``, the UMAP hook and the Variables-Map scatter
- * hook so all three stay in lockstep with the same filter contract.
+ * The Run Query result allow-list is NOT folded in here — it is resolved
+ * separately by ``useIbgcIdsetParam`` (CSV for small sets, a server-cached
+ * ``ibgc_ids_token`` for large ones) and merged by each consumer, so a
+ * multi-thousand-id result never overflows the GET request line.
+ *
+ * Used by ``IbgcRosterTable``, the UMAP hook, the Variables-Map scatter hook
+ * and the count hook so all four stay in lockstep with the same filter
+ * contract.
  */
 export function appliedFiltersToApiParams(
   applied: AppliedIbgcFilters,
-  resultIbgcIds: number[] | null = null,
   assetToken: string | null = null,
 ): Record<string, string> {
   const params: Record<string, string> = {};
@@ -226,9 +231,6 @@ export function appliedFiltersToApiParams(
   }
   if (applied.maxLengthKb != null) {
     params.max_length_kb = String(applied.maxLengthKb);
-  }
-  if (resultIbgcIds && resultIbgcIds.length > 0) {
-    params.ibgc_ids = resultIbgcIds.join(",");
   }
   if (assetToken) {
     params.asset_token = assetToken;

@@ -731,6 +731,14 @@ export interface IbgcCountResponse {
   will_sample: boolean;
 }
 
+/** Token referencing a server-cached Run Query result allow-list. Minted by
+ *  POST /ibgcs/idset/ so large id sets ride as a short ``ibgc_ids_token`` on
+ *  the roster/map/count GETs instead of an oversized ``ibgc_ids`` CSV. */
+export interface IbgcIdSetResponse {
+  token: string;
+  n_ibgcs: number;
+}
+
 export interface IbgcIdsResponse {
   ids: number[];
   total_count: number;

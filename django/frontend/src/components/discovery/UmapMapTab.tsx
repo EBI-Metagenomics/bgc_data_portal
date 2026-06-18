@@ -7,6 +7,7 @@ import {
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
+import { useIbgcIdsetParam } from "@/hooks/use-ibgc-idset-param";
 import { IbgcScatterPlot } from "./IbgcScatterPlot";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
@@ -21,11 +22,12 @@ export function UmapMapTab() {
   const sortBy = useDiscoveryStore((s) => s.rosterSortBy);
   const order = useDiscoveryStore((s) => s.rosterOrder);
 
-  const filterParams = appliedFiltersToApiParams(
-    applied,
-    resultIbgcIds,
-    assetToken,
-  );
+  const { param: idsetParam, ready: idsetReady } =
+    useIbgcIdsetParam(resultIbgcIds);
+  const filterParams = {
+    ...appliedFiltersToApiParams(applied, assetToken),
+    ...idsetParam,
+  };
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
     resultIbgcIds !== null ||
@@ -42,7 +44,7 @@ export function UmapMapTab() {
         order,
         ...filterParams,
       }),
-    enabled: hasActiveScope,
+    enabled: hasActiveScope && idsetReady,
   });
 
   const points = useMemo(() => {

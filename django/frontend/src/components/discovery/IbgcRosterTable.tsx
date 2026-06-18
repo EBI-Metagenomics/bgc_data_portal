@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchIbgcIds, fetchIbgcRoster } from "@/api/ibgcs";
 import type { IbgcRosterParams } from "@/api/ibgcs";
@@ -20,6 +20,7 @@ import {
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
+import { useIbgcIdsetParam } from "@/hooks/use-ibgc-idset-param";
 import { MAX_SHORTLIST, useShortlistStore } from "@/stores/shortlist-store";
 import { IbgcContextMenu } from "./IbgcContextMenu";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
@@ -124,34 +125,48 @@ export function IbgcRosterTable() {
 
   const COLUMNS = columnsFor(searchSource);
 
-  const filterParams = appliedFiltersToApiParams(
-    applied,
-    resultIbgcIds,
-    assetToken,
-  );
-
   // Bitscore/Identity %/Query cov. % are per-hit query metrics, not server
-  // columns. For these we rank the result allow-list client-side by the
-  // chosen metric map and send sort_by="similarity" — the server orders rows
-  // by their position in the (DESC-ranked) ``ibgc_ids`` list, and flips it for
-  // order="asc". Stored-column sorts (novelty/size/…) pass straight through.
-  const METRIC_MAPS: Record<string, Record<number, number> | null> = {
-    similarity: resultSimilarityById,
-    pident: resultPidentById,
-    qcov: resultQcoverageById,
-  };
+  // columns. For these we rank the result allow-list client-side by the chosen
+  // metric and send sort_by="similarity" — the server orders rows by their
+  // position in the (DESC-ranked) allow-list, and flips it for order="asc".
+  // Stored-column sorts (novelty/size/…) pass straight through.
   const isMetricSort =
     sortBy === "similarity" || sortBy === "pident" || sortBy === "qcov";
   const effectiveSortBy: IbgcRosterParams["sort_by"] = isMetricSort
     ? "similarity"
     : (sortBy as IbgcRosterParams["sort_by"]);
-  if (isMetricSort && resultIbgcIds && resultIbgcIds.length > 0) {
-    const scoreMap = METRIC_MAPS[sortBy] ?? {};
-    const ordered = [...resultIbgcIds].sort(
+
+  // The allow-list scoping the request: re-ranked by the active metric for
+  // metric sorts (so the server's array_position order mirrors the table),
+  // otherwise the canonical best-first order. ``useIbgcIdsetParam`` turns it
+  // into an inline CSV (small sets) or a server-cached token (large sets) so a
+  // multi-thousand-id result never overflows the GET request line.
+  const scopedIds = useMemo(() => {
+    if (!resultIbgcIds || resultIbgcIds.length === 0) return resultIbgcIds;
+    if (!isMetricSort) return resultIbgcIds;
+    const scoreMap =
+      sortBy === "pident"
+        ? resultPidentById
+        : sortBy === "qcov"
+          ? resultQcoverageById
+          : resultSimilarityById;
+    return [...resultIbgcIds].sort(
       (a, b) => (scoreMap?.[b] ?? -Infinity) - (scoreMap?.[a] ?? -Infinity),
     );
-    filterParams.ibgc_ids = ordered.join(",");
-  }
+  }, [
+    resultIbgcIds,
+    isMetricSort,
+    sortBy,
+    resultSimilarityById,
+    resultPidentById,
+    resultQcoverageById,
+  ]);
+
+  const { param: idsetParam, ready: idsetReady } = useIbgcIdsetParam(scopedIds);
+  const filterParams = {
+    ...appliedFiltersToApiParams(applied, assetToken),
+    ...idsetParam,
+  };
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
     resultIbgcIds !== null ||
@@ -181,7 +196,7 @@ export function IbgcRosterTable() {
         order,
         ...filterParams,
       }),
-    enabled: hasActiveScope,
+    enabled: hasActiveScope && idsetReady,
   });
 
   const items = data?.items ?? [];
