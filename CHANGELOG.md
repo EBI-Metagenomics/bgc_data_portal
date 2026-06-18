@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.8.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.7.0...bgc_data_portal-v3.8.0) (2026-06-18)
+
+
+### Features
+
+* **discovery:** Improve iBGC provenance in Reports by adding: taxonomy, collection, bgc detectors ([fdf7f08](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/fdf7f0879fa1b9c053fd473e4f97376046d75ede))
+* **discovery:** Support new core domain extraction and querying in platform ([e28db41](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/e28db4116cddebe78483c1b9bd760b3507799650))
+
 ## [3.7.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.6.0...bgc_data_portal-v3.7.0) (2026-06-17)
 
 
