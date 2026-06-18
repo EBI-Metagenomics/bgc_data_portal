@@ -831,8 +831,12 @@ export interface ReportIbgcRow {
   parent_assembly_accession: string | null;
   parent_assembly_id: number | null;
   organism_name: string | null;
+  /** Parent-assembly data source / collection (e.g. MGnify, GTDB, MIBiG). */
+  collection: string | null;
   biome_path: string;
   taxonomy_phylum: string | null;
+  /** Full taxonomy lineage dot-path (e.g. Bacteria.Actinomycetota.…). */
+  taxonomy_path: string;
   contig_accession: string | null;
 }
 

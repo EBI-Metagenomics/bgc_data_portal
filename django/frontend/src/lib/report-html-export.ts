@@ -26,6 +26,8 @@ import type {
   SunburstNode,
 } from "@/api/types";
 import { colorByAncestorDepth } from "@/lib/sunburst-colors";
+import { domainTokenSet, preferredDomainToken } from "@/lib/domains";
+import { buildUpsetFigure } from "@/lib/upset";
 
 interface PlotlyFigure {
   id: string;
@@ -205,8 +207,9 @@ function pieFigure(id: string, rows: CategoryCount[]): PlotlyFigure {
 
 function ibgcTable(rows: ReportIbgcRow[]): string {
   const head = [
-    "iBGC", "Assembly", "Organism", "Phylum", "Biome", "Size (kb)",
+    "iBGC", "Assembly", "Collection", "Biome", "Size (kb)",
     "Novelty", "Dom. nov.", "GCF", "Class", "Sources", "Contig", "Start", "End",
+    "Taxonomy",
   ];
   const body = rows
     .map((r) => {
@@ -217,8 +220,7 @@ function ibgcTable(rows: ReportIbgcRow[]): string {
       return `<tr>
         <td class="mono">${esc(r.label)}${badges}</td>
         <td class="mono">${esc(r.parent_assembly_accession)}</td>
-        <td>${esc(r.organism_name)}</td>
-        <td>${esc(r.taxonomy_phylum)}</td>
+        <td>${esc(r.collection)}</td>
         <td>${esc(r.biome_path || null)}</td>
         <td class="r">${fmt(r.size_kb, 1)}</td>
         <td class="r">${fmt(r.novelty_score)}</td>
@@ -229,6 +231,7 @@ function ibgcTable(rows: ReportIbgcRow[]): string {
         <td class="mono">${esc(r.contig_accession)}</td>
         <td class="r">${num(r.start)}</td>
         <td class="r">${num(r.end)}</td>
+        <td>${esc(r.taxonomy_path || null)}</td>
       </tr>`;
     })
     .join("");
@@ -237,8 +240,8 @@ function ibgcTable(rows: ReportIbgcRow[]): string {
 
 function assemblyTable(rows: ReportAssemblyRow[]): string {
   const head = [
-    "Accession", "Organism", "Phylum", "Biome", "Source", "Size (Mb)",
-    "BGCs (total)", "iBGCs (shortlist)",
+    "Accession", "Collection", "Biome", "Size (Mb)",
+    "iBGCs (shortlist)", "Taxonomy",
   ];
   const body = rows
     .map(
@@ -246,13 +249,11 @@ function assemblyTable(rows: ReportAssemblyRow[]): string {
         <td class="mono">${esc(r.accession)}${
         r.is_type_strain ? ' <span class="badge out">type strain</span>' : ""
       }</td>
-        <td>${esc(r.organism_name)}</td>
-        <td>${esc(r.taxonomy_phylum)}</td>
-        <td>${esc(r.biome_path || null)}</td>
         <td>${esc(r.source_name)}</td>
+        <td>${esc(r.biome_path || null)}</td>
         <td class="r">${fmt(r.assembly_size_mb, 2)}</td>
-        <td class="r">${num(r.total_bgcs_in_assembly)}</td>
         <td class="r b">${num(r.ibgcs_in_shortlist)}</td>
+        <td>${esc(r.taxonomy_path || null)}</td>
       </tr>`,
     )
     .join("");
@@ -270,10 +271,10 @@ function gcfDistributionTable(rows: GcfDistributionEntry[]): string {
       </tr>`,
     )
     .join("");
-  return `<h3>GCF distribution (table)</h3>${table(
+  return `<h3>GCF distribution (table)</h3><div class="scroll-sm">${table(
     ["GCF", "iBGCs", "Fraction"],
     body,
-  )}`;
+  )}</div>`;
 }
 
 function domainCompositionPanel(c: DomainCompositionSummary): string {
@@ -292,8 +293,16 @@ function domainCompositionPanel(c: DomainCompositionSummary): string {
   const body = c.rows
     .map((d) => {
       const [r, g, b] = TIER_COLOR[d.tier] ?? [148, 163, 184];
+      // InterPro-entry-else-signature accession, linked to its InterPro page
+      // (entry or member-DB) when one resolved server-side.
+      const token = preferredDomainToken(d);
+      const cell = d.domain_url
+        ? `<a href="${esc(d.domain_url)}" target="_blank" rel="noopener noreferrer">${esc(
+            token,
+          )}</a>`
+        : esc(token);
       return `<tr>
-        <td class="mono">${esc(d.domain_acc)}${
+        <td class="mono nowrap">${cell}${
         d.domain_name ? ` <span class="muted">· ${esc(d.domain_name)}</span>` : ""
       }</td>
         <td class="r">${num(d.ibgc_count)}</td>
@@ -304,10 +313,28 @@ function domainCompositionPanel(c: DomainCompositionSummary): string {
       </tr>`;
     })
     .join("");
-  return `<h3>Domain composition</h3>${bar}${table(
+  // Copy-as-set buttons (InterPro-else-signature, deduped, comma-joined),
+  // wired to the clipboard by the inline script in the page body.
+  const copyBtn = (tier: "core" | "variable" | "rare", label: string) => {
+    const set = domainTokenSet(c.rows.filter((d) => d.tier === tier));
+    const count =
+      tier === "core"
+        ? c.core_count
+        : tier === "variable"
+          ? c.variable_count
+          : c.rare_count;
+    return `<button class="copybtn" data-set="${esc(set)}"${
+      count === 0 ? " disabled" : ""
+    }>Copy ${label} (${count})</button>`;
+  };
+  const copyRow = `<div class="copybtns">${copyBtn(
+    "core",
+    "Core",
+  )}${copyBtn("variable", "Variable")}${copyBtn("rare", "Rare")}</div>`;
+  return `<h3>Domain composition</h3>${bar}${copyRow}<div class="scroll-sm">${table(
     ["Domain", "iBGCs", "Fraction", "Tier"],
     body,
-  )}`;
+  )}</div>`;
 }
 
 function goslimHeatmap(matrix: DomainGoslimMatrix): string {
@@ -399,6 +426,13 @@ td.b{font-weight:600}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .muted{color:#94a3b8}
 .scroll{max-height:480px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px}
+.scroll-sm{max-height:320px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px}
+td.nowrap,th.nowrap{white-space:nowrap}
+.copybtns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.copybtn{font-size:11px;padding:3px 8px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#334155;cursor:pointer}
+.copybtn:hover:not(:disabled){background:#f1f5f9}
+.copybtn:disabled{opacity:.5;cursor:default}
+.copybtn.copied{background:#10b981;border-color:#10b981;color:#fff}
 .badge{display:inline-block;font-size:10px;color:#fff;background:#6366f1;border-radius:4px;padding:1px 5px;margin-left:4px}
 .badge.ts{background:#018786}
 .badge.out{background:#94a3b8}
@@ -429,19 +463,23 @@ function buildReportHtml(payload: ReportPayload, plotlySource: string): string {
   const completeFig = add(
     completenessFigure("fig-complete", payload.completeness_bar),
   );
-  const classFig = add(
-    barFigure("fig-class", payload.bgc_class_pie, { color: "#6366f1" }),
-  );
+  const classFig = add(pieFigure("fig-class", payload.bgc_class_pie));
   const lengthFig = add(
     barFigure("fig-length", payload.length_histogram, {
       color: "#6366f1",
       labelKey: "label",
     }),
   );
+  // Predictor distribution as an UpSet (iBGCs per predictor-tool combination).
+  const upset = buildUpsetFigure(payload.ibgc_rows);
   const predictorFig = add(
-    barFigure("fig-predictor", payload.predictor_distribution, {
-      color: "#10b981",
-    }),
+    upset
+      ? {
+          id: "fig-predictor",
+          data: upset.figure.data,
+          layout: upset.figure.layout,
+        }
+      : null,
   );
   const sourceFig = add(
     barFigure("fig-source", payload.source_distribution, {
@@ -554,6 +592,28 @@ function buildReportHtml(payload: ReportPayload, plotlySource: string): string {
   FIGS.forEach(function(f){
     var el = document.getElementById(f.id);
     if (el && window.Plotly) { window.Plotly.newPlot(el, f.data, f.layout, cfg); }
+  });
+})();
+</script>
+<script>
+(function(){
+  // Copy-as-set buttons in the Domain composition panel.
+  document.querySelectorAll('.copybtn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var text = btn.getAttribute('data-set') || '';
+      if (!text) return;
+      var label = btn.textContent;
+      var done = function(){
+        btn.classList.add('copied');
+        btn.textContent = 'Copied!';
+        setTimeout(function(){ btn.classList.remove('copied'); btn.textContent = label; }, 1200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function(){ window.prompt('Copy:', text); });
+      } else {
+        window.prompt('Copy:', text);
+      }
+    });
   });
 })();
 </script>

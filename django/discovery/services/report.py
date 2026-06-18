@@ -174,10 +174,16 @@ def build_report_payload(
                 ),
                 "parent_assembly_id": first_asm.id if first_asm else None,
                 "organism_name": first_asm.organism_name if first_asm else None,
+                "collection": (
+                    first_asm.source.name
+                    if first_asm and first_asm.source_id
+                    else None
+                ),
                 "biome_path": first_asm.biome_path if first_asm else "",
                 "taxonomy_phylum": _taxonomy_phylum(
                     contig.taxonomy_path if contig else None
                 ),
+                "taxonomy_path": contig.taxonomy_path if contig else "",
                 "contig_accession": contig.accession if contig else None,
             }
         )
@@ -611,7 +617,8 @@ def build_report_payload(
 #     composition rows and domains_long.
 # v4: added domain_url (InterPro entry or signature member-DB page) to
 #     domain composition rows and domains_long.
-ANALYST_SCHEMA_VERSION = "4"
+# v5: added collection + taxonomy_path (full lineage) to iBGC rows.
+ANALYST_SCHEMA_VERSION = "5"
 
 
 def build_report_analyst_export(token: str, payload: dict) -> dict:

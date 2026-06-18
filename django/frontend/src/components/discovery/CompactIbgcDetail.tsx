@@ -116,6 +116,11 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           <h3 className="font-mono text-sm font-semibold leading-tight">
             {ibgc.accession || ibgc.label}
           </h3>
+          {ibgc.parent_assembly?.source_name && (
+            <span className="text-xs font-normal text-muted-foreground">
+              {ibgc.parent_assembly.source_name}
+            </span>
+          )}
           {ibgc.is_type_strain && (
             <Badge
               className="text-[10px] text-white border-transparent"

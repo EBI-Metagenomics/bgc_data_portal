@@ -451,8 +451,10 @@ class ReportIbgcRow(Schema):
     parent_assembly_accession: str | None = None
     parent_assembly_id: int | None = None
     organism_name: str | None = None
+    collection: str | None = None  # parent-assembly data source (MGnify/GTDB/…)
     biome_path: str = ""
     taxonomy_phylum: str | None = None
+    taxonomy_path: str = ""  # full lineage dot-path
     contig_accession: str | None = None
 
 

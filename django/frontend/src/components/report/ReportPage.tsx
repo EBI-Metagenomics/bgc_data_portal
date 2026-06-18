@@ -17,6 +17,7 @@ import { Loader2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { domainTokenSet } from "@/lib/domains";
+import { buildUpsetFigure } from "@/lib/upset";
 import { ReportDownloadButtons } from "./ReportDownloadButtons";
 import type {
   CategoryCount,
@@ -260,8 +261,7 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
               <TableRow>
                 <TableHead>iBGC</TableHead>
                 <TableHead>Assembly</TableHead>
-                <TableHead>Organism</TableHead>
-                <TableHead>Phylum</TableHead>
+                <TableHead>Collection</TableHead>
                 <TableHead>Biome</TableHead>
                 <TableHead className="text-right">Size (kb)</TableHead>
                 <TableHead className="text-right">Novelty</TableHead>
@@ -272,6 +272,7 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
                 <TableHead>Contig</TableHead>
                 <TableHead className="text-right">Start</TableHead>
                 <TableHead className="text-right">End</TableHead>
+                <TableHead>Taxonomy</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -302,10 +303,7 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
                     {r.parent_assembly_accession ?? "—"}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {r.organism_name ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {r.taxonomy_phylum ?? "—"}
+                    {r.collection ?? "—"}
                   </TableCell>
                   <TableCell className="text-xs">{r.biome_path || "—"}</TableCell>
                   <TableCell className="text-right">
@@ -333,6 +331,9 @@ function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
                   <TableCell className="text-right text-xs">
                     {r.end ?? "—"}
                   </TableCell>
+                  <TableCell className="text-xs">
+                    {r.taxonomy_path || "—"}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -359,7 +360,7 @@ function BgcStatsSection({ payload }: { payload: ReportPayload }) {
         <CompletenessPanel rows={payload.completeness_bar} />
         <BgcClassPanel rows={payload.bgc_class_pie} />
         <LengthHistogramPanel rows={payload.length_histogram} />
-        <PredictorPanel rows={payload.predictor_distribution} />
+        <PredictorPanel rows={payload.ibgc_rows} />
         <SourceDistributionPanel rows={payload.source_distribution} />
       </CardContent>
     </Card>
@@ -792,18 +793,18 @@ function BgcClassPanel({ rows }: { rows: CategoryCount[] }) {
       <Plot
         data={[
           {
-            type: "bar",
-            x: rows.map((r) => r.name),
-            y: rows.map((r) => r.count),
-            marker: { color: "#6366f1" },
+            type: "pie",
+            labels: rows.map((r) => r.name),
+            values: rows.map((r) => r.count),
+            hole: 0.4,
+            textinfo: "label+percent",
           },
         ]}
         layout={{
           autosize: true,
           height: 240,
-          margin: { l: 40, r: 16, t: 8, b: 60 },
-          xaxis: { title: { text: "class" }, tickangle: -30 },
-          yaxis: { title: { text: "iBGCs" } },
+          margin: { l: 16, r: 16, t: 8, b: 16 },
+          showlegend: false,
         }}
         useResizeHandler
         style={{ width: "100%" }}
@@ -840,28 +841,30 @@ function LengthHistogramPanel({ rows }: { rows: LengthBucket[] }) {
   );
 }
 
-function PredictorPanel({ rows }: { rows: CategoryCount[] }) {
+function PredictorPanel({ rows }: { rows: ReportIbgcRow[] }) {
+  const built = buildUpsetFigure(rows);
   return (
     <PanelCard title="Predictor distribution">
-      <Plot
-        data={[
-          {
-            type: "bar",
-            x: rows.map((r) => r.name),
-            y: rows.map((r) => r.count),
-            marker: { color: "#10b981" },
-          },
-        ]}
-        layout={{
-          autosize: true,
-          height: 240,
-          margin: { l: 40, r: 16, t: 8, b: 36 },
-          yaxis: { title: { text: "Hits" } },
-        }}
-        useResizeHandler
-        style={{ width: "100%" }}
-        config={{ displayModeBar: false }}
-      />
+      {built ? (
+        <>
+          <Plot
+            data={built.figure.data as Plotly.Data[]}
+            layout={built.figure.layout}
+            useResizeHandler
+            style={{ width: "100%" }}
+            config={{ displayModeBar: false }}
+          />
+          {built.data.emptyCount > 0 && (
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {built.data.emptyCount} iBGC(s) without predictor tools omitted.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="py-8 text-center text-xs text-muted-foreground">
+          No predictor data available.
+        </p>
+      )}
     </PanelCard>
   );
 }
@@ -897,13 +900,11 @@ function AssemblyRosterSection({ rows }: { rows: ReportAssemblyRow[] }) {
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
                 <TableHead>Accession</TableHead>
-                <TableHead>Organism</TableHead>
-                <TableHead>Phylum</TableHead>
+                <TableHead>Collection</TableHead>
                 <TableHead>Biome</TableHead>
-                <TableHead>Source</TableHead>
                 <TableHead className="text-right">Size (Mb)</TableHead>
-                <TableHead className="text-right">BGCs (total)</TableHead>
                 <TableHead className="text-right">iBGCs (shortlist)</TableHead>
+                <TableHead>Taxonomy</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -917,24 +918,18 @@ function AssemblyRosterSection({ rows }: { rows: ReportAssemblyRow[] }) {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-xs">
-                    {r.organism_name ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {r.taxonomy_phylum ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">{r.biome_path || "—"}</TableCell>
                   <TableCell className="text-xs">{r.source_name ?? "—"}</TableCell>
+                  <TableCell className="text-xs">{r.biome_path || "—"}</TableCell>
                   <TableCell className="text-right text-xs">
                     {r.assembly_size_mb != null
                       ? r.assembly_size_mb.toFixed(2)
                       : "—"}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {r.total_bgcs_in_assembly}
-                  </TableCell>
                   <TableCell className="text-right font-semibold">
                     {r.ibgcs_in_shortlist}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {r.taxonomy_path || "—"}
                   </TableCell>
                 </TableRow>
               ))}
