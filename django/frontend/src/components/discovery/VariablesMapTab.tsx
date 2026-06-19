@@ -1,12 +1,19 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchIbgcDetail, fetchIbgcScatter } from "@/api/ibgcs";
+import { fetchIbgcDetail, fetchIbgcScatter, toMapSortBy } from "@/api/ibgcs";
 import {
   appliedFiltersToApiParams,
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
-import type { IbgcDetail, IbgcScatterAxis, IbgcScatterPoint } from "@/api/types";
+import { useIbgcIdsetParam } from "@/hooks/use-ibgc-idset-param";
+import type {
+  CriterionColumn,
+  CriterionScore,
+  IbgcDetail,
+  IbgcScatterAxis,
+  IbgcScatterPoint,
+} from "@/api/types";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 import {
   Select,
@@ -25,22 +32,72 @@ const STABLE_AXES: { value: IbgcScatterAxis; label: string }[] = [
   { value: "n_cds", label: "# CDS" },
 ];
 
-/** Axes whose values come from the active-query store maps rather than
- *  the ``/ibgcs/scatter/`` endpoint. The display label of
- *  ``similarity_score`` depends on which advanced-query path produced the
- *  result set — Dice for domain searches, bitscore for sequence searches. */
-const QUERY_AXES = new Set<IbgcScatterAxis>([
+/** Legacy query axes whose values come from the single-similarity store maps
+ *  (similar-iBGC / filter-only paths, which don't go through the combined
+ *  query). Combined-query axes use ``score:<cid>[:metric]`` instead. */
+const LEGACY_QUERY_AXES = new Set<IbgcScatterAxis>([
   "similarity_score",
   "best_pident",
   "best_qcoverage",
 ]);
 
-function axisOptionsFor(
+/** A "query axis" is resolved client-side from the store score maps rather than
+ *  the ``/ibgcs/scatter/`` endpoint: a per-criterion ``score:*`` axis or a
+ *  legacy single-similarity axis. */
+function isQueryAxis(axis: IbgcScatterAxis): boolean {
+  return axis.startsWith("score:") || LEGACY_QUERY_AXES.has(axis);
+}
+
+function metricValue(sc: CriterionScore | undefined, key: string): number | null {
+  if (!sc) return null;
+  switch (key) {
+    case "value":
+      return sc.value;
+    case "pident":
+      return sc.pident;
+    case "qcoverage":
+      return sc.qcoverage;
+    default:
+      return null;
+  }
+}
+
+/** Resolve a ``score:<cid>[:metric]`` axis for one iBGC from the combined-query
+ *  per-criterion score maps. */
+function criterionAxisValue(
+  axis: string,
+  id: number,
+  scoresByCriterion: Record<string, Record<number, CriterionScore>> | null,
+): number | null {
+  const parts = axis.split(":"); // score:<cid>[:<metric>]
+  const cid = parts[1];
+  const metric = parts[2] ?? "value";
+  if (!cid) return null;
+  return metricValue(scoresByCriterion?.[cid]?.[id], metric);
+}
+
+/** Build the X/Y axis options. With a combined query active, each criterion
+ *  contributes one plottable axis per metric (keyed ``score:<cid>[:metric]``);
+ *  otherwise the legacy single-similarity axes back the similar-iBGC path. */
+function buildAxisOptions(
+  useCombined: boolean,
+  criteria: CriterionColumn[] | null,
   searchSource: string | null,
 ): { value: IbgcScatterAxis; label: string }[] {
   const opts = [...STABLE_AXES];
-  // The similarity axis is always available — what it *means* depends on
-  // the active search source.
+  if (useCombined && criteria) {
+    for (const c of criteria) {
+      const multi = c.metrics.length > 1;
+      for (const m of c.metrics) {
+        if (!m.sortable) continue;
+        const value = (
+          m.key === "value" ? `score:${c.id}` : `score:${c.id}:${m.key}`
+        ) as IbgcScatterAxis;
+        opts.push({ value, label: multi ? `${c.label} · ${m.label}` : c.label });
+      }
+    }
+    return opts;
+  }
   opts.push({
     value: "similarity_score",
     label:
@@ -69,31 +126,58 @@ export function VariablesMapTab() {
   const resultQcoverageById = useDiscoveryStore(
     (s) => s.resultQcoverageById,
   );
+  const resultCriteria = useDiscoveryStore((s) => s.resultCriteria);
+  const resultScoresByCriterion = useDiscoveryStore(
+    (s) => s.resultScoresByCriterion,
+  );
   const searchSource = useDiscoveryStore((s) => s.searchSource);
   const applied = useDiscoveryStore((s) => s.appliedFilters);
   const referenceIbgcId = useDiscoveryStore((s) => s.referenceIbgcId);
 
-  const axisOptions = axisOptionsFor(searchSource);
+  const useCombined = (resultCriteria?.length ?? 0) > 0;
+  const axisOptions = buildAxisOptions(useCombined, resultCriteria, searchSource);
   const axisLabel = (axis: IbgcScatterAxis): string =>
     axisOptions.find((o) => o.value === axis)?.label ?? axis;
 
-  const xIsQuery = QUERY_AXES.has(xAxis);
-  const yIsQuery = QUERY_AXES.has(yAxis);
+  // When the active criteria change, a previously-selected ``score:*`` axis can
+  // reference a criterion that no longer exists — reset it to a stable axis so
+  // the map doesn't get stuck plotting nothing. Keyed on the criteria id set so
+  // this only fires when the result's columns actually change.
+  const criteriaKey = (resultCriteria ?? []).map((c) => c.id).join(",");
+  useEffect(() => {
+    const valid = new Set(axisOptions.map((o) => o.value));
+    const stale = (a: IbgcScatterAxis) => a.startsWith("score:") && !valid.has(a);
+    if (stale(xAxis) || stale(yAxis)) {
+      setAxes(
+        stale(xAxis) ? "novelty_score" : xAxis,
+        stale(yAxis) ? "domain_novelty" : yAxis,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [criteriaKey]);
+
+  const xIsQuery = isQueryAxis(xAxis);
+  const yIsQuery = isQueryAxis(yAxis);
   const anyStableAxis = !xIsQuery || !yIsQuery;
   const anyQueryAxis = xIsQuery || yIsQuery;
-  // Need a query result for any query axis to plot.
-  const queryAxesUnplottable = anyQueryAxis && resultSimilarityById == null;
+  // Need scored results to plot a query axis: per-criterion scores for combined
+  // queries, or the single-similarity map for the legacy similar-iBGC path.
+  const haveQueryScores = useCombined
+    ? resultScoresByCriterion != null
+    : resultSimilarityById != null;
+  const queryAxesUnplottable = anyQueryAxis && !haveQueryScores;
 
   const assetToken = useDiscoveryStore((s) => s.assetToken);
   // Sample the same top-5k the roster shows (server caps both at 5k). The sort
   // selects *which* points; the x/y axes only decide where they're plotted.
   const sortBy = useDiscoveryStore((s) => s.rosterSortBy);
   const order = useDiscoveryStore((s) => s.rosterOrder);
-  const filterParams = appliedFiltersToApiParams(
-    applied,
-    resultIbgcIds,
-    assetToken,
-  );
+  const { param: idsetParam, ready: idsetReady } =
+    useIbgcIdsetParam(resultIbgcIds);
+  const filterParams = {
+    ...appliedFiltersToApiParams(applied, assetToken),
+    ...idsetParam,
+  };
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
     resultIbgcIds !== null ||
@@ -119,13 +203,11 @@ export function VariablesMapTab() {
       fetchIbgcScatter({
         x_axis: scatterX,
         y_axis: scatterY,
-        // pident/qcov are client-only roster metrics, not map sort columns;
-        // the allow-list is fully plotted so order is moot — fold to similarity.
-        sort_by: sortBy === "pident" || sortBy === "qcov" ? "similarity" : sortBy,
+        sort_by: toMapSortBy(sortBy),
         order,
         ...filterParams,
       }),
-    enabled: anyStableAxis && hasActiveScope,
+    enabled: anyStableAxis && hasActiveScope && idsetReady,
   });
 
   // ── Reference iBGC detail ────────────────────────────────────────────
@@ -155,6 +237,9 @@ export function VariablesMapTab() {
     }
 
     function resolveAxis(axis: IbgcScatterAxis, id: number): number | null {
+      if (axis.startsWith("score:")) {
+        return criterionAxisValue(axis, id, resultScoresByCriterion);
+      }
       if (axis === "similarity_score") {
         return resultSimilarityById?.[id] ?? null;
       }
@@ -226,6 +311,7 @@ export function VariablesMapTab() {
         resultSimilarityById,
         resultPidentById,
         resultQcoverageById,
+        resultScoresByCriterion,
       );
       const y = axisValueFromDetail(
         refDetail,
@@ -233,6 +319,7 @@ export function VariablesMapTab() {
         resultSimilarityById,
         resultPidentById,
         resultQcoverageById,
+        resultScoresByCriterion,
       );
       if (x != null && y != null) {
         base.push({
@@ -259,6 +346,7 @@ export function VariablesMapTab() {
     resultSimilarityById,
     resultPidentById,
     resultQcoverageById,
+    resultScoresByCriterion,
     xAxis,
     yAxis,
     scatterX,
@@ -348,7 +436,13 @@ function axisValueFromDetail(
   resultSimilarityById: Record<number, number> | null,
   resultPidentById: Record<number, number> | null,
   resultQcoverageById: Record<number, number> | null,
+  resultScoresByCriterion: Record<string, Record<number, CriterionScore>> | null,
 ): number | null {
+  // Per-criterion axes resolve from the combined-query score maps (keyed by id),
+  // independent of IbgcDetail.
+  if (axis.startsWith("score:")) {
+    return criterionAxisValue(axis, d.id, resultScoresByCriterion);
+  }
   // IbgcDetail does not carry `n_cds`; if that axis is selected and the
   // reference is missing from the scatter response there is nothing
   // meaningful to inject — skip the halo rather than guess a coordinate.

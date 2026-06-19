@@ -5,6 +5,7 @@ import {
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
+import { useIbgcIdsetParam } from "@/hooks/use-ibgc-idset-param";
 
 /**
  * Cheap COUNT against the iBGC filter surface.
@@ -29,16 +30,17 @@ export function useIbgcCount() {
     resultIbgcIds !== null ||
     assetToken !== null;
 
-  const filterParams = appliedFiltersToApiParams(
-    applied,
-    resultIbgcIds,
-    assetToken,
-  );
+  const { param: idsetParam, ready: idsetReady } =
+    useIbgcIdsetParam(resultIbgcIds);
+  const filterParams = {
+    ...appliedFiltersToApiParams(applied, assetToken),
+    ...idsetParam,
+  };
 
   const query = useQuery({
     queryKey: ["ibgc-count", filterParams],
     queryFn: () => fetchIbgcCount(filterParams),
-    enabled: hasActiveScope,
+    enabled: hasActiveScope && idsetReady,
   });
 
   return {

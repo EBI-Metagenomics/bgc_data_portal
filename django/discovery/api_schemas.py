@@ -235,6 +235,138 @@ class QueryScoresResponse(Schema):
     cap: int
 
 
+# ── Combined multi-criterion query ─────────────────────────────────────────
+
+
+class CombinedQueryCriterion(Schema):
+    """One scoring criterion instance in a combined query.
+
+    ``id`` is a stable, client-generated per-instance key — it is what the
+    roster columns and Variables-map axes reference, so two criteria of the same
+    ``type`` (e.g. a domain AND filter and a domain OR filter) stay distinct.
+    ``params`` carries the criterion-specific fields (validated server-side):
+
+    * ``domain`` — ``domains_text``, ``logic`` (``and``/``or``), ``threshold``
+    * ``architecture`` — ``architecture`` (list), ``weight``, ``k``, ``threshold``
+    * ``sequence`` — ``sequence``, ``min_bitscore``, ``min_pident``, ``min_qcov``
+    * ``chemical`` — ``smiles``, ``similarity_threshold``
+    * ``similar`` — ``ibgc_id``, ``k``
+    """
+
+    id: str
+    type: str  # domain | architecture | sequence | chemical | similar
+    params: dict = {}
+
+
+class CombinedQueryFilters(Schema):
+    """Non-scoring narrowing filters applied to the criteria intersection.
+
+    Mirrors the ``_apply_ibgc_filters`` kwargs the single-criterion endpoints
+    accept as query params; every field is optional and defaults to "no narrowing".
+    """
+
+    include_partials: bool = True
+    validated_only: bool = False
+    min_length_kb: float | None = None
+    max_length_kb: float | None = None
+    min_novelty: float | None = None
+    max_novelty: float | None = None
+    min_domain_novelty: float | None = None
+    max_domain_novelty: float | None = None
+    detector_tools: str | None = None
+    source_tools: str | None = None  # deprecated alias for detector_tools
+    source_names: str | None = None
+    assembly_type: str | None = None
+    leaf_path_prefix: str | None = None
+    bgc_class: str | None = None
+    chemont_ids: str | None = None
+    np_classes: str | None = None
+    accession: str | None = None
+    bgc_accession: str | None = None
+    assembly_accession: str | None = None
+    assembly_ids: str | None = None
+    organism: str | None = None
+    biome_lineage: str | None = None
+    taxonomy_path: str | None = None
+    domain_text: str | None = None
+
+
+class CombinedQueryRequest(Schema):
+    criteria: list[CombinedQueryCriterion] = []
+    filters: CombinedQueryFilters | None = None
+
+
+class CombinedQueryAccepted(Schema):
+    task_id: str
+
+
+class CriterionMetricSchema(Schema):
+    """One sortable column a criterion contributes (``key`` indexes the score payload)."""
+
+    key: str
+    label: str
+    sortable: bool = True
+
+
+class CriterionColumn(Schema):
+    """Column descriptor for one criterion instance — drives roster columns / map axes.
+
+    Sort the roster/map by ``score:<id>`` (the criterion's primary ``value``) or
+    ``score:<id>:<metric.key>`` for a secondary metric (e.g. a sequence pident).
+    """
+
+    id: str
+    type: str
+    label: str
+    metrics: list[CriterionMetricSchema]
+
+
+class CriterionScore(Schema):
+    """A single criterion's score for one iBGC. ``value`` is the primary metric.
+
+    The ``pident`` / ``qcoverage`` / ``best_hit_protein_id`` fields are populated
+    for sequence-search criteria only.
+    """
+
+    value: float | None = None
+    pident: float | None = None
+    qcoverage: float | None = None
+    best_hit_protein_id: str | None = None
+
+
+class CombinedRosterItem(IbgcRosterItem):
+    """Roster row carrying one score payload per criterion, keyed by criterion id."""
+
+    scores: dict[str, CriterionScore] = {}
+
+
+class CombinedRosterResponse(Schema):
+    items: list[CombinedRosterItem]
+    pagination: PaginationMeta
+    criteria: list[CriterionColumn]
+
+
+class CombinedScoreRow(Schema):
+    id: int
+    scores: dict[str, CriterionScore] = {}
+
+
+class CombinedScoresResponse(Schema):
+    """Compact, full (capped) combined-query payload for the Variables map.
+
+    ``ibgc_ids_token`` resolves the result allow-list for the scatter / count /
+    roster GET endpoints (avoids threading thousands of ids through the URL).
+    """
+
+    items: list[CombinedScoreRow]
+    criteria: list[CriterionColumn]
+    total_matched: int
+    capped: bool
+    cap: int
+    ibgc_ids_token: str
+    warnings: list[str] = []
+
+
 class IbgcMemberBgc(Schema):
     """Source BGC prediction contributing to an iBGC (drill-down list)."""
 
@@ -320,6 +452,26 @@ class IbgcCountResponse(Schema):
     exact_count: int
     cap: int
     will_sample: bool
+
+
+class IbgcIdSetRequest(Schema):
+    """A Run Query result allow-list to stash server-side.
+
+    The dashboard POSTs the resolved id set here when it is too large to ride
+    inline as an ``ibgc_ids`` CSV on the roster / map / count GET requests
+    (which would exceed the HTTP request-line limit). Order is significant —
+    it is preserved so ``sort_by=similarity`` keeps the caller's best-first
+    rank.
+    """
+
+    ibgc_ids: list[int]
+
+
+class IbgcIdSetResponse(Schema):
+    """Short token referencing a cached :class:`IbgcIdSetRequest` list."""
+
+    token: str
+    n_ibgcs: int
 
 
 class SimilarIbgcRequest(Schema):

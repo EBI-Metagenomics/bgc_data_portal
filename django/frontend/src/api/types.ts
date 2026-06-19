@@ -649,6 +649,117 @@ export interface QueryScoresResponse {
   cap: number;
 }
 
+// ── Combined multi-criterion query ──────────────────────────────────────
+// One async query carrying several scoring criteria (e.g. domain-AND +
+// domain-ARCH + sequence). The server AND-intersects their iBGC id sets; each
+// criterion keeps its own sortable column(s) in the roster and its own axis in
+// the Variables map, keyed by the criterion's stable per-instance ``id``.
+
+export type CriterionType =
+  | "domain"
+  | "architecture"
+  | "sequence"
+  | "chemical"
+  | "similar";
+
+/** One scoring criterion instance. ``id`` is a stable, client-generated
+ *  per-instance key — two criteria of the same ``type`` (e.g. a domain AND and
+ *  a domain OR filter) stay distinct because their ids differ. */
+export interface CombinedQueryCriterion {
+  id: string;
+  type: CriterionType;
+  params: Record<string, unknown>;
+}
+
+/** Non-scoring narrowing filters applied to the criteria intersection. Mirrors
+ *  the backend ``CombinedQueryFilters``; every field is optional. */
+export interface CombinedQueryFilters {
+  include_partials?: boolean;
+  validated_only?: boolean;
+  min_length_kb?: number | null;
+  max_length_kb?: number | null;
+  min_novelty?: number | null;
+  max_novelty?: number | null;
+  min_domain_novelty?: number | null;
+  max_domain_novelty?: number | null;
+  detector_tools?: string | null;
+  source_names?: string | null;
+  assembly_type?: string | null;
+  leaf_path_prefix?: string | null;
+  bgc_class?: string | null;
+  chemont_ids?: string | null;
+  np_classes?: string | null;
+  accession?: string | null;
+  assembly_ids?: string | null;
+  organism?: string | null;
+  biome_lineage?: string | null;
+  taxonomy_path?: string | null;
+  domain_text?: string | null;
+}
+
+export interface CombinedQueryRequest {
+  criteria: CombinedQueryCriterion[];
+  filters?: CombinedQueryFilters | null;
+}
+
+export interface CombinedQueryAccepted {
+  task_id: string;
+}
+
+/** One sortable column a criterion contributes; ``key`` indexes a CriterionScore
+ *  (``"value"`` for the primary metric, ``"pident"`` etc. for sub-metrics). */
+export interface CriterionMetric {
+  key: string;
+  label: string;
+  sortable: boolean;
+}
+
+/** Column descriptor for one criterion instance — drives the roster columns and
+ *  the Variables-map axes. Sort by ``score:<id>`` or ``score:<id>:<metric.key>``. */
+export interface CriterionColumn {
+  id: string;
+  type: CriterionType;
+  label: string;
+  metrics: CriterionMetric[];
+}
+
+/** A single criterion's score for one iBGC. ``value`` is the primary metric;
+ *  ``pident`` / ``qcoverage`` / ``best_hit_protein_id`` are sequence-only. */
+export interface CriterionScore {
+  value: number | null;
+  pident: number | null;
+  qcoverage: number | null;
+  best_hit_protein_id: string | null;
+}
+
+/** Roster row carrying one score payload per criterion, keyed by criterion id. */
+export interface CombinedRosterItem extends IbgcRosterItem {
+  scores: Record<string, CriterionScore>;
+}
+
+export interface CombinedRosterResponse {
+  items: CombinedRosterItem[];
+  pagination: PaginationMeta;
+  criteria: CriterionColumn[];
+}
+
+export interface CombinedScoreRow {
+  id: number;
+  scores: Record<string, CriterionScore>;
+}
+
+/** Compact, full (capped) combined-query payload for the Variables map.
+ *  ``ibgc_ids_token`` scopes the result set for the scatter/count/roster GETs. */
+export interface CombinedScoresResponse {
+  items: CombinedScoreRow[];
+  criteria: CriterionColumn[];
+  total_matched: number;
+  capped: boolean;
+  cap: number;
+  ibgc_ids_token: string;
+  warnings: string[];
+}
+
 export interface IbgcMemberBgc {
   id: number;
   accession: string;
@@ -731,11 +842,24 @@ export interface IbgcCountResponse {
   will_sample: boolean;
 }
 
+/** Token referencing a server-cached Run Query result allow-list. Minted by
+ *  POST /ibgcs/idset/ so large id sets ride as a short ``ibgc_ids_token`` on
+ *  the roster/map/count GETs instead of an oversized ``ibgc_ids`` CSV. */
+export interface IbgcIdSetResponse {
+  token: string;
+  n_ibgcs: number;
+}
+
 export interface IbgcIdsResponse {
   ids: number[];
   total_count: number;
   truncated: boolean;
 }
+
+/** A per-criterion Variables-map axis: ``score:<criterionId>`` (primary value)
+ *  or ``score:<criterionId>:<metricKey>`` (e.g. a sequence criterion's pident).
+ *  Resolved client-side from the combined-query score maps. */
+export type CriterionAxis = `score:${string}`;
 
 export type IbgcScatterAxis =
   | "size_kb"
@@ -744,7 +868,8 @@ export type IbgcScatterAxis =
   | "domain_novelty"
   | "similarity_score"
   | "best_pident"
-  | "best_qcoverage";
+  | "best_qcoverage"
+  | CriterionAxis;
 
 // ── Shortlist Report schemas ─────────────────────────────────────────────
 
