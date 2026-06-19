@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchIbgcUmap } from "@/api/ibgcs";
+import { fetchIbgcUmap, toMapSortBy } from "@/api/ibgcs";
 import { Loader2 } from "lucide-react";
 import {
   appliedFiltersToApiParams,
@@ -38,9 +38,7 @@ export function UmapMapTab() {
     queryFn: () =>
       fetchIbgcUmap({
         include_partials: true,
-        // pident/qcov are client-only roster metrics, not map sort columns;
-        // the allow-list is fully plotted so order is moot — fold to similarity.
-        sort_by: sortBy === "pident" || sortBy === "qcov" ? "similarity" : sortBy,
+        sort_by: toMapSortBy(sortBy),
         order,
         ...filterParams,
       }),

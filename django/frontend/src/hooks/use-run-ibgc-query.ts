@@ -1,26 +1,25 @@
 import { useState } from "react";
 import {
-  postIbgcDomainQueryScores,
-  postIbgcArchitectureQueryScores,
-  fetchIbgcSequenceQueryScores,
-  fetchIbgcChemicalQueryScores,
-} from "@/api/ibgcs";
-import { postSequenceQuery, postChemicalQuery } from "@/api/queries";
-import type { QueryScoresResponse } from "@/api/types";
+  postCombinedQuery,
+  fetchCombinedQueryScores,
+} from "@/api/queries";
+import type {
+  CombinedQueryCriterion,
+  CombinedScoresResponse,
+  CriterionScore,
+} from "@/api/types";
 import { useQueryStore } from "@/stores/query-store";
 import {
   snapshotFiltersToApplied,
   useDiscoveryStore,
+  type SearchSource,
 } from "@/stores/discovery-store";
 import { ApiError } from "@/api/client";
 import { toast } from "sonner";
 
 /**
  * Soft cap on how many iBGCs we propagate from a scored query into the
- * dashboard's roster + maps. Mirrors the server-side
- * ``DASHBOARD_RESULT_CAP`` so the maps don't bother downsampling further.
- * When more than this many iBGCs come back, we keep the top-N by score —
- * that's what users actually care about for similarity-driven queries.
+ * dashboard's roster + maps. Mirrors the server-side ``DASHBOARD_RESULT_CAP``.
  */
 const QUERY_RESULT_CAP = 5_000;
 
@@ -28,13 +27,16 @@ const QUERY_RESULT_CAP = 5_000;
  * Hook that drives the Run Query button in the v2 dashboard.
  *
  * On every press it (a) snapshots the current filter-chip values into
- * ``discovery-store.appliedFilters`` — that's what the roster/maps key
- * off, so toggling chips alone does NOT refetch — and (b) resolves any
- * active advanced searches (domain conditions + sequence) into an iBGC id
- * allow-list intersected with the filters.
+ * ``discovery-store.appliedFilters`` — that's what the roster/maps key off, so
+ * toggling chips alone does NOT refetch — and (b) resolves any active scoring
+ * searches (domain conditions, architecture, sequence, chemical) into a single
+ * combined multi-criterion query whose criteria are AND-intersected server-side.
  *
- * The chemical query path is not surfaced in v2 yet — it lives in P1.5b's
- * follow-up.
+ * The combined query returns one score column per criterion (keyed by the
+ * criterion's stable id). Those are stored in ``resultCriteria`` +
+ * ``resultScoresByCriterion`` for the per-criterion roster columns / map axes;
+ * the legacy single-similarity maps are back-filled from the dominant criterion
+ * so the existing roster/Variables-map views keep working during the migration.
  */
 export function useRunIbgcQuery() {
   const [isRunning, setIsRunning] = useState(false);
@@ -54,37 +56,84 @@ export function useRunIbgcQuery() {
   const similarityThreshold = useQueryStore((s) => s.similarityThreshold);
 
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
+  const setCombinedResult = useDiscoveryStore((s) => s.setCombinedResult);
   const setAppliedFilters = useDiscoveryStore((s) => s.setAppliedFilters);
 
   const run = async () => {
     setError(null);
 
-    // Snapshot chip values → applied filters every time Run Query is
-    // pressed, regardless of whether an advanced query is also active.
+    // Snapshot chip values → applied filters every time Run Query is pressed.
     // Shared with the landing-page keyword redirect via
-    // ``snapshotFiltersToApplied`` so both paths stay in lockstep.
+    // ``snapshotFiltersToApplied`` so both paths stay in lockstep. The roster
+    // and maps apply these filters at fetch time; the combined query carries
+    // only the scoring criteria, so filters narrow the result downstream.
     setAppliedFilters(snapshotFiltersToApplied());
 
-    // The Boolean (AND/OR token) query and the architecture query are
-    // independent surfaces — whichever has content is applied, and when both
-    // do their result sets are intersected (same as the domain/sequence/
-    // chemical branches below).
     const archAccs = architectureText
       .split(/[,\s]+/)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
     const archActive = archAccs.length > 0;
     const booleanActive = domainText.trim().length > 0;
+    const sequenceActive = sequenceQuery.trim().length > 0;
+    const chemicalActive = smilesQuery.trim().length > 0;
 
-    if (
-      !booleanActive &&
-      !archActive &&
-      !sequenceQuery.trim() &&
-      !smilesQuery.trim()
-    ) {
-      // Filters-only run: clear any prior advanced-query allow-list so the
-      // roster reflects the new filter snapshot.
+    // Each active surface becomes one criterion. The current query builder
+    // supports a single instance per type, so the type doubles as the stable
+    // per-instance id; when the UI gains multi-instance criteria these become
+    // client-generated unique ids.
+    const criteria: CombinedQueryCriterion[] = [];
+    if (booleanActive) {
+      criteria.push({
+        id: "domain",
+        type: "domain",
+        params: {
+          domains_text: domainText,
+          logic: domainLogic,
+          threshold: domainThreshold,
+        },
+      });
+    }
+    if (archActive) {
+      criteria.push({
+        id: "architecture",
+        type: "architecture",
+        params: {
+          architecture: archAccs,
+          weight: architectureWeight,
+          threshold: architectureThreshold,
+          k: QUERY_RESULT_CAP,
+        },
+      });
+    }
+    if (sequenceActive) {
+      criteria.push({
+        id: "sequence",
+        type: "sequence",
+        params: {
+          sequence: sequenceQuery,
+          min_bitscore: sequenceMinBitscore,
+          min_pident: sequenceMinPident,
+          min_qcov: sequenceMinQcov,
+        },
+      });
+    }
+    if (chemicalActive) {
+      criteria.push({
+        id: "chemical",
+        type: "chemical",
+        params: {
+          smiles: smilesQuery,
+          similarity_threshold: similarityThreshold,
+        },
+      });
+    }
+
+    if (criteria.length === 0) {
+      // Filters-only run: clear any prior scored-query allow-list so the roster
+      // reflects the new filter snapshot.
       setQueryResult(null, null, null, null, null, null);
+      setCombinedResult(null, null);
       toast.success("Filters applied");
       return;
     }
@@ -92,162 +141,76 @@ export function useRunIbgcQuery() {
     setIsRunning(true);
     const abortController = new AbortController();
     try {
-      const idSets: Set<number>[] = [];
-      const similarities: Record<number, number> = {};
-      const bestHitProtein: Record<number, string> = {};
-      const pident: Record<number, number> = {};
-      const qcoverage: Record<number, number> = {};
-      // Per-branch (total_matched, capped) so the roster banner can report
-      // how many matched vs the 5k cap. Branches run domain → arch →
-      // sequence → chemical, so the sequence bitscore overwrites a domain
-      // hit's 1.0 when both hit the same iBGC (preferred — more informative).
-      const branchStats: { total: number; capped: boolean }[] = [];
-      const collect = (resp: QueryScoresResponse) => {
-        idSets.push(new Set(resp.items.map((r) => r.id)));
-        for (const item of resp.items) {
-          if (item.similarity_score != null) {
-            similarities[item.id] = item.similarity_score;
-          }
-          if (item.best_hit_protein_id) {
-            bestHitProtein[item.id] = item.best_hit_protein_id;
-          }
-          if (item.best_pident != null) pident[item.id] = item.best_pident;
-          if (item.best_qcoverage != null) {
-            qcoverage[item.id] = item.best_qcoverage;
-          }
+      const accepted = await postCombinedQuery({ criteria });
+      const scores = await pollCombinedScores(
+        accepted.task_id,
+        abortController,
+      );
+
+      const ids = scores.items.map((r) => r.id);
+
+      // Per-criterion score maps: criterion id → (iBGC id → score payload).
+      const scoresByCriterion: Record<
+        string,
+        Record<number, CriterionScore>
+      > = {};
+      for (const col of scores.criteria) scoresByCriterion[col.id] = {};
+      for (const row of scores.items) {
+        for (const [cid, sc] of Object.entries(row.scores)) {
+          (scoresByCriterion[cid] ??= {})[row.id] = sc;
         }
-        branchStats.push({ total: resp.total_matched, capped: resp.capped });
-      };
-
-      // ── Domain branch ─────────────────────────────────────────────────
-      if (booleanActive) {
-        collect(
-          await postIbgcDomainQueryScores(
-            {
-              domains_text: domainText,
-              logic: domainLogic,
-              threshold: domainThreshold,
-            },
-            QUERY_RESULT_CAP,
-          ),
-        );
       }
+      setCombinedResult(scores.criteria, scoresByCriterion);
 
-      // ── Architecture branch (composite-Dice) ──────────────────────────
-      if (archActive) {
-        collect(
-          await postIbgcArchitectureQueryScores(
-            {
-              architecture: archAccs,
-              weight: architectureWeight,
-              threshold: architectureThreshold,
-              k: QUERY_RESULT_CAP,
-            },
-            QUERY_RESULT_CAP,
-          ),
-        );
-      }
-
-      // ── Sequence branch ───────────────────────────────────────────────
-      if (sequenceQuery.trim()) {
-        const accepted = await postSequenceQuery({
-          sequence: sequenceQuery,
-          min_bitscore: sequenceMinBitscore,
-          min_pident: sequenceMinPident,
-          min_qcov: sequenceMinQcov,
-        });
-        // Poll with backoff until the task is ready. Budget matches the
-        // Celery result TTL (CELERY_RESULT_EXPIRES, default 1h): polling
-        // longer is pointless because AsyncResult silently returns
-        // PENDING for evicted task ids. Past the slow-notice threshold
-        // (~2 min) we surface a cancellable "still searching" toast so
-        // the user can let go without keeping the tab open.
-        collect(await pollSequenceTask(accepted.task_id, abortController));
-      }
-
-      // ── Chemical branch (ChemOnt via ClassyFire) ──────────────────────
-      if (smilesQuery.trim()) {
-        const accepted = await postChemicalQuery({
-          smiles: smilesQuery,
-          similarity_threshold: similarityThreshold,
-        });
-        // Novel compounds absent from ClassyFire's cache classify slowly, so
-        // reuse the same poll-with-backoff path as sequence search.
-        collect(await pollChemicalTask(accepted.task_id, abortController));
-      }
-
-      // Intersect across active branches; if only one branch ran, that's
-      // already the result. (Mirrors legacy intersection semantics.) Each
-      // branch is already ranked best-first and server-capped at 5k, so the
-      // single-branch allow-list stays in score order.
-      let intersection: number[] = [];
-      if (idSets.length === 1) {
-        intersection = [...idSets[0]!];
-      } else if (idSets.length > 1) {
-        const first = idSets[0]!;
-        intersection = [...first].filter((id) =>
-          idSets.slice(1).every((s) => s.has(id)),
-        );
-      }
-
-      // Match count + capped flag for the roster banner. Single branch: take
-      // its server-reported total. Multi-branch intersection: the true total
-      // is unknowable when any branch was itself capped, so report null +
-      // capped so the banner stays honest.
-      const anyBranchCapped = branchStats.some((b) => b.capped);
-      let totalMatched: number | null;
-      let capped: boolean;
-      if (branchStats.length === 1) {
-        totalMatched = branchStats[0]!.total;
-        capped = branchStats[0]!.capped;
-      } else {
-        totalMatched = anyBranchCapped ? null : intersection.length;
-        capped = anyBranchCapped;
-      }
-
-      // Defensive top-K clip (each branch is already ≤ cap server-side, so an
-      // intersection can't exceed it — kept so the allow-list can never blow
-      // past the cap if that ever changes).
-      if (intersection.length > QUERY_RESULT_CAP) {
-        intersection.sort((a, b) => {
-          const sa = similarities[a] ?? -Infinity;
-          const sb = similarities[b] ?? -Infinity;
-          return sb - sa;
-        });
-        intersection = intersection.slice(0, QUERY_RESULT_CAP);
-        capped = true;
-      }
-
-      // When sequence search is one of the branches, label the result
-      // set as "sequence" so the roster shows bitscore + best-hit
-      // protein columns. Domain-only runs keep the standard similarity
-      // column. Mixed runs prefer the sequence label since that path
-      // carries the more useful per-iBGC metadata.
-      const source:
-        | "sequence"
-        | "chemical"
-        | "domain"
-        | "domain_architecture"
-        | null = sequenceQuery.trim()
+      // Legacy back-fill: the existing roster/maps read a single similarity
+      // map + sequence sub-metric maps + a ``searchSource`` label. Derive them
+      // from the dominant criterion (sequence > chemical > architecture >
+      // domain) so those views keep working until per-criterion columns land.
+      const source: SearchSource = sequenceActive
         ? "sequence"
-        : smilesQuery.trim()
+        : chemicalActive
           ? "chemical"
           : archActive
             ? "domain_architecture"
             : booleanActive
               ? "domain"
               : null;
+      const sourceType =
+        source === "domain_architecture" ? "architecture" : source;
+      const sourceCol =
+        scores.criteria.find((c) => c.type === sourceType) ??
+        scores.criteria[0];
+
+      const similarities: Record<number, number> = {};
+      const bestHitProtein: Record<number, string> = {};
+      const pident: Record<number, number> = {};
+      const qcoverage: Record<number, number> = {};
+      if (sourceCol) {
+        const map = scoresByCriterion[sourceCol.id] ?? {};
+        for (const id of ids) {
+          const sc = map[id];
+          if (sc?.value != null) similarities[id] = sc.value;
+          if (sourceCol.type === "sequence") {
+            if (sc?.pident != null) pident[id] = sc.pident;
+            if (sc?.qcoverage != null) qcoverage[id] = sc.qcoverage;
+            if (sc?.best_hit_protein_id) {
+              bestHitProtein[id] = sc.best_hit_protein_id;
+            }
+          }
+        }
+      }
+
       setQueryResult(
-        intersection,
+        ids,
         similarities,
         source,
         source === "sequence" ? bestHitProtein : null,
         source === "sequence" ? pident : null,
         source === "sequence" ? qcoverage : null,
-        totalMatched,
-        capped,
+        scores.total_matched,
+        scores.capped,
       );
-      toast.success(`Query returned ${intersection.length} iBGC(s)`);
+      toast.success(`Query returned ${ids.length} iBGC(s)`);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         toast.info("Search cancelled");
@@ -268,33 +231,29 @@ export function useRunIbgcQuery() {
   return { run, isRunning, error };
 }
 
-// 1h matches CELERY_RESULT_EXPIRES — past that the result is evicted
-// and AsyncResult would return PENDING forever, so capping polling
-// here is the actionable boundary, not a UX guess.
-const SEQUENCE_POLL_HARD_CAP_MS = 60 * 60 * 1000;
-const SEQUENCE_POLL_SLOW_NOTICE_MS = 2 * 60 * 1000;
-const SEQUENCE_POLL_INITIAL_MS = 1000;
-const SEQUENCE_POLL_MAX_MS = 5000;
-
-type StatusFetcher = (taskId: string) => Promise<QueryScoresResponse>;
+// 1h matches the task result lifetime — past that the result is evicted and the
+// poll would 503 forever, so capping polling here is the actionable boundary.
+const POLL_HARD_CAP_MS = 60 * 60 * 1000;
+const POLL_SLOW_NOTICE_MS = 2 * 60 * 1000;
+const POLL_INITIAL_MS = 1000;
+const POLL_MAX_MS = 5000;
 
 /**
- * Poll an async iBGC-roster search task with backoff until it's ready.
+ * Poll an async task with backoff until it's ready.
  *
- * The backend returns 503 while the task is PENDING (so the dashboard stays
- * responsive) and 200 when ready. We back off the poll interval to avoid
- * hammering the API during multi-minute runs but stay responsive for short
- * ones — the first hit lands at 1s. Past the slow-notice threshold (~2 min) a
- * cancellable "still searching" toast lets the user let go.
+ * The backend returns 503 while the task is PENDING and 200 when ready. We back
+ * off the poll interval to stay responsive for short runs (first hit at 1s)
+ * without hammering the API during multi-minute ones. Past the slow-notice
+ * threshold (~2 min) a cancellable "still searching" toast lets the user let go.
  */
-async function pollRosterTask(
+async function pollTask<T>(
   taskId: string,
   abortController: AbortController,
-  fetchStatus: StatusFetcher,
+  fetchStatus: (taskId: string) => Promise<T>,
   messages: { slow: string; timeout: string },
-) {
+): Promise<T> {
   const start = Date.now();
-  let waitMs = SEQUENCE_POLL_INITIAL_MS;
+  let waitMs = POLL_INITIAL_MS;
   let slowNoticeShown = false;
   let slowToastId: string | number | undefined;
 
@@ -305,7 +264,7 @@ async function pollRosterTask(
     }
   };
 
-  while (Date.now() - start < SEQUENCE_POLL_HARD_CAP_MS) {
+  while (Date.now() - start < POLL_HARD_CAP_MS) {
     if (abortController.signal.aborted) {
       dismissSlowToast();
       throw new DOMException("Search cancelled", "AbortError");
@@ -316,10 +275,7 @@ async function pollRosterTask(
       return result;
     } catch (e) {
       if (e instanceof ApiError && e.status === 503) {
-        if (
-          !slowNoticeShown &&
-          Date.now() - start > SEQUENCE_POLL_SLOW_NOTICE_MS
-        ) {
+        if (!slowNoticeShown && Date.now() - start > POLL_SLOW_NOTICE_MS) {
           slowNoticeShown = true;
           slowToastId = toast.message(messages.slow, {
             duration: Infinity,
@@ -330,7 +286,7 @@ async function pollRosterTask(
           });
         }
         await new Promise((r) => setTimeout(r, waitMs));
-        waitMs = Math.min(SEQUENCE_POLL_MAX_MS, Math.round(waitMs * 1.5));
+        waitMs = Math.min(POLL_MAX_MS, Math.round(waitMs * 1.5));
         continue;
       }
       dismissSlowToast();
@@ -341,28 +297,18 @@ async function pollRosterTask(
   throw new Error(messages.timeout);
 }
 
-function pollSequenceTask(taskId: string, abortController: AbortController) {
-  return pollRosterTask(
+function pollCombinedScores(
+  taskId: string,
+  abortController: AbortController,
+): Promise<CombinedScoresResponse> {
+  return pollTask(
     taskId,
     abortController,
-    (id) => fetchIbgcSequenceQueryScores(id, QUERY_RESULT_CAP),
+    (id) => fetchCombinedQueryScores(id),
     {
-      slow: "Still searching… large protein queries can take several minutes. Keep this tab open.",
+      slow: "Still searching… sequence and chemical criteria can take several minutes. Keep this tab open.",
       timeout:
-        "Sequence search exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
-    },
-  );
-}
-
-function pollChemicalTask(taskId: string, abortController: AbortController) {
-  return pollRosterTask(
-    taskId,
-    abortController,
-    (id) => fetchIbgcChemicalQueryScores(id, QUERY_RESULT_CAP),
-    {
-      slow: "Still classifying… novel structures can take a minute to classify in ClassyFire. Keep this tab open.",
-      timeout:
-        "Chemical search exceeded the 1-hour result lifetime — retry, or check that ClassyFire is reachable.",
+        "Query exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
     },
   );
 }

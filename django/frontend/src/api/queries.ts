@@ -1,76 +1,51 @@
 import { apiGet, apiPost } from "./client";
 import type {
-  DomainQueryRequest,
+  CombinedQueryAccepted,
+  CombinedQueryRequest,
+  CombinedRosterResponse,
+  CombinedScoresResponse,
   PaginatedAssemblyAggregationResponse,
-  PaginatedQueryResultResponse,
 } from "./types";
 
-export interface DomainQueryParams {
-  page?: number;
-  page_size?: number;
-  sort_by?: string;
-  order?: "asc" | "desc";
-  search?: string;
-  source_names?: string;
-  detector_tools?: string;
-  taxonomy_path?: string;
-  assembly_type?: string;
-  bgc_class?: string;
-  biome_lineage?: string;
-  assembly_accession?: string;
-  bgc_accession?: string;
+// Composite-Dice "find similar iBGCs" lives in `src/api/ibgcs.ts` →
+// `postSimilarIbgcQuery`. All other scoring searches (domain, architecture,
+// sequence, chemical) are now driven through the combined query below.
+
+// ── Combined multi-criterion query ──────────────────────────────────────────
+// One async query carrying several scoring criteria. Returns 202 + a task_id;
+// poll the status endpoint (paginated roster with per-criterion score columns)
+// or the scores endpoint (full capped payload + ibgc_ids_token for the maps).
+
+/** Dispatch a combined multi-criterion query → 202 + task_id. */
+export function postCombinedQuery(body: CombinedQueryRequest) {
+  return apiPost<CombinedQueryAccepted>("/query/combined/", body);
 }
 
-export function postDomainQuery(
-  body: DomainQueryRequest,
-  params: DomainQueryParams = {}
+export interface CombinedStatusParams {
+  page?: number;
+  page_size?: number;
+  /** ``score:<criterionId>[:<metricKey>]`` or an iBGC column (``novelty_score``,
+   *  ``size_kb``, ``bgc_class``, …). Empty = primary criterion. */
+  sort_by?: string;
+  order?: "asc" | "desc";
+}
+
+/** Poll a combined query → paginated roster with per-criterion score columns. */
+export function fetchCombinedQueryStatus(
+  taskId: string,
+  params: CombinedStatusParams = {},
 ) {
-  const queryString = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) queryString.set(key, String(value));
-  }
-  const qs = queryString.toString();
-  return apiPost<PaginatedQueryResultResponse>(
-    `/query/domain/${qs ? `?${qs}` : ""}`,
-    body
+  return apiGet<CombinedRosterResponse>(
+    `/query/combined/status/${taskId}/`,
+    params as Record<string, string | number | boolean | undefined>,
   );
 }
 
-// Composite-Dice "find similar iBGCs" replaces the retired embedding-based
-// similar-BGC endpoint. See `src/api/ibgcs.ts` → `postSimilarIbgcQuery`.
-
-export interface ChemicalQueryRequest {
-  smiles: string;
-  similarity_threshold: number;
-}
-
-export interface ChemicalQueryAccepted {
-  task_id: string;
-}
-
-/**
- * Dispatch a ChemOnt chemical-similarity search. The query SMILES is
- * classified into ChemOnt terms via ClassyFire (cached by InChIKey) and
- * scored against each iBGC's annotations. Returns ``202`` + a ``task_id``;
- * poll ``fetchIbgcChemicalQueryStatus`` for the iBGC roster.
- */
-export function postChemicalQuery(body: ChemicalQueryRequest) {
-  return apiPost<ChemicalQueryAccepted>("/query/chemical/", body);
-}
-
-export interface SequenceQueryRequest {
-  sequence: string;
-  min_bitscore: number;
-  min_pident: number;
-  min_qcov: number;
-}
-
-export interface SequenceQueryAccepted {
-  task_id: string;
-}
-
-export function postSequenceQuery(body: SequenceQueryRequest) {
-  return apiPost<SequenceQueryAccepted>("/query/sequence/", body);
+/** Poll a combined query → full capped scores payload (+ ibgc_ids_token). */
+export function fetchCombinedQueryScores(taskId: string) {
+  return apiGet<CombinedScoresResponse>(
+    `/query/combined/status/${taskId}/scores/`,
+  );
 }
 
 export interface AssemblyAggregationParams {

@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import type { AssetSummary } from "@/api/assets";
-import type { IbgcScatterAxis, RegionCds } from "@/api/types";
+import type {
+  CriterionColumn,
+  CriterionScore,
+  IbgcScatterAxis,
+  RegionCds,
+} from "@/api/types";
 import { useFilterStore } from "@/stores/filter-store";
 
 /**
@@ -27,7 +32,11 @@ export type RosterSortKey =
   // metric map and sends sort_by="similarity" (array_position) so the server
   // preserves that order. Selectable only while a sequence result is active.
   | "pident"
-  | "qcov";
+  | "qcov"
+  // Combined-query per-criterion sort keys: ``score:<criterionId>`` (primary
+  // value) or ``score:<criterionId>:<metricKey>`` (e.g. a sequence pident).
+  // Resolved by the combined status endpoint against its cached score maps.
+  | `score:${string}`;
 
 /** Which advanced-query path produced the current ``resultIbgcIds`` set.
  *  Lets the roster swap the "Sim." column for sequence-search-specific
@@ -103,6 +112,20 @@ interface DiscoveryState {
     qcoverage?: Record<number, number> | null,
     totalMatched?: number | null,
     capped?: boolean,
+  ) => void;
+
+  // Combined multi-criterion query result. ``resultCriteria`` is the ordered
+  // list of criterion-column descriptors (drives the roster's per-criterion
+  // columns + the Variables-map axes); ``resultScoresByCriterion`` maps a
+  // criterion id → (iBGC id → its score payload). Both null when no combined
+  // query is active. The legacy ``result*ById`` maps above are back-filled
+  // from the primary criterion so existing views keep working during the
+  // migration to per-criterion columns.
+  resultCriteria: CriterionColumn[] | null;
+  resultScoresByCriterion: Record<string, Record<number, CriterionScore>> | null;
+  setCombinedResult: (
+    criteria: CriterionColumn[] | null,
+    scoresByCriterion: Record<string, Record<number, CriterionScore>> | null,
   ) => void;
 
   // Snapshot of filter-store values taken when the user last pressed Run
@@ -322,6 +345,14 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       selectedCds: null,
     }),
 
+  resultCriteria: null,
+  resultScoresByCriterion: null,
+  setCombinedResult: (criteria, scoresByCriterion) =>
+    set({
+      resultCriteria: criteria,
+      resultScoresByCriterion: scoresByCriterion,
+    }),
+
   appliedFilters: EMPTY_APPLIED_FILTERS,
   setAppliedFilters: (filters) => set({ appliedFilters: filters }),
 
@@ -340,6 +371,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       resultBestHitProteinById: null,
       resultPidentById: null,
       resultQcoverageById: null,
+      resultCriteria: null,
+      resultScoresByCriterion: null,
       searchSource: null,
       resultTotalMatched: null,
       resultCapped: false,

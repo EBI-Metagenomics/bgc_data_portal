@@ -9,7 +9,6 @@ import type {
   IbgcScatterPoint,
   IbgcUmapPoint,
   PaginatedIbgcRosterResponse,
-  QueryScoresResponse,
 } from "./types";
 
 export interface IbgcFilterParams {
@@ -108,106 +107,6 @@ export function fetchIbgcIds(params: IbgcIdsParams = {}) {
   );
 }
 
-// ── iBGC-collapsed query endpoints ─────────────────────────────────────────
-
-export interface DomainQueryRequest {
-  /** Comma/whitespace-separated accessions (InterPro entries or signature
-   *  accs). A token prefixed with ``-``/``!`` is excluded. */
-  domains_text: string;
-  logic: "and" | "or";
-  /** AND-only containment threshold (0–1): min fraction of include tokens
-   *  that must be present. Default 1.0 (all). */
-  threshold?: number;
-}
-
-export interface IbgcDomainQueryParams extends IbgcFilterParams {
-  sort_by?:
-    | "novelty_score"
-    | "domain_novelty"
-    | "size_kb"
-    | "classification_path"
-    | "similarity_score"
-    | "id";
-  order?: "asc" | "desc";
-  page?: number;
-  page_size?: number;
-}
-
-export function postIbgcDomainQuery(
-  body: DomainQueryRequest,
-  params: IbgcDomainQueryParams = {},
-) {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
-  }
-  const path = qs.toString()
-    ? `/query/ibgc-domain/?${qs.toString()}`
-    : "/query/ibgc-domain/";
-  return apiPost<PaginatedIbgcRosterResponse>(path, body);
-}
-
-export interface IbgcSequenceStatusParams extends IbgcDomainQueryParams {
-  // same shape as the domain-query params
-}
-
-export function fetchIbgcSequenceQueryStatus(
-  taskId: string,
-  params: IbgcSequenceStatusParams = {},
-) {
-  return apiGet<PaginatedIbgcRosterResponse>(
-    `/query/ibgc-sequence/status/${taskId}/`,
-    params as Record<string, string | number | boolean | undefined>,
-  );
-}
-
-/** Poll a chemical (ChemOnt/ClassyFire) search task → iBGC roster. */
-export function fetchIbgcChemicalQueryStatus(
-  taskId: string,
-  params: IbgcSequenceStatusParams = {},
-) {
-  return apiGet<PaginatedIbgcRosterResponse>(
-    `/query/chemical/status/${taskId}/`,
-    params as Record<string, string | number | boolean | undefined>,
-  );
-}
-
-// ── Compact, capped query "scores" endpoints ────────────────────────────────
-// These return up to `max_results` (server-bounded by DASHBOARD_RESULT_CAP)
-// ranked {id, similarity_score, best_pident, best_qcoverage, best_hit_protein}
-// rows plus the true `total_matched`. The dashboard builds its result
-// allow-list + metric maps from these; the full roster rows are fetched
-// separately via /ibgcs/roster/?ibgc_ids=…
-
-/** Poll a sequence-search task → compact, bitscore-ranked scores (≤ max). */
-export function fetchIbgcSequenceQueryScores(taskId: string, maxResults?: number) {
-  return apiGet<QueryScoresResponse>(
-    `/query/ibgc-sequence/status/${taskId}/scores/`,
-    maxResults !== undefined ? { max_results: maxResults } : {},
-  );
-}
-
-/** Poll a chemical-search task → compact, similarity-ranked scores (≤ max). */
-export function fetchIbgcChemicalQueryScores(taskId: string, maxResults?: number) {
-  return apiGet<QueryScoresResponse>(
-    `/query/chemical/status/${taskId}/scores/`,
-    maxResults !== undefined ? { max_results: maxResults } : {},
-  );
-}
-
-/** Domain query → compact scores (≤ max). Domain match is binary (score 1.0). */
-export function postIbgcDomainQueryScores(
-  body: DomainQueryRequest,
-  maxResults?: number,
-) {
-  const qs = new URLSearchParams();
-  if (maxResults !== undefined) qs.set("max_results", String(maxResults));
-  const path = qs.toString()
-    ? `/query/ibgc-domain/scores/?${qs.toString()}`
-    : "/query/ibgc-domain/scores/";
-  return apiPost<QueryScoresResponse>(path, body);
-}
-
 export function fetchIbgcDetail(ibgcId: number, assetToken?: string | null) {
   // Negative ids belong to ephemeral asset uploads — the backend resolves
   // them through the ``X-Asset-Token`` header so the URL path stays clean.
@@ -244,6 +143,23 @@ export type IbgcMapSortBy =
   | "size_kb"
   | "id"
   | "similarity";
+
+/** Coerce a roster sort key to a valid map-sampling sort column. The roster's
+ *  client-only metrics (``pident`` / ``qcov``) and combined-query per-criterion
+ *  keys (``score:*``) aren't map sort columns; the allow-list is fully plotted
+ *  so order is moot — fold them to ``similarity``. */
+export function toMapSortBy(sortBy: string): IbgcMapSortBy {
+  switch (sortBy) {
+    case "novelty_score":
+    case "domain_novelty":
+    case "size_kb":
+    case "id":
+    case "similarity":
+      return sortBy;
+    default:
+      return "similarity";
+  }
+}
 
 export interface IbgcUmapParams extends IbgcFilterParams {
   max_points?: number;
@@ -324,38 +240,3 @@ export function fetchIbgcArchitecture(
   return apiGet<IbgcArchitectureResponse>(`/ibgcs/${ibgcId}/architecture/`);
 }
 
-export interface IbgcArchitectureQueryRequest {
-  architecture: string[];
-  weight: number;
-  k?: number;
-  /** Minimum composite-Dice score (0–1) to return. Default 0.25 server-side. */
-  threshold?: number;
-}
-
-export function postIbgcArchitectureQuery(
-  body: IbgcArchitectureQueryRequest,
-  page = 1,
-  pageSize = 25,
-) {
-  const qs = new URLSearchParams({
-    page: String(page),
-    page_size: String(pageSize),
-  });
-  return apiPost<PaginatedIbgcRosterResponse>(
-    `/query/ibgc-architecture/?${qs.toString()}`,
-    body,
-  );
-}
-
-/** Architecture query → compact, composite-Dice-ranked scores (≤ max). */
-export function postIbgcArchitectureQueryScores(
-  body: IbgcArchitectureQueryRequest,
-  maxResults?: number,
-) {
-  const qs = new URLSearchParams();
-  if (maxResults !== undefined) qs.set("max_results", String(maxResults));
-  const path = qs.toString()
-    ? `/query/ibgc-architecture/scores/?${qs.toString()}`
-    : "/query/ibgc-architecture/scores/";
-  return apiPost<QueryScoresResponse>(path, body);
-}

@@ -1,10 +1,10 @@
 """Unit tests for free-text domain-query token parsing.
 
-Covers ``_parse_domain_tokens`` — the include/exclude split that backs the
-text-entry AND/OR domain filter. Pure function, no DB needed.
+Covers ``parse_domain_tokens`` — the include/exclude split that backs the
+text-entry AND/OR domain criterion. Pure function, no DB needed.
 """
 
-from discovery.api import _parse_domain_tokens
+from discovery.services.query import parse_domain_tokens as _parse_domain_tokens
 
 
 def test_splits_on_comma_and_whitespace():
