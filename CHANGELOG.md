@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.9.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.8.0...bgc_data_portal-v3.9.0) (2026-06-19)
+
+
+### Features
+
+* **portal:** per-criterion scoring in Discovery combined query ([18326ea](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/18326eab2efe7c42e3ef28340507b4b67d00eef0))
+* **portal:** per-criterion scoring in Discovery combined query ([4729228](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/472922831a1661e82d1ad6ea237eeab9356f88cc))
+
+
+### Bug Fixes
+
+* **deployment:** Bump app and chart version ([f2b64ef](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/f2b64ef0dfe8952b0ec7851b72e241911edc49e6))
+* result-set token. So large Run Query allow-lists no longer ride in the GET URL ([5b6aa85](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/5b6aa8545c428be53bd168d4280740d33b498e4c))
+
 ## [3.8.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.7.0...bgc_data_portal-v3.8.0) (2026-06-18)
 
 
