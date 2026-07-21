@@ -136,7 +136,19 @@ worker:
   includeSecret: true
   includeConfig: true
   workingDir: /app
-  initContainers: []
+  # Block until Postgres accepts connections before the worker's command runs
+  # createcachetable — otherwise the worker races Postgres startup under
+  # `skaffold dev` and its first-boot crash fails the deploy's stabilize check.
+  initContainers:
+    - name: wait-for-postgres
+      image: bgc-data-portal-django-worker
+      command:
+        - sh
+        - -c
+        - |
+          until python -c "import socket; socket.create_connection(('postgres', 5432))" 2>/dev/null; do
+            echo "waiting for postgres..."; sleep 2
+          done
   # django-tasks db_worker polls the Postgres queue (both queues). --reload
   # defaults to DEBUG, giving the same hot-reload watchmedo used to provide.
   # createcachetable is idempotent — safe to run here as well as in the django
