@@ -26,8 +26,10 @@ from discovery.models import (
 )
 from discovery.services.ingestion.cbgc_assigner import CbgcAssigner
 from tests.factories.discovery_models import (
+    ConsensusBgcFactory,
     DashboardContigFactory,
     DashboardDetectorFactory,
+    SourceBgcPredictionFactory,
 )
 
 
@@ -252,6 +254,107 @@ class TestDisjointness:
 
 
 # ── bgc_number sequencing ─────────────────────────────────────────────────────
+
+
+# ── hydration (cross-dataset / re-load contigs) ───────────────────────────────
+
+
+class TestHydration:
+    """Fresh assigners must see cBGCs a prior load already persisted.
+
+    Later datasets in the same cycle reuse the ``discovery_contig`` row via
+    ``bulk_create(ignore_conflicts=True)`` in ``load_contigs``. Without
+    hydration, ``_find_overlaps`` returns ``[]`` and ``_create`` collides
+    with the ``excl_cbgc_overlap`` exclusion constraint.
+    """
+
+    def test_exact_range_reuses_existing_cbgc(self, contig, detector):
+        existing = ConsensusBgcFactory(
+            contig=contig, start_pos=0, end_pos=10_529
+        )
+        fresh = CbgcAssigner()
+        got_id, bgc_num, pred_acc = fresh.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=0,
+            end=10_529,
+            detector_id=detector.id,
+            tool_code=detector.tool_name_code,
+        )
+        assert got_id == existing.id
+        assert ConsensusBgc.objects.filter(contig_id=contig.id).count() == 1
+        assert pred_acc == f"{existing.accession}.ANT.{bgc_num:02}"
+
+    def test_overlapping_range_extends_existing_cbgc(self, contig, detector):
+        existing = ConsensusBgcFactory(
+            contig=contig, start_pos=1_000, end_pos=5_000
+        )
+        fresh = CbgcAssigner()
+        got_id, *_ = fresh.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=4_500,
+            end=10_000,
+            detector_id=detector.id,
+            tool_code=detector.tool_name_code,
+        )
+        assert got_id == existing.id
+        cbgc = ConsensusBgc.objects.get(id=existing.id)
+        assert cbgc.bgc_range.lower == 1_000
+        assert cbgc.bgc_range.upper == 10_001
+
+    def test_bgc_number_counter_continues_after_hydration(self, contig, detector):
+        existing = ConsensusBgcFactory(
+            contig=contig, start_pos=1_000, end_pos=10_000
+        )
+        # Prior load left two antiSMASH source predictions on this cBGC.
+        SourceBgcPredictionFactory(
+            contig=contig,
+            cbgc=existing,
+            detector=detector,
+            start_pos=1_000,
+            end_pos=5_000,
+            bgc_number=1,
+            prediction_accession=f"{existing.accession}.ANT.01",
+        )
+        SourceBgcPredictionFactory(
+            contig=contig,
+            cbgc=existing,
+            detector=detector,
+            start_pos=6_000,
+            end_pos=10_000,
+            bgc_number=2,
+            prediction_accession=f"{existing.accession}.ANT.02",
+        )
+        fresh = CbgcAssigner()
+        _, bgc_num, pred_acc = fresh.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=2_000,
+            end=4_000,
+            detector_id=detector.id,
+            tool_code=detector.tool_name_code,
+        )
+        assert bgc_num == 3
+        assert pred_acc == f"{existing.accession}.ANT.03"
+
+    def test_disjoint_range_creates_second_cbgc_without_collision(
+        self, contig, detector
+    ):
+        existing = ConsensusBgcFactory(
+            contig=contig, start_pos=0, end_pos=5_000
+        )
+        fresh = CbgcAssigner()
+        got_id, *_ = fresh.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=20_000,
+            end=25_000,
+            detector_id=detector.id,
+            tool_code=detector.tool_name_code,
+        )
+        assert got_id != existing.id
+        assert ConsensusBgc.objects.filter(contig_id=contig.id).count() == 2
 
 
 class TestBgcNumberSequencing:
