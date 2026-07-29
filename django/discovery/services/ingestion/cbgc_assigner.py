@@ -36,6 +36,7 @@ from discovery.models import (
 )
 from discovery.services.accession_registry import lookup_or_mint_cbgc
 from django.db.backends.postgresql.psycopg_any import NumericRange
+from django.db.models import Max
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +64,11 @@ class CbgcAssigner:
     """Stateful helper that assigns source BGCs to cBGCs during a single load run.
 
     Maintains a per-contig sorted list of in-memory ``_Cbgc`` shadows so each
-    overlap query is O(log n). All DB writes (create / extend / merge /
-    alias / registry coord-sync) flow through this class so the caller
-    stays oblivious to the cBGC bookkeeping.
+    overlap query is O(log n). Existing cBGCs on a contig are hydrated from
+    the DB on first touch — required when a later dataset in the same cycle
+    (or a re-load) reuses a contig that a prior load already populated. All
+    DB writes (create / extend / merge / alias / registry coord-sync) flow
+    through this class so the caller stays oblivious to the cBGC bookkeeping.
 
     Usage::
 
@@ -83,6 +86,7 @@ class CbgcAssigner:
 
     def __init__(self) -> None:
         self._cbgcs: dict[int, list[_Cbgc]] = defaultdict(list)
+        self._hydrated: set[int] = set()
 
     def assign(
         self,
@@ -115,7 +119,46 @@ class CbgcAssigner:
     # ── internal helpers ──────────────────────────────────────────────────
 
     def _find_overlaps(self, contig_id: int, start: int, end: int) -> list[_Cbgc]:
+        if contig_id not in self._hydrated:
+            self._hydrate(contig_id)
         return [c for c in self._cbgcs[contig_id] if c.start <= end and c.end >= start]
+
+    def _hydrate(self, contig_id: int) -> None:
+        # Later datasets in the same cycle reuse the ``discovery_contig`` row via
+        # ``bulk_create(ignore_conflicts=True)`` in ``load_contigs``. Without
+        # this seeding, ``_find_overlaps`` misses cBGCs from prior loads on the
+        # same contig and ``_create`` races into ``excl_cbgc_overlap``.
+        self._hydrated.add(contig_id)
+        rows = list(
+            ConsensusBgc.objects.filter(contig_id=contig_id).values(
+                "id", "accession", "bgc_range"
+            )
+        )
+        if not rows:
+            return
+        cbgc_ids = [r["id"] for r in rows]
+        counters: dict[int, dict[int, int]] = {
+            cid: defaultdict(lambda: 1) for cid in cbgc_ids
+        }
+        for row in (
+            SourceBgcPrediction.objects.filter(cbgc_id__in=cbgc_ids)
+            .values("cbgc_id", "detector_id")
+            .annotate(max_num=Max("bgc_number"))
+        ):
+            counters[row["cbgc_id"]][row["detector_id"]] = (row["max_num"] or 0) + 1
+        for row in rows:
+            rng = row["bgc_range"]  # NumericRange, half-open [lower, upper)
+            self._insert_sorted(
+                contig_id,
+                _Cbgc(
+                    db_id=row["id"],
+                    accession=row["accession"],
+                    contig_accession="",
+                    start=rng.lower,
+                    end=rng.upper - 1,
+                    next_bgc_number=counters[row["id"]],
+                ),
+            )
 
     def _create(
         self,
