@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.9.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.0...bgc_data_portal-v3.9.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ingestion:** preload existing cBGCs per contig in CbgcAssigner ([7e68ca6](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/7e68ca6c3b9a02e61816505ca41dbed7e693225e))
+* **ingestion:** preload existing cBGCs per contig in CbgcAssigner ([db05195](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/db05195d23e0b4c09d5465a8fdb72983b31a447a))
+
 ## [3.9.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.8.0...bgc_data_portal-v3.9.0) (2026-06-19)
 
 
