@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from discovery.models import (
@@ -84,9 +85,16 @@ class CbgcAssigner:
             )
     """
 
-    def __init__(self) -> None:
+    def __init__(self, on_pre_merge: Callable[[], None] | None = None) -> None:
         self._cbgcs: dict[int, list[_Cbgc]] = defaultdict(list)
         self._hydrated: set[int] = set()
+        # Optional hook fired at the top of every ``_merge`` call, before any
+        # DB writes. Loaders that keep an in-memory batch of source
+        # predictions (whose ``cbgc_id`` values could reference cBGCs about
+        # to be absorbed) use it to flush that batch while the absorbed ids
+        # are still live in the DB, so ``_merge``'s subsequent re-FK covers
+        # them alongside previously-persisted rows.
+        self._on_pre_merge = on_pre_merge
 
     def assign(
         self,
@@ -231,6 +239,15 @@ class CbgcAssigner:
         rows already pointing at the absorbed cBGCs are re-FK'd to the
         survivor.
         """
+        # Flush the caller's in-flight batch (if any) BEFORE the delete
+        # below. Otherwise rows still in memory keep stale cbgc_id values
+        # for the cBGCs we're about to absorb, and their next bulk_create
+        # commit trips the SourceBgcPrediction → ConsensusBgc FK constraint.
+        # Once flushed, the re-FK a few lines down catches them alongside
+        # any rows persisted in earlier iterations.
+        if self._on_pre_merge is not None:
+            self._on_pre_merge()
+
         overlaps.sort(key=lambda c: c.db_id)
         survivor = overlaps[0]
         absorbed = overlaps[1:]

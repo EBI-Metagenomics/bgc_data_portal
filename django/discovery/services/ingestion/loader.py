@@ -391,9 +391,22 @@ def load_source_bgcs(
         DashboardContig.objects.values_list("id", "accession")
     )
 
-    assigner = CbgcAssigner()
     batch: list[SourceBgcPrediction] = []
     total = 0
+
+    def _flush_batch() -> None:
+        # Nested-function bulk_create used both by the size-triggered flushes
+        # in the loop and by the assigner's pre-merge hook — the hook needs
+        # to persist any in-flight rows before their cbgc_id references get
+        # invalidated by a cBGC merge/delete downstream.
+        nonlocal total
+        if not batch:
+            return
+        SourceBgcPrediction.objects.bulk_create(batch, ignore_conflicts=True)
+        total += len(batch)
+        batch.clear()
+
+    assigner = CbgcAssigner(on_pre_merge=_flush_batch)
 
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
@@ -448,13 +461,9 @@ def load_source_bgcs(
             )
 
             if len(batch) >= BATCH_SIZE:
-                SourceBgcPrediction.objects.bulk_create(batch, ignore_conflicts=True)
-                total += len(batch)
-                batch.clear()
+                _flush_batch()
 
-    if batch:
-        SourceBgcPrediction.objects.bulk_create(batch, ignore_conflicts=True)
-        total += len(batch)
+    _flush_batch()
 
     lookup = _build_source_bgc_lookup()
     logger.info(

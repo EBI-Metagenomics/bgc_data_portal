@@ -224,6 +224,95 @@ class TestMerge:
         assert absorbed_accession in aliases
 
 
+class TestPreMergeCallback:
+    """The ``on_pre_merge`` hook lets a batching loader flush its in-flight
+    ``SourceBgcPrediction`` rows before ``_merge`` deletes the cBGCs those
+    rows still reference in memory. Without it, the loader's next
+    ``bulk_create`` commit trips the source-BGC → cBGC FK constraint (this
+    is the marine_v2.0 cycle-2026-07-23 failure the fix targets)."""
+
+    def test_callback_fires_before_absorbed_delete(self, contig):
+        det1 = DashboardDetectorFactory(name="p1", tool="p1", version="1")
+        det2 = DashboardDetectorFactory(name="p2", tool="p2", version="1")
+
+        # Record whether the callback saw the absorbed cBGC still live.
+        absorbed_alive_when_hook_fired: list[bool] = []
+        pre_existing_ids: list[int] = []
+
+        def hook() -> None:
+            # Both cBGCs must still exist at hook time — the merge hasn't
+            # deleted anything yet.
+            absorbed_alive_when_hook_fired.append(
+                ConsensusBgc.objects.filter(id__in=pre_existing_ids).count() == 2
+            )
+
+        a = CbgcAssigner(on_pre_merge=hook)
+        cbgc_a, *_ = a.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=1000,
+            end=4_000,
+            detector_id=det1.id,
+            tool_code="AAA",
+        )
+        cbgc_b, *_ = a.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=8_000,
+            end=12_000,
+            detector_id=det2.id,
+            tool_code="BBB",
+        )
+        pre_existing_ids.extend([cbgc_a, cbgc_b])
+
+        det3 = DashboardDetectorFactory(name="p3", tool="p3", version="1")
+        a.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=3_500,
+            end=9_000,
+            detector_id=det3.id,
+            tool_code="CCC",
+        )
+
+        assert absorbed_alive_when_hook_fired == [True], (
+            "on_pre_merge should fire exactly once, before either absorbed "
+            "cBGC row is deleted"
+        )
+
+    def test_no_callback_still_merges_cleanly(self, contig):
+        # The callback is optional; omitting it must not regress merge.
+        det1 = DashboardDetectorFactory(name="q1", tool="q1", version="1")
+        det2 = DashboardDetectorFactory(name="q2", tool="q2", version="1")
+        a = CbgcAssigner()
+        a.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=1000,
+            end=4_000,
+            detector_id=det1.id,
+            tool_code="AAA",
+        )
+        a.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=8_000,
+            end=12_000,
+            detector_id=det2.id,
+            tool_code="BBB",
+        )
+        det3 = DashboardDetectorFactory(name="q3", tool="q3", version="1")
+        bridge, *_ = a.assign(
+            contig_id=contig.id,
+            contig_accession=contig.accession,
+            start=3_500,
+            end=9_000,
+            detector_id=det3.id,
+            tool_code="CCC",
+        )
+        assert ConsensusBgc.objects.filter(id=bridge).exists()
+
+
 # ── disjointness invariant ────────────────────────────────────────────────────
 
 
