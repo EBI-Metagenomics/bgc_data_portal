@@ -24,8 +24,6 @@ import math
 import re
 from dataclasses import dataclass, field
 
-from django.db.models import Q
-
 log = logging.getLogger(__name__)
 
 # Mirrors ``api.DASHBOARD_RESULT_CAP`` — the in-memory sort/intersection of a
@@ -188,13 +186,6 @@ def parse_domain_tokens(text: str) -> tuple[list[str], list[str]]:
     return include, exclude
 
 
-def domain_token_q(tokens: list[str]) -> Q:
-    """Match a ContigDomain by either its signature acc or InterPro entry."""
-    return Q(contig__cds_list__domains__domain_acc__in=tokens) | Q(
-        contig__cds_list__domains__interpro_entry_acc__in=tokens
-    )
-
-
 # ── Domain containment ────────────────────────────────────────────────────────
 
 
@@ -206,11 +197,18 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
     the iBGC (``matched / N_include``) so the column sorts meaningfully — strict
     AND yields 1.0 for every hit, partial-AND / OR grade by coverage.
 
+    A token "is present" in an iBGC iff some CDS whose ``cds_range`` overlaps
+    the iBGC's ``bgc_range`` on the same contig carries a domain hit matching
+    the token (via ``domain_acc`` or ``interpro_entry_acc``). Contig-wide
+    presence is *not* sufficient: multiple iBGCs share a contig and their
+    ranges are disjoint, so restricting to overlapping CDS is required to
+    avoid false positives from unrelated regions of the contig.
+
     AND keeps iBGCs carrying ``ceil(threshold × N_include)`` distinct include
     tokens; OR keeps any iBGC carrying at least one. Excluded tokens drop an
-    iBGC if any source BGC carries them.
+    iBGC if any overlapping CDS carries them.
     """
-    from discovery.models import SourceBgcPrediction
+    from django.db import connection
 
     include, exclude = parse_domain_tokens(params.domains_text)
     metrics = CRITERION_METRICS["domain"]
@@ -218,21 +216,31 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
         return CriterionResult(scores={}, metrics=metrics, total_matched=0)
 
     n_include = len(include)
-    base = SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
 
-    # Count, per iBGC, how many distinct include tokens it carries — one cheap
-    # id-set query per token (a token can match via either column, so a single
-    # grouped COUNT would double-count). This per-token count is what grades the
-    # score for both AND and OR; the modes differ only in the keep threshold.
-    hit_counts: dict[int, int] = {}
-    for tok in include:
-        tok_ids = (
-            base.filter(domain_token_q([tok]))
-            .values_list("integrated_bgc_id", flat=True)
-            .distinct()
-        )
-        for nid in set(tok_ids):
-            hit_counts[nid] = hit_counts.get(nid, 0) + 1
+    # Per-iBGC count of distinct include tokens present within the iBGC's
+    # bgc_range. A token counts once even if matched by both columns or by
+    # multiple domain hits.
+    include_sql = """
+        WITH tokens(tok) AS (SELECT unnest(%s::text[])),
+             matches AS (
+                 SELECT DISTINCT i.id AS ibgc_id, t.tok
+                 FROM discovery_ibgc i
+                 JOIN discovery_cds c
+                   ON c.contig_id = i.contig_id
+                  AND c.cds_range && i.bgc_range
+                 JOIN discovery_domain_hit d
+                   ON d.cds_id = c.id
+                 JOIN tokens t
+                   ON t.tok = d.domain_acc
+                   OR t.tok = d.interpro_entry_acc
+             )
+        SELECT ibgc_id, COUNT(*) AS n_matched
+        FROM matches
+        GROUP BY ibgc_id
+    """
+    with connection.cursor() as cur:
+        cur.execute(include_sql, [include])
+        hit_counts = {int(iid): int(n) for iid, n in cur.fetchall()}
 
     if (params.logic or "and") == "and":
         threshold = max(0.0, min(1.0, params.threshold))
@@ -242,12 +250,20 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
     matched = {nid: c for nid, c in hit_counts.items() if c >= need}
 
     if exclude and matched:
-        excluded_ids = set(
-            SourceBgcPrediction.objects.filter(integrated_bgc_id__in=list(matched))
-            .filter(domain_token_q(exclude))
-            .values_list("integrated_bgc_id", flat=True)
-            .distinct()
-        )
+        exclude_sql = """
+            SELECT DISTINCT i.id
+            FROM discovery_ibgc i
+            JOIN discovery_cds c
+              ON c.contig_id = i.contig_id
+             AND c.cds_range && i.bgc_range
+            JOIN discovery_domain_hit d
+              ON d.cds_id = c.id
+             AND (d.domain_acc = ANY(%s) OR d.interpro_entry_acc = ANY(%s))
+            WHERE i.id = ANY(%s)
+        """
+        with connection.cursor() as cur:
+            cur.execute(exclude_sql, [exclude, exclude, list(matched)])
+            excluded_ids = {int(r[0]) for r in cur.fetchall()}
         matched = {nid: c for nid, c in matched.items() if nid not in excluded_ids}
 
     scores = {
