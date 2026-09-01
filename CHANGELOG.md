@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.9.2](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.1...bgc_data_portal-v3.9.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **discovery:** scope domain search to CDS overlapping the iBGC range ([5d4499f](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/5d4499fd4d5d7501ec2ab3537fb5ba6bf192a71a))
+* **ingestion:** flush source-BGC batch before cBGC merge deletes ([b236017](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/b23601732c55cd2feeb3b7dc156b939e111a0281))
+
 ## [3.9.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.0...bgc_data_portal-v3.9.1) (2026-07-29)
 
 
