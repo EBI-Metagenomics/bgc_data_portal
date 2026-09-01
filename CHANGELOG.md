@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.9.3](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.2...bgc_data_portal-v3.9.3) (2026-09-01)
+
+
+### Bug Fixes
+
+* **ci:** Bump app and chart version in Chart.yaml ([edef3bc](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/edef3bc7f578376a27b78dc775fc6a2b95363791))
+* **ci:** Correct app and chart version in Chart.yaml ([f25dd0b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/f25dd0b004ea32d849929b65d829244165229e2d))
+
 ## [3.9.2](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.1...bgc_data_portal-v3.9.2) (2026-09-01)
 
 
