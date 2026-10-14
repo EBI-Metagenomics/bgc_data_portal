@@ -53,6 +53,13 @@ def taxon_ranked_labels(taxon) -> RankedLabels:
     return list(zip(present, labels))
 
 
+# Above this many ids, read the whole (small, ~15k-row) Taxon table instead of
+# sending a giant ``taxid IN (...)``: unfiltered trees/sunbursts reference
+# nearly every taxon, and a 12k-element IN list made django-debug-toolbar's
+# SQL panel (sqlparse) balloon to GBs and OOM-kill the dev server.
+IN_LIST_MAX = 500
+
+
 def ranked_labels_by_taxon(taxon_ids: Iterable[int | None]) -> dict[int, RankedLabels]:
     """One query: ``{taxon_id: [(rank, label), ...]}`` for the given ids."""
     from discovery.models import Taxon
@@ -60,8 +67,13 @@ def ranked_labels_by_taxon(taxon_ids: Iterable[int | None]) -> dict[int, RankedL
     ids = {t for t in taxon_ids if t is not None}
     if not ids:
         return {}
+    qs = Taxon.objects.all()
+    if len(ids) <= IN_LIST_MAX:
+        qs = qs.filter(taxid__in=ids)
     return {
-        t.taxid: taxon_ranked_labels(t) for t in Taxon.objects.filter(taxid__in=ids)
+        t.taxid: taxon_ranked_labels(t)
+        for t in qs.iterator(chunk_size=5000)
+        if t.taxid in ids
     }
 
 

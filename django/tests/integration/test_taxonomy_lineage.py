@@ -281,3 +281,22 @@ def test_loader_keeps_canonical_path_of_linked_contigs(
         None,
         "",
     )
+
+
+def test_large_taxon_lookup_avoids_giant_in_list(mapping, legacy_contigs, monkeypatch):
+    """Unfiltered trees reference ~every taxon; a 12k-element ``IN (...)``
+    OOM-killed the dev server via debug-toolbar's SQL formatter."""
+    from discovery.services import taxonomy
+
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    _apply(mapping)
+    ids = [2, 3379134, 1224, 1236]
+    expected = ranked_labels_by_taxon(ids)
+
+    monkeypatch.setattr(taxonomy, "IN_LIST_MAX", 2)
+    with CaptureQueriesContext(connection) as ctx:
+        got = ranked_labels_by_taxon(ids + [999])
+    assert got == expected
+    assert not any(" IN (" in q["sql"] for q in ctx.captured_queries)
