@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.10.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.10.0...bgc_data_portal-v3.10.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **taxonomy:** avoid giant taxid IN-list when labelling ranks ([8a6e93a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/8a6e93a18f38e24fe8df070da776a0241e29b80b))
+
 ## [3.10.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.3...bgc_data_portal-v3.10.0) (2026-10-14)
 
 
