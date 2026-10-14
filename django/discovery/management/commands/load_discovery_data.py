@@ -55,6 +55,14 @@ class Command(BaseCommand):
             default=False,
             help="Skip enqueueing the platform-overview DiscoveryStats refresh at the end.",
         )
+        parser.add_argument(
+            "--retaxonomy",
+            action="store_true",
+            default=False,
+            help="Overwrite taxonomy_path of taxon-linked contigs with the TSV "
+            "value and unlink them (re-run apply_taxonomy_mapping afterwards). "
+            "Default keeps their canonical path.",
+        )
 
     def handle(self, *args, **options):
         data_dir = options["data_dir"]
@@ -72,7 +80,12 @@ class Command(BaseCommand):
             )
 
         t0 = time.perf_counter()
-        run_pipeline(data_dir, truncate=truncate, skip_stats=skip_stats)
+        run_pipeline(
+            data_dir,
+            truncate=truncate,
+            skip_stats=skip_stats,
+            retaxonomy=options["retaxonomy"],
+        )
         elapsed = time.perf_counter() - t0
 
         self.stdout.write(self.style.SUCCESS(f"Done in {elapsed:.1f}s"))

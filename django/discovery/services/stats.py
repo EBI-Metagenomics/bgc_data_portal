@@ -101,17 +101,6 @@ def compute_assembly_stats(assembly_qs) -> dict:
     }
 
 
-TAXONOMY_RANK_NAMES = [
-    "kingdom",
-    "phylum",
-    "class",
-    "order",
-    "family",
-    "genus",
-    "species",
-]
-
-
 def build_sunburst_from_paths(paths, *, sep: str = ".") -> list[dict]:
     """Flat sunburst nodes from dot-separated ltree paths.
 
@@ -140,20 +129,21 @@ def build_sunburst_from_paths(paths, *, sep: str = ".") -> list[dict]:
     return list(nodes.values())
 
 
-def build_taxonomy_sunburst_from_paths(paths) -> list[dict]:
-    """Build flat sunburst nodes from an iterable of ltree taxonomy paths."""
+def build_taxonomy_sunburst(rows) -> list[dict]:
+    """Flat sunburst nodes from ``(taxonomy_path, taxon_id, count)`` rows.
+
+    Ranks come from the linked ``Taxon`` (see ``services.taxonomy``); node
+    ids are ``rank:label`` so the frontend can colour by the phylum ancestor
+    whatever its depth. ``count`` is the number of contributing items.
+    """
+    from discovery.services.taxonomy import ranked_labels, ranked_labels_by_taxon
+
+    rows = [r for r in rows if r[0] or r[1] is not None]
+    lookup = ranked_labels_by_taxon(r[1] for r in rows)
     nodes: dict[str, dict] = {}
-    for path in paths:
-        if not path:
-            continue
-        parts = path.split(".")
+    for path, taxon_id, count in rows:
         parent_id = ""
-        for depth, label in enumerate(parts):
-            rank = (
-                TAXONOMY_RANK_NAMES[depth]
-                if depth < len(TAXONOMY_RANK_NAMES)
-                else f"rank_{depth}"
-            )
+        for rank, label in ranked_labels(path, taxon_id, lookup):
             node_id = f"{rank}:{label}"
             if node_id not in nodes:
                 nodes[node_id] = {
@@ -162,7 +152,7 @@ def build_taxonomy_sunburst_from_paths(paths) -> list[dict]:
                     "parent": parent_id,
                     "count": 0,
                 }
-            nodes[node_id]["count"] += 1
+            nodes[node_id]["count"] += count
             parent_id = node_id
     return list(nodes.values())
 
@@ -170,12 +160,14 @@ def build_taxonomy_sunburst_from_paths(paths) -> list[dict]:
 def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
     from discovery.models import DashboardContig
 
-    contig_paths = (
+    rows = (
         DashboardContig.objects.filter(assembly__in=assembly_qs)
         .exclude(taxonomy_path="")
-        .values_list("taxonomy_path", flat=True)
+        .values_list("taxonomy_path", "taxon_id")
+        .annotate(n=Count("id"))
+        .order_by()
     )
-    return build_taxonomy_sunburst_from_paths(contig_paths)
+    return build_taxonomy_sunburst(rows)
 
 
 # ── iBGC stats ───────────────────────────────────────────────────────────────

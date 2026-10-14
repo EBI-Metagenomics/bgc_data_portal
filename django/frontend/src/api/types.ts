@@ -154,6 +154,8 @@ export interface ValidatedReferencePoint {
 export interface TaxonomyNode {
   name: string;
   rank: string;
+  /** Full ltree path to this node — the ``taxonomy_path`` filter value. */
+  path: string;
   count: number;
   children: TaxonomyNode[];
 }

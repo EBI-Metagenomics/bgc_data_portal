@@ -9,22 +9,36 @@ import { cn } from "@/lib/utils";
 import type { TaxonomyNode } from "@/api/types";
 import { FilterChip } from "./FilterChip";
 
+/** Ltree path of the parent node ("" at the root). */
+function parentPath(path: string): string {
+  const i = path.lastIndexOf(".");
+  return i < 0 ? "" : path.slice(0, i);
+}
+
+function findNode(
+  nodes: TaxonomyNode[],
+  path: string,
+): TaxonomyNode | undefined {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    if (path.startsWith(`${node.path}.`)) return findNode(node.children, path);
+  }
+  return undefined;
+}
+
 function TaxonomyNodeItem({
   node,
   depth,
-  selectedRank,
-  selectedValue,
+  selectedPath,
   onSelect,
 }: {
   node: TaxonomyNode;
   depth: number;
-  selectedRank: string;
-  selectedValue: string;
-  onSelect: (rank: string, value: string) => void;
+  selectedPath: string;
+  onSelect: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const isSelected =
-    node.rank === selectedRank && node.name === selectedValue;
+  const isSelected = node.path === selectedPath;
   const hasChildren = node.children.length > 0;
 
   return (
@@ -36,11 +50,7 @@ function TaxonomyNodeItem({
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => {
-          if (isSelected) {
-            onSelect(node.rank, "");
-          } else {
-            onSelect(node.rank, node.name);
-          }
+          onSelect(isSelected ? parentPath(node.path) : node.path);
         }}
       >
         {hasChildren && (
@@ -59,7 +69,9 @@ function TaxonomyNodeItem({
           </button>
         )}
         {!hasChildren && <span className="w-4" />}
-        <span className="flex-1 truncate">{node.name}</span>
+        <span className="flex-1 truncate" title={node.rank}>
+          {node.name}
+        </span>
         <Badge variant="secondary" className="text-xs">
           {node.count}
         </Badge>
@@ -68,11 +80,10 @@ function TaxonomyNodeItem({
         hasChildren &&
         node.children.map((child) => (
           <TaxonomyNodeItem
-            key={`${child.rank}-${child.name}`}
+            key={child.path}
             node={child}
             depth={depth + 1}
-            selectedRank={selectedRank}
-            selectedValue={selectedValue}
+            selectedPath={selectedPath}
             onSelect={onSelect}
           />
         ))}
@@ -85,28 +96,10 @@ export function TaxonomyFilter() {
   const [searchText, setSearchText] = useState("");
   const filterStore = useFilterStore();
 
+  // The filter value is the selected node's ltree path, as served by the
+  // tree endpoint — ranks can be absent, so never rebuild it by position.
   const taxonomyPath = filterStore.taxonomyPath;
-  const pathParts = taxonomyPath ? taxonomyPath.split(";").filter(Boolean) : [];
-  const RANK_ORDER = ["kingdom", "phylum", "class", "order", "family", "genus"];
-  const ranks = RANK_ORDER.map((key, i) => ({
-    key,
-    value: pathParts[i] ?? "",
-  }));
-  const deepest = [...ranks].reverse().find((r) => r.value);
-
-  function handleSelect(rank: string, value: string) {
-    if (!value) {
-      const rankIndex = RANK_ORDER.indexOf(rank);
-      const newParts = pathParts.slice(0, rankIndex);
-      filterStore.setTaxonomyPath(newParts.length > 0 ? newParts.join(";") : "");
-    } else {
-      const rankIndex = RANK_ORDER.indexOf(rank);
-      const newParts = [...pathParts];
-      newParts[rankIndex] = value;
-      const trimmed = newParts.slice(0, rankIndex + 1);
-      filterStore.setTaxonomyPath(trimmed.join(";"));
-    }
-  }
+  const selected = taxonomyPath ? findNode(tree ?? [], taxonomyPath) : undefined;
 
   function filterTree(nodes: TaxonomyNode[]): TaxonomyNode[] {
     if (!searchText) return nodes;
@@ -125,14 +118,18 @@ export function TaxonomyFilter() {
   }
 
   const displayed = filterTree(tree ?? []);
-  const label = deepest
-    ? `Taxonomy: ${deepest.key} ${deepest.value}`
+  const label = taxonomyPath
+    ? `Taxonomy: ${
+        selected
+          ? `${selected.rank} ${selected.name}`
+          : taxonomyPath.split(".").pop()
+      }`
     : "Taxonomy";
 
   return (
     <FilterChip
       label={label}
-      active={!!deepest}
+      active={!!taxonomyPath}
       onClear={() => filterStore.setTaxonomyPath("")}
       dataTour="taxonomy-filter"
       width="md"
@@ -154,12 +151,11 @@ export function TaxonomyFilter() {
           <div className="max-h-64 overflow-auto">
             {displayed.map((node) => (
               <TaxonomyNodeItem
-                key={`${node.rank}-${node.name}`}
+                key={node.path}
                 node={node}
                 depth={0}
-                selectedRank={deepest?.key ?? ""}
-                selectedValue={deepest?.value ?? ""}
-                onSelect={handleSelect}
+                selectedPath={taxonomyPath}
+                onSelect={filterStore.setTaxonomyPath}
               />
             ))}
             {displayed.length === 0 && (

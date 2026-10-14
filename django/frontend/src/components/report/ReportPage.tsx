@@ -30,7 +30,10 @@ import type {
   ReportScoreDistribution,
   SunburstNode,
 } from "@/api/types";
-import { colorByAncestorDepth } from "@/lib/sunburst-colors";
+import {
+  colorByAncestorDepth,
+  colorByAncestorRank,
+} from "@/lib/sunburst-colors";
 import {
   Tooltip,
   TooltipContent,
@@ -146,21 +149,28 @@ function ReportBody({ payload }: { payload: ReportPayload }) {
 }
 
 /** A coloured iBGC sunburst. ``colorDepth`` picks the ancestor ring whose
- *  hue is inherited by descendants (taxonomy → 1 = phylum, biome → 3). */
+ *  hue is inherited by descendants (biome → 3); ``colorRank`` instead picks
+ *  the ancestor by its ``rank:`` id prefix (taxonomy → "phylum"), since
+ *  taxonomy depth does not identify rank. */
 function ColoredSunburst({
   nodes,
-  colorDepth,
+  colorDepth = 0,
+  colorRank,
   unit = "iBGC(s)",
   height = 420,
 }: {
   nodes: SunburstNode[];
-  colorDepth: number;
+  colorDepth?: number;
+  colorRank?: string;
   unit?: string;
   height?: number;
 }) {
   const colors = useMemo(
-    () => colorByAncestorDepth(nodes, colorDepth),
-    [nodes, colorDepth],
+    () =>
+      colorRank
+        ? colorByAncestorRank(nodes, colorRank)
+        : colorByAncestorDepth(nodes, colorDepth),
+    [nodes, colorDepth, colorRank],
   );
   return (
     <Plot
@@ -217,7 +227,7 @@ function BiomeTaxonomySection({
         </PanelCard>
         <PanelCard title="Taxonomy (coloured by phylum)">
           {taxonomy && taxonomy.length > 0 ? (
-            <ColoredSunburst nodes={taxonomy} colorDepth={1} />
+            <ColoredSunburst nodes={taxonomy} colorRank="phylum" />
           ) : (
             <p className="text-xs text-muted-foreground">No taxonomy data.</p>
           )}
@@ -988,7 +998,7 @@ function AssemblyStatsSection({
           <PanelCard title="Taxonomy distribution (coloured by phylum)">
             <ColoredSunburst
               nodes={taxonomySunburst}
-              colorDepth={1}
+              colorRank="phylum"
               unit="assembly(ies)"
               height={320}
             />

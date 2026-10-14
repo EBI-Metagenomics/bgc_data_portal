@@ -123,6 +123,64 @@ class DashboardAssembly(models.Model):
         return self.assembly_accession
 
 
+# ── Taxon ───────────────────────────────────────────────────────────────────────
+
+
+class Taxon(models.Model):
+    """NCBI taxon with its canonical 8-rank lineage.
+
+    One row per taxid referenced by a contig lineage: the leaf a contig is
+    assigned to plus every canonical-rank ancestor. ``ltree_path`` is the
+    sanitised dot-path of the present ranks (absent ranks skipped), i.e. the
+    value written to ``DashboardContig.taxonomy_path``; its labels pair
+    one-to-one, in order, with the non-empty ``<rank>_taxid`` columns.
+    Populated by ``apply_taxonomy_mapping``.
+    """
+
+    taxid = models.IntegerField(primary_key=True)
+    name = models.CharField(max_length=255)
+    rank = models.CharField(max_length=32, help_text="NCBI rank of this node")
+    parent_taxid = models.IntegerField(
+        null=True, blank=True, help_text="Nearest canonical-rank ancestor"
+    )
+    ltree_path = models.CharField(max_length=1024)
+    deepest_informative_rank = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        help_text="Deepest rank ignoring genus-less placeholder species "
+        "(e.g. 'Pseudomonadota bacterium' → phylum)",
+    )
+    taxdump_version = models.CharField(max_length=64, blank=True, default="")
+
+    domain_name = models.CharField(max_length=255, blank=True, default="")
+    domain_taxid = models.IntegerField(null=True, blank=True)
+    kingdom_name = models.CharField(max_length=255, blank=True, default="")
+    kingdom_taxid = models.IntegerField(null=True, blank=True)
+    phylum_name = models.CharField(max_length=255, blank=True, default="")
+    phylum_taxid = models.IntegerField(null=True, blank=True)
+    class_name = models.CharField(max_length=255, blank=True, default="")
+    class_taxid = models.IntegerField(null=True, blank=True)
+    order_name = models.CharField(max_length=255, blank=True, default="")
+    order_taxid = models.IntegerField(null=True, blank=True)
+    family_name = models.CharField(max_length=255, blank=True, default="")
+    family_taxid = models.IntegerField(null=True, blank=True)
+    genus_name = models.CharField(max_length=255, blank=True, default="")
+    genus_taxid = models.IntegerField(null=True, blank=True)
+    species_name = models.CharField(max_length=255, blank=True, default="")
+    species_taxid = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "discovery_taxon"
+        indexes = [
+            models.Index(fields=["phylum_taxid"], name="idx_taxon_phylum"),
+            models.Index(fields=["genus_taxid"], name="idx_taxon_genus"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.rank}, {self.taxid})"
+
+
 # ── Contig ──────────────────────────────────────────────────────────────────────
 
 
@@ -145,6 +203,21 @@ class DashboardContig(models.Model):
         blank=True,
         default="",
         help_text="ltree dot-path, e.g. Bacteria.Actinomycetota.Actinomycetia...",
+    )
+    taxon = models.ForeignKey(
+        Taxon,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="contigs",
+        help_text="Rank-aware NCBI lineage; null until apply_taxonomy_mapping runs",
+    )
+    taxonomy_path_legacy = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="taxonomy_path before apply_taxonomy_mapping rewrote it "
+        "(kept for --revert)",
     )
 
     class Meta:
