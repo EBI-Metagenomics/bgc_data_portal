@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.10.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.3...bgc_data_portal-v3.10.0) (2026-10-14)
+
+
+### Features
+
+* **taxonomy:** rank-aware NCBI lineages via Taxon table ([66e3feb](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/66e3feb84b1f0c2b992ba3e650e89ad59f650d36))
+* **taxonomy:** rank-aware NCBI lineages via Taxon table ([0b3876e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/0b3876e653317e043da8866e7464f70e7f01ec5a))
+
 ## [3.9.3](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.9.2...bgc_data_portal-v3.9.3) (2026-09-01)
 
 
