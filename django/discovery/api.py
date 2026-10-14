@@ -3135,38 +3135,43 @@ def query_results_assembly_aggregation(
 )
 def taxonomy_tree(request):
     from discovery.models import DashboardContig
+    from discovery.services.taxonomy import ranked_labels, ranked_labels_by_taxon
 
-    RANK_NAMES = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
-
-    qs = DashboardContig.objects.exclude(taxonomy_path="").values_list(
-        "taxonomy_path", flat=True
+    rows = list(
+        DashboardContig.objects.exclude(taxonomy_path="")
+        .values_list("taxonomy_path", "taxon_id")
+        .annotate(n=Count("id"))
+        .order_by()
     )
+    lookup = ranked_labels_by_taxon(r[1] for r in rows)
 
     tree: dict = {}
-    for path in qs:
-        parts = path.split(".")
+    for path, taxon_id, n in rows:
         node = tree
-        for depth, label in enumerate(parts):
-            rank = RANK_NAMES[depth] if depth < len(RANK_NAMES) else f"rank_{depth}"
+        prefix: list[str] = []
+        for rank, label in ranked_labels(path, taxon_id, lookup):
+            prefix.append(label)
             if label not in node:
-                node[label] = {"_rank": rank, "_count": 0, "_children": {}}
-            node[label]["_count"] += 1
+                node[label] = {
+                    "_rank": rank,
+                    "_path": ".".join(prefix),
+                    "_count": 0,
+                    "_children": {},
+                }
+            node[label]["_count"] += n
             node = node[label]["_children"]
 
     def _build_nodes(level: dict) -> list[TaxonomyNode]:
-        nodes = []
-        for name, data in sorted(level.items()):
-            if name.startswith("_"):
-                continue
-            nodes.append(
-                TaxonomyNode(
-                    name=name,
-                    rank=data["_rank"],
-                    count=data["_count"],
-                    children=_build_nodes(data["_children"]),
-                )
+        return [
+            TaxonomyNode(
+                name=name,
+                rank=data["_rank"],
+                path=data["_path"],
+                count=data["_count"],
+                children=_build_nodes(data["_children"]),
             )
-        return nodes
+            for name, data in sorted(level.items())
+        ]
 
     return _build_nodes(tree)
 

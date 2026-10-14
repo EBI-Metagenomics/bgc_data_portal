@@ -245,8 +245,17 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
 def load_contigs(
     data_dir: Path,
     assembly_lookup: dict[str, int],
+    *,
+    retaxonomy: bool = False,
 ) -> dict[str, int]:
-    """Load contigs.tsv → DashboardContig. Returns ``{sequence_sha256: contig_id}``."""
+    """Load contigs.tsv → DashboardContig. Returns ``{sequence_sha256: contig_id}``.
+
+    Contigs already linked to a ``Taxon`` keep their canonical
+    ``taxonomy_path``: the ETL still emits rank-less legacy paths, which
+    would silently undo ``apply_taxonomy_mapping``. ``retaxonomy=True``
+    takes the TSV path instead and unlinks the taxon so the contig is
+    picked up by the next ``apply_taxonomy_mapping`` run.
+    """
     path = data_dir / "contigs.tsv"
     if not path.exists():
         logger.warning("contigs.tsv not found, skipping")
@@ -276,12 +285,32 @@ def load_contigs(
             )
 
     rows = list({o.sequence_sha256: o for o in rows}.values())
+    update_fields = ["assembly", "accession", "length", "taxonomy_path"]
+    if retaxonomy:
+        update_fields += ["taxon", "taxonomy_path_legacy"]
+    else:
+        linked: dict[str, str] = {}
+        shas = [o.sequence_sha256 for o in rows]
+        for i in range(0, len(shas), BATCH_SIZE):
+            linked.update(
+                DashboardContig.objects.filter(
+                    sequence_sha256__in=shas[i : i + BATCH_SIZE],
+                    taxon__isnull=False,
+                ).values_list("sequence_sha256", "taxonomy_path")
+            )
+        for o in rows:
+            if o.sequence_sha256 in linked:
+                o.taxonomy_path = linked[o.sequence_sha256]
+        if linked:
+            logger.info(
+                "Kept canonical taxonomy_path for %d taxon-linked contigs", len(linked)
+            )
     DashboardContig.objects.bulk_create(
         rows,
         batch_size=BATCH_SIZE,
         update_conflicts=True,
         unique_fields=["sequence_sha256"],
-        update_fields=["assembly", "accession", "length", "taxonomy_path"],
+        update_fields=update_fields,
     )
     lookup = dict(DashboardContig.objects.values_list("sequence_sha256", "id"))
     logger.info("Loaded %d contigs", len(lookup))
@@ -866,7 +895,11 @@ def compute_catalog_counts() -> None:
 
 
 def run_pipeline(
-    data_dir: str | Path, *, truncate: bool = False, skip_stats: bool = False
+    data_dir: str | Path,
+    *,
+    truncate: bool = False,
+    skip_stats: bool = False,
+    retaxonomy: bool = False,
 ) -> None:
     """Execute the full discovery data loading pipeline.
 
@@ -889,7 +922,7 @@ def run_pipeline(
 
     detector_lookup = load_detectors(data_dir)
     assembly_lookup = load_assemblies(data_dir)
-    contig_lookup = load_contigs(data_dir, assembly_lookup)
+    contig_lookup = load_contigs(data_dir, assembly_lookup, retaxonomy=retaxonomy)
     load_contig_sequences(data_dir, contig_lookup)
 
     # Source predictions + cBGC envelopes (with stable accessions).

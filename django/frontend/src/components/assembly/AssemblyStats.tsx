@@ -5,7 +5,7 @@ import { useFilterStore } from "@/stores/filter-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatsExportMenu } from "@/components/stats/StatsExportMenu";
 import { exportAssemblyStats } from "@/api/exports";
-import { colorByAncestorDepth } from "@/lib/sunburst-colors";
+import { colorByAncestorDepth, colorByAncestorRank } from "@/lib/sunburst-colors";
 
 export function AssemblyStats({ assemblyIds, enabled = true }: { assemblyIds?: string; enabled?: boolean }) {
   const { data, isLoading } = useAssemblyStats(assemblyIds, enabled);
@@ -106,7 +106,7 @@ type SunNode = { id: string; label: string; parent: string; count: number };
 function TaxonomySunburst({ nodes }: { nodes: SunNode[] }) {
   if (nodes.length === 0) return <EmptyPlaceholder label="No taxonomy data" />;
 
-  const colors = colorByAncestorDepth(nodes, 1); // phylum
+  const colors = colorByAncestorRank(nodes, "phylum");
   return (
     <Plot
       data={[

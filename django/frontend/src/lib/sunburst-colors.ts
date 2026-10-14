@@ -79,3 +79,44 @@ export function colorByAncestorDepth(
     return c;
   });
 }
+
+/**
+ * Like ``colorByAncestorDepth`` but picks the ancestor by rank rather than
+ * depth, for taxonomy sunbursts whose node ids are ``rank:label``. Taxonomy
+ * depth does not identify rank (a kingdom ring exists only for some
+ * lineages), so "colour by phylum" must match the ``phylum:`` ancestor.
+ * Nodes without one (e.g. domain-only lineages) stay neutral.
+ */
+export function colorByAncestorRank(
+  nodes: SunburstNode[],
+  rank: string,
+  palette: string[] = SUNBURST_PALETTE,
+): string[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const prefix = `${rank}:`;
+
+  const ancestorOfRank = (start: SunburstNode): SunburstNode | undefined => {
+    let cur: SunburstNode | undefined = start;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur.id)) {
+      if (cur.id.startsWith(prefix)) return cur;
+      seen.add(cur.id);
+      cur = cur.parent ? byId.get(cur.parent) : undefined;
+    }
+    return undefined;
+  };
+
+  const colorForAncestor = new Map<string, string>();
+  let next = 0;
+  return nodes.map((n) => {
+    const anc = ancestorOfRank(n);
+    if (!anc) return NEUTRAL;
+    let c = colorForAncestor.get(anc.id);
+    if (!c) {
+      c = palette[next % palette.length] ?? NEUTRAL;
+      next += 1;
+      colorForAncestor.set(anc.id, c);
+    }
+    return c;
+  });
+}

@@ -659,6 +659,7 @@ class ReportPayload(Schema):
 class TaxonomyNode(Schema):
     name: str
     rank: str
+    path: str = ""  # full ltree path to this node — use as the taxonomy_path filter
     count: int
     children: list["TaxonomyNode"] = []
 

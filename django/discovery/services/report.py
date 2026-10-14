@@ -53,11 +53,12 @@ LENGTH_BUCKETS: list[tuple[float, float, str]] = [
 SCORE_SAMPLE_CAP = 500
 
 
-def _taxonomy_phylum(taxonomy_path: str | None) -> str | None:
-    if not taxonomy_path:
-        return None
-    parts = taxonomy_path.split(".")
-    return parts[1] if len(parts) >= 2 else parts[0]
+def _taxonomy_phylum(
+    taxonomy_path: str | None, taxon_id: int | None, tax_lookup: dict
+) -> str | None:
+    from discovery.services.taxonomy import phylum_label
+
+    return phylum_label(taxonomy_path or "", taxon_id, tax_lookup)
 
 
 def _is_partial(ibgc: IntegratedBgc) -> bool:
@@ -122,6 +123,9 @@ def build_report_payload(
         )
     )
     n_ibgcs = len(ibgcs) + len(extra_ibgc_rows)
+    from discovery.services.taxonomy import ranked_labels_by_taxon
+
+    tax_lookup = ranked_labels_by_taxon(i.contig.taxon_id for i in ibgcs if i.contig)
     now = timezone.now()
     expires_at = now + timedelta(seconds=REPORT_TTL_SECONDS)
 
@@ -181,7 +185,9 @@ def build_report_payload(
                 ),
                 "biome_path": first_asm.biome_path if first_asm else "",
                 "taxonomy_phylum": _taxonomy_phylum(
-                    contig.taxonomy_path if contig else None
+                    contig.taxonomy_path if contig else None,
+                    contig.taxon_id if contig else None,
+                    tax_lookup,
                 ),
                 "taxonomy_path": contig.taxonomy_path if contig else "",
                 "contig_accession": contig.accession if contig else None,
@@ -520,12 +526,20 @@ def build_report_payload(
     assemblies = list(
         DashboardAssembly.objects.filter(id__in=assembly_ids).select_related("source")
     )
-    contig_taxonomy_lookup: dict[int, str] = {}
+    contig_taxonomy_lookup: dict[int, tuple[str, int | None]] = {}
     for c in DashboardContig.objects.filter(assembly_id__in=assembly_ids).values(
-        "assembly_id", "taxonomy_path"
+        "assembly_id", "taxonomy_path", "taxon_id"
     ):
         if c["taxonomy_path"] and c["assembly_id"] not in contig_taxonomy_lookup:
-            contig_taxonomy_lookup[c["assembly_id"]] = c["taxonomy_path"]
+            contig_taxonomy_lookup[c["assembly_id"]] = (
+                c["taxonomy_path"],
+                c["taxon_id"],
+            )
+    tax_lookup.update(
+        ranked_labels_by_taxon(
+            t for _, t in contig_taxonomy_lookup.values() if t not in tax_lookup
+        )
+    )
 
     ibgcs_per_assembly: dict[int, int] = defaultdict(int)
     for r in ibgc_rows:
@@ -534,7 +548,7 @@ def build_report_payload(
 
     assembly_rows = []
     for asm in assemblies:
-        tx = contig_taxonomy_lookup.get(asm.id, "")
+        tx, tx_taxon = contig_taxonomy_lookup.get(asm.id, ("", None))
         assembly_rows.append(
             {
                 "id": asm.id,
@@ -543,7 +557,7 @@ def build_report_payload(
                 "source_name": asm.source.name if asm.source else None,
                 "biome_path": asm.biome_path,
                 "taxonomy_path": tx,
-                "taxonomy_phylum": _taxonomy_phylum(tx),
+                "taxonomy_phylum": _taxonomy_phylum(tx, tx_taxon, tax_lookup),
                 "assembly_size_mb": asm.assembly_size_mb,
                 "total_bgcs_in_assembly": asm.bgc_count,
                 "ibgcs_in_shortlist": ibgcs_per_assembly.get(asm.id, 0),
@@ -565,12 +579,13 @@ def build_report_payload(
         assembly_stats = {}
 
     # ── iBGC-derived taxonomy sunburst ─────────────────────────────────────
-    from discovery.services.stats import build_taxonomy_sunburst_from_paths
+    from discovery.services.stats import build_taxonomy_sunburst
 
-    ibgc_taxonomy_paths = [
-        n.contig.taxonomy_path for n in ibgcs if n.contig and n.contig.taxonomy_path
-    ]
-    taxonomy_sunburst = build_taxonomy_sunburst_from_paths(ibgc_taxonomy_paths)
+    taxonomy_sunburst = build_taxonomy_sunburst(
+        (n.contig.taxonomy_path, n.contig.taxon_id, 1)
+        for n in ibgcs
+        if n.contig and n.contig.taxonomy_path
+    )
 
     # ── iBGC-derived biome sunburst (one count per iBGC) ───────────────────
     biome_paths = [r.get("biome_path") for r in ibgc_rows if r.get("biome_path")]
