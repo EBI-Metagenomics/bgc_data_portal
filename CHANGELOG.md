@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.11.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.10.1...bgc_data_portal-v3.11.0) (2026-10-16)
+
+
+### Features
+
+* **loader:** load ETL-harmonised taxonomy (taxa.tsv + contig taxid) ([0e53c14](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/0e53c1447474e2348a48910c0250a3d9a2710880))
+* **loader:** load ETL-harmonised taxonomy (taxa.tsv + contig taxid) ([1698b73](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/1698b73c3257537ad99bb7ecbedc7ad8c07c57c9))
+
 ## [3.10.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.10.0...bgc_data_portal-v3.10.1) (2026-10-14)
 
 
