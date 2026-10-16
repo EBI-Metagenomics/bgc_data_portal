@@ -61,7 +61,16 @@ class Command(BaseCommand):
             default=False,
             help="Overwrite taxonomy_path of taxon-linked contigs with the TSV "
             "value and unlink them (re-run apply_taxonomy_mapping afterwards). "
-            "Default keeps their canonical path.",
+            "Default keeps their canonical path. Only affects contigs.tsv rows "
+            "without a taxid column value.",
+        )
+        parser.add_argument(
+            "--allow-taxon-changes",
+            action="store_true",
+            default=False,
+            help="Let taxa.tsv redefine stored Taxon rows (name/rank/parent/path). "
+            "Default aborts: that means a different taxdump, and the stored "
+            "contigs must be re-harmonised first.",
         )
 
     def handle(self, *args, **options):
@@ -85,6 +94,7 @@ class Command(BaseCommand):
             truncate=truncate,
             skip_stats=skip_stats,
             retaxonomy=options["retaxonomy"],
+            allow_taxon_changes=options["allow_taxon_changes"],
         )
         elapsed = time.perf_counter() - t0
 
