@@ -7,6 +7,9 @@ and writes:
   * ``DashboardGCF`` nodes for the tree (with ``representative_ibgc``)
   * ``IntegratedBgc`` per-row classification (primaries + partial projections)
   * ``IbgcClusteringSnapshot`` per-iBGC pre-import values for rollback
+  * for a weighted-metric run (schema v2, ADR 0003), the run's feature
+    weights + vocabularies under ``<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/weights/``,
+    which the scoring-cache rebuild then reuses verbatim
 
 Per-prediction (``SourceBgcPrediction``) rows are not modified — leaf path
 / UMAP / scoring columns live on ``IntegratedBgc`` only in the v2 schema.
@@ -89,11 +92,31 @@ class Command(BaseCommand):
             f"  levels:       {run_meta.get('n_levels')}\n"
         )
 
+        params = run_meta.get("params") or {}
+        metric = params.get("similarity_metric", "dice")
+        self.stdout.write(
+            f"  metric:       {metric} (vocab={params.get('domain_vocab') or '-'}, "
+            f"enrichment={params.get('enrichment_version') or '-'}, "
+            f"schema=v{params.get('schema_version', 1)})\n"
+        )
+        run_weights = _run_weights_from_payload(payload, metric)
+
         if options["dry_run"]:
             self.stdout.write(self.style.WARNING("--dry-run: no DB writes performed."))
             return
 
         run = self._apply(payload, force=options["force"])
+        if run_weights is not None:
+            from django.conf import settings
+
+            from discovery.services.clustering.feature_weights import (
+                persist_run_weights,
+            )
+
+            out = persist_run_weights(
+                Path(settings.CLUSTERING_ARTIFACTS_DIR) / sha[:12], run_weights
+            )
+            self.stdout.write(self.style.SUCCESS(f"Wrote run weights: {out}"))
         self.stdout.write(
             self.style.SUCCESS(f"Imported ClusteringRun pk={run.pk} sha256={sha[:12]}…")
         )
@@ -173,6 +196,14 @@ class Command(BaseCommand):
             "knn_k": int(params.get("knn_k") or 0),
             "leiden_resolutions": params.get("leiden_resolutions", []),
             "seed": int(params.get("seed") or 42),
+            # v2 (ADR 0003); a v1 tarball has none of these → Dice defaults.
+            "similarity_metric": params.get("similarity_metric") or "dice",
+            "domain_vocab": params.get("domain_vocab") or "IPR_PROJECTED",
+            "enrichment_version": params.get("enrichment_version") or "",
+            "prune_below": float(params.get("prune_below", 0.05)),
+            "min_projection_similarity": float(
+                params.get("min_projection_similarity", 0.1)
+            ),
             "n_proteins": 0,
             "n_ibgcs": int(run_meta.get("n_ibgcs", 0)),
             "n_levels": int(run_meta.get("n_levels", 0)),
@@ -393,3 +424,23 @@ def _maybe_float(x) -> float | None:
         return float(x)
     except (TypeError, ValueError):
         return None
+
+
+def _run_weights_from_payload(payload: dict, metric: str):
+    """Return the tarball's ``RunWeights`` for a weighted metric, else ``None``.
+
+    Raises ``CommandError`` before any DB write when a weighted-metric tarball
+    lacks its weights — the run could not be scored consistently later.
+    """
+    if metric == "dice":
+        return None
+    keys = ("domain_weights", "pair_weights", "domain_accs", "pair_vocab")
+    missing = [k for k in keys if payload.get(k) is None]
+    if missing:
+        raise CommandError(
+            f"similarity_metric={metric!r} but the tarball lacks {missing}; "
+            "it was produced by a pre-v2 bgc-cluster"
+        )
+    from discovery.services.clustering.feature_weights import RunWeights
+
+    return RunWeights(**{k: payload[k] for k in keys})

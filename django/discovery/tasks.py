@@ -166,6 +166,11 @@ def run_bgc_clustering_task(
     auto_reclassify: bool = True,
     reclassify_scope: str = "all_non_primary",
     score_ibgcs: bool = True,
+    similarity_metric: str = "dice",
+    domain_vocab: str = "IPR_PROJECTED",
+    enrichment_version: str = "",
+    prune_below: float = 0.05,
+    min_projection_similarity: float = 0.1,
 ) -> dict:
     """Domain+adjacency hierarchical-CPM-Leiden clustering over iBGCs.
 
@@ -205,6 +210,11 @@ def run_bgc_clustering_task(
         seed=seed,
         apply=apply,
         score_ibgcs=score_ibgcs,
+        similarity_metric=similarity_metric,
+        domain_vocab=domain_vocab,
+        enrichment_version=enrichment_version,
+        prune_below=prune_below,
+        min_projection_similarity=min_projection_similarity,
     )
 
     if apply and auto_reclassify and "run_pk" in result:

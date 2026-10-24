@@ -4,6 +4,12 @@ Builds the small inputs the HPC ``bgc-cluster`` CLI needs (M_domains,
 M_pairs, vocabs, ibgc_ids for primaries and partials, validated subset) and
 writes them as a single ``.tgz`` under ``CLUSTERING_ARTIFACTS_DIR/exports/``.
 No N×N matrix is produced — that's the whole point of the HPC handoff.
+
+``--similarity-metric cosine_idf_enrich`` (ADR 0003) also computes the run's
+IDF over the primary iBGCs, multiplies in the ``--enrichment-version`` table
+and ships both weight vectors in the (schema v2) tarball. The default
+(``dice`` on the ``IPR_PROJECTED`` vocabulary) exports exactly what it did
+before.
 """
 
 from __future__ import annotations
@@ -59,6 +65,38 @@ class Command(BaseCommand):
         )
         parser.add_argument("--knn-k", type=int, default=None)
         parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument(
+            "--similarity-metric",
+            choices=("dice", "cosine_idf_enrich"),
+            default="dice",
+            help="iBGC similarity metric (default dice; ADR 0003: cosine_idf_enrich).",
+        )
+        parser.add_argument(
+            "--domain-vocab",
+            choices=("IPR_PROJECTED", "IPR_GAPFILLED"),
+            default=None,
+            help=(
+                "Domain label vocabulary (default IPR_GAPFILLED for "
+                "cosine_idf_enrich, IPR_PROJECTED for dice)."
+            ),
+        )
+        parser.add_argument(
+            "--enrichment-version",
+            default="",
+            help="DomainEnrichment version; required for cosine_idf_enrich.",
+        )
+        parser.add_argument(
+            "--prune-below",
+            type=float,
+            default=0.05,
+            help="Similarity-graph edge prune before kNN (default 0.05).",
+        )
+        parser.add_argument(
+            "--min-projection-similarity",
+            type=float,
+            default=0.1,
+            help="Partials: minimum summed top-k similarity to project (default 0.1).",
+        )
 
     def handle(self, *args, **options):
         run_tag = options["run_tag"] or _dt.datetime.utcnow().strftime("%Y%m%dT%H%M%S")
@@ -67,6 +105,14 @@ class Command(BaseCommand):
         out_path = out_dir / f"{run_tag}.tgz"
 
         sources = tuple(s.upper() for s in options["domain_sources"])
+        metric = options["similarity_metric"]
+        vocab = options["domain_vocab"] or (
+            "IPR_PROJECTED" if metric == "dice" else "IPR_GAPFILLED"
+        )
+        if metric != "dice" and not options["enrichment_version"]:
+            raise CommandError(
+                f"--similarity-metric {metric} needs --enrichment-version"
+            )
 
         inputs = self._build_inputs(
             sources=sources,
@@ -75,6 +121,13 @@ class Command(BaseCommand):
             knn_k=options["knn_k"],
             seed=options["seed"],
             run_tag=run_tag,
+            similarity_metric=metric,
+            domain_vocab=vocab,
+            enrichment_version=(
+                options["enrichment_version"] if metric != "dice" else ""
+            ),
+            prune_below=options["prune_below"],
+            min_projection_similarity=options["min_projection_similarity"],
         )
 
         from common_core.clustering.io import write_inputs_tarball
@@ -91,6 +144,11 @@ class Command(BaseCommand):
         knn_k: int | None,
         seed: int,
         run_tag: str,
+        similarity_metric: str = "dice",
+        domain_vocab: str = "IPR_PROJECTED",
+        enrichment_version: str = "",
+        prune_below: float = 0.05,
+        min_projection_similarity: float = 0.1,
     ):
         """Construct ``ClusteringInputs`` from the live database."""
         import numpy as np
@@ -126,6 +184,7 @@ class Command(BaseCommand):
         M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
             sources=sources,
             ibgc_ids_subset=clusterable_ibgc_ids,
+            vocab=domain_vocab,
         )
         if M_domains.shape[0] == 0:
             raise CommandError("No iBGCs with selected-source domains found.")
@@ -133,8 +192,27 @@ class Command(BaseCommand):
         M_pairs, ibgc_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
             sources=sources,
             ibgc_ids_subset=ibgc_ids.tolist(),
+            vocab=domain_vocab,
         )
         M_pairs = _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids)
+
+        run_weights = None
+        if similarity_metric != "dice":
+            # IDF over the primaries only (the clusterable corpus), as in the
+            # benchmark; partials share the columns and so the weights.
+            from discovery.services.clustering.feature_weights import (
+                compute_run_weights,
+            )
+
+            run_weights = compute_run_weights(
+                M_domains=M_domains,
+                M_pairs=M_pairs,
+                domain_accs=domain_accs,
+                pair_vocab=pair_vocab,
+                ibgc_ids=ibgc_ids,
+                enrichment_version=enrichment_version,
+                domain_vocab=domain_vocab,
+            )
 
         # Partials: iBGCs not in the primary set.
         partial_ibgc_ids = list(
@@ -147,6 +225,7 @@ class Command(BaseCommand):
                 sources=sources,
                 domain_accs_subset=domain_accs.tolist(),
                 ibgc_ids_subset=partial_ibgc_ids,
+                vocab=domain_vocab,
             )
             (
                 partials_M_pairs,
@@ -156,6 +235,7 @@ class Command(BaseCommand):
                 sources=sources,
                 pair_vocab_subset=pair_vocab.tolist(),
                 ibgc_ids_subset=partial_ibgc_ids,
+                vocab=domain_vocab,
             )
             partials_M_pairs = _align_rows(
                 partials_M_pairs,
@@ -199,11 +279,18 @@ class Command(BaseCommand):
                 "scipy": _safe_version("scipy"),
                 "numpy": _safe_version("numpy"),
             },
+            similarity_metric=similarity_metric,
+            domain_vocab=domain_vocab,
+            enrichment_version=enrichment_version,
+            prune_below=float(prune_below),
+            min_projection_similarity=float(min_projection_similarity),
         )
 
         log.info(
-            "export_clustering_inputs: primaries=%d partials=%d "
+            "export_clustering_inputs: metric=%s vocab=%s primaries=%d partials=%d "
             "domains=%d pairs=%d validated=%d",
+            similarity_metric,
+            domain_vocab,
             M_domains.shape[0],
             partials_M_domains.shape[0],
             M_domains.shape[1],
@@ -221,6 +308,8 @@ class Command(BaseCommand):
             partials_ibgc_ids=partials_ibgc_ids,
             validated_ibgc_ids=validated_ibgc_ids,
             params=params,
+            domain_weights=run_weights.domain_weights if run_weights else None,
+            pair_weights=run_weights.pair_weights if run_weights else None,
         )
 
 

@@ -54,6 +54,9 @@ DOMAIN_ACCS_FILE = "domain_accs.npy"
 PAIR_VOCAB_FILE = "pair_vocab.npy"
 LEAF_PATHS_FILE = "leaf_paths.json"
 SIG_TO_IPR_FILE = "sig_to_ipr.json"
+# cosine_idf_enrich runs only; aligned to DOMAIN_ACCS_FILE / PAIR_VOCAB_FILE.
+DOMAIN_WEIGHTS_FILE = "domain_weights.npy"
+PAIR_WEIGHTS_FILE = "pair_weights.npy"
 
 
 def persist_scoring_cache(
@@ -66,12 +69,18 @@ def persist_scoring_cache(
     pair_vocab: np.ndarray,
     leaf_paths: list[str],
     sig_to_ipr: dict[str, str] | None = None,
+    domain_weights: np.ndarray | None = None,
+    pair_weights: np.ndarray | None = None,
 ) -> Path:
     """Write the small per-iBGC signature matrices needed by on-demand similarity.
 
     ``sig_to_ipr`` (signature_acc → ipr_entry_acc) lets the architecture
     search resolve user-pasted raw Pfam/NCBIFAM/TIGRFAM accessions onto
     the IPR-projected vocabulary; persisted as JSON next to the matrices.
+
+    ``domain_weights`` / ``pair_weights`` are the run's per-feature weights
+    (``cosine_idf_enrich`` runs), aligned to ``domain_accs`` / ``pair_vocab``.
+    For a Dice run they are omitted and any stale weight files are removed.
 
     Returns the cache directory path.
     """
@@ -86,6 +95,17 @@ def persist_scoring_cache(
     np.save(cache_dir / PAIR_VOCAB_FILE, np.asarray(pair_vocab, dtype=object))
     (cache_dir / LEAF_PATHS_FILE).write_text(json.dumps(list(leaf_paths)))
     (cache_dir / SIG_TO_IPR_FILE).write_text(json.dumps(sig_to_ipr or {}))
+    for name, w, vocab in (
+        (DOMAIN_WEIGHTS_FILE, domain_weights, domain_accs),
+        (PAIR_WEIGHTS_FILE, pair_weights, pair_vocab),
+    ):
+        path = cache_dir / name
+        if w is None:
+            path.unlink(missing_ok=True)
+            continue
+        if len(w) != len(vocab):
+            raise ValueError(f"{name}: {len(w)} weights for {len(vocab)} columns")
+        np.save(path, np.asarray(w, dtype=np.float32))
     legacy_sim = cache_dir / "sim.npz"
     if legacy_sim.exists():
         try:
@@ -98,7 +118,8 @@ def persist_scoring_cache(
 
 def load_scoring_cache(artifacts_dir: Path) -> dict:
     """Return ``M_domains``, ``M_pairs``, ``ibgc_ids``, ``domain_accs``,
-    ``pair_vocab``, ``leaf_paths``, ``sig_to_ipr``.
+    ``pair_vocab``, ``leaf_paths``, ``sig_to_ipr``, ``domain_weights``,
+    ``pair_weights`` (the last two ``None`` for Dice runs).
     """
     import scipy.sparse as sp
 
@@ -113,7 +134,13 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
         "pair_vocab": np.load(cache_dir / PAIR_VOCAB_FILE, allow_pickle=True),
         "leaf_paths": json.loads((cache_dir / LEAF_PATHS_FILE).read_text()),
         "sig_to_ipr": sig_to_ipr,
+        "domain_weights": _load_optional(cache_dir / DOMAIN_WEIGHTS_FILE),
+        "pair_weights": _load_optional(cache_dir / PAIR_WEIGHTS_FILE),
     }
+
+
+def _load_optional(path: Path) -> np.ndarray | None:
+    return np.load(path) if path.exists() else None
 
 
 def compute_novelty_against_validated(
@@ -249,6 +276,8 @@ def score_primary_ibgcs(
     run: ClusteringRun,
     weights: tuple[float, float] = (0.5, 0.5),
     sim: sp.csr_matrix | None = None,
+    domain_weights: np.ndarray | None = None,
+    pair_weights: np.ndarray | None = None,
 ) -> dict:
     """Write ``novelty_score`` and ``domain_novelty`` on the primary iBGCs of ``run``.
 
@@ -273,6 +302,9 @@ def score_primary_ibgcs(
         Unused for scoring (kept for backward compatibility). Novelty is now
         computed from a dedicated block via
         :func:`compute_novelty_against_validated`, not this matrix.
+    domain_weights, pair_weights:
+        The run's per-feature weights when ``run.similarity_metric`` is not
+        Dice; novelty is then scored by common-core's metric-aware kernel.
     """
     from discovery.models import IntegratedBgc
 
@@ -294,12 +326,28 @@ def score_primary_ibgcs(
             run.pk,
         )
 
-    novelty = compute_novelty_against_validated(
-        M_domains,
-        M_pairs,
-        validated_cols,
-        weights=weights,
-    )
+    metric = getattr(run, "similarity_metric", "dice") or "dice"
+    if metric == "dice":
+        novelty = compute_novelty_against_validated(
+            M_domains,
+            M_pairs,
+            validated_cols,
+            weights=weights,
+        )
+    else:
+        from common_core.clustering.scoring import (
+            compute_novelty_against_validated as compute_weighted_novelty,
+        )
+
+        novelty = compute_weighted_novelty(
+            M_domains,
+            M_pairs,
+            validated_cols,
+            weights=weights,
+            metric=metric,
+            domain_weights=domain_weights,
+            pair_weights=pair_weights,
+        )
     domain_novelty = compute_domain_novelty_array(M_domains, leaf_paths)
 
     ibgc_rows = list(IntegratedBgc.objects.filter(id__in=ids_list))

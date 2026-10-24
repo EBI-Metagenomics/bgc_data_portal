@@ -34,6 +34,10 @@ DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM", "TIGRFAM")
 DEFAULT_SCORE_WEIGHTS: tuple[float, float] = (0.5, 0.5)
 DEFAULT_RESOLUTIONS: tuple[float, ...] = (0.03, 0.08, 0.15, 0.25)
 KNN_K_FLOOR = 5
+# Thresholds every Dice run so far was built with; a run that keeps them
+# (and the Dice metric) keeps its pre-ADR-0003 sha.
+DEFAULT_PRUNE_BELOW = 0.05
+DEFAULT_MIN_PROJECTION_SIMILARITY = 0.1
 
 
 def auto_knn_k(n: int) -> int:
@@ -59,8 +63,18 @@ def run_clustering_pipeline(
     seed: int = 42,
     apply: bool = False,
     score_ibgcs: bool = True,
+    similarity_metric: str = "dice",
+    domain_vocab: str = "IPR_PROJECTED",
+    enrichment_version: str = "",
+    prune_below: float = DEFAULT_PRUNE_BELOW,
+    min_projection_similarity: float = DEFAULT_MIN_PROJECTION_SIMILARITY,
 ) -> dict:
     """Run the full domain/adjacency clustering pipeline.
+
+    ``similarity_metric="cosine_idf_enrich"`` (ADR 0003) needs an
+    ``enrichment_version``; the run's IDF is computed over its clusterable
+    iBGCs and both weight vectors are persisted with the run. The defaults
+    reproduce the original binary-Dice run exactly.
 
     Returns a result dict with ``run_pk``, ``sha256``, counts, and (when
     ``apply=True``) ``artifacts_dir`` pointing at the MIBiG analysis
@@ -83,15 +97,23 @@ def run_clustering_pipeline(
     from discovery.services.clustering.knn_graph import build_knn_graph
     from discovery.services.clustering.layout import compute_2d_layout
     from discovery.services.clustering.leiden import run_hierarchical_leiden
-    from discovery.services.clustering.membership import build_ibgc_domain_matrix
+    from discovery.services.clustering.feature_weights import compute_run_weights
+    from discovery.services.clustering.membership import (
+        build_ibgc_domain_matrix,
+        check_vocab,
+        query_sources,
+    )
     from discovery.services.clustering.paths import build_ltree_paths
     from discovery.services.clustering.representative import pick_medoid
+    from django.conf import settings
     from django.db.models import Q
     from django.utils import timezone
 
     leiden_resolutions = tuple(leiden_resolutions)
     upper_sources = tuple(sorted({s.upper() for s in domain_sources}))
     weights = (float(score_weights[0]), float(score_weights[1]))
+    is_dice = _check_metric(similarity_metric, enrichment_version)
+    check_vocab(domain_vocab)
 
     # ── 0. Pre-flight: iBGC table must be populated ───────────────────────
     if not IntegratedBgc.objects.exists():
@@ -115,6 +137,7 @@ def run_clustering_pipeline(
     M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
         sources=upper_sources,
         ibgc_ids_subset=clusterable_ibgc_ids,
+        vocab=domain_vocab,
     )
     if M_domains.shape[0] == 0:
         return {"error": "no iBGCs with selected-source domains found"}
@@ -123,16 +146,42 @@ def run_clustering_pipeline(
     M_pairs, ibgc_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
         sources=upper_sources,
         ibgc_ids_subset=ibgc_ids.tolist(),
+        vocab=domain_vocab,
     )
     M_pairs = _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids)
 
-    # ── 3. Composite weighted-mean Dice similarity ──────────────────────
-    sim = compute_composite_similarity(
-        M_domains,
-        M_pairs,
-        weights=weights,
-        prune_below=0.05,
-    )
+    # ── 3. Composite similarity ──────────────────────────────────────────
+    run_weights = None
+    if is_dice:
+        sim = compute_composite_similarity(
+            M_domains,
+            M_pairs,
+            weights=weights,
+            prune_below=prune_below,
+        )
+    else:
+        from common_core.clustering.similarity import (
+            compute_composite_similarity as compute_weighted_similarity,
+        )
+
+        run_weights = compute_run_weights(
+            M_domains=M_domains,
+            M_pairs=M_pairs,
+            domain_accs=domain_accs,
+            pair_vocab=pair_vocab,
+            ibgc_ids=ibgc_ids,
+            enrichment_version=enrichment_version,
+            domain_vocab=domain_vocab,
+        )
+        sim = compute_weighted_similarity(
+            M_domains,
+            M_pairs,
+            weights=weights,
+            prune_below=prune_below,
+            metric=similarity_metric,
+            domain_weights=run_weights.domain_weights,
+            pair_weights=run_weights.pair_weights,
+        )
 
     # ── 4. Union top-k kNN (auto-pick k when not supplied) ──────────────
     effective_k = int(knn_k) if knn_k is not None else auto_knn_k(M_domains.shape[0])
@@ -169,13 +218,22 @@ def run_clustering_pipeline(
         seed=seed,
         ibgc_etag=f"{IntegratedBgc.objects.count()}:{ibgc_max_id}",
         domain_etag=f"{n_domain_rows}:{domain_max_id}",
-        domain_vocab=ClusteringRun.DOMAIN_VOCAB_IPR_PROJECTED,
+        domain_vocab=domain_vocab,
+        similarity_metric=similarity_metric,
+        enrichment_version=enrichment_version,
+        prune_below=prune_below,
+        min_projection_similarity=min_projection_similarity,
+        weights_sha=_weights_sha(run_weights),
     )
     run, created = ClusteringRun.objects.update_or_create(
         sha256=sha,
         defaults={
             "domain_sources": list(upper_sources),
-            "domain_vocab": ClusteringRun.DOMAIN_VOCAB_IPR_PROJECTED,
+            "domain_vocab": domain_vocab,
+            "similarity_metric": similarity_metric,
+            "enrichment_version": enrichment_version,
+            "prune_below": float(prune_below),
+            "min_projection_similarity": float(min_projection_similarity),
             "score_weights": list(weights),
             "knn_k": effective_k,
             "leiden_resolutions": list(leiden_resolutions),
@@ -287,6 +345,16 @@ def run_clustering_pipeline(
         except Exception:  # noqa: BLE001 — never block the run on plot errors
             log.exception("MIBiG analysis failed; clustering run is intact")
 
+        if run_weights is not None:
+            from discovery.services.clustering.feature_weights import (
+                persist_run_weights,
+            )
+
+            persist_run_weights(
+                Path(settings.CLUSTERING_ARTIFACTS_DIR) / run.sha256[:12],
+                run_weights,
+            )
+
         # ── 12. iBGC scoring (novelty + domain novelty) ───────────────────
         if score_ibgcs:
             from discovery.services.clustering.ibgc_scoring import (
@@ -297,7 +365,7 @@ def run_clustering_pipeline(
             if artifacts_dir is not None:
                 try:
                     sig_to_ipr = _build_sig_to_ipr_lookup(
-                        sources=upper_sources,
+                        sources=query_sources(upper_sources, domain_vocab),
                         vocab_set=set(domain_accs.tolist()),
                     )
                     persist_scoring_cache(
@@ -309,6 +377,7 @@ def run_clustering_pipeline(
                         pair_vocab=pair_vocab,
                         leaf_paths=leaf_paths,
                         sig_to_ipr=sig_to_ipr,
+                        **_cache_weights(run_weights),
                     )
                 except Exception:  # noqa: BLE001 — cache miss is non-fatal
                     log.exception("Failed to persist iBGC scoring cache")
@@ -321,6 +390,7 @@ def run_clustering_pipeline(
                     leaf_paths=leaf_paths,
                     run=run,
                     weights=weights,
+                    **_cache_weights(run_weights),
                 )
                 result_extra_scoring = scoring_result
             except Exception:  # noqa: BLE001 — never block apply on scoring
@@ -333,6 +403,8 @@ def run_clustering_pipeline(
         "run_pk": run.pk,
         "created": created,
         "sha256": sha,
+        "similarity_metric": similarity_metric,
+        "domain_vocab": domain_vocab,
         "n_ibgcs": int(M_domains.shape[0]),
         "n_domains": int(M_domains.shape[1]),
         "n_pairs_vocab": int(M_pairs.shape[1]),
@@ -436,21 +508,81 @@ def _compute_run_sha(
     ibgc_etag: str,
     domain_etag: str,
     domain_vocab: str,
+    similarity_metric: str = "dice",
+    enrichment_version: str = "",
+    prune_below: float = DEFAULT_PRUNE_BELOW,
+    min_projection_similarity: float = DEFAULT_MIN_PROJECTION_SIMILARITY,
+    weights_sha: str = "",
 ) -> str:
-    """Return a stable sha256 hex digest for ``ClusteringRun.update_or_create``."""
-    payload = "|".join(
-        [
-            f"sources={','.join(sources)}",
-            f"vocab={domain_vocab}",
-            f"weights={weights[0]:.6f},{weights[1]:.6f}",
-            f"k={knn_k}",
-            "res=" + ",".join(f"{r:.6f}" for r in leiden_resolutions),
-            f"seed={seed}",
-            f"ibgc_etag={ibgc_etag}",
-            f"domain_etag={domain_etag}",
+    """Return a stable sha256 hex digest for ``ClusteringRun.update_or_create``.
+
+    A Dice run with the default thresholds hashes exactly as before ADR 0003,
+    so re-running it reproduces its sha. Other thresholds append
+    ``prune`` / ``min_proj``; a weighted metric also appends the metric,
+    enrichment version and the weight-vector digest.
+    """
+    parts = [
+        f"sources={','.join(sources)}",
+        f"vocab={domain_vocab}",
+        f"weights={weights[0]:.6f},{weights[1]:.6f}",
+        f"k={knn_k}",
+        "res=" + ",".join(f"{r:.6f}" for r in leiden_resolutions),
+        f"seed={seed}",
+        f"ibgc_etag={ibgc_etag}",
+        f"domain_etag={domain_etag}",
+    ]
+    is_dice = similarity_metric == "dice"
+    if not is_dice or (prune_below, min_projection_similarity) != (
+        DEFAULT_PRUNE_BELOW,
+        DEFAULT_MIN_PROJECTION_SIMILARITY,
+    ):
+        parts += [
+            f"prune={prune_below:.6f}",
+            f"min_proj={min_projection_similarity:.6f}",
         ]
-    )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    if not is_dice:
+        parts += [
+            f"metric={similarity_metric}",
+            f"enrichment={enrichment_version}",
+            f"weights_sha={weights_sha}",
+        ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def _check_metric(similarity_metric: str, enrichment_version: str) -> bool:
+    """Validate the metric; return True for Dice."""
+    from common_core.clustering.similarity import METRIC_DICE, SIMILARITY_METRICS
+
+    if similarity_metric not in SIMILARITY_METRICS:
+        raise ValueError(
+            f"unknown similarity_metric {similarity_metric!r}; "
+            f"expected one of {SIMILARITY_METRICS}"
+        )
+    if similarity_metric == METRIC_DICE:
+        return True
+    if not enrichment_version:
+        raise ValueError(
+            f"similarity_metric={similarity_metric!r} needs an enrichment_version"
+        )
+    return False
+
+
+def _weights_sha(run_weights) -> str:
+    if run_weights is None:
+        return ""
+    from common_core.clustering.weights import weights_sha256
+
+    return weights_sha256(run_weights.domain_weights, run_weights.pair_weights)
+
+
+def _cache_weights(run_weights) -> dict:
+    """``domain_weights`` / ``pair_weights`` kwargs (both None for Dice)."""
+    if run_weights is None:
+        return {"domain_weights": None, "pair_weights": None}
+    return {
+        "domain_weights": run_weights.domain_weights,
+        "pair_weights": run_weights.pair_weights,
+    }
 
 
 def rebuild_scoring_cache_from_db(run) -> Path | None:
@@ -467,19 +599,39 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
     leaf path — so reconstruct them here and persist under
     ``<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/``. Returns the cache
     directory, or ``None`` when there is nothing clusterable to score.
+
+    A weighted-metric run (``similarity_metric != "dice"``) is rebuilt on the
+    run's own vocabulary (``<sha[:12]>/weights/``, written by the pipeline or
+    by ``import_clustering_results``) and the cache gets those exact weights.
+    IDF is never recomputed here: the corpus may have changed since the run.
     """
     from discovery.models import IntegratedBgc, SourceBgcPrediction
     from discovery.services.clustering.adjacency import (
         build_ibgc_adjacency_pair_matrix,
     )
+    from discovery.services.clustering.feature_weights import load_run_weights
     from discovery.services.clustering.ibgc_scoring import persist_scoring_cache
-    from discovery.services.clustering.membership import build_ibgc_domain_matrix
+    from discovery.services.clustering.membership import (
+        build_ibgc_domain_matrix,
+        query_sources,
+    )
     from django.conf import settings
     from django.db.models import Q
 
     upper_sources = tuple(
         sorted({s.upper() for s in (run.domain_sources or DEFAULT_DOMAIN_SOURCES)})
     )
+    vocab = run.domain_vocab or "IPR_PROJECTED"
+    artifacts_dir = Path(settings.CLUSTERING_ARTIFACTS_DIR) / run.sha256[:12]
+    run_weights = None
+    if (run.similarity_metric or "dice") != "dice":
+        run_weights = load_run_weights(artifacts_dir)
+        if run_weights is None:
+            raise FileNotFoundError(
+                f"ClusteringRun sha={run.sha256[:12]} uses "
+                f"{run.similarity_metric!r} but has no persisted weights under "
+                f"{artifacts_dir}; re-import its output tarball"
+            )
 
     # Same clusterable subset the pipeline scores: iBGCs with at least one
     # non-partial-or-validated source prediction.
@@ -495,6 +647,10 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
     M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
         sources=upper_sources,
         ibgc_ids_subset=clusterable_ibgc_ids,
+        vocab=vocab,
+        domain_accs_subset=(
+            run_weights.domain_accs.tolist() if run_weights is not None else None
+        ),
     )
     if M_domains.shape[0] == 0:
         return None
@@ -502,8 +658,30 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
     M_pairs, ibgc_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
         sources=upper_sources,
         ibgc_ids_subset=ibgc_ids.tolist(),
+        vocab=vocab,
+        pair_vocab_subset=(
+            run_weights.pair_vocab.tolist() if run_weights is not None else None
+        ),
     )
     M_pairs = _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids)
+    cache_weights: dict = {"domain_weights": None, "pair_weights": None}
+    if run_weights is not None:
+        if M_pairs.shape[1] == 0 and len(run_weights.pair_vocab):
+            # No adjacency rows at all: keep the run's column space.
+            import scipy.sparse as sp
+
+            M_pairs = sp.csr_matrix(
+                (M_pairs.shape[0], len(run_weights.pair_vocab)), dtype=M_pairs.dtype
+            )
+            pair_vocab = run_weights.pair_vocab
+        cache_weights = {
+            "domain_weights": _align_weights(
+                run_weights.domain_accs, run_weights.domain_weights, domain_accs
+            ),
+            "pair_weights": _align_weights(
+                run_weights.pair_vocab, run_weights.pair_weights, pair_vocab
+            ),
+        }
 
     # Leaf GCF paths come straight from the imported iBGC rows, aligned to the
     # matrix row order.
@@ -515,11 +693,10 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
     leaf_paths = [gcf_by_id.get(int(i)) or "" for i in ibgc_ids.tolist()]
 
     sig_to_ipr = _build_sig_to_ipr_lookup(
-        sources=upper_sources,
+        sources=query_sources(upper_sources, vocab),
         vocab_set=set(domain_accs.tolist()),
     )
 
-    artifacts_dir = Path(settings.CLUSTERING_ARTIFACTS_DIR) / run.sha256[:12]
     return persist_scoring_cache(
         artifacts_dir=artifacts_dir,
         M_domains=M_domains,
@@ -529,4 +706,26 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
         pair_vocab=pair_vocab,
         leaf_paths=leaf_paths,
         sig_to_ipr=sig_to_ipr,
+        **cache_weights,
     )
+
+
+def _align_weights(src_vocab, src_weights, dst_vocab):
+    """Reorder ``src_weights`` onto ``dst_vocab`` by label; every label must exist."""
+    import numpy as np
+
+    def _key(x):
+        return tuple(x) if isinstance(x, (list, tuple)) else x
+
+    index = {_key(v): i for i, v in enumerate(src_vocab.tolist())}
+    missing = [v for v in dst_vocab.tolist() if _key(v) not in index]
+    if missing:
+        raise ValueError(
+            f"{len(missing)} columns have no persisted weight (e.g. {missing[:3]})"
+        )
+    order = np.fromiter(
+        (index[_key(v)] for v in dst_vocab.tolist()),
+        dtype=np.int64,
+        count=len(dst_vocab),
+    )
+    return np.asarray(src_weights, dtype=np.float32)[order]

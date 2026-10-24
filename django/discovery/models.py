@@ -922,7 +922,12 @@ class CdsChemOnt(models.Model):
 
 
 class ClusteringRun(models.Model):
-    """One iBGC composite-Dice → KNN graph → hierarchical CPM Leiden run.
+    """One iBGC composite similarity → KNN graph → hierarchical CPM Leiden run.
+
+    ``similarity_metric`` records how iBGC × iBGC similarity was scored
+    (ADR 0003): binary composite Dice (older runs) or the IDF × enrichment
+    weighted cosine, whose per-feature weights are persisted with the run's
+    artefacts so every consumer scores with the same weights.
 
     Parameters + counts only. The hierarchy itself lives in ``DashboardGCF``
     rows; per-iBGC leaf paths live on ``IntegratedBgc.gene_cluster_family``.
@@ -938,9 +943,14 @@ class ClusteringRun(models.Model):
     )
     DOMAIN_VOCAB_RAW = "RAW"
     DOMAIN_VOCAB_IPR_PROJECTED = "IPR_PROJECTED"
+    DOMAIN_VOCAB_IPR_GAPFILLED = "IPR_GAPFILLED"
     DOMAIN_VOCAB_CHOICES = (
         (DOMAIN_VOCAB_RAW, "Raw signature accessions"),
         (DOMAIN_VOCAB_IPR_PROJECTED, "IPR entry when available, else signature"),
+        (
+            DOMAIN_VOCAB_IPR_GAPFILLED,
+            "IPR-projected, plus Gene3D/PRINTS/ProSite hits that fill gaps",
+        ),
     )
     domain_vocab = models.CharField(
         max_length=20,
@@ -949,7 +959,35 @@ class ClusteringRun(models.Model):
     )
     score_weights = models.JSONField(
         default=list,
-        help_text="(w_domain, w_adjacency) for the composite Dice score, e.g. [0.5, 0.5]",
+        help_text="(w_domain, w_adjacency) for the composite score, e.g. [0.5, 0.5]",
+    )
+    # Values match common_core.clustering.similarity.SIMILARITY_METRICS so
+    # they pass through the HPC tarball unchanged.
+    SIMILARITY_DICE = "dice"
+    SIMILARITY_COSINE_IDF_ENRICH = "cosine_idf_enrich"
+    SIMILARITY_METRIC_CHOICES = (
+        (SIMILARITY_DICE, "Binary composite Dice"),
+        (SIMILARITY_COSINE_IDF_ENRICH, "IDF × enrichment weighted cosine"),
+    )
+    similarity_metric = models.CharField(
+        max_length=32,
+        choices=SIMILARITY_METRIC_CHOICES,
+        default=SIMILARITY_DICE,
+    )
+    enrichment_version = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="DomainEnrichment.version used for the feature weights; '' for Dice",
+    )
+    prune_below = models.FloatField(
+        default=0.05,
+        help_text="Similarity-graph edges below this are dropped before kNN",
+    )
+    min_projection_similarity = models.FloatField(
+        default=0.1,
+        help_text="Partial iBGCs whose summed top-k similarity is below this "
+        "stay unprojected",
     )
     knn_k = models.PositiveSmallIntegerField()
     leiden_resolutions = models.JSONField(
@@ -977,6 +1015,51 @@ class ClusteringRun(models.Model):
 
     def __str__(self):
         return f"ClusteringRun {self.pk} ({self.created_at:%Y-%m-%d})"
+
+
+class DomainEnrichment(models.Model):
+    """Frozen BGC-core vs flank enrichment weight per domain label (ADR 0003).
+
+    ``weight = max(0.05, sigmoid(log2(p_core / p_flank)))`` with the
+    pseudocount split by set size, learned on genome catalogues by
+    ``manage.py build_domain_enrichment``. A ``version`` is built once and
+    never changed in place: re-learning means a new version, a new
+    clustering run and a fresh benchmark check. Labels are in ``vocab`` (the
+    ``ClusteringRun.domain_vocab`` the version was built with); a run may only
+    use a version of its own vocabulary. Labels absent from a version weigh
+    0.5. ``vocab`` and ``datasets`` are the same on every row of a version.
+    """
+
+    version = models.CharField(max_length=50, db_index=True)
+    vocab = models.CharField(
+        max_length=20,
+        choices=ClusteringRun.DOMAIN_VOCAB_CHOICES,
+        help_text="Label vocabulary the version was learned on",
+    )
+    datasets = models.JSONField(
+        default=list,
+        help_text="AssemblySource names the version was learned on (sorted)",
+    )
+    label = models.CharField(max_length=50)
+    n_core = models.PositiveIntegerField(
+        default=0, help_text="Core CDS (inside GECCO/SanntiS iBGCs) carrying the label"
+    )
+    n_flank = models.PositiveIntegerField(
+        default=0,
+        help_text="Flank CDS (outside any iBGC, or antiSMASH overhang) carrying it",
+    )
+    weight = models.FloatField()
+
+    class Meta:
+        db_table = "discovery_domain_enrichment"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["version", "label"], name="uniq_domain_enrichment_version_label"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.label} @ {self.version}: {self.weight:.3f}"
 
 
 class DashboardGCF(models.Model):

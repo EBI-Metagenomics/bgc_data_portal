@@ -53,6 +53,28 @@ class Command(BaseCommand):
         )
         parser.add_argument("--seed", type=int, default=42)
         parser.add_argument(
+            "--similarity-metric",
+            choices=("dice", "cosine_idf_enrich"),
+            default="dice",
+            help="iBGC similarity metric (default dice; ADR 0003: cosine_idf_enrich)",
+        )
+        parser.add_argument(
+            "--domain-vocab",
+            choices=("IPR_PROJECTED", "IPR_GAPFILLED"),
+            default=None,
+            help=(
+                "Domain label vocabulary (default IPR_GAPFILLED for "
+                "cosine_idf_enrich, IPR_PROJECTED for dice)"
+            ),
+        )
+        parser.add_argument(
+            "--enrichment-version",
+            default="",
+            help="DomainEnrichment version (required for cosine_idf_enrich)",
+        )
+        parser.add_argument("--prune-below", type=float, default=0.05)
+        parser.add_argument("--min-projection-similarity", type=float, default=0.1)
+        parser.add_argument(
             "--apply",
             action="store_true",
             help="Persist results to IntegratedBgc + DashboardGCF and emit MIBiG artifacts",
@@ -123,7 +145,22 @@ class Command(BaseCommand):
                 "(dev only), unset the CLUSTERING_HPC_MODE env var."
             )
 
+        metric = options["similarity_metric"]
+        if metric != "dice" and not options["enrichment_version"]:
+            from django.core.management.base import CommandError
+
+            raise CommandError(
+                f"--similarity-metric {metric} needs --enrichment-version"
+            )
         kwargs = {
+            "similarity_metric": metric,
+            "domain_vocab": options["domain_vocab"]
+            or ("IPR_PROJECTED" if metric == "dice" else "IPR_GAPFILLED"),
+            "enrichment_version": (
+                options["enrichment_version"] if metric != "dice" else ""
+            ),
+            "prune_below": options["prune_below"],
+            "min_projection_similarity": options["min_projection_similarity"],
             "domain_sources": [s.upper() for s in options["domain_sources"]],
             "score_weights": options["score_weights"],
             "knn_k": options["knn_k"],
