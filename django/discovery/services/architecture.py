@@ -12,7 +12,7 @@ across all CDS whose ``cds_range`` overlaps the iBGC's / source-BGC's
 ``bgc_range`` on the same contig. Duplicate ``(cds_start, dom_start, acc)``
 tuples are collapsed. ``ref_db`` is filtered to PFAM/NCBIFAM by default
 (``DEFAULT_DOMAIN_SOURCES``) so the surfaced architecture matches the
-vocabulary the composite-Dice scoring cache uses.
+vocabulary the composite-similarity scoring cache uses.
 
 This module also hosts :func:`collapse_to_interpro_rows`, which folds
 per-signature ``ContigDomain`` rows into one row per InterPro entry for

@@ -10,8 +10,8 @@ Computes all derived scores and materialised tables from raw loaded data:
     the clustering pipeline)
 
 iBGC-level novelty and ``domain_novelty`` are written by
-``discovery.services.clustering.ibgc_scoring`` over the composite-Dice
-matrix — not here.
+``discovery.services.clustering.ibgc_scoring`` with the clustering run's
+composite similarity — not here.
 """
 
 from __future__ import annotations
@@ -117,8 +117,7 @@ def _compute_assembly_aggregates() -> None:
     # iBGC count + l1 distinct count + mean novelty per assembly, via
     # contigs → ibgcs traversal.
     with connection.cursor() as cur:
-        cur.execute(
-            """
+        cur.execute("""
             SELECT a.id,
                    COUNT(DISTINCT i.id) AS ibgc_count,
                    COUNT(DISTINCT SPLIT_PART(i.gene_cluster_family, '.', 1))
@@ -128,8 +127,7 @@ def _compute_assembly_aggregates() -> None:
             LEFT JOIN discovery_contig c ON c.assembly_id = a.id
             LEFT JOIN discovery_ibgc i ON i.contig_id = c.id
             GROUP BY a.id
-            """
-        )
+            """)
         agg_by_id = {row[0]: (row[1], row[2], row[3]) for row in cur.fetchall()}
 
     batch = []
@@ -179,8 +177,7 @@ def _compute_percentile_ranks() -> None:
     logger.info("Computing percentile ranks ...")
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
+        cursor.execute("""
             UPDATE discovery_assembly AS a
             SET
                 pctl_novelty  = sub.pctl_novelty,
@@ -195,8 +192,7 @@ def _compute_percentile_ranks() -> None:
                 FROM discovery_assembly
             ) AS sub
             WHERE a.id = sub.id
-            """
-        )
+            """)
 
     logger.info("Percentile ranks computed")
 
@@ -318,16 +314,14 @@ def _compute_chemont_ic() -> None:
     # term specificity is calibrated against the same corpus the search scores.
     ibgc_terms: dict[int, set[str]] = defaultdict(set)
     with connection.cursor() as cur:
-        cur.execute(
-            """
+        cur.execute("""
             SELECT i.id AS ibgc_id, ch.chemont_id
             FROM discovery_cds_chemont ch
             JOIN discovery_cds c ON c.id = ch.cds_id
             JOIN discovery_ibgc i
               ON i.contig_id = c.contig_id
              AND i.bgc_range && c.cds_range
-            """
-        )
+            """)
         for ibgc_id, cid in cur.fetchall():
             ibgc_terms[ibgc_id].add(cid)
 

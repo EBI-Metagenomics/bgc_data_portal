@@ -13,8 +13,9 @@ Pipeline:
    per-row leaf paths.
 
 3. Build the asset's domain + adjacency-pair matrices on the same column
-   space, stack them under the primary matrices, run composite-Dice
-   similarity, take the top-K nearest primary neighbours per virtual iBGC
+   space (and label vocabulary) as the run, score them against the primary
+   matrices with the run's similarity metric and persisted feature weights
+   (ADR 0003), take the top-K nearest primary neighbours per virtual iBGC
    and compute:
 
    * ``gene_cluster_family`` — weighted-vote leaf path of the K neighbours
@@ -62,6 +63,8 @@ from .schemas import (
 log = logging.getLogger(__name__)
 
 KNN_K = 5
+# Fallback only: the run's ``min_projection_similarity`` applies (it is
+# metric-specific); 0.1 is what every Dice run uses.
 MIN_TOTAL_SIMILARITY = 0.1
 
 
@@ -266,6 +269,21 @@ def _project_against_run(
         )
         return
 
+    metric = run.similarity_metric or "dice"
+    if cache_payload.get("similarity_metric", "dice") != metric:
+        log.warning(
+            "Scoring cache at %s was written for %r but the run uses %r — "
+            "virtual iBGCs cannot be projected until it is rebuilt",
+            artifacts_dir,
+            cache_payload.get("similarity_metric"),
+            metric,
+        )
+        return
+    min_total_similarity = getattr(run, "min_projection_similarity", None)
+    if min_total_similarity is None:
+        min_total_similarity = MIN_TOTAL_SIMILARITY
+    vocab = run.domain_vocab or "IPR_PROJECTED"
+
     M_dom_pri = cache_payload["M_domains"]
     M_pair_pri = cache_payload["M_pairs"]
     pri_row_ids = cache_payload["ibgc_ids"]
@@ -317,23 +335,26 @@ def _project_against_run(
 
     # Build asset matrices on the primary's column space.
     M_dom_q = build_asset_domain_matrix(
-        virtual_ibgcs, sources=sources, domain_accs=dom_accs
+        virtual_ibgcs, sources=sources, domain_accs=dom_accs, vocab=vocab
     )
     M_pair_q = build_asset_adjacency_pair_matrix(
-        virtual_ibgcs, sources=sources, pair_vocab=pair_vocab
+        virtual_ibgcs, sources=sources, pair_vocab=pair_vocab, vocab=vocab
     )
 
     # Score the asset rows against the (large, fixed) primary set directly.
     # Stacking under the primary matrix and running the full self-similarity
     # would recompute the entire n_primary² primary block — already cached from
     # the clustering run and irrelevant here — on every upload. The asset set is
-    # tiny, so we compute only the (n_asset × n_primary) Dice block.
+    # tiny, so we compute only the (n_asset × n_primary) block.
     sim_block = compute_composite_similarity_block(
         M_dom_q,
         M_dom_pri,
         M_pair_q,
         M_pair_pri,
         weights=weights,
+        metric=metric,
+        domain_weights=cache_payload.get("domain_weights"),
+        pair_weights=cache_payload.get("pair_weights"),
     )
     M_dom_q_csr = M_dom_q.tocsr()
 
@@ -348,7 +369,7 @@ def _project_against_run(
         top_cols = cols[order]
         top_vals = vals[order]
         top_sum = float(top_vals.sum())
-        if top_sum < MIN_TOTAL_SIMILARITY:
+        if top_sum < min_total_similarity:
             continue
 
         weights_norm = top_vals / top_sum
@@ -717,8 +738,7 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
                     "domain_description": d.domain_description or d.domain_name,
                     "go_slim": go_slim_for_terms(d.go_terms),
                     "interpro_entry_acc": (d.interpro_entry_acc or "").strip(),
-                    "interpro_entry_description": d.interpro_entry_description
-                    or "",
+                    "interpro_entry_description": d.interpro_entry_description or "",
                     "ref_db": d.ref_db or "",
                 }
             )

@@ -20,7 +20,7 @@ Two dropdowns above the plot set the X and Y axes. The always-available choices 
 
 After you run a search, extra axes become available that carry the query's score:
 
-- **Query similarity** — for a domain or find-similar search (labelled **Domain match (Dice)** for domain searches).
+- **Query similarity** — for a domain or find-similar search (labelled **Domain match** for domain searches).
 - **Bitscore**, **Identity %**, and **Query coverage %** — for a [sequence search](sequence-search.qmd).
 
 If you pick a query axis without having run a search, the plot prompts you to run one to populate it.

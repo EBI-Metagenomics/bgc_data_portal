@@ -12,7 +12,7 @@ function countTokens(text: string): number {
 
 /**
  * Domain query: a Boolean (AND/OR containment) section and an Architecture
- * (composite-Dice) section. Both are independent — whichever has accessions is
+ * (composite-similarity) section. Both are independent — whichever has accessions is
  * applied, and when both do their result sets are intersected.
  */
 export function DomainQueryBuilder() {
@@ -190,7 +190,7 @@ function ArchitectureSection({
 }: ArchitectureSectionProps) {
   const tokenCount = countTokens(text);
   const adjacency = (1 - weight).toFixed(2);
-  const dice = weight.toFixed(2);
+  const domainShare = weight.toFixed(2);
 
   return (
     <div className="space-y-2 border-t pt-3">
@@ -215,7 +215,7 @@ function ArchitectureSection({
         <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-muted-foreground">
           <span>Weight</span>
           <span className="font-mono text-foreground">
-            Adj {adjacency} · Dice {dice}
+            Adj {adjacency} · Domains {domainShare}
           </span>
         </div>
         <Slider
@@ -227,7 +227,7 @@ function ArchitectureSection({
         />
         <div className="flex justify-between text-[10px] text-muted-foreground">
           <span>← Adjacency Index</span>
-          <span>Sørensen-Dice →</span>
+          <span>Domain set →</span>
         </div>
       </div>
 

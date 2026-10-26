@@ -1,4 +1,11 @@
-"""On-demand composite-Dice similarity backed by the small signature matrices.
+"""On-demand composite similarity backed by the small signature matrices.
+
+Scores with the active run's ``similarity_metric`` (ADR 0003): composite Dice
+on the binary matrices, or the IDF × enrichment weighted cosine. For the
+latter the cache holds row-normalised weighted copies ``X = rownorm(M·diag(w))``
+built once on load (same nnz as ``M``), so a query is ``rownorm(q·w) · Xᵀ``.
+The binary matrices stay loaded: domain novelty and architecture input need
+them.
 
 Both ``/query/similar-ibgc/`` and ``/query/ibgc-architecture/`` now run the same
 single sparse-vector-matmul kernel against the persisted ``M_domains`` /
@@ -52,6 +59,12 @@ class ScoringCache:
     # Pfam/NCBIFAM/TIGRFAM accs onto the IPR-projected vocabulary. Empty
     # dict for caches predating the IPR projection.
     sig_to_ipr: dict[str, str] = None  # type: ignore[assignment]
+    # ADR 0003. For "dice" the four arrays below are None.
+    similarity_metric: str = "dice"
+    domain_weights: object = None  # numpy float32, aligned to domain_accs
+    pair_weights: object = None
+    X_domains: object = None  # rownorm(M_domains · diag(domain_weights)), CSR
+    X_pairs: object = None
 
     def row_index_for(self, ibgc_id: int) -> int | None:
         return self._id_to_row.get(int(ibgc_id))
@@ -72,7 +85,21 @@ class ScoringCache:
             return self.ibgc_ids
         if key == "sig_to_ipr":
             return self.sig_to_ipr or {}
+        if key in (
+            "similarity_metric",
+            "domain_weights",
+            "pair_weights",
+            "X_domains",
+            "X_pairs",
+        ):
+            return getattr(self, key)
         raise KeyError(key)
+
+    def get(self, key: str, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
 
 _lock = threading.Lock()
@@ -124,6 +151,35 @@ def _load_cache(run) -> ScoringCache:
         json.loads(sig_to_ipr_path.read_text()) if sig_to_ipr_path.exists() else {}
     )
 
+    from discovery.services.clustering.ibgc_scoring import (
+        DOMAIN_WEIGHTS_FILE,
+        PAIR_WEIGHTS_FILE,
+        cached_similarity_metric,
+    )
+
+    metric = run.similarity_metric or "dice"
+    cache_metric = cached_similarity_metric(cache_dir)
+    if cache_metric != metric:
+        raise FileNotFoundError(
+            f"Scoring cache for run sha={run.sha256[:12]} was written for "
+            f"{cache_metric!r} but the run uses {metric!r}; rebuild it "
+            "(manage.py rebuild_scoring_cache)"
+        )
+    domain_weights = pair_weights = X_domains = X_pairs = None
+    if metric != "dice":
+        from common_core.clustering.similarity import weighted_rows
+
+        try:
+            domain_weights = np.load(cache_dir / DOMAIN_WEIGHTS_FILE)
+            pair_weights = np.load(cache_dir / PAIR_WEIGHTS_FILE)
+        except OSError as exc:
+            raise FileNotFoundError(
+                f"Scoring cache for run sha={run.sha256[:12]} lacks its "
+                f"{metric!r} feature weights"
+            ) from exc
+        X_domains = weighted_rows(M_domains.tocsr(), domain_weights)
+        X_pairs = weighted_rows(M_pairs.tocsr(), pair_weights)
+
     weights = list(run.score_weights or (0.5, 0.5))
     total = float(weights[0]) + float(weights[1])
     if total <= 0:
@@ -133,8 +189,9 @@ def _load_cache(run) -> ScoringCache:
 
     id_to_row = {int(x): i for i, x in enumerate(ibgc_ids.tolist())}
     log.info(
-        "similarity_on_demand: loaded cache sha=%s n_rows=%d (D=%d, P=%d)",
+        "similarity_on_demand: loaded cache sha=%s metric=%s n_rows=%d (D=%d, P=%d)",
         run.sha256[:12],
+        metric,
         len(ibgc_ids),
         M_domains.shape[1],
         M_pairs.shape[1],
@@ -152,6 +209,11 @@ def _load_cache(run) -> ScoringCache:
         weight_adjacency=wa,
         _id_to_row=id_to_row,
         sig_to_ipr=sig_to_ipr,
+        similarity_metric=metric,
+        domain_weights=domain_weights,
+        pair_weights=pair_weights,
+        X_domains=X_domains,
+        X_pairs=X_pairs,
     )
 
 
@@ -166,8 +228,9 @@ def score_against_all(
     weight_domain: float | None = None,
     weight_adjacency: float | None = None,
 ):
-    """Return the composite-Dice score vector (length n_primary).
+    """Return the composite score vector (length n_primary) under the run's metric.
 
+    ``q_dom`` / ``q_pair`` are binary 1×D / 1×P rows on the cache's columns.
     Either weight may be overridden by the caller (e.g. ARCH supplies its
     own weight); when both are None we use the cached weights from the
     active run.
@@ -182,6 +245,19 @@ def score_against_all(
     if total <= 0:
         return np.zeros(cache.M_domains.shape[0], dtype=np.float32)
     w_d, w_a = w_d / total, w_a / total
+
+    if cache.similarity_metric != "dice":
+        n_rows = cache.M_domains.shape[0]
+        out = np.zeros(n_rows, dtype=np.float32)
+        if w_d > 0.0 and q_dom.nnz:
+            out += w_d * weighted_cosine_scores(
+                q_dom, cache.domain_weights, cache.X_domains
+            )
+        if w_a > 0.0 and q_pair.nnz:
+            out += w_a * weighted_cosine_scores(
+                q_pair, cache.pair_weights, cache.X_pairs
+            )
+        return out
 
     n_rows = cache.M_domains.shape[0]
     dice_d = np.zeros(n_rows, dtype=np.float32)
@@ -218,6 +294,23 @@ def score_against_all(
             ).astype(np.float32)
 
     return (w_d * dice_d) + (w_a * dice_a)
+
+
+def weighted_cosine_scores(q, w, X):
+    """Weighted cosine of one binary query row against every row of ``X``.
+
+    ``X`` is the pre-normalised ``rownorm(M · diag(w))``; the query is
+    weighted and normalised the same way, so the dot product is the cosine.
+    Clipped to 1.0 like the clustering matrix.
+    """
+    import numpy as np
+    from common_core.clustering.similarity import weighted_rows
+
+    qx = weighted_rows(q.tocsr(), w)
+    if qx.nnz == 0:
+        return np.zeros(X.shape[0], dtype=np.float32)
+    scores = np.asarray((qx @ X.T).todense(), dtype=np.float32).reshape(-1)
+    return np.minimum(scores, 1.0)
 
 
 def top_k(scores, k: int) -> tuple[list[int], list[float]]:

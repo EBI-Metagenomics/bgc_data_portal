@@ -713,9 +713,7 @@ def _parse_ibgc_id_scope(
             )
         return list(cached) or None
     if ibgc_ids:
-        return [
-            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
-        ] or None
+        return [int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()] or None
     return None
 
 
@@ -1479,9 +1477,7 @@ def ibgc_idset(request, body: IbgcIdSetRequest):
     if not ids:
         raise HttpError(400, "ibgc_ids must be non-empty")
     if len(ids) > DASHBOARD_RESULT_CAP:
-        raise HttpError(
-            400, f"ibgc_ids exceeds the {DASHBOARD_RESULT_CAP} result cap"
-        )
+        raise HttpError(400, f"ibgc_ids exceeds the {DASHBOARD_RESULT_CAP} result cap")
     token, n = _cache_ibgc_idset(ids)
     return IbgcIdSetResponse(token=token, n_ibgcs=n)
 
@@ -1495,7 +1491,7 @@ def _apply_ibgc_sort(qs, sort_by: str, order: str, parsed_ids: list[int] | None)
 
       * ``sort_by="similarity"`` with a caller-supplied ``ibgc_ids`` order →
         rank by ``array_position`` in that list (Find-Similar / sequence query
-        results, which arrive pre-ranked by Dice / bitscore).
+        results, which arrive pre-ranked by similarity / bitscore).
       * otherwise → ``ORDER BY <field> [DESC] NULLS LAST`` over the stored
         score columns (``size_kb`` via the computed span annotation). Unknown
         keys fall back to ``novelty_score``.
@@ -1504,9 +1500,7 @@ def _apply_ibgc_sort(qs, sort_by: str, order: str, parsed_ids: list[int] | None)
         from django.db.models import IntegerField
         from django.db.models.expressions import RawSQL
 
-        ordered_ids = (
-            list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
-        )
+        ordered_ids = list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
         # Qualify the id column: the queryset may join discovery_bgc /
         # discovery_assembly when a chip filter is active, which would make a
         # bare ``id`` ambiguous to Postgres.
@@ -2326,10 +2320,11 @@ def similar_ibgc_query(
     page: int = 1,
     page_size: int = 25,
 ):
-    """Top-K iBGCs by composite-Dice similarity to ``body.ibgc_id``.
+    """Top-K iBGCs by composite similarity to ``body.ibgc_id``.
 
-    Composite-Dice is computed on demand against the per-iBGC signature
-    matrices of the active ClusteringRun. The full N×N similarity matrix
+    The composite (the run's similarity metric: IDF × enrichment weighted
+    cosine, or Dice on older runs) is computed on demand against the per-iBGC
+    signature matrices of the active ClusteringRun. The full N×N similarity matrix
     is no longer materialised; the result is cached in Redis for 24h keyed
     on the run's sha256 so a new clustering run invalidates the cache by
     orphaning the previous keys.
@@ -2754,9 +2749,7 @@ def _validate_criterion_params(ctype: str, params) -> dict:
         if not cleaned:
             raise HttpError(400, "sequence criterion requires a protein sequence")
         if len(cleaned) > 5000:
-            raise HttpError(
-                400, "Sequence exceeds maximum length of 5,000 amino acids"
-            )
+            raise HttpError(400, "Sequence exceeds maximum length of 5,000 amino acids")
         if not (0.0 <= params.min_bitscore <= 10_000.0):
             raise HttpError(400, "min_bitscore must be between 0 and 10000")
         if not (0.0 <= params.min_pident <= 100.0):
@@ -2809,9 +2802,7 @@ def _normalise_combined_criteria(criteria) -> list[dict]:
         except CriterionError as exc:
             raise HttpError(exc.status, exc.message)
         normalised = _validate_criterion_params(c.type, params)
-        out.append(
-            {"id": cid, "type": c.type, "params": normalised or raw_params}
-        )
+        out.append({"id": cid, "type": c.type, "params": normalised or raw_params})
     return out
 
 
@@ -2840,9 +2831,7 @@ def _criterion_columns(result: dict) -> list[CriterionColumn]:
     ]
 
 
-def _combined_scores_map(
-    scores_by_id: dict, ibgc_id: int
-) -> dict[str, CriterionScore]:
+def _combined_scores_map(scores_by_id: dict, ibgc_id: int) -> dict[str, CriterionScore]:
     raw = scores_by_id.get(str(ibgc_id), {})
     return {
         cid: CriterionScore(
@@ -2960,9 +2949,7 @@ def combined_query_status(
     columns = _criterion_columns(result)
     ordered_ids = [int(i) for i in result.get("ordered_ids", [])]
     scores_by_id = result.get("scores_by_id", {})
-    primary_cid = (
-        result["criteria"][0]["id"] if result.get("criteria") else None
-    )
+    primary_cid = result["criteria"][0]["id"] if result.get("criteria") else None
 
     if not ordered_ids:
         return CombinedRosterResponse(

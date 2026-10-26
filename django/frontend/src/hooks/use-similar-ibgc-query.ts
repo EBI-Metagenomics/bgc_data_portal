@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { postSimilarIbgcQuery } from "@/api/ibgcs";
 
 /**
- * Top-K iBGCs by composite-Dice similarity to a seed iBGC id. Replaces the
+ * Top-K iBGCs by composite similarity to a seed iBGC id. Replaces the
  * retired embedding-based `useSimilarBgcQuery`. The seed must be a primary
  * iBGC in the latest ClusteringRun (the backend rejects partials in v1).
  */

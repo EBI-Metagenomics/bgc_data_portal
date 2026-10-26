@@ -9,7 +9,7 @@ here, and the combined multi-criterion query intersects several
 ``CriterionResult`` score maps under AND semantics.
 
 A score payload is a dict ``{"value": float, ...}``. ``value`` is the criterion's
-primary, sortable metric (bitscore, composite-Dice, ChemOnt similarity, or — for
+primary, sortable metric (bitscore, composite similarity, ChemOnt similarity, or — for
 domain containment — the *fraction of include tokens matched*). Sequence search
 additionally carries ``pident`` / ``qcoverage`` / ``best_hit_protein_id``.
 
@@ -81,7 +81,7 @@ class CriterionError(Exception):
 # columns (the user's "pident, etc."); the rest contribute a single score.
 CRITERION_METRICS: dict[str, list[CriterionMetric]] = {
     "domain": [CriterionMetric("value", "Match frac.")],
-    "architecture": [CriterionMetric("value", "Arch. Dice")],
+    "architecture": [CriterionMetric("value", "Arch. similarity")],
     "similar": [CriterionMetric("value", "Similarity")],
     "sequence": [
         CriterionMetric("value", "Bitscore"),
@@ -274,14 +274,15 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
     )
 
 
-# ── Domain architecture (composite-Dice) ──────────────────────────────────────
+# ── Domain architecture (composite similarity) ────────────────────────────────
 
 
 def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]]:
     """Resolve an architecture query to ``(top_ids, top_scores)`` (best-first).
 
-    Scores ``weight·Dice(domain set) + (1-weight)·Dice(adjacency pairs)`` against
-    the cached primary-iBGC matrices of the latest ClusteringRun. ``k`` is bounded
+    Scores ``weight·S(domain set) + (1-weight)·S(adjacency pairs)`` against the
+    cached primary-iBGC matrices of the latest ClusteringRun, ``S`` being the
+    run's similarity metric (weighted cosine, or Dice on older runs). ``k`` is bounded
     by :data:`RESULT_CAP`. Raises :class:`CriterionError` when the input is empty,
     the scoring cache is unavailable, or no accession matched the vocabulary.
     """
@@ -327,7 +328,7 @@ def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]
             "No supplied accession matched the scoring cache vocabulary — "
             "check the input or rerun clustering against a broader source set.",
         )
-    # Post-filter by the minimum composite-Dice score. Applied after the cache
+    # Post-filter by the minimum composite score. Applied after the cache
     # (keyed on accs/weight/k only) so the threshold stays a cheap, cache-friendly
     # cut. May legitimately return nothing — not an error.
     threshold = float(params.threshold or 0.0)
@@ -339,7 +340,7 @@ def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]
 
 
 def resolve_architecture(params: ArchitectureParams) -> CriterionResult:
-    """Resolve a domain-architecture criterion to per-iBGC composite-Dice scores."""
+    """Resolve a domain-architecture criterion to per-iBGC composite scores."""
     top_ids, top_scores = architecture_top(params)
     scores = {
         nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)
@@ -351,13 +352,13 @@ def resolve_architecture(params: ArchitectureParams) -> CriterionResult:
     )
 
 
-# ── Similar-iBGC (composite-Dice to a seed) ───────────────────────────────────
+# ── Similar-iBGC (composite similarity to a seed) ─────────────────────────────
 
 
 def similar_top(params: SimilarParams) -> tuple[list[int], list[float]]:
     """Resolve a similar-iBGC query to ``(top_ids, top_scores)`` (best-first).
 
-    Composite-Dice of the seed iBGC against all other primaries of the active
+    Composite similarity of the seed iBGC against all other primaries of the active
     ClusteringRun, computed on demand and cached for 24h keyed on the run sha256.
     Raises :class:`CriterionError` if the cache is missing or the seed is not a
     primary in the latest run.
@@ -407,7 +408,7 @@ def similar_top(params: SimilarParams) -> tuple[list[int], list[float]]:
 
 
 def resolve_similar(params: SimilarParams) -> CriterionResult:
-    """Resolve a similar-iBGC criterion to per-iBGC composite-Dice scores."""
+    """Resolve a similar-iBGC criterion to per-iBGC composite scores."""
     top_ids, top_scores = similar_top(params)
     scores = {
         nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)

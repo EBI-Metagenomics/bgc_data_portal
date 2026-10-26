@@ -209,8 +209,9 @@ class QueryScoreRow(Schema):
     Carries only the per-hit metrics the dashboard needs to build its
     result allow-list and metric maps — the full roster rows are fetched
     separately via ``/ibgcs/roster/?ibgc_ids=…``. ``similarity_score`` is
-    the query's native score (phmmer bitscore for sequence search, Dice for
-    domain/architecture, ChemOnt BMA for chemical). The ``best_*`` fields are
+    the query's native score (phmmer bitscore for sequence search, the
+    clustering run's composite similarity for domain/architecture, ChemOnt
+    BMA for chemical). The ``best_*`` fields are
     populated for sequence search only.
     """
 
@@ -493,11 +494,13 @@ class IbgcArchitectureResponse(Schema):
 
 
 class IbgcArchitectureQueryRequest(Schema):
-    """Composite-Dice query over a user-supplied domain architecture.
+    """Composite-similarity query over a user-supplied domain architecture.
 
+    Scored with the active ClusteringRun's similarity metric (IDF ×
+    enrichment weighted cosine; composite Dice on older runs).
     ``architecture`` is the ordered list of domain accessions; ``weight`` is
-    the Sørensen-Dice share (``1.0`` = pure Dice, ``0.0`` = pure adjacency).
-    ``threshold`` is the minimum composite-Dice score (0–1) an iBGC must reach
+    the domain-set share (``1.0`` = domain set only, ``0.0`` = adjacency only).
+    ``threshold`` is the minimum composite score (0–1) an iBGC must reach
     to be returned. Unknown accessions (not in the latest ClusteringRun's
     scoring cache) are silently dropped.
     """
@@ -777,7 +780,8 @@ class QueryResultBgc(Schema):
     domain_novelty: float = 0.0
     is_partial: bool = False
     # For sequence queries `similarity_score` carries the best bitscore; for
-    # other modes it keeps the mode-specific score (Dice, Tanimoto, etc.).
+    # other modes it keeps the mode-specific score (composite similarity,
+    # ChemOnt, etc.).
     similarity_score: float = 0.0
     # Sequence-query-specific metrics (populated only by the protein search).
     best_bitscore: float | None = None

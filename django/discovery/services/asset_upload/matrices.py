@@ -5,7 +5,7 @@ These mirror :mod:`discovery.services.clustering.membership` and
 ``AssetData`` (the parsed upload) rather than querying the ORM. They emit
 sparse CSR matrices with the **same column ordering** as the persisted
 scoring cache so they can be horizontally stacked under the primary
-matrices for composite-Dice similarity.
+matrices for composite similarity.
 
 Label vocabulary: ``vocab`` selects the run's ``domain_vocab``
 (``IPR_PROJECTED`` or ``IPR_GAPFILLED``); both go through

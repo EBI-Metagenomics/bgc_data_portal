@@ -78,7 +78,7 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     docsUrl: "domain-query.html",
   },
   architecture_search: {
-    text: "Composite-Dice over a positional domain architecture. Each iBGC is scored as w\u00B7Dice(domain set) + (1\u2212w)\u00B7Dice(adjacent-pair set). Adjacency rewards matching neighbour pairs in the supplied order; S\u00F8rensen-Dice measures unordered domain overlap. Slide right to favour bag-of-domains; slide left to favour gene-order similarity. Accessions outside the clustering run's vocabulary are silently dropped.",
+    text: "Composite similarity over a positional domain architecture. Each iBGC is scored as w\u00B7S(domain set) + (1\u2212w)\u00B7S(adjacent-pair set), where S is the clustering run's similarity: a cosine weighted towards rare, BGC-core domains (S\u00F8rensen-Dice on older runs). Adjacency rewards matching neighbour pairs in the supplied order; the domain set measures unordered overlap. Slide right to favour bag-of-domains; slide left to favour gene-order similarity. Accessions outside the clustering run's vocabulary are silently dropped.",
     docsUrl: "domain-query.html#architecture-mode-arch",
   },
   tanimoto: {

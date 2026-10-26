@@ -1,5 +1,8 @@
 """Domain + adjacency hierarchical-CPM-Leiden clustering for BGCs.
 
+iBGC similarity is the run's ``similarity_metric`` (ADR 0003): IDF ×
+enrichment weighted cosine, or binary composite Dice for older runs.
+
 Public API surface for the discovery clustering pipeline. Heavy imports
 (numpy, scipy.sparse, igraph, leidenalg, umap-learn, plotly) are deferred
 inside the individual modules' function bodies so this package can be

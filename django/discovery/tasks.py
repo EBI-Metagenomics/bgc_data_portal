@@ -251,7 +251,7 @@ def reclassify_bgcs_task(
     clustering_run_pk: int,
     scope: str = "partial",
     knn_k: int = 5,
-    min_total_similarity: float = 0.1,
+    min_total_similarity: float | None = None,
     then_project: bool = False,
     project_knn_k: int = 5,
 ) -> dict:
@@ -307,7 +307,7 @@ def project_partial_ibgcs_task(
     *,
     clustering_run_pk: int,
     knn_k: int = 5,
-    min_total_similarity: float = 0.1,
+    min_total_similarity: float | None = None,
 ) -> dict:
     """Project partial / non-primary iBGCs onto a ClusteringRun's UMAP.
 

@@ -38,7 +38,7 @@ def reclassify_bgcs(
     clustering_run_pk: int,
     scope: str = SCOPE_PARTIAL,
     knn_k: int = 5,
-    min_total_similarity: float = 0.1,
+    min_total_similarity: float | None = None,
     chunk_size: int = 256,
     progress_cb=None,
 ) -> dict:
@@ -50,6 +50,7 @@ def reclassify_bgcs(
     ``classification_run_id``), so the parameter is validated but does not
     branch the implementation. The actual numerical work is delegated to
     :func:`discovery.services.clustering.ibgc_scoring.project_partial_ibgcs`.
+    ``min_total_similarity=None`` uses the run's ``min_projection_similarity``.
     """
     from discovery.services.clustering.ibgc_scoring import project_partial_ibgcs
 

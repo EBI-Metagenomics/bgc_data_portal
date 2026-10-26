@@ -1,4 +1,8 @@
-"""Per-iBGC scoring (novelty + domain novelty) over the composite-Dice matrix.
+"""Per-iBGC scoring (novelty + domain novelty) over the composite similarity.
+
+"Similarity" below is the run's ``similarity_metric`` (ADR 0003): composite
+Dice for older runs, the IDF × enrichment weighted cosine otherwise. Every
+function here scores with the run's metric and persisted feature weights.
 
 Designed to be called inline at the end of ``run_clustering_pipeline`` with
 the already-built primary-iBGC matrices in memory, or independently from a
@@ -7,11 +11,11 @@ management command after rehydrating the cached matrices from disk
 
 Score definitions (locked in the v2 redesign):
 
-* ``novelty_score`` = ``1 − max(composite_dice_sim(this, v))`` for ``v`` in
+* ``novelty_score`` = ``1 − max(composite_sim(this, v))`` for ``v`` in
   the set of validated iBGCs in the same clustering run. A validated iBGC is
   itself in that set, so its self-similarity of 1.0 makes its novelty 0 — it
   is, by definition, not novel. This is computed against a freshly-built,
-  unpruned, diagonal-intact composite-Dice block (see
+  unpruned, diagonal-intact composite block (see
   :func:`compute_novelty_against_validated`), **not** the clustering ``sim``
   matrix, whose zeroed diagonal and ``prune_below`` would otherwise drop the
   self-match and inflate near-threshold novelty. When the run has no
@@ -24,7 +28,7 @@ Score definitions (locked in the v2 redesign):
   return for a one-member community.
 
 Partial-only iBGCs are projected against the primary set in
-:func:`project_partial_ibgcs`: KNN top-K weighted by composite-Dice
+:func:`project_partial_ibgcs`: KNN top-K weighted by composite
 similarity assigns them a leaf path, ``umap_x``/``umap_y`` (averaged from
 neighbours), and the two novelty scores.
 """
@@ -57,6 +61,8 @@ SIG_TO_IPR_FILE = "sig_to_ipr.json"
 # cosine_idf_enrich runs only; aligned to DOMAIN_ACCS_FILE / PAIR_VOCAB_FILE.
 DOMAIN_WEIGHTS_FILE = "domain_weights.npy"
 PAIR_WEIGHTS_FILE = "pair_weights.npy"
+# {"similarity_metric": ...}; absent in caches written before ADR 0003 (Dice).
+SIMILARITY_FILE = "similarity.json"
 
 
 def persist_scoring_cache(
@@ -71,6 +77,7 @@ def persist_scoring_cache(
     sig_to_ipr: dict[str, str] | None = None,
     domain_weights: np.ndarray | None = None,
     pair_weights: np.ndarray | None = None,
+    similarity_metric: str = "dice",
 ) -> Path:
     """Write the small per-iBGC signature matrices needed by on-demand similarity.
 
@@ -81,6 +88,8 @@ def persist_scoring_cache(
     ``domain_weights`` / ``pair_weights`` are the run's per-feature weights
     (``cosine_idf_enrich`` runs), aligned to ``domain_accs`` / ``pair_vocab``.
     For a Dice run they are omitted and any stale weight files are removed.
+    ``similarity_metric`` is recorded so readers can refuse a cache that
+    doesn't match the run.
 
     Returns the cache directory path.
     """
@@ -95,6 +104,11 @@ def persist_scoring_cache(
     np.save(cache_dir / PAIR_VOCAB_FILE, np.asarray(pair_vocab, dtype=object))
     (cache_dir / LEAF_PATHS_FILE).write_text(json.dumps(list(leaf_paths)))
     (cache_dir / SIG_TO_IPR_FILE).write_text(json.dumps(sig_to_ipr or {}))
+    if similarity_metric != "dice" and (domain_weights is None or pair_weights is None):
+        raise ValueError(f"similarity_metric={similarity_metric!r} needs both weights")
+    (cache_dir / SIMILARITY_FILE).write_text(
+        json.dumps({"similarity_metric": similarity_metric})
+    )
     for name, w, vocab in (
         (DOMAIN_WEIGHTS_FILE, domain_weights, domain_accs),
         (PAIR_WEIGHTS_FILE, pair_weights, pair_vocab),
@@ -119,7 +133,8 @@ def persist_scoring_cache(
 def load_scoring_cache(artifacts_dir: Path) -> dict:
     """Return ``M_domains``, ``M_pairs``, ``ibgc_ids``, ``domain_accs``,
     ``pair_vocab``, ``leaf_paths``, ``sig_to_ipr``, ``domain_weights``,
-    ``pair_weights`` (the last two ``None`` for Dice runs).
+    ``pair_weights`` (the last two ``None`` for Dice runs) and
+    ``similarity_metric``.
     """
     import scipy.sparse as sp
 
@@ -136,7 +151,16 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
         "sig_to_ipr": sig_to_ipr,
         "domain_weights": _load_optional(cache_dir / DOMAIN_WEIGHTS_FILE),
         "pair_weights": _load_optional(cache_dir / PAIR_WEIGHTS_FILE),
+        "similarity_metric": cached_similarity_metric(cache_dir),
     }
+
+
+def cached_similarity_metric(cache_dir: Path) -> str:
+    """Metric a scoring cache was written for (``"dice"`` for legacy caches)."""
+    path = Path(cache_dir) / SIMILARITY_FILE
+    if not path.exists():
+        return "dice"
+    return str(json.loads(path.read_text()).get("similarity_metric") or "dice")
 
 
 def _load_optional(path: Path) -> np.ndarray | None:
@@ -149,10 +173,16 @@ def compute_novelty_against_validated(
     validated_cols: list[int],
     *,
     weights: tuple[float, float] = (0.5, 0.5),
+    metric: str = "dice",
+    domain_weights: np.ndarray | None = None,
+    pair_weights: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Return novelty per row: ``1 − max(composite_dice_sim_to_validated)``.
+    """Return novelty per row: ``1 − max(composite_sim_to_validated)``.
 
-    Computed against a freshly-built composite-Dice block of every row
+    ``metric="dice"`` (default) is computed here; a weighted metric delegates
+    to the common-core kernel (same block semantics) with the run's weights.
+
+    Computed against a freshly-built composite block of every row
     against the validated columns — **unpruned and with the diagonal
     intact** — rather than the clustering ``sim`` matrix. The clustering
     matrix zeroes its diagonal and prunes below a threshold so KNN / Leiden
@@ -169,6 +199,20 @@ def compute_novelty_against_validated(
     n_rows = M_domains.shape[0]
     if not validated_cols:
         return np.full(n_rows, np.nan, dtype=np.float32)
+    if metric != "dice":
+        from common_core.clustering.scoring import (
+            compute_novelty_against_validated as compute_weighted_novelty,
+        )
+
+        return compute_weighted_novelty(
+            M_domains,
+            M_pairs,
+            validated_cols,
+            weights=weights,
+            metric=metric,
+            domain_weights=domain_weights,
+            pair_weights=pair_weights,
+        )
 
     w_d, w_a = weights
     total = float(w_d) + float(w_a)
@@ -285,11 +329,11 @@ def score_primary_ibgcs(
     ----------
     M_domains:
         Binary iBGC × domain matrix. Used both to count domain occurrences
-        within leaf-GCF groups and to build the composite-Dice novelty block.
+        within leaf-GCF groups and to build the composite novelty block.
         Row order matches ``ibgc_ids``.
     M_pairs:
         Binary iBGC × adjacency-pair matrix; the second component of the
-        composite-Dice novelty block. Row order matches ``ibgc_ids``.
+        composite novelty block. Row order matches ``ibgc_ids``.
     ibgc_ids:
         Ordering of iBGC primary-key ids for rows of ``M_domains`` / ``M_pairs``.
     leaf_paths:
@@ -297,14 +341,14 @@ def score_primary_ibgcs(
     run:
         The ``ClusteringRun`` whose primary iBGCs are being scored.
     weights:
-        ``(w_domain, w_adjacency)`` composite-Dice weights for novelty.
+        ``(w_domain, w_adjacency)`` composite weights for novelty.
     sim:
         Unused for scoring (kept for backward compatibility). Novelty is now
         computed from a dedicated block via
         :func:`compute_novelty_against_validated`, not this matrix.
     domain_weights, pair_weights:
         The run's per-feature weights when ``run.similarity_metric`` is not
-        Dice; novelty is then scored by common-core's metric-aware kernel.
+        Dice (aligned to the matrix columns).
     """
     from discovery.models import IntegratedBgc
 
@@ -326,28 +370,15 @@ def score_primary_ibgcs(
             run.pk,
         )
 
-    metric = getattr(run, "similarity_metric", "dice") or "dice"
-    if metric == "dice":
-        novelty = compute_novelty_against_validated(
-            M_domains,
-            M_pairs,
-            validated_cols,
-            weights=weights,
-        )
-    else:
-        from common_core.clustering.scoring import (
-            compute_novelty_against_validated as compute_weighted_novelty,
-        )
-
-        novelty = compute_weighted_novelty(
-            M_domains,
-            M_pairs,
-            validated_cols,
-            weights=weights,
-            metric=metric,
-            domain_weights=domain_weights,
-            pair_weights=pair_weights,
-        )
+    novelty = compute_novelty_against_validated(
+        M_domains,
+        M_pairs,
+        validated_cols,
+        weights=weights,
+        metric=getattr(run, "similarity_metric", "dice") or "dice",
+        domain_weights=domain_weights,
+        pair_weights=pair_weights,
+    )
     domain_novelty = compute_domain_novelty_array(M_domains, leaf_paths)
 
     ibgc_rows = list(IntegratedBgc.objects.filter(id__in=ids_list))
@@ -387,7 +418,7 @@ def project_partial_ibgcs(
     *,
     clustering_run_pk: int,
     knn_k: int = 5,
-    min_total_similarity: float = 0.1,
+    min_total_similarity: float | None = None,
     chunk_size: int = 256,
     progress_cb=None,
 ) -> dict:
@@ -395,8 +426,9 @@ def project_partial_ibgcs(
 
     For every ``IntegratedBgc`` whose ``classification_run_id`` differs from
     the run identified by ``clustering_run_pk`` (partial-only iBGCs and stale
-    rows from earlier runs), compute composite-Dice similarity to every
-    primary iBGC of the run and derive:
+    rows from earlier runs), compute composite similarity (the run's metric,
+    vocabulary and persisted weights) to every primary iBGC of the run and
+    derive:
 
       * ``umap_x`` / ``umap_y`` — weighted average of the top-K primary
         neighbours' coordinates (similarity-weighted).
@@ -412,7 +444,8 @@ def project_partial_ibgcs(
 
     iBGCs whose top-K similarity sum is below ``min_total_similarity`` (or
     that have no overlapping vocabulary with the primary set) are left
-    unprojected and counted as ``skipped``.
+    unprojected and counted as ``skipped``. ``None`` (default) uses the run's
+    ``min_projection_similarity``; the threshold is metric-specific.
     """
     import scipy.sparse as sp
 
@@ -430,6 +463,9 @@ def project_partial_ibgcs(
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
     sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM", "TIGRFAM")
     weights = tuple(run.score_weights) if run.score_weights else (0.5, 0.5)
+    if min_total_similarity is None:
+        min_total_similarity = float(run.min_projection_similarity)
+    metric, vocab, run_weights = run_similarity_settings(run)
 
     # ── 1. Identify partials ─────────────────────────────────────────────
     partial_ibgc_ids = list(
@@ -465,9 +501,15 @@ def project_partial_ibgcs(
         }
 
     # ── 2. Primary matrices (rebuilt fresh; cache exists for parity only) ─
+    # A weighted run is rebuilt on its own vocabulary so its persisted
+    # weights line up with the columns.
     M_dom_pri, pri_row_ids, dom_accs = build_ibgc_domain_matrix(
         sources=sources,
         ibgc_ids_subset=primary_ids,
+        vocab=vocab,
+        domain_accs_subset=(
+            run_weights.domain_accs.tolist() if run_weights is not None else None
+        ),
     )
     if M_dom_pri.shape[0] == 0:
         return {
@@ -479,9 +521,18 @@ def project_partial_ibgcs(
     M_pair_pri, pri_row_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
         sources=sources,
         ibgc_ids_subset=primary_ids,
+        vocab=vocab,
+        pair_vocab_subset=(
+            run_weights.pair_vocab.tolist() if run_weights is not None else None
+        ),
     )
     M_pair_pri = _align_rows(M_pair_pri, pri_row_ids_adj, pri_row_ids)
     n_primary = M_dom_pri.shape[0]
+    if run_weights is not None and M_pair_pri.shape[1] == 0:
+        # No primary has an adjacency pair: keep the run's column space.
+        pair_vocab = run_weights.pair_vocab
+        M_pair_pri = sp.csr_matrix((n_primary, len(pair_vocab)), dtype=np.uint8)
+    feature_weights = _aligned_feature_weights(run_weights, dom_accs, pair_vocab)
 
     pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
 
@@ -526,6 +577,7 @@ def project_partial_ibgcs(
             sources=sources,
             domain_accs_subset=dom_accs.tolist(),
             ibgc_ids_subset=chunk_ids,
+            vocab=vocab,
         )
         if M_dom_q.shape[0] == 0:
             continue
@@ -534,8 +586,14 @@ def project_partial_ibgcs(
             sources=sources,
             pair_vocab_subset=pair_vocab.tolist(),
             ibgc_ids_subset=chunk_ids,
+            vocab=vocab,
         )
         M_pair_q = _align_rows(M_pair_q, q_pair_ids, q_row_ids)
+        if M_pair_q.shape[1] != M_pair_pri.shape[1]:
+            # No adjacency rows in this chunk: keep the run's column space.
+            M_pair_q = sp.csr_matrix(
+                (M_pair_q.shape[0], M_pair_pri.shape[1]), dtype=M_pair_pri.dtype
+            )
 
         M_dom_full = sp.vstack([M_dom_pri, M_dom_q], format="csr")
         M_pair_full = sp.vstack([M_pair_pri, M_pair_q], format="csr")
@@ -544,6 +602,8 @@ def project_partial_ibgcs(
             M_pair_full,
             weights=weights,
             prune_below=0.0,
+            metric=metric,
+            **feature_weights,
         )
         sim_block = sim_full[n_primary:, :n_primary].tocsr()
         M_dom_q_csr = M_dom_q.tocsr()
@@ -655,4 +715,45 @@ def project_partial_ibgcs(
         "projected": projected,
         "skipped": skipped,
         "scope": len(partial_ibgc_ids),
+    }
+
+
+def run_similarity_settings(run):
+    """``(metric, vocab, RunWeights | None)`` for ``run``.
+
+    A weighted run without persisted weights raises ``FileNotFoundError``:
+    scoring it with Dice (or recomputed IDF) would silently disagree with
+    the run's clustering.
+    """
+    from django.conf import settings
+
+    from discovery.services.clustering.feature_weights import load_run_weights
+
+    metric = run.similarity_metric or "dice"
+    vocab = run.domain_vocab or "IPR_PROJECTED"
+    if metric == "dice":
+        return metric, vocab, None
+    artifacts_dir = Path(settings.CLUSTERING_ARTIFACTS_DIR) / run.sha256[:12]
+    run_weights = load_run_weights(artifacts_dir)
+    if run_weights is None:
+        raise FileNotFoundError(
+            f"ClusteringRun sha={run.sha256[:12]} uses {metric!r} but has no "
+            f"persisted weights under {artifacts_dir}"
+        )
+    return metric, vocab, run_weights
+
+
+def _aligned_feature_weights(run_weights, dom_accs, pair_vocab) -> dict:
+    """``domain_weights`` / ``pair_weights`` kwargs aligned to the rebuilt columns."""
+    if run_weights is None:
+        return {"domain_weights": None, "pair_weights": None}
+    from discovery.services.clustering.pipeline import _align_weights
+
+    return {
+        "domain_weights": _align_weights(
+            run_weights.domain_accs, run_weights.domain_weights, dom_accs
+        ),
+        "pair_weights": _align_weights(
+            run_weights.pair_vocab, run_weights.pair_weights, pair_vocab
+        ),
     }

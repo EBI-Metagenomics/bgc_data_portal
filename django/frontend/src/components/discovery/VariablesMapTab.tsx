@@ -104,7 +104,7 @@ function buildAxisOptions(
       searchSource === "sequence"
         ? "Bitscore"
         : searchSource === "domain"
-          ? "Domain match (Dice)"
+          ? "Domain match"
           : "Query similarity",
   });
   if (searchSource === "sequence") {

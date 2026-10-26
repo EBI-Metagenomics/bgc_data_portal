@@ -33,7 +33,7 @@ class Command(BaseCommand):
             nargs=2,
             default=[0.5, 0.5],
             metavar=("W_DOMAIN", "W_ADJACENCY"),
-            help="Weights for composite Dice (w_domain w_adjacency; default 0.5 0.5)",
+            help="Composite weights (w_domain w_adjacency; default 0.5 0.5)",
         )
         parser.add_argument(
             "--knn-k",

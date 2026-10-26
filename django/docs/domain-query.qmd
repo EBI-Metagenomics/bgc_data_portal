@@ -43,7 +43,7 @@ Set it towards Dice when membership matters most, towards Adjacency when the ord
 
 ## Running and reading results
 
-The search runs on **Run Query** and combines with any active filters and other conditions. Results sort by domain similarity, and the roster's similarity column shows the **domain match (Dice)** score. On the [Variables map](variables-map.qmd) you can put **Domain match (Dice)** on an axis.
+The search runs on **Run Query** and combines with any active filters and other conditions. Results sort by domain similarity, and the roster's similarity column shows the **domain match** score. On the [Variables map](variables-map.qmd) you can put **Domain match** on an axis.
 
 ## Tips
 

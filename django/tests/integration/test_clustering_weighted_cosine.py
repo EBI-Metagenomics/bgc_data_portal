@@ -426,3 +426,129 @@ def test_in_portal_pipeline_cosine_run(dets, tmp_path):
 
         fx["validated"].refresh_from_db()
         assert fx["validated"].novelty_score == pytest.approx(0.0, abs=1e-6)
+
+
+# ── Phase 3: every consumer scores a cosine run with the run's weights ──────
+
+LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+
+@pytest.mark.django_db
+def test_consumers_score_cosine_run_with_its_weights(dets, tmp_path):
+    from types import SimpleNamespace
+
+    from common_core.clustering.io import read_inputs_tarball, read_outputs_tarball
+    from common_core.clustering.similarity import compute_composite_similarity
+    from discovery.services.asset_upload.project import _project_against_run
+    from discovery.services.asset_upload.schemas import AssetCds, AssetDomain
+    from discovery.services.clustering import similarity_on_demand as sod
+    from discovery.services.clustering.ibgc_scoring import project_partial_ibgcs
+    from discovery.services.query.criteria import (
+        ArchitectureParams,
+        SimilarParams,
+        architecture_top,
+        similar_top,
+    )
+
+    fx = _corpus(dets)
+    with override_settings(CLUSTERING_ARTIFACTS_DIR=tmp_path, CACHES=LOCMEM):
+        inp = _export("cos", similarity_metric=COSINE, enrichment_version="t1")
+        out = _hpc(inp)
+        call_command("import_clustering_results", str(out), skip_discovery_stats=True)
+        run = ClusteringRun.objects.get(
+            sha256=read_outputs_tarball(out)["run"]["sha256"]
+        )
+        inputs = read_inputs_tarball(inp)
+        sod._active = None
+
+        # Reference: the clustering's own (unpruned) similarity over primaries.
+        full = compute_composite_similarity(
+            inputs.M_domains,
+            inputs.M_pairs,
+            prune_below=0.0,
+            metric=COSINE,
+            domain_weights=inputs.domain_weights,
+            pair_weights=inputs.pair_weights,
+        ).toarray()
+        ids = inputs.ibgc_ids.tolist()
+
+        # Find similar
+        cache = sod.get_active_scoring_cache()
+        assert cache.similarity_metric == COSINE and cache.X_domains is not None
+        seed = ids[0]
+        top_ids, top_scores = similar_top(SimilarParams(ibgc_id=seed, k=len(ids) - 1))
+        got = dict(zip(top_ids, top_scores))
+        for j, nid in enumerate(ids[1:], start=1):
+            assert got[nid] == pytest.approx(full[0, j], abs=1e-6)
+
+        # Architecture search: the validated MIBiG locus's own architecture.
+        v_row = ids.index(fx["validated"].id)
+        arch = ["IPR_A1", "PF_A2", "G_A2", "PF_A3"]
+        a_ids, a_scores = architecture_top(
+            ArchitectureParams(architecture=arch, weight=0.5, k=len(ids), threshold=0)
+        )
+        assert dict(zip(a_ids, a_scores))[ids[v_row]] == pytest.approx(1.0, abs=1e-6)
+
+        # Partial projection (portal path) uses the run's metric and threshold.
+        # The HPC import already projected the partial; detach it first.
+        def _detach():
+            IntegratedBgc.objects.filter(pk=fx["partial"].pk).update(
+                classification_run=None, gene_cluster_family="", umap_projected=False
+            )
+
+        hpc_leaf = IntegratedBgc.objects.get(pk=fx["partial"].pk).gene_cluster_family
+        _detach()
+        res = project_partial_ibgcs(clustering_run_pk=run.pk)
+        assert (res["scope"], res["projected"]) == (1, 1)
+        fx["partial"].refresh_from_db()
+        assert fx["partial"].umap_projected
+        assert fx["partial"].gene_cluster_family == hpc_leaf  # same as HPC's
+        _detach()
+        run.min_projection_similarity = 99.0
+        run.save(update_fields=["min_projection_similarity"])
+        assert project_partial_ibgcs(clustering_run_pk=run.pk)["projected"] == 0
+
+        # Upload projection: a virtual copy of the validated locus lands on it.
+        key = ("up", 1, 3000, "MIBiG")
+        doms = []
+        for i, hits in enumerate(FAM_A):
+            for db, acc, ipr, s, e in hits:
+                doms.append(
+                    AssetDomain(
+                        key,
+                        f"p{i}",
+                        acc,
+                        ref_db=db,
+                        interpro_entry_acc=ipr,
+                        start_position=s,
+                        end_position=e,
+                    )
+                )
+        cds = [AssetCds(key, f"p{i}", 1000 * i, 1000 * i + 900, 1) for i in range(3)]
+        vibgc = SimpleNamespace(
+            cds=cds,
+            domains=doms,
+            umap_x=None,
+            umap_y=None,
+            umap_projected=False,
+            gene_cluster_family="",
+            novelty_score=None,
+            domain_novelty=None,
+        )
+        _project_against_run([vibgc], run)  # threshold still 99 → unprojected
+        assert not vibgc.umap_projected
+        run.min_projection_similarity = 0.1
+        _project_against_run([vibgc], run)
+        assert vibgc.umap_projected
+        assert vibgc.novelty_score == pytest.approx(0.0, abs=1e-6)  # = validated
+
+        # A cache written for another metric is refused, not silently reused.
+        from discovery.services.clustering.ibgc_scoring import SIMILARITY_FILE
+
+        (tmp_path / run.sha256[:12] / "scoring_cache" / SIMILARITY_FILE).write_text(
+            '{"similarity_metric": "dice"}'
+        )
+        sod._active = None
+        with pytest.raises(FileNotFoundError, match="written for 'dice'"):
+            sod.get_active_scoring_cache()
+        sod._active = None

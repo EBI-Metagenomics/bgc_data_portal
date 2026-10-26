@@ -19,10 +19,10 @@ interface QueryState {
    *  sequence. Applied independently of (and intersected with) the Boolean
    *  query. */
   domainArchitectureText: string;
-  /** Sørensen-Dice share in the composite score (0..1). Adjacency share
+  /** Domain-set share in the composite score (0..1). Adjacency share
    *  is ``1 - architectureWeight``. */
   architectureWeight: number;
-  /** Minimum composite-Dice score (0..1) an iBGC must reach to be returned by
+  /** Minimum composite similarity (0..1) an iBGC must reach to be returned by
    *  the architecture query. Default 0.25. */
   architectureThreshold: number;
   similarBgcSourceId: number | null;

@@ -378,6 +378,7 @@ def run_clustering_pipeline(
                         leaf_paths=leaf_paths,
                         sig_to_ipr=sig_to_ipr,
                         **_cache_weights(run_weights),
+                        similarity_metric=similarity_metric,
                     )
                 except Exception:  # noqa: BLE001 — cache miss is non-fatal
                     log.exception("Failed to persist iBGC scoring cache")
@@ -707,6 +708,7 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
         leaf_paths=leaf_paths,
         sig_to_ipr=sig_to_ipr,
         **cache_weights,
+        similarity_metric=run.similarity_metric or "dice",
     )
 
 

@@ -34,8 +34,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--min-total-similarity",
             type=float,
-            default=0.1,
-            help="Minimum sum of top-K Dice required to commit an assignment",
+            default=None,
+            help=(
+                "Minimum sum of top-K similarity required to commit an "
+                "assignment (default: the run's min_projection_similarity)"
+            ),
         )
         parser.add_argument(
             "--sync",

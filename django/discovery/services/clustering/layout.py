@@ -1,7 +1,7 @@
 """2D layout for the BGC graph (replacement for the old UMAP-2d step).
 
 Prefers UMAP fed via its ``precomputed_knn`` constructor parameter with a
-top-k KNN derived from the same composite-Dice similarity matrix used for
+top-k KNN derived from the same composite similarity matrix used for
 community detection — keeps the visualization coherent with the clustering.
 Falls back to igraph DRL/Fruchterman–Reingold for small graphs or when
 umap-learn is unavailable.

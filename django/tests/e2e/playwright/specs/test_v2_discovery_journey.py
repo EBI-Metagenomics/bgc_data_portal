@@ -202,7 +202,7 @@ def test_v2_architecture_tab_runs_query(page, e2e_v2_base_url):
     textarea.wait_for(timeout=5_000)
     textarea.fill("PF00109, PF02801, PF00501")
 
-    # The Sørensen-Dice ↔ Adjacency slider is a Radix slider — verify the
+    # The domain-set ↔ adjacency slider is a Radix slider — verify the
     # accessible role is present (we don't move it; default 0.5 is fine).
     slider = query_panel.get_by_role("slider")
     assert slider.count() >= 1
