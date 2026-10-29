@@ -31,9 +31,12 @@ class Command(BaseCommand):
             "--score-weights",
             type=float,
             nargs=2,
-            default=[0.5, 0.5],
+            default=None,
             metavar=("W_DOMAIN", "W_ADJACENCY"),
-            help="Composite weights (w_domain w_adjacency; default 0.5 0.5)",
+            help=(
+                "Composite weights (w_domain w_adjacency; default 0.5 0.5 for "
+                "dice, 0.6 0.4 for cosine_idf_enrich)"
+            ),
         )
         parser.add_argument(
             "--knn-k",
@@ -71,6 +74,15 @@ class Command(BaseCommand):
             "--enrichment-version",
             default="",
             help="DomainEnrichment version (required for cosine_idf_enrich)",
+        )
+        parser.add_argument(
+            "--idf-exponent",
+            type=float,
+            default=None,
+            help=(
+                "Feature weight = idf ** p × enrichment "
+                "(cosine_idf_enrich only; default 0.5)"
+            ),
         )
         parser.add_argument("--prune-below", type=float, default=0.05)
         parser.add_argument("--min-projection-similarity", type=float, default=0.1)
@@ -163,6 +175,7 @@ class Command(BaseCommand):
             "min_projection_similarity": options["min_projection_similarity"],
             "domain_sources": [s.upper() for s in options["domain_sources"]],
             "score_weights": options["score_weights"],
+            "idf_exponent": options["idf_exponent"],
             "knn_k": options["knn_k"],
             "leiden_resolutions": options["leiden_resolutions"],
             "seed": options["seed"],

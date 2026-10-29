@@ -274,6 +274,24 @@ def test_cosine_run_sha_keys_enrichment_and_weights():
     assert base != _compute_run_sha(
         **dict(cos, enrichment_version="v2"), weights_sha="a"
     )
+    # idf_exponent: 1.0 keeps the pre-amendment sha, anything else changes it;
+    # Dice ignores it.
+    assert _compute_run_sha(**cos, weights_sha="a", idf_exponent=1.0) == base
+    assert _compute_run_sha(**cos, weights_sha="a", idf_exponent=0.5) != base
+    assert _compute_run_sha(**_SHA, idf_exponent=0.5) == _compute_run_sha(**_SHA)
+
+
+def test_metric_run_defaults():
+    from discovery.services.clustering.pipeline import metric_run_defaults
+
+    assert metric_run_defaults("dice") == ((0.5, 0.5), 1.0)
+    # Dice has no feature weights: an exponent is ignored, weights are kept.
+    assert metric_run_defaults("dice", [0.7, 0.3], 0.5) == ((0.7, 0.3), 1.0)
+    assert metric_run_defaults("cosine_idf_enrich") == ((0.6, 0.4), 0.5)
+    assert metric_run_defaults("cosine_idf_enrich", [0.5, 0.5], 1.0) == (
+        (0.5, 0.5),
+        1.0,
+    )
 
 
 def test_align_weights_reorders_by_label_and_rejects_unknown():

@@ -6,8 +6,9 @@ writes them as a single ``.tgz`` under ``CLUSTERING_ARTIFACTS_DIR/exports/``.
 No N×N matrix is produced — that's the whole point of the HPC handoff.
 
 ``--similarity-metric cosine_idf_enrich`` (ADR 0003) also computes the run's
-IDF over the primary iBGCs, multiplies in the ``--enrichment-version`` table
-and ships both weight vectors in the (schema v2) tarball. The default
+IDF over the primary iBGCs, raises it to ``--idf-exponent``, multiplies in the
+``--enrichment-version`` table and ships both weight vectors in the (schema
+v2) tarball. The default
 (``dice`` on the ``IPR_PROJECTED`` vocabulary) exports exactly what it did
 before.
 """
@@ -54,8 +55,9 @@ class Command(BaseCommand):
             "--score-weights",
             type=float,
             nargs=2,
-            default=[0.5, 0.5],
+            default=None,
             metavar=("W_DOMAIN", "W_ADJACENCY"),
+            help="Default 0.5 0.5 for dice, 0.6 0.4 for cosine_idf_enrich.",
         )
         parser.add_argument(
             "--leiden-resolutions",
@@ -86,6 +88,15 @@ class Command(BaseCommand):
             help="DomainEnrichment version; required for cosine_idf_enrich.",
         )
         parser.add_argument(
+            "--idf-exponent",
+            type=float,
+            default=None,
+            help=(
+                "Feature weight = idf ** p × enrichment "
+                "(cosine_idf_enrich only; default 0.5)."
+            ),
+        )
+        parser.add_argument(
             "--prune-below",
             type=float,
             default=0.05,
@@ -113,10 +124,15 @@ class Command(BaseCommand):
             raise CommandError(
                 f"--similarity-metric {metric} needs --enrichment-version"
             )
+        from discovery.services.clustering.pipeline import metric_run_defaults
+
+        weights, idf_exponent = metric_run_defaults(
+            metric, options["score_weights"], options["idf_exponent"]
+        )
 
         inputs = self._build_inputs(
             sources=sources,
-            weights=tuple(options["score_weights"]),
+            weights=weights,
             resolutions=tuple(options["leiden_resolutions"]),
             knn_k=options["knn_k"],
             seed=options["seed"],
@@ -128,6 +144,7 @@ class Command(BaseCommand):
             ),
             prune_below=options["prune_below"],
             min_projection_similarity=options["min_projection_similarity"],
+            idf_exponent=idf_exponent,
         )
 
         from common_core.clustering.io import write_inputs_tarball
@@ -149,6 +166,7 @@ class Command(BaseCommand):
         enrichment_version: str = "",
         prune_below: float = 0.05,
         min_projection_similarity: float = 0.1,
+        idf_exponent: float = 1.0,
     ):
         """Construct ``ClusteringInputs`` from the live database."""
         import numpy as np
@@ -212,6 +230,7 @@ class Command(BaseCommand):
                 ibgc_ids=ibgc_ids,
                 enrichment_version=enrichment_version,
                 domain_vocab=domain_vocab,
+                idf_exponent=idf_exponent,
             )
 
         # Partials: iBGCs not in the primary set.
@@ -284,13 +303,16 @@ class Command(BaseCommand):
             enrichment_version=enrichment_version,
             prune_below=float(prune_below),
             min_projection_similarity=float(min_projection_similarity),
+            idf_exponent=float(idf_exponent),
         )
 
         log.info(
-            "export_clustering_inputs: metric=%s vocab=%s primaries=%d partials=%d "
-            "domains=%d pairs=%d validated=%d",
+            "export_clustering_inputs: metric=%s vocab=%s idf_exponent=%g "
+            "weights=%s primaries=%d partials=%d domains=%d pairs=%d validated=%d",
             similarity_metric,
             domain_vocab,
+            idf_exponent,
+            weights,
             M_domains.shape[0],
             partials_M_domains.shape[0],
             M_domains.shape[1],

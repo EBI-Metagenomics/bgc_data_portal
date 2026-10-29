@@ -171,6 +171,7 @@ def run_bgc_clustering_task(
     enrichment_version: str = "",
     prune_below: float = 0.05,
     min_projection_similarity: float = 0.1,
+    idf_exponent: float | None = None,
 ) -> dict:
     """Domain+adjacency hierarchical-CPM-Leiden clustering over iBGCs.
 
@@ -188,15 +189,13 @@ def run_bgc_clustering_task(
     from discovery.services.clustering.pipeline import (
         DEFAULT_DOMAIN_SOURCES,
         DEFAULT_RESOLUTIONS,
-        DEFAULT_SCORE_WEIGHTS,
+        metric_run_defaults,
         run_clustering_pipeline,
     )
 
     sources = tuple(s.upper() for s in (domain_sources or DEFAULT_DOMAIN_SOURCES))
-    weights = (
-        (float(score_weights[0]), float(score_weights[1]))
-        if score_weights
-        else DEFAULT_SCORE_WEIGHTS
+    weights, idf_exponent = metric_run_defaults(
+        similarity_metric, score_weights, idf_exponent
     )
     resolutions = (
         tuple(leiden_resolutions) if leiden_resolutions else DEFAULT_RESOLUTIONS
@@ -215,6 +214,7 @@ def run_bgc_clustering_task(
         enrichment_version=enrichment_version,
         prune_below=prune_below,
         min_projection_similarity=min_projection_similarity,
+        idf_exponent=idf_exponent,
     )
 
     if apply and auto_reclassify and "run_pk" in result:

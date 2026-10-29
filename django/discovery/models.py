@@ -980,6 +980,11 @@ class ClusteringRun(models.Model):
         default="",
         help_text="DomainEnrichment.version used for the feature weights; '' for Dice",
     )
+    idf_exponent = models.FloatField(
+        default=1.0,
+        help_text="Feature weight = idf ** idf_exponent × enrichment (ADR 0003 "
+        "amendment); 1.0 for Dice and for cosine runs built before it",
+    )
     prune_below = models.FloatField(
         default=0.05,
         help_text="Similarity-graph edges below this are dropped before kNN",

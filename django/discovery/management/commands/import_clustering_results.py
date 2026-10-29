@@ -97,6 +97,7 @@ class Command(BaseCommand):
         self.stdout.write(
             f"  metric:       {metric} (vocab={params.get('domain_vocab') or '-'}, "
             f"enrichment={params.get('enrichment_version') or '-'}, "
+            f"idf_exponent={float(params.get('idf_exponent', 1.0)):g}, "
             f"schema=v{params.get('schema_version', 1)})\n"
         )
         run_weights = _run_weights_from_payload(payload, metric)
@@ -200,6 +201,7 @@ class Command(BaseCommand):
             "similarity_metric": params.get("similarity_metric") or "dice",
             "domain_vocab": params.get("domain_vocab") or "IPR_PROJECTED",
             "enrichment_version": params.get("enrichment_version") or "",
+            "idf_exponent": float(params.get("idf_exponent", 1.0)),
             "prune_below": float(params.get("prune_below", 0.05)),
             "min_projection_similarity": float(
                 params.get("min_projection_similarity", 0.1)

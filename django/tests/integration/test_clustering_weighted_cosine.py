@@ -296,10 +296,15 @@ def test_cosine_export_hpc_import_round_trip(dets, tmp_path):
             VOCAB_IPR_GAPFILLED,
             "t1",
         )
+        # ADR 0003 amendment defaults for cosine runs.
+        assert (p.idf_exponent, tuple(p.score_weights)) == (
+            W.COSINE_IDF_EXPONENT,
+            W.COSINE_SCORE_WEIGHTS,
+        )
         accs = inputs.domain_accs.tolist()
         assert "G_A2" in accs and "G_A1" not in accs and "PR_X" not in accs
 
-        # Weights = species-dereplicated IDF over the primaries × enrichment.
+        # Weights = species-dereplicated IDF ** 0.5 over the primaries × enrichment.
         tax = dict(IntegratedBgc.objects.values_list("id", "contig__taxonomy_path"))
         groups = np.asarray(
             [tax[int(i)] or "NA" for i in inputs.ibgc_ids], dtype=object
@@ -310,12 +315,12 @@ def test_cosine_export_hpc_import_round_trip(dets, tmp_path):
         e_dom = W.enrichment_vector(accs, table)
         np.testing.assert_allclose(
             inputs.domain_weights,
-            W.idf_weights(inputs.M_domains, groups) * e_dom,
+            np.sqrt(W.idf_weights(inputs.M_domains, groups)) * e_dom,
             rtol=1e-6,
         )
         np.testing.assert_allclose(
             inputs.pair_weights,
-            W.idf_weights(inputs.M_pairs, groups)
+            np.sqrt(W.idf_weights(inputs.M_pairs, groups))
             * W.pair_enrichment(inputs.pair_vocab.tolist(), accs, e_dom),
             rtol=1e-6,
         )
@@ -339,6 +344,8 @@ def test_cosine_export_hpc_import_round_trip(dets, tmp_path):
         assert run.similarity_metric == COSINE
         assert run.domain_vocab == VOCAB_IPR_GAPFILLED
         assert run.enrichment_version == "t1"
+        assert run.idf_exponent == W.COSINE_IDF_EXPONENT
+        assert run.score_weights == list(W.COSINE_SCORE_WEIGHTS)
         assert (run.prune_below, run.min_projection_similarity) == (0.05, 0.1)
 
         art = tmp_path / sha[:12]
@@ -365,8 +372,42 @@ def test_cosine_export_hpc_import_round_trip(dets, tmp_path):
             "dice",
             VOCAB_IPR_PROJECTED,
         )
+        assert (run_d.idf_exponent, run_d.score_weights) == (1.0, [0.5, 0.5])
         assert load_run_weights(tmp_path / sha_d[:12]) is None
         assert load_scoring_cache(tmp_path / sha_d[:12])["domain_weights"] is None
+
+
+@pytest.mark.django_db
+def test_cosine_export_full_idf_is_the_benchmark_reference(dets, tmp_path):
+    """``--idf-exponent 1`` reproduces the pre-amendment (benchmark) weights."""
+    from common_core.clustering import weights as W
+    from common_core.clustering.io import read_inputs_tarball
+
+    _corpus(dets)
+    with override_settings(CLUSTERING_ARTIFACTS_DIR=tmp_path):
+        half = read_inputs_tarball(
+            _export("half", similarity_metric=COSINE, enrichment_version="t1")
+        )
+        full = read_inputs_tarball(
+            _export(
+                "full",
+                similarity_metric=COSINE,
+                enrichment_version="t1",
+                idf_exponent=1.0,
+                score_weights=[0.5, 0.5],
+            )
+        )
+    assert full.params.idf_exponent == 1.0
+    assert tuple(full.params.score_weights) == (0.5, 0.5)
+    tax = dict(IntegratedBgc.objects.values_list("id", "contig__taxonomy_path"))
+    groups = np.asarray([tax[int(i)] or "NA" for i in full.ibgc_ids], dtype=object)
+    table = dict(
+        DomainEnrichment.objects.filter(version="t1").values_list("label", "weight")
+    )
+    e_dom = W.enrichment_vector(full.domain_accs.tolist(), table)
+    idf = W.idf_weights(full.M_domains, groups)
+    np.testing.assert_array_equal(full.domain_weights, W.combine(idf, e_dom))
+    np.testing.assert_allclose(half.domain_weights**2, idf * e_dom**2, rtol=1e-5)
 
 
 @pytest.mark.django_db

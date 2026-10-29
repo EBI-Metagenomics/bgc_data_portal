@@ -40,6 +40,35 @@ DEFAULT_PRUNE_BELOW = 0.05
 DEFAULT_MIN_PROJECTION_SIMILARITY = 0.1
 
 
+def metric_run_defaults(
+    similarity_metric: str,
+    score_weights: Sequence[float] | None = None,
+    idf_exponent: float | None = None,
+) -> tuple[tuple[float, float], float]:
+    """Resolve ``(score_weights, idf_exponent)`` for a run of ``similarity_metric``.
+
+    Dice: ``(0.5, 0.5)`` unless given, and always ``idf_exponent=1.0`` (Dice
+    has no feature weights). ``cosine_idf_enrich``: the ADR 0003 amendment's
+    ``(0.6, 0.4)`` and ``0.5`` unless given.
+    """
+    from common_core.clustering.similarity import METRIC_DICE
+    from common_core.clustering.weights import (
+        COSINE_IDF_EXPONENT,
+        COSINE_SCORE_WEIGHTS,
+    )
+
+    is_dice = similarity_metric == METRIC_DICE
+    default_weights = DEFAULT_SCORE_WEIGHTS if is_dice else COSINE_SCORE_WEIGHTS
+    weights = (
+        (float(score_weights[0]), float(score_weights[1]))
+        if score_weights
+        else default_weights
+    )
+    if is_dice:
+        return weights, 1.0
+    return weights, float(COSINE_IDF_EXPONENT if idf_exponent is None else idf_exponent)
+
+
 def auto_knn_k(n: int) -> int:
     """Heuristic kNN k for ``n`` nodes: ``max(KNN_K_FLOOR, ceil(ln(n)))``."""
     if n <= 1:
@@ -68,13 +97,15 @@ def run_clustering_pipeline(
     enrichment_version: str = "",
     prune_below: float = DEFAULT_PRUNE_BELOW,
     min_projection_similarity: float = DEFAULT_MIN_PROJECTION_SIMILARITY,
+    idf_exponent: float = 1.0,
 ) -> dict:
     """Run the full domain/adjacency clustering pipeline.
 
     ``similarity_metric="cosine_idf_enrich"`` (ADR 0003) needs an
-    ``enrichment_version``; the run's IDF is computed over its clusterable
-    iBGCs and both weight vectors are persisted with the run. The defaults
-    reproduce the original binary-Dice run exactly.
+    ``enrichment_version``; the run's IDF (raised to ``idf_exponent``) is
+    computed over its clusterable iBGCs and both weight vectors are persisted
+    with the run. The defaults reproduce the original binary-Dice run exactly;
+    :func:`metric_run_defaults` gives the recommended cosine settings.
 
     Returns a result dict with ``run_pk``, ``sha256``, counts, and (when
     ``apply=True``) ``artifacts_dir`` pointing at the MIBiG analysis
@@ -113,6 +144,8 @@ def run_clustering_pipeline(
     upper_sources = tuple(sorted({s.upper() for s in domain_sources}))
     weights = (float(score_weights[0]), float(score_weights[1]))
     is_dice = _check_metric(similarity_metric, enrichment_version)
+    if is_dice:
+        idf_exponent = 1.0
     check_vocab(domain_vocab)
 
     # ── 0. Pre-flight: iBGC table must be populated ───────────────────────
@@ -172,6 +205,7 @@ def run_clustering_pipeline(
             ibgc_ids=ibgc_ids,
             enrichment_version=enrichment_version,
             domain_vocab=domain_vocab,
+            idf_exponent=idf_exponent,
         )
         sim = compute_weighted_similarity(
             M_domains,
@@ -221,6 +255,7 @@ def run_clustering_pipeline(
         domain_vocab=domain_vocab,
         similarity_metric=similarity_metric,
         enrichment_version=enrichment_version,
+        idf_exponent=idf_exponent,
         prune_below=prune_below,
         min_projection_similarity=min_projection_similarity,
         weights_sha=_weights_sha(run_weights),
@@ -232,6 +267,7 @@ def run_clustering_pipeline(
             "domain_vocab": domain_vocab,
             "similarity_metric": similarity_metric,
             "enrichment_version": enrichment_version,
+            "idf_exponent": float(idf_exponent),
             "prune_below": float(prune_below),
             "min_projection_similarity": float(min_projection_similarity),
             "score_weights": list(weights),
@@ -511,6 +547,7 @@ def _compute_run_sha(
     domain_vocab: str,
     similarity_metric: str = "dice",
     enrichment_version: str = "",
+    idf_exponent: float = 1.0,
     prune_below: float = DEFAULT_PRUNE_BELOW,
     min_projection_similarity: float = DEFAULT_MIN_PROJECTION_SIMILARITY,
     weights_sha: str = "",
@@ -520,7 +557,8 @@ def _compute_run_sha(
     A Dice run with the default thresholds hashes exactly as before ADR 0003,
     so re-running it reproduces its sha. Other thresholds append
     ``prune`` / ``min_proj``; a weighted metric also appends the metric,
-    enrichment version and the weight-vector digest.
+    enrichment version and the weight-vector digest, plus ``idf_exp`` when it
+    isn't 1 (so cosine runs built before the ADR 0003 amendment keep their sha).
     """
     parts = [
         f"sources={','.join(sources)}",
@@ -547,6 +585,8 @@ def _compute_run_sha(
             f"enrichment={enrichment_version}",
             f"weights_sha={weights_sha}",
         ]
+        if idf_exponent != 1.0:
+            parts.append(f"idf_exp={idf_exponent:.6f}")
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 

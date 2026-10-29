@@ -111,8 +111,9 @@ def compute_run_weights(
     ibgc_ids: np.ndarray,
     enrichment_version: str,
     domain_vocab: str,
+    idf_exponent: float = 1.0,
 ) -> RunWeights:
-    """IDF over the run's (clusterable) rows × the frozen enrichment table."""
+    """``idf ** idf_exponent`` over the run's clusterable rows × the enrichment table."""
     from common_core.clustering import weights as W
 
     groups = ibgc_taxonomy_groups(ibgc_ids.tolist())
@@ -123,12 +124,17 @@ def compute_run_weights(
     enrich_pair = W.pair_enrichment(
         pair_vocab.tolist(), domain_accs.tolist(), enrich_dom
     )
-    w_dom = W.combine(W.idf_weights(M_domains, groups), enrich_dom)
-    w_pair = W.combine(W.idf_weights(M_pairs, groups), enrich_pair)
+    w_dom = W.combine(
+        W.idf_weights(M_domains, groups), enrich_dom, idf_exponent=idf_exponent
+    )
+    w_pair = W.combine(
+        W.idf_weights(M_pairs, groups), enrich_pair, idf_exponent=idf_exponent
+    )
     log.info(
-        "compute_run_weights: enrichment=%s domains=%d (%d unknown to the table) "
-        "pairs=%d",
+        "compute_run_weights: enrichment=%s idf_exponent=%g domains=%d "
+        "(%d unknown to the table) pairs=%d",
         enrichment_version,
+        idf_exponent,
         len(w_dom),
         int((enrich_dom == W.UNKNOWN_ENRICH).sum()),
         len(w_pair),
