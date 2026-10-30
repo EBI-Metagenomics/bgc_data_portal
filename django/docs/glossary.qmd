@@ -9,7 +9,7 @@ Each entry links to the page where the term is explained in full. New to the pla
 
 ### Adjacency (domain adjacency)
 
-The neighbouring domain *pairs* along a cluster's proteins. Used alongside domain overlap to measure cluster similarity, capturing arrangement rather than just membership. See [Scores & Metrics](scores-metrics.qmd).
+The neighbouring domain *pairs* along a cluster's proteins. Used alongside the domain set to measure cluster similarity, capturing arrangement rather than just membership. See [Scores & Metrics](scores-metrics.qmd).
 
 ### Assembly
 
@@ -37,7 +37,7 @@ A hierarchical chemical-structure ontology (from ClassyFire) used to label predi
 
 ### Composite similarity
 
-The weighted combination of domain overlap and adjacency overlap used to compare clusters. The basis for clustering, find-similar, and novelty. See [Scores & Metrics](scores-metrics.qmd).
+The weighted combination of domain similarity and adjacency similarity (each a [weighted cosine](#weighted-cosine)) used to compare clusters. The basis for clustering, find-similar, and novelty. See [Scores & Metrics](scores-metrics.qmd).
 
 ### Detector
 
@@ -93,7 +93,7 @@ The dataset an assembly came from (e.g. a marine catalogue, BacDive, MIBiG). A f
 
 ### Sørensen–Dice
 
-The set-overlap coefficient used to score domain and adjacency similarity: `2·|A∩B| / (|A|+|B|)`. See [Scores & Metrics](scores-metrics.qmd).
+The unweighted set-overlap coefficient `2·|A∩B| / (|A|+|B|)`. Earlier releases scored domain and adjacency similarity with it; the platform now uses [weighted cosine](#weighted-cosine). See [Scores & Metrics](scores-metrics.qmd).
 
 ### Submitted
 
@@ -106,6 +106,10 @@ An assembly corresponding to a strain deposited in a public culture collection (
 ### Validated
 
 An iBGC from an experimentally characterised reference (e.g. MIBiG). The yardstick for novelty; novelty `0` by definition. See [MIBiG & Validated BGCs](mibig-validated.qmd).
+
+### Weighted cosine
+
+The similarity used for domain and adjacency similarity: a cosine over the features two clusters share, where each domain is weighted by its rarity across taxa and by how strongly it is enriched in BGC cores over flanking genes. Rare, core biosynthetic domains count for more than ubiquitous or housekeeping ones. See [Scores & Metrics](scores-metrics.qmd).
 
 ---
 

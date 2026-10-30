@@ -1,6 +1,8 @@
 """Per-feature weights for the ``cosine_idf_enrich`` similarity metric (ADR 0003).
 
-``w = idf × enrich`` per column of the domain and adjacency-pair matrices:
+``w = idf ** idf_exponent × enrich`` per column of the domain and adjacency-pair
+matrices (``idf_exponent`` 0.5 by default since ADR 0003 Amendment 1, stored on
+the run):
 
 * ``idf`` — recomputed for every clustering run over its clusterable iBGCs,
   document frequency counted once per species (``DashboardContig.taxonomy_path``;
@@ -113,7 +115,7 @@ def compute_run_weights(
     domain_vocab: str,
     idf_exponent: float = 1.0,
 ) -> RunWeights:
-    """``idf ** idf_exponent`` over the run's clusterable rows × the enrichment table."""
+    """``idf ** idf_exponent`` over the run's clusterable rows × enrichment table."""
     from common_core.clustering import weights as W
 
     groups = ibgc_taxonomy_groups(ibgc_ids.tolist())

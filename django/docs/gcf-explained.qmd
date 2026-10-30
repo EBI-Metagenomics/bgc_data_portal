@@ -15,7 +15,7 @@ Each GCF has a **dotted path** identifier reflecting its place in a hierarchy �
 
 The platform clusters all iBGCs from their **protein domains and domain arrangement** — the same composite similarity described in [Scores & Metrics](scores-metrics.qmd) — not from raw sequence. In outline:
 
-1. Each iBGC's domain content and neighbouring-domain pairs are compared to every other's, giving a composite-Dice similarity.
+1. Each iBGC's domain content and neighbouring-domain pairs are compared to every other's, giving a composite similarity (a weighted cosine that favours rare, core biosynthetic domains).
 2. A nearest-neighbour graph links each iBGC to its most similar peers.
 3. A hierarchical community-detection step partitions that graph into nested families, producing the dotted leaf paths.
 

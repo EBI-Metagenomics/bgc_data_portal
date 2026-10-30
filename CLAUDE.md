@@ -74,12 +74,14 @@ django/
     tasks.py              # django-tasks background tasks
     cache_utils.py        # cache + job-status helpers
     services/             # Business logic layer
-      clustering/         # Domain+adjacency Dice → KNN → hierarchical Leiden
+      clustering/         # Domain+adjacency similarity (weighted cosine; Dice on older runs) → KNN → hierarchical Leiden
         pipeline.py       # Orchestrator (persists per-run scoring cache)
         ibgc_scoring.py    # iBGC novelty + domain_novelty + partial projection
         reclassify.py     # KNN reclassification of non-primary DashboardBgcs
         metrics.py        # Sørensen–Dice similarity
-        bgc_similarity.py # Composite weighted-mean Dice
+        bgc_similarity.py # Composite weighted-mean Dice (in-portal Dice path)
+        feature_weights.py # Per-run IDF ** p × enrichment weights (ADR 0003)
+        enrichment.py     # Builds the versioned BGC-core vs flank domain enrichment table
         knn_graph.py      # Union top-k KNN graph
         leiden.py         # Hierarchical CPM Leiden
         layout.py         # UMAP (precomputed_knn) → DRL fallback
@@ -101,7 +103,7 @@ django/
 
 **iBGC-first** — In v2 the dashboard surfaces ``IntegratedBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the iBGC. `IntegratedBGC.umap_projected = True` marks coords averaged from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered.
 
-**Composite-Dice similarity** — Replaces the retired ESM embedding HNSW. Per `ClusteringRun`, ``run_clustering_pipeline`` builds the iBGC×iBGC composite-Dice matrix (`w_d · Dice(domains) + w_a · Dice(adjacency-pairs)`) and persists it under `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`. The cache feeds iBGC novelty scoring and the `/query/similar-ibgc/` endpoint.
+**Composite similarity** — Replaces the retired ESM embedding HNSW. Each `ClusteringRun` records its `similarity_metric` (ADR 0003, monorepo `docs/architecture/adr/`): `cosine_idf_enrich` = `w_d · cos_w(domains) + w_a · cos_w(adjacency-pairs)` with per-feature weights `idf ** idf_exponent × enrich` (defaults 0.6/0.4, exponent 0.5), or `dice` = the same composite with Sørensen–Dice (older runs, rollback). Every consumer (novelty, Find similar, architecture search, asset upload, partial projection) scores with the active run's metric and weights. ``run_clustering_pipeline`` builds the iBGC×iBGC matrix and persists it under `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`. The cache feeds iBGC novelty scoring and the `/query/similar-ibgc/` endpoint.
 
 **iBGC scoring** — `novelty_score = 1 − max(sim to validated iBGC)` and `domain_novelty = |domains unique within leaf GCF| / |domains|` (NULL for singleton GCFs / iBGCs without source-vocab domains). Computed inline by the pipeline (primary iBGCs) and by `project_partial_ibgcs` (partials, after reclassify).
 

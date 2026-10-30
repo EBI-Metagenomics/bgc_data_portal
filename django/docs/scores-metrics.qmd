@@ -9,16 +9,23 @@ This page defines the quantitative measures shown across the discovery platform 
 
 Almost everything here rests on one idea: **how similar are two clusters?** The platform answers this from the **protein domains** each cluster's genes encode and how those domains are arranged — not from raw DNA or protein alignment. This lets functionally related clusters match even when their sequences have diverged.
 
-Similarity combines two ingredients, each a **Sørensen–Dice** overlap:
+Similarity combines two ingredients:
 
-- **Domain overlap** — how much the two clusters' *sets* of domains coincide.
-- **Adjacency overlap** — how much their *neighbouring domain pairs* coincide (i.e. the arrangement).
+- **Domain similarity** — how much the two clusters' *sets* of domains coincide.
+- **Adjacency similarity** — how much their *neighbouring domain pairs* coincide (i.e. the arrangement).
 
-For two sets A and B, the Sørensen–Dice coefficient is
+Each is a **weighted cosine** similarity. Every domain (and every domain pair) carries a weight $w$, and for two clusters A and B
 
-$$\text{Dice}(A,B) = \frac{2\,|A \cap B|}{|A| + |B|}$$
+$$\cos_w(A,B) = \frac{\sum_{f \in A \cap B} w_f^2}{\sqrt{\sum_{f \in A} w_f^2}\;\sqrt{\sum_{f \in B} w_f^2}}$$
 
-which is 1 when the sets are identical and 0 when they share nothing. The overall **composite similarity** is a weighted average of the domain and adjacency Dice scores (balanced by default). This composite measure is what builds the gene cluster families, drives [Find similar iBGCs](similar-ibgc.qmd), and underlies novelty.
+which is 1 when the clusters carry the same features and 0 when they share nothing. Shared domains count by their weight, so matching on a rare, core biosynthetic domain counts for more than matching on a ubiquitous or housekeeping one. A domain's weight combines two factors:
+
+- **Rarity** — domains found across many taxonomic groups weigh less (inverse document frequency, square-rooted so rarity does not dominate).
+- **Core enrichment** — domains that occur more often inside predicted BGCs than in the genes flanking them weigh more; domains typical of flanking regions weigh little.
+
+A domain pair weighs the geometric mean of its two domains. The overall **composite similarity** is `0.6 × domain similarity + 0.4 × adjacency similarity`. This composite measure is what builds the gene cluster families, drives [Find similar iBGCs](similar-ibgc.qmd), and underlies novelty.
+
+**Change from earlier releases.** Earlier releases scored both ingredients with the unweighted Sørensen–Dice overlap, $\text{Dice}(A,B) = 2\,|A \cap B| / (|A| + |B|)$, averaged 50/50. Weighted cosine values are generally higher than Dice for the same pair, and families were rebuilt with the new measure, so **novelty scores, similarity scores and family paths are not comparable with earlier releases**.
 
 ## Novelty
 

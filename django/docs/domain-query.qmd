@@ -36,10 +36,10 @@ The search then ranks iBGCs by how closely their domain architecture resembles y
 
 A **weight slider** balances the two ingredients of the architecture score:
 
-- towards **Sørensen–Dice** — reward sharing the same *set* of domains;
+- towards **Domain set** — reward sharing the same *set* of domains;
 - towards **Adjacency Index** — reward the same *neighbouring pairs* (the order/arrangement).
 
-Set it towards Dice when membership matters most, towards Adjacency when the order of domains is the point. The default is balanced. See [Scores & Metrics](scores-metrics.qmd) for how these combine.
+Set it towards the domain set when membership matters most, towards Adjacency when the order of domains is the point. The default is balanced. Both ingredients use the platform's weighted cosine similarity, so rare, core biosynthetic domains count for more than ubiquitous ones. See [Scores & Metrics](scores-metrics.qmd) for how these combine.
 
 ## Running and reading results
 
