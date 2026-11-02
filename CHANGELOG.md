@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.11.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.11.0...bgc_data_portal-v3.11.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **portal:** stop asset upload projection from OOM-killing the worker ([d80475e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/d80475e5cb5bce336276b5dc56d0676bb5029088))
+* **portal:** stop asset upload projection from OOM-killing the worker ([38a4c9a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/38a4c9ad7d2df0779fc13a7e40fa0b4f5da48b92))
+
 ## [3.11.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.10.1...bgc_data_portal-v3.11.0) (2026-10-16)
 
 
