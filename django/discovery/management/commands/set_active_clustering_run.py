@@ -16,9 +16,7 @@ from django.utils import timezone
 log = logging.getLogger(__name__)
 
 IBGC_RESTORE_FIELDS = (
-    "umap_x",
-    "umap_y",
-    "umap_projected",
+    "is_partial",
     "gene_cluster_family",
     "novelty_score",
     "domain_novelty",
@@ -96,9 +94,7 @@ class Command(BaseCommand):
         ibgcs = list(IntegratedBgc.objects.filter(id__in=list(snap_by_id.keys())))
         for ibgc in ibgcs:
             s = snap_by_id[ibgc.id]
-            ibgc.umap_x = s.umap_x
-            ibgc.umap_y = s.umap_y
-            ibgc.umap_projected = s.umap_projected
+            ibgc.is_partial = s.is_partial
             ibgc.gene_cluster_family = s.gene_cluster_family or ""
             ibgc.novelty_score = s.novelty_score
             ibgc.domain_novelty = s.domain_novelty

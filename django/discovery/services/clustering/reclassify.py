@@ -5,7 +5,7 @@ The primary clustering pass operates on the *clusterable* subset of
 least one non-partial or validated member. Partial-only iBGCs are handled
 here via KNN projection against the run's primary iBGCs.
 
-In the v2 schema, leaf path / UMAP / novelty fields live on
+In the v2 schema, leaf path / novelty fields live on
 ``IntegratedBgc`` (not on the per-tool ``SourceBgcPrediction``), so the
 projection target is the iBGC. The actual numerical work is shared with
 the inline post-clustering hook and lives in

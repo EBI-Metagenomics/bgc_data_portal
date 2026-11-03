@@ -6,7 +6,7 @@ subtitle: "The Reference and Compare panels"
 When you select an iBGC, its detail card appears on the right of the discovery platform. There are two such cards, with identical layouts:
 
 - **Reference** (top) — the iBGC you pin with **right-click → Set as reference iBGC**. It stays put while you browse other candidates.
-- **Compare** (middle) — updates every time you **left-click** an iBGC in the roster or on a map.
+- **Compare** (middle) — updates every time you **left-click** an iBGC in the roster or on the Variables map.
 
 Together they let you hold one cluster fixed and read others against it.
 
@@ -31,7 +31,7 @@ A row of chips summarises the cluster:
 | **GCF** | The gene cluster family path (e.g. `42.7.3`). **Click it** to filter the whole discovery platform to that family and its descendants. |
 | **Novelty** | Distance from the nearest validated cluster. |
 | **Domain Novelty** | Fraction of domains unique within the GCF. |
-| **compound features** | Count of predicted/curated compound features. Hover for the list; click to open the structure in MolView when a SMILES is available. |
+| **compound features** | Count of curated compounds (validated iBGCs). Hover for the list; click to open the structure in MolView when a SMILES is available. |
 
 ### Location and sources
 
@@ -43,10 +43,7 @@ A gene-level diagram of the cluster: each arrow is a protein-coding gene (CDS). 
 
 ## Compound features in detail
 
-The "compound features" chip combines two kinds of chemistry prediction, shown in its hover tooltip:
-
-- **Curated compounds** — for validated iBGCs, the named product(s) and their natural-product class path (from sources such as MIBiG).
-- **CHAMOIS ChemOnt classes** — chemical classes predicted from the cluster's proteins and aggregated across its genes, shown as a small tree with the number of contributing genes and a confidence percentage. See [ChemOnt](chemont.qmd).
+The "compound features" chip lists, in its hover tooltip, the **curated compounds** of validated iBGCs: the named product(s), their structure, and their natural-product class path (from sources such as MIBiG).
 
 ## Using the two panels together
 
@@ -54,12 +51,12 @@ A typical comparison:
 
 1. Find a promising cluster and **right-click → Set as reference iBGC**. It pins to the top.
 2. **Left-click** through similar candidates (or use [Find similar iBGCs](similar-ibgc.qmd)); each loads into the Compare card.
-3. Read class, GCF, novelty, size, and predicted chemistry against the reference.
+3. Read class, GCF, novelty, size, and known compounds against the reference.
 4. Click into individual genes to confirm the domain architecture in the [protein panel](protein-panel.qmd).
 5. Add the keepers to your [shortlist](shortlists.qmd).
 
 ## Related pages
 
 - [Protein Panel](protein-panel.qmd)
-- [Scores & Metrics](scores-metrics.qmd) · [BGC Classes](bgc-classes.qmd) · [ChemOnt](chemont.qmd)
+- [Scores & Metrics](scores-metrics.qmd) · [BGC Classes](bgc-classes.qmd)
 - [Find Similar iBGCs](similar-ibgc.qmd)

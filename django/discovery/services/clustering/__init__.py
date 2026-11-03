@@ -4,7 +4,7 @@ iBGC similarity is the run's ``similarity_metric`` (ADR 0003): IDF ×
 enrichment weighted cosine, or binary composite Dice for older runs.
 
 Public API surface for the discovery clustering pipeline. Heavy imports
-(numpy, scipy.sparse, igraph, leidenalg, umap-learn, plotly) are deferred
+(numpy, scipy.sparse, igraph, leidenalg, plotly) are deferred
 inside the individual modules' function bodies so this package can be
 imported on the web container without ML dependencies installed.
 

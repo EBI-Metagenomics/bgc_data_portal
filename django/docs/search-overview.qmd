@@ -3,31 +3,29 @@ title: "Search Overview"
 subtitle: "Targeted searches when you know what you're looking for"
 ---
 
-Beyond the metadata [filters](filtering.qmd), the platform offers four **targeted searches** that rank iBGCs by how well they match something you supply. Use them when you have a concrete starting point — a known enzyme architecture, a protein sequence, a compound structure, or an interesting cluster you want more of.
+Beyond the metadata [filters](filtering.qmd), the platform offers three **targeted searches** that rank iBGCs by how well they match something you supply. Use them when you have a concrete starting point — a known enzyme architecture, a protein sequence, or an interesting cluster you want more of.
 
 | Search | You supply | Finds iBGCs that… |
 |--------|-----------|-------------------|
 | **[Domain](domain-query.qmd)** | Protein domain accessions | …contain (or lack) those domains, or match a whole domain architecture |
 | **[Sequence](sequence-search.qmd)** | A protein sequence | …encode a protein similar to yours (phmmer alignment) |
-| **[Chemical](chemical-search.qmd)** | A SMILES structure | …are predicted to make chemically similar products |
 | **[Find similar iBGCs](similar-ibgc.qmd)** | An existing iBGC (right-click) | …are most like that cluster overall |
 
 ## How searches behave
 
-- **They combine with filters.** A search runs *within* whatever metadata chips are active. Add a taxonomy or biome chip to restrict a sequence or chemical search to a clade or environment.
+- **They combine with filters.** A search runs *within* whatever metadata chips are active. Add a taxonomy or biome chip to restrict a sequence search to a clade or environment.
 - **They run when you press Run Query** (except Find similar, which runs immediately from the right-click menu).
-- **Sequence and chemical searches run in the background.** They are submitted as jobs; the discovery platform shows progress and fills in the results when the job completes. Domain and Find-similar searches return promptly.
+- **Sequence searches run in the background.** They are submitted as jobs; the discovery platform shows progress and fills in the results when the job completes. Domain and Find-similar searches return promptly.
 - **Results are ranked by match quality.** The [roster](bgc-roster.qmd) automatically sorts by the search score and the similarity column adapts to the search type (a domain similarity, a bitscore, etc.). The [Variables map](variables-map.qmd) gains matching axes.
 
 ## Which search to use
 
 - You know the **enzyme machinery** (e.g. a PKS ketosynthase plus a specific tailoring domain) → **Domain** search, in architecture mode for an ordered run of domains.
 - You have a **specific protein** (a characterised enzyme, a hit from your own data) → **Sequence** search.
-- You have a **compound** and want clusters predicted to make similar chemistry → **Chemical** search.
 - You found **one good cluster** and want its closest relatives across the catalogue → **Find similar iBGCs**.
 
 ## Related pages
 
-- [Domain Search](domain-query.qmd) · [Sequence Search](sequence-search.qmd) · [Chemical Search](chemical-search.qmd) · [Find Similar iBGCs](similar-ibgc.qmd)
+- [Domain Search](domain-query.qmd) · [Sequence Search](sequence-search.qmd) · [Find Similar iBGCs](similar-ibgc.qmd)
 - [Filtering](filtering.qmd)
 - [Scores & Metrics](scores-metrics.qmd)

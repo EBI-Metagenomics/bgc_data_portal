@@ -53,8 +53,6 @@ website:
               href: bgc-roster.qmd
             - text: "Variables Map"
               href: variables-map.qmd
-            - text: "UMAP"
-              href: umap.qmd
             - text: "iBGC Detail"
               href: ibgc-detail.qmd
             - text: "Protein Panel"
@@ -73,8 +71,6 @@ website:
               href: domain-query.qmd
             - text: "Sequence Search"
               href: sequence-search.qmd
-            - text: "Chemical Search"
-              href: chemical-search.qmd
             - text: "Find Similar iBGCs"
               href: similar-ibgc.qmd
         - section: "Shortlist & Report"
@@ -99,8 +95,6 @@ website:
               href: bgc-classes.qmd
             - text: "Gene Cluster Families"
               href: gcf-explained.qmd
-            - text: "ChemOnt"
-              href: chemont.qmd
             - text: "Biome Ontology"
               href: biome-ontology.qmd
             - text: "MIBiG & Validated BGCs"

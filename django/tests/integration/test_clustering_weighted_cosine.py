@@ -534,7 +534,7 @@ def test_consumers_score_cosine_run_with_its_weights(dets, tmp_path):
         # The HPC import already projected the partial; detach it first.
         def _detach():
             IntegratedBgc.objects.filter(pk=fx["partial"].pk).update(
-                classification_run=None, gene_cluster_family="", umap_projected=False
+                classification_run=None, gene_cluster_family="", is_partial=False
             )
 
         hpc_leaf = IntegratedBgc.objects.get(pk=fx["partial"].pk).gene_cluster_family
@@ -542,7 +542,7 @@ def test_consumers_score_cosine_run_with_its_weights(dets, tmp_path):
         res = project_partial_ibgcs(clustering_run_pk=run.pk)
         assert (res["scope"], res["projected"]) == (1, 1)
         fx["partial"].refresh_from_db()
-        assert fx["partial"].umap_projected
+        assert fx["partial"].is_partial
         assert fx["partial"].gene_cluster_family == hpc_leaf  # same as HPC's
         _detach()
         run.min_projection_similarity = 99.0
@@ -569,18 +569,16 @@ def test_consumers_score_cosine_run_with_its_weights(dets, tmp_path):
         vibgc = SimpleNamespace(
             cds=cds,
             domains=doms,
-            umap_x=None,
-            umap_y=None,
-            umap_projected=False,
+            projected=False,
             gene_cluster_family="",
             novelty_score=None,
             domain_novelty=None,
         )
         _project_against_run([vibgc], run)  # threshold still 99 → unprojected
-        assert not vibgc.umap_projected
+        assert not vibgc.projected
         run.min_projection_similarity = 0.1
         _project_against_run([vibgc], run)
-        assert vibgc.umap_projected
+        assert vibgc.projected
         assert vibgc.novelty_score == pytest.approx(0.0, abs=1e-6)  # = validated
 
         # A cache written for another metric is refused, not silently reused.

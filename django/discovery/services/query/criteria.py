@@ -1,7 +1,7 @@
 """Uniform criterion resolvers for the Discovery query engine.
 
 Every scoring criterion (domain containment, domain architecture, sequence
-search, chemical similarity, similar-iBGC) is resolved by a function returning a
+search, similar-iBGC) is resolved by a function returning a
 :class:`CriterionResult` — a mapping of ``iBGC id → score payload`` plus a column
 descriptor (:class:`CriterionMetric` list) and pre-cap counters. This is the
 single source of truth: the legacy single-criterion endpoints/tasks delegate
@@ -9,7 +9,7 @@ here, and the combined multi-criterion query intersects several
 ``CriterionResult`` score maps under AND semantics.
 
 A score payload is a dict ``{"value": float, ...}``. ``value`` is the criterion's
-primary, sortable metric (bitscore, composite similarity, ChemOnt similarity, or — for
+primary, sortable metric (bitscore, composite similarity, or — for
 domain containment — the *fraction of include tokens matched*). Sequence search
 additionally carries ``pident`` / ``qcoverage`` / ``best_hit_protein_id``.
 
@@ -88,7 +88,6 @@ CRITERION_METRICS: dict[str, list[CriterionMetric]] = {
         CriterionMetric("pident", "Identity %"),
         CriterionMetric("qcoverage", "Query cov. %"),
     ],
-    "chemical": [CriterionMetric("value", "ChemOnt sim.")],
 }
 
 
@@ -119,12 +118,6 @@ class SequenceParams:
 
 
 @dataclass
-class ChemicalParams:
-    smiles: str = ""
-    similarity_threshold: float = 0.5
-
-
-@dataclass
 class SimilarParams:
     ibgc_id: int = 0
     k: int = 25
@@ -134,7 +127,6 @@ _PARAM_TYPES = {
     "domain": DomainParams,
     "architecture": ArchitectureParams,
     "sequence": SequenceParams,
-    "chemical": ChemicalParams,
     "similar": SimilarParams,
 }
 
@@ -549,124 +541,6 @@ def resolve_sequence(params: SequenceParams) -> CriterionResult:
     )
 
 
-# ── Chemical similarity (ChemOnt BMA) ─────────────────────────────────────────
-
-
-def run_chemical_search(
-    smiles: str, similarity_threshold: float
-) -> dict[int, float]:
-    """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
-
-    The query SMILES is classified into ChemOnt terms via ClassyFire (cached by
-    InChIKey so known/repeat compounds skip the network), then compared with
-    IC-based (Resnik / Best Match Average) similarity against each iBGC's pooled
-    ChemOnt annotations. iBGC membership is decided by range overlap.
-
-    Returns ``{ibgc_id: similarity_score}``. Raises if the IC cache is missing or
-    ClassyFire is unreachable, so the failure is visible to the operator/user.
-    """
-    from collections import defaultdict
-
-    from common_core.chemont import classyfire_client as cf
-    from common_core.chemont.ontology import get_ontology
-    from common_core.chemont.similarity import semantic_similarity
-
-    from discovery.models import PrecomputedStats
-    from django.conf import settings
-    from django.core.cache import cache
-    from django.db import connection
-
-    ont = get_ontology()
-
-    # Classify the query SMILES → ChemOnt terms, cached by InChIKey.
-    inchikey = cf.smiles_to_inchikey(smiles)
-    if inchikey is None:
-        log.warning("Invalid SMILES for chemical search: %s", smiles[:50])
-        return {}
-    cache_key = f"chemont:classify:{inchikey}"
-    query_term_ids: list[str] | None = cache.get(cache_key)
-    if query_term_ids is None:
-        result = cf.classify(
-            smiles,
-            base_url=getattr(settings, "CLASSYFIRE_URL", cf.DEFAULT_BASE_URL),
-            timeout=getattr(settings, "CLASSYFIRE_TIMEOUT", 30.0),
-            poll_timeout=getattr(settings, "CLASSYFIRE_POLL_TIMEOUT", 90.0),
-        )
-        query_term_ids = result.chemont_ids if result else []
-        # Cache even an empty list: a structure ClassyFire can't classify won't
-        # classify on retry either, and this avoids re-submitting.
-        cache.set(
-            cache_key,
-            query_term_ids,
-            getattr(settings, "CHEMONT_CLASSIFY_CACHE_TTL", 60 * 60 * 24 * 30),
-        )
-    if not query_term_ids:
-        log.info("No ChemOnt terms for SMILES %s — no chemical matches", inchikey)
-        return {}
-
-    ic_row = PrecomputedStats.objects.filter(key="chemont_ic").first()
-    if not ic_row or not ic_row.data:
-        raise RuntimeError(
-            "ChemOnt IC values not precomputed — run recompute_all_scores "
-            "before chemical search can return results"
-        )
-    ic_values: dict[str, float] = ic_row.data
-
-    # Pool each iBGC's ChemOnt terms from two sources:
-    #   1. CHAMOIS gene-based predictions (CdsChemOnt), attributed via range
-    #      overlap — each CDS contributes to the iBGC whose bgc_range overlaps
-    #      its cds_range on the same contig (iBGCs are disjoint per contig).
-    #   2. Structure-derived classes (IbgcChemOnt) — ClassyFire on a known
-    #      compound's SMILES, attached directly to the iBGC.
-    ibgc_terms: dict[int, set[str]] = defaultdict(set)
-    with connection.cursor() as cur:
-        cur.execute(
-            """
-            SELECT i.id AS ibgc_id, ch.chemont_id
-            FROM discovery_cds_chemont ch
-            JOIN discovery_cds c ON c.id = ch.cds_id
-            JOIN discovery_ibgc i
-              ON i.contig_id = c.contig_id
-             AND i.bgc_range && c.cds_range
-            """
-        )
-        for ibgc_id, cid in cur.fetchall():
-            ibgc_terms[ibgc_id].add(cid)
-
-        cur.execute("SELECT ibgc_id, chemont_id FROM discovery_ibgc_chemont")
-        for ibgc_id, cid in cur.fetchall():
-            ibgc_terms[ibgc_id].add(cid)
-
-    # Symmetric BMA (Lin) over the query and each iBGC's pooled ChemOnt terms.
-    # Asymmetric coverage was evaluated and rejected: a fully-characterised query
-    # "explains" almost every cluster's sparse predicted classes, collapsing
-    # ranking. ``coverage_similarity`` remains available for other uses.
-    ibgc_similarities: dict[int, float] = {}
-    for ibgc_id, np_terms in ibgc_terms.items():
-        score = semantic_similarity(query_term_ids, list(np_terms), ic_values, ont)
-        if score >= similarity_threshold:
-            ibgc_similarities[ibgc_id] = round(score, 4)
-
-    log.info(
-        "Chemical query (ChemOnt): SMILES=%s threshold=%.2f matches=%d",
-        smiles[:50],
-        similarity_threshold,
-        len(ibgc_similarities),
-    )
-    return ibgc_similarities
-
-
-def resolve_chemical(params: ChemicalParams) -> CriterionResult:
-    """Resolve a chemical-similarity criterion to per-iBGC ChemOnt scores."""
-    raw = run_chemical_search(params.smiles, params.similarity_threshold)
-    scores = {nid: {"value": float(v)} for nid, v in raw.items()}
-    return CriterionResult(
-        scores=scores,
-        metrics=CRITERION_METRICS["chemical"],
-        total_matched=len(scores),
-    )
-
-
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 
@@ -674,7 +548,6 @@ _RESOLVERS = {
     "domain": resolve_domain,
     "architecture": resolve_architecture,
     "sequence": resolve_sequence,
-    "chemical": resolve_chemical,
     "similar": resolve_similar,
 }
 

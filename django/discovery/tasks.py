@@ -56,28 +56,12 @@ def keyword_resolve(search_key: str, keyword: str) -> bool:
 
 @task(queue_name="scores")
 def recompute_scores_task() -> bool:
-    """Recompute all discovery scores (novelty, assembly, GCF, catalogs, UMAP)."""
+    """Recompute all discovery scores (assembly, GCF, catalogs, iBGC classes)."""
     from discovery.services.scores import recompute_all_scores
 
     recompute_all_scores()
     log.info("Score recomputation complete (task %s)", uuid4().hex)
     return True
-
-
-@task()
-def chemical_similarity_search(
-    smiles: str, similarity_threshold: float
-) -> dict[int, float]:
-    """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
-
-    Thin task wrapper over ``discovery.services.query.run_chemical_search`` —
-    the canonical resolver shared with the combined multi-criterion query.
-    Returns ``{ibgc_id: similarity_score}``; raises if the IC cache is missing
-    or ClassyFire is unreachable so the failure is visible to the operator.
-    """
-    from discovery.services.query import run_chemical_search
-
-    return run_chemical_search(smiles, similarity_threshold)
 
 
 @task()
@@ -176,11 +160,11 @@ def run_bgc_clustering_task(
     """Domain+adjacency hierarchical-CPM-Leiden clustering over iBGCs.
 
     Runs the orchestrator in ``services.clustering.pipeline``. If ``apply``
-    is True, writes leaf paths + umap coords to ``IntegratedBgc``, upserts
+    is True, writes leaf paths to ``IntegratedBgc``, upserts
     ``DashboardGCF`` rows, and emits MIBiG validation artifacts under
     ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``. Optionally
     chains a reclassify task to assign partial iBGCs and a projection task
-    that fills umap / leaf path / novelty for partials.
+    that fills leaf path / novelty for partials.
     """
     task_id = uuid4().hex
     search_key = f"bgc_clustering:{task_id}"
@@ -259,7 +243,7 @@ def reclassify_bgcs_task(
 
     Re-runnable independently of ``run_bgc_clustering_task``. Updates only
     classification fields on ``IntegratedBgc``; never touches the hierarchy.
-    When ``then_project`` is set, chains the partial-iBGC UMAP projection on
+    When ``then_project`` is set, chains the partial-iBGC projection on
     success (replaces the old Celery ``link=`` on the clustering chain).
     """
     task_id = uuid4().hex
@@ -299,7 +283,7 @@ def reclassify_bgcs_task(
     return result
 
 
-# ── Partial-iBGC projection (umap coords + scores for non-primary iBGCs) ───────
+# ── Partial-iBGC projection (GCF + scores for non-primary iBGCs) ─────────────
 
 
 @task(queue_name="scores")
@@ -309,12 +293,12 @@ def project_partial_ibgcs_task(
     knn_k: int = 5,
     min_total_similarity: float | None = None,
 ) -> dict:
-    """Project partial / non-primary iBGCs onto a ClusteringRun's UMAP.
+    """Project partial / non-primary iBGCs onto a ClusteringRun.
 
-    Writes ``umap_x`` / ``umap_y`` (similarity-weighted average of top-K
-    primary neighbours), ``gene_cluster_family``, ``novelty_score``, and
-    ``domain_novelty`` on every ``IntegratedBgc`` whose ``classification_run``
-    differs from the target run. Marks ``umap_projected = True``.
+    Writes ``gene_cluster_family`` (weighted vote of the top-K primary
+    neighbours), ``novelty_score`` and ``domain_novelty`` on every
+    ``IntegratedBgc`` whose ``classification_run`` differs from the target
+    run. Marks ``is_partial = True``.
     """
     task_id = uuid4().hex
     search_key = f"bgc_project_partial:{clustering_run_pk}"

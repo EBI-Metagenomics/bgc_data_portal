@@ -9,7 +9,7 @@ import type {
 
 // Composite-similarity "find similar iBGCs" lives in `src/api/ibgcs.ts` →
 // `postSimilarIbgcQuery`. All other scoring searches (domain, architecture,
-// sequence, chemical) are now driven through the combined query below.
+// sequence) are now driven through the combined query below.
 
 // ── Combined multi-criterion query ──────────────────────────────────────────
 // One async query carrying several scoring criteria. Returns 202 + a task_id;

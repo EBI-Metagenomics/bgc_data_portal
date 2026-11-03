@@ -21,12 +21,12 @@ Each tool's call on a contig is recorded as a **source prediction**, tagged with
 
 ## iBGC — integrated BGC
 
-An **integrated BGC (iBGC)** consolidates overlapping source predictions on the same contig into one candidate. It is the central unit of the platform: the roster lists iBGCs, the maps plot iBGCs, scores are computed per iBGC, and shortlists are made of iBGCs.
+An **integrated BGC (iBGC)** consolidates overlapping source predictions on the same contig into one candidate. It is the central unit of the platform: the roster lists iBGCs, the Variables map plots iBGCs, scores are computed per iBGC, and shortlists are made of iBGCs.
 
 Each iBGC records the source predictions it was built from, the **tools** that called them, its location on the contig, its size, its predicted class, and its scores. An iBGC may be flagged:
 
 - **Validated** — it comes from an experimentally characterised reference (e.g. MIBiG). Validated iBGCs are the yardstick novelty is measured against.
-- **Partial** — the cluster runs off the edge of its contig, so it may be incomplete. Partial iBGCs are placed onto the maps by similarity to complete ones rather than being clustered directly.
+- **Partial** — the cluster runs off the edge of its contig, so it may be incomplete. Partial iBGCs are assigned to families by similarity to complete ones rather than being clustered directly.
 - **Submitted** — it came from an assembly *you* uploaded with [Load Asset](load-asset.qmd), not from the catalogue. Submitted iBGCs are shown in amber.
 
 ## Assembly
@@ -58,9 +58,9 @@ Both are shown as "—" when they cannot be computed (for example domain novelty
 
 Wherever the platform compares two clusters — for novelty, for "find similar", for a domain search — it measures similarity from **shared protein domains and how those domains are arranged**, not from raw DNA or protein alignment. This means clusters with the same biosynthetic logic can be matched even when their sequences have diverged. (The exception is [Sequence Search](sequence-search.qmd), which deliberately aligns a query protein against cluster proteins.)
 
-## Predicted chemistry
+## Known chemistry
 
-The pipeline also predicts the chemistry of each cluster's product. **CHAMOIS** assigns chemical classes from the [ChemOnt](chemont.qmd) ontology to the proteins in a cluster. Validated iBGCs additionally carry curated compound names and structures. Both appear in the iBGC detail panel as "compound features".
+Validated iBGCs carry curated compound names, structures, and natural-product classes (from sources such as MIBiG). These appear in the iBGC detail panel as "compound features".
 
 ## Shortlist and report
 

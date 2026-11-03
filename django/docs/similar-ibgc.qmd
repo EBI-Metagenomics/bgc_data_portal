@@ -7,7 +7,7 @@ subtitle: "Expand your search around a cluster you like"
 
 ## Running it
 
-Right-click any iBGC — in the [roster](bgc-roster.qmd), on a [map](umap.qmd), or in a [detail panel](ibgc-detail.qmd) — and choose **Find similar iBGCs**. Unlike the sequence and chemical searches, it runs immediately; you do not press Run Query.
+Right-click any iBGC — in the [roster](bgc-roster.qmd), on the [Variables map](variables-map.qmd), or in a [detail panel](ibgc-detail.qmd) — and choose **Find similar iBGCs**. Unlike the domain and sequence searches, it runs immediately; you do not press Run Query.
 
 The results replace the current result set, ranked by similarity to the cluster you picked. The roster sorts by that similarity and its similarity column shows the score; on the [Variables map](variables-map.qmd) you can plot **Query similarity** on an axis.
 

@@ -33,11 +33,9 @@ config:
     LOG_LEVEL: "DEBUG"
     MATOMO_URL: ""
     MATOMO_SITE_ID: ""
-    NUMBA_CACHE_DIR: /tmp/numba_cache
-    CLASSYFIRE_URL: "http://classyfire.wishartlab.com"
 
 postgres:
-  image: pgvector/pgvector:pg18-trixie
+  image: postgres:18-trixie
   imagePullPolicy: ""
   storage: 5Gi
   headlessService: false

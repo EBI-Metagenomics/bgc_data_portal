@@ -8,7 +8,7 @@ A query is built from **filter chips** in the top strip. Each chip adds one rest
 There are two kinds of chip:
 
 - **Metadata filters** narrow the catalogue by attributes that are already stored (taxonomy, biome, class, …). They are fast and can be combined freely.
-- **Advanced search chips** run a computation — match by protein domain, protein sequence, or chemical structure. These are covered under [Searching](search-overview.qmd).
+- **Advanced search chips** run a computation — match by protein domain or protein sequence. These are covered under [Searching](search-overview.qmd).
 
 ![The filter strip: database counts on top, the filter chips below, and an active **BGC Class: NRP** chip. The banner reports how many iBGCs match.](images/filter-strip.png)
 
@@ -23,7 +23,6 @@ There are two kinds of chip:
 | **Biome** | The environment the assembly came from, using the [GOLD biome ontology](biome-ontology.qmd). |
 | **BGC class** | The kind of biosynthetic machinery — [Polyketide, NRPS, RiPP, …](bgc-classes.qmd) |
 | **GCF** | A [gene cluster family](gcf-explained.qmd) path and its descendants. |
-| **ChemOnt class** | The predicted [chemical class](chemont.qmd) of the product. |
 | **Accessions** | A single smart field that accepts an assembly, contig, BGC, iBGC, or protein accession. See [Accessions Field](accessions.qmd). |
 | **Length** | A minimum/maximum cluster size. |
 
@@ -31,7 +30,7 @@ Each active chip shows a count of selected values; clear it from the chip or use
 
 ## How filters combine
 
-All chips are combined with **AND**: an iBGC must satisfy every active chip to appear. Within a single hierarchical chip (taxonomy, biome, GCF, ChemOnt), selecting a node includes that node and everything below it.
+All chips are combined with **AND**: an iBGC must satisfy every active chip to appear. Within a single hierarchical chip (taxonomy, biome, GCF), selecting a node includes that node and everything below it.
 
 Advanced search chips are combined with the metadata filters too — for example, you can run a [sequence search](sequence-search.qmd) *restricted* to marine Actinomycetota by adding those metadata chips alongside the sequence chip.
 
@@ -50,4 +49,4 @@ Clicking the **GCF** chip inside an [iBGC detail](ibgc-detail.qmd) card applies 
 - [Accessions Field](accessions.qmd)
 - [Search Overview](search-overview.qmd) — the advanced chips
 - [Load Asset](load-asset.qmd)
-- [Taxonomy](glossary.qmd) · [Biome Ontology](biome-ontology.qmd) · [BGC Classes](bgc-classes.qmd) · [ChemOnt](chemont.qmd)
+- [Taxonomy](glossary.qmd) · [Biome Ontology](biome-ontology.qmd) · [BGC Classes](bgc-classes.qmd)

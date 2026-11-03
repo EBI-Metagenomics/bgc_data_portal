@@ -10,7 +10,6 @@ Pipeline phases (in dependency order):
   5. CDS                  → ContigCds (deduped on contig + range + strand)
   5.5 CDS sequences       → CdsSequence
   6. Domains              → ContigDomain (FK to ContigCds + denormalised contig FK)
-  7. CDS ChemOnt          → CdsChemOnt
   9–10. Assembly + catalog score recomputation
 
 Natural products are NOT loaded here — they're per-iBGC and the iBGC table
@@ -29,8 +28,12 @@ Expected directory layout::
       cds.tsv                   (optional)
       cds_sequences.tsv         (optional)
       domains.tsv               (optional)
-      cds_chemont.tsv           (optional)
       natural_products.tsv      (read by load_natural_products step, not here)
+
+Legacy files from pre-removal staged tarballs (``cds_chemont.tsv``,
+``embeddings_bgc.tsv``, ``embeddings_protein.tsv``) and the ``umap_x`` /
+``umap_y`` columns of ``bgcs.tsv`` are ignored: they are never read, so old
+tarballs still load.
 """
 
 from __future__ import annotations
@@ -42,9 +45,12 @@ import re
 import sys
 from pathlib import Path
 
+from django.db.backends.postgresql.psycopg_any import NumericRange
+from django.db.models import Avg, Count, Max
+from django.db.models.expressions import RawSQL
+
 from discovery.models import (
     AssemblySource,
-    CdsChemOnt,
     CdsSequence,
     ContigCds,
     ContigDomain,
@@ -60,9 +66,6 @@ from discovery.models import (
 )
 from discovery.services.go_slim import go_slim_for_terms
 from discovery.services.taxonomy import RANKS
-from django.db.backends.postgresql.psycopg_any import NumericRange
-from django.db.models import Avg, Count, Max
-from django.db.models.expressions import RawSQL
 
 from .cbgc_assigner import CbgcAssigner
 from .tsv_copy import truncate_tables
@@ -78,7 +81,6 @@ ALL_DISCOVERY_TABLES = [
     "discovery_ibgc_natural_product",
     "discovery_ibgc_clustering_snapshot",
     "discovery_gcf",
-    "discovery_cds_chemont",
     "discovery_domain_hit",
     "discovery_cds_sequence",
     "discovery_cds",
@@ -623,7 +625,7 @@ def load_source_bgcs(
     return lookup
 
 
-# ── CDS / domains / chemont ──────────────────────────────────────────────────
+# ── CDS / domains ──────────────────────────────────────────────────────────
 
 
 def load_cds(
@@ -830,87 +832,19 @@ def load_domains(
     return total
 
 
-def _flush_cds_chemont(batch: list[CdsChemOnt]) -> int:
-    """Upsert a CdsChemOnt batch, deduped on the ``(cds, chemont_id)`` conflict
-    key. Without the dedup, a tarball that lists the same ChemOnt class twice
-    for one CDS makes ``ON CONFLICT DO UPDATE`` touch a row twice in a single
-    statement, which Postgres rejects ("cannot affect row a second time").
-    Last occurrence wins, matching the upsert's update semantics.
-    """
-    deduped = list({(obj.cds_id, obj.chemont_id): obj for obj in batch}.values())
-    CdsChemOnt.objects.bulk_create(
-        deduped,
-        update_conflicts=True,
-        unique_fields=["cds", "chemont_id"],
-        update_fields=["chemont_name", "probability", "weight"],
-    )
-    return len(deduped)
+LEGACY_IGNORED_FILES = (
+    "cds_chemont.tsv",
+    "embeddings_bgc.tsv",
+    "embeddings_protein.tsv",
+)
 
 
-def load_cds_chemont(
-    data_dir: Path,
-    contig_lookup: dict[str, int],
-    cds_lookup: dict[tuple[int, str], int],
-) -> int:
-    """Load cds_chemont.tsv → CdsChemOnt.
-
-    Each row identifies a CDS via ``(contig_sha256, protein_id_str)`` and
-    carries the deepest ChemOnt class chosen by CHAMOIS plus its
-    iBGC-level probability and gene-specific weight.
-    """
-    path = data_dir / "cds_chemont.tsv"
-    if not path.exists():
-        logger.info("cds_chemont.tsv not found, skipping")
-        return 0
-
-    batch: list[CdsChemOnt] = []
-    total = 0
-    skipped = 0
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            contig_sha = row.get("contig_sha256", "")
-            contig_id = contig_lookup.get(contig_sha)
-            if contig_id is None:
-                skipped += 1
-                continue
-            protein_id = row.get("protein_id_str", "")
-            cds_id = cds_lookup.get((contig_id, protein_id))
-            if cds_id is None:
-                skipped += 1
-                continue
-
-            try:
-                probability = float(row.get("probability", "0.0"))
-            except ValueError:
-                probability = 0.0
-            try:
-                weight = float(row.get("weight", "0.0"))
-            except ValueError:
-                weight = 0.0
-
-            batch.append(
-                CdsChemOnt(
-                    cds_id=cds_id,
-                    chemont_id=row["chemont_id"],
-                    chemont_name=row["chemont_name"],
-                    probability=probability,
-                    weight=weight,
-                )
-            )
-
-            if len(batch) >= BATCH_SIZE:
-                total += _flush_cds_chemont(batch)
-                batch.clear()
-
-    if batch:
-        total += _flush_cds_chemont(batch)
-
-    if skipped:
-        logger.warning("Skipped %d CDS ChemOnt rows (unresolved CDS)", skipped)
-    logger.info("Loaded %d CDS ChemOnt classifications", total)
-    return total
+def _log_ignored_legacy_files(data_dir: Path) -> list[str]:
+    """Note (and skip) files from removed features in a pre-removal tarball."""
+    present = [name for name in LEGACY_IGNORED_FILES if (data_dir / name).exists()]
+    if present:
+        logger.info("Ignoring legacy files from a pre-removal tarball: %s", present)
+    return present
 
 
 # ── Post-load computations ───────────────────────────────────────────────────
@@ -1045,11 +979,11 @@ def run_pipeline(
     # Source predictions + cBGC envelopes (with stable accessions).
     load_source_bgcs(data_dir, contig_lookup, detector_lookup, assembly_lookup)
 
-    # CDS / domains / chemont — contig-anchored, deduped at insert.
+    # CDS / domains — contig-anchored, deduped at insert.
     cds_lookup = load_cds(data_dir, contig_lookup)
     load_cds_sequences(data_dir, contig_lookup, cds_lookup)
     load_domains(data_dir, contig_lookup, cds_lookup)
-    load_cds_chemont(data_dir, contig_lookup, cds_lookup)
+    _log_ignored_legacy_files(data_dir)
 
     if not skip_stats:
         compute_assembly_scores()

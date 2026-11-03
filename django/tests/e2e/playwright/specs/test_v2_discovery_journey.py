@@ -2,9 +2,9 @@
 
 Exercises the redesigned surface end-to-end:
 
-  - landing on ``/`` renders the new dashboard with TopFiltersStrip + three-tab
+  - landing on ``/`` renders the new dashboard with TopFiltersStrip + two-tab
     results card + reference/compare detail slots + protein info panel
-  - tab switching between BGC roster / Variables map / UMAP
+  - tab switching between BGC roster / Variables map
   - left-click on a roster row populates the Compare slot
   - right-click on a roster row → context menu → "Set as reference iBGC" pins
     the row in the Reference slot
@@ -51,7 +51,7 @@ def test_v2_dashboard_shell_renders(page, e2e_v2_base_url):
 
 @pytest.mark.e2e
 def test_v2_results_tabs_switch(page, e2e_v2_base_url):
-    """The three results tabs all activate and reveal their tab panel."""
+    """Both results tabs activate and reveal their tab panel."""
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="results-tabs"]')
@@ -63,11 +63,6 @@ def test_v2_results_tabs_switch(page, e2e_v2_base_url):
     page.locator('[data-testid="results-tab-variables"]').click()
     # Variables tab shows X/Y axis selectors (combobox role).
     page.wait_for_selector("text=/^Novelty$/", timeout=10_000)
-
-    # Switch to UMAP.
-    page.locator('[data-testid="results-tab-umap"]').click()
-    # Tab content is rendered (the plot or its loading/empty placeholder).
-    page.wait_for_timeout(500)
 
     # Back to roster.
     page.locator('[data-testid="results-tab-roster"]').click()
@@ -254,8 +249,8 @@ def test_v2_generate_report_opens_tab_and_renders(page, e2e_v2_base_url, context
 
 @pytest.mark.e2e
 def test_v2_load_asset_journey(page, e2e_v2_base_url):
-    """Upload a TGZ asset, verify it surfaces in the roster + UMAP + can be
-    evicted via the chip's X button.
+    """Upload a TGZ asset, verify it surfaces in the roster + Variables map +
+    can be evicted via the chip's X button.
 
     Skips automatically when the fixture file isn't present (CI without the
     seed data) so the spec can still run on lean environments.
@@ -287,9 +282,9 @@ def test_v2_load_asset_journey(page, e2e_v2_base_url):
         timeout=60_000,
     )
 
-    # Switch to UMAP — the asset point should be plotted as a "Submitted
-    # asset" trace (legend text rendered by Plotly).
-    page.locator('[data-testid="results-tab-umap"]').click()
+    # Switch to the Variables map — the asset point should be plotted as a
+    # "Submitted asset" trace (legend text rendered by Plotly).
+    page.locator('[data-testid="results-tab-variables"]').click()
     page.wait_for_timeout(1_000)
     # Plotly may or may not render the legend depending on point count;
     # the SUBMITTED badge confirmation above is the load-bearing assertion.

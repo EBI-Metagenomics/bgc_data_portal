@@ -25,18 +25,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ChemOnt ontology. The web pod needs it to build the hierarchical ChemOnt
-# filter tree (/filters/chemont-classes/) and to expand a selected parent class
-# to its descendants; without it both fall back to flat leaves. Baked in at
-# build time (same source as the worker/ETL images) at the default path expected
-# by common_core.chemont.ontology. ``/data/<subdir>`` volume mounts don't shadow
-# this, so no PVC/mount is needed. Vendored in-repo (vendor/chemont/) rather than
-# fetched from classyfire.wishartlab.com, which is frequently unreachable.
-# ChemOnt is a static ontology (data-version 2.1, 2016), so it never goes stale.
-RUN mkdir -p /data/chemont
-COPY vendor/chemont/ChemOnt_2_1.obo /data/chemont/ChemOnt_2_1.obo
-ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
-
 WORKDIR /app
 COPY requirements-web.lock .
 RUN pip install --upgrade pip && pip install -r requirements-web.lock

@@ -46,8 +46,8 @@ class AssetDetector:
 class AssetBgc:
     """One BGC prediction row keyed by (contig_sha, start, end, detector_name).
 
-    ``classification_path``/``novelty_score``/``domain_novelty``/``umap_x``/
-    ``umap_y``/``gene_cluster_family`` are intentionally left at the inert
+    ``classification_path``/``novelty_score``/``domain_novelty``/
+    ``gene_cluster_family`` are intentionally left at the inert
     defaults from the TSV — the projection step recomputes them on the fly,
     so anything the user puts there in the upload is ignored.
     """
@@ -126,18 +126,6 @@ class AssetNaturalProduct:
 
 
 @dataclass
-class AssetCdsChemOnt:
-    """Per-CDS ChemOnt classification (deepest class as emitted by CHAMOIS)."""
-
-    bgc_key: tuple[str, int, int, str]
-    protein_id_str: str
-    chemont_id: str
-    chemont_name: str = ""
-    probability: float = 0.0
-    weight: float = 0.0
-
-
-@dataclass
 class AssetData:
     """Fully-parsed in-memory asset, ready for the projection step."""
 
@@ -149,7 +137,6 @@ class AssetData:
     contig_sequences: dict[str, str] = field(default_factory=dict)  # sha256 → zlib-b64
     domains: list[AssetDomain] = field(default_factory=list)
     natural_products: list[AssetNaturalProduct] = field(default_factory=list)
-    cds_chemont: list[AssetCdsChemOnt] = field(default_factory=list)
 
     def assembly_lookup(self) -> dict[str, AssetAssembly]:
         return {a.assembly_accession: a for a in self.assemblies}
@@ -203,8 +190,9 @@ OPTIONAL_FILES: tuple[str, ...] = (
     "contig_sequences.tsv",
     "domains.tsv",
     "natural_products.tsv",
-    "cds_chemont.tsv",
 )
+# Legacy members of pre-removal bundles (CHAMOIS ChemOnt, ESM-C embeddings):
+# not allow-listed, so ``inspect_tarball`` skips them like any other extra TSV.
 ALLOWED_FILES: frozenset[str] = frozenset(REQUIRED_FILES + OPTIONAL_FILES)
 
 REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -257,14 +245,5 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
         "bgc_end",
         "detector_name",
         "name",
-    ),
-    "cds_chemont.tsv": (
-        "contig_sha256",
-        "bgc_start",
-        "bgc_end",
-        "detector_name",
-        "protein_id_str",
-        "chemont_id",
-        "chemont_name",
     ),
 }

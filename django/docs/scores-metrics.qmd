@@ -80,7 +80,6 @@ When you run a search, results gain a per-query score (shown in the roster's sim
   - **Identity %** — fraction of identical aligned residues.
   - **Query coverage %** — fraction of your query spanned by the alignment.
   - A hit must clear all three cut-offs you set.
-- **[Chemical](chemical-search.qmd) search** — chemical-class similarity between your query compound and each iBGC's predicted chemistry.
 
 ## Other per-iBGC values
 
@@ -94,7 +93,7 @@ When you run a search, results gain a per-query score (shown in the roster's sim
 
 ## A note on partial clusters
 
-**Partial** iBGCs (truncated at a contig edge) are not clustered directly. They are placed into a family — and given novelty and domain-novelty scores — by their nearest complete neighbours. Their scores and map position are therefore approximate; the partial flag tells you when to apply that caution.
+**Partial** iBGCs (truncated at a contig edge) are not clustered directly. They are placed into a family — and given novelty and domain-novelty scores — by their nearest complete neighbours. Their scores are therefore approximate; the partial flag tells you when to apply that caution.
 
 ## Related pages
 

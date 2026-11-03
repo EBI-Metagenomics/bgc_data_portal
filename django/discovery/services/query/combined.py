@@ -44,7 +44,6 @@ FILTER_KEYS = (
     "assembly_type",
     "leaf_path_prefix",
     "bgc_class",
-    "chemont_ids",
     "np_classes",
     "accession",
     "bgc_accession",
@@ -70,8 +69,6 @@ def criterion_label(ctype: str, params, index_within_type: int, type_count: int)
         base = "Architecture sim."
     elif ctype == "sequence":
         base = "Sequence"
-    elif ctype == "chemical":
-        base = "Chemical sim."
     elif ctype == "similar":
         base = f"Similar to iBGC-{params.ibgc_id}"
     else:

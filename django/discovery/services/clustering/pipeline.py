@@ -9,12 +9,12 @@ non-validated predictions are excluded from community detection (they're
 handled by ``reclassify_bgcs`` / ``project_partial_ibgcs`` via KNN).
 
 When ``apply=True``, the resulting hierarchy is persisted into
-``DashboardGCF`` and per-iBGC leaf path / UMAP coords are written on
+``DashboardGCF`` and the per-iBGC leaf path is written on
 ``IntegratedBgc``. MIBiG validation artifacts are emitted under
 ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``.
 
 Per-prediction (``SourceBgcPrediction``) rows are not duplicated with leaf
-path / UMAP fields — the API reads those from ``integrated_bgc`` via FK.
+path fields — the API reads those from ``integrated_bgc`` via FK.
 """
 
 from __future__ import annotations
@@ -126,7 +126,6 @@ def run_clustering_pipeline(
         compute_composite_similarity,
     )
     from discovery.services.clustering.knn_graph import build_knn_graph
-    from discovery.services.clustering.layout import compute_2d_layout
     from discovery.services.clustering.leiden import run_hierarchical_leiden
     from discovery.services.clustering.feature_weights import compute_run_weights
     from discovery.services.clustering.membership import (
@@ -227,13 +226,10 @@ def run_clustering_pipeline(
     # ── 5. Hierarchical Leiden under CPM ─────────────────────────────────
     levels = run_hierarchical_leiden(graph, resolutions=leiden_resolutions, seed=seed)
 
-    # ── 6. 2D layout ─────────────────────────────────────────────────────
-    coords = compute_2d_layout(graph, sim, seed=seed)
-
-    # ── 7. ltree paths ───────────────────────────────────────────────────
+    # ── 6. ltree paths ───────────────────────────────────────────────────
     paths_per_row, gcf_nodes = build_ltree_paths(levels, ibgc_ids)
 
-    # ── 8. Run dedup + persist ───────────────────────────────────────────
+    # ── 7. Run dedup + persist ───────────────────────────────────────────
     from django.db.models.functions import Upper
 
     domain_qs = ContigDomain.objects.annotate(ref_db_upper=Upper("ref_db")).filter(
@@ -283,7 +279,6 @@ def run_clustering_pipeline(
             ),
             "igraph_version": _safe_version("igraph"),
             "leidenalg_version": _safe_version("leidenalg"),
-            "umap_version": _safe_version("umap-learn"),
             "scipy_version": _safe_version("scipy"),
         },
     )
@@ -294,7 +289,7 @@ def run_clustering_pipeline(
         sha[:12],
     )
 
-    # ── 9. Replace DashboardGCF rows; pick medoids ──────────────────────
+    # ── 8. Replace DashboardGCF rows; pick medoids ──────────────────────
     DashboardGCF.objects.filter(clustering_run=run).delete()
     gcf_rows: list[DashboardGCF] = []
     for node in gcf_nodes:
@@ -334,7 +329,7 @@ def run_clustering_pipeline(
             batch_size=5_000,
         )
 
-    # ── 10. Apply: write iBGC leaf path + UMAP coords ────────────────────
+    # ── 9. Apply: write iBGC leaf path ───────────────────────────────────
     artifacts_dir = None
     result_extra_scoring: dict | None = None
     leaf_paths: list[str] = [
@@ -348,25 +343,21 @@ def run_clustering_pipeline(
         for ibgc in ibgc_rows:
             i = ibgc_lookup[ibgc.id]
             ibgc.gene_cluster_family = leaf_paths[i]
-            ibgc.umap_x = float(coords[i, 0])
-            ibgc.umap_y = float(coords[i, 1])
-            ibgc.umap_projected = False
+            ibgc.is_partial = False
             ibgc.classification_run = run
             ibgc.classified_at = now
         IntegratedBgc.objects.bulk_update(
             ibgc_rows,
             [
                 "gene_cluster_family",
-                "umap_x",
-                "umap_y",
-                "umap_projected",
+                "is_partial",
                 "classification_run",
                 "classified_at",
             ],
             batch_size=5_000,
         )
 
-        # ── 11. MIBiG analysis artifacts ─────────────────────────────────
+        # ── 10. MIBiG analysis artifacts ─────────────────────────────────
         from discovery.services.clustering.mibig_analysis import emit_run_artifacts
 
         try:
@@ -375,7 +366,6 @@ def run_clustering_pipeline(
                     run,
                     ibgc_ids=ibgc_ids.tolist(),
                     leaf_paths=leaf_paths,
-                    coords=coords,
                 )
             )
         except Exception:  # noqa: BLE001 — never block the run on plot errors
@@ -391,7 +381,7 @@ def run_clustering_pipeline(
                 run_weights,
             )
 
-        # ── 12. iBGC scoring (novelty + domain novelty) ───────────────────
+        # ── 11. iBGC scoring (novelty + domain novelty) ───────────────────
         if score_ibgcs:
             from discovery.services.clustering.ibgc_scoring import (
                 persist_scoring_cache,

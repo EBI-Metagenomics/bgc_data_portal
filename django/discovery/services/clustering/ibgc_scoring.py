@@ -29,8 +29,7 @@ Score definitions (locked in the v2 redesign):
 
 Partial-only iBGCs are projected against the primary set in
 :func:`project_partial_ibgcs`: KNN top-K weighted by composite
-similarity assigns them a leaf path, ``umap_x``/``umap_y`` (averaged from
-neighbours), and the two novelty scores.
+similarity assigns them a leaf path and the two novelty scores.
 """
 
 from __future__ import annotations
@@ -388,11 +387,11 @@ def score_primary_ibgcs(
         ibgc.novelty_score = None if np.isnan(nv) else nv
         dn = float(domain_novelty[i])
         ibgc.domain_novelty = None if np.isnan(dn) else dn
-        ibgc.umap_projected = False
+        ibgc.is_partial = False
 
     IntegratedBgc.objects.bulk_update(
         ibgc_rows,
-        ["novelty_score", "domain_novelty", "umap_projected"],
+        ["novelty_score", "domain_novelty", "is_partial"],
         batch_size=5_000,
     )
 
@@ -430,8 +429,6 @@ def project_partial_ibgcs(
     vocabulary and persisted weights) to every primary iBGC of the run and
     derive:
 
-      * ``umap_x`` / ``umap_y`` — weighted average of the top-K primary
-        neighbours' coordinates (similarity-weighted).
       * ``gene_cluster_family`` — leaf path of the weighted-majority primary
         neighbour vote.
       * ``novelty_score`` — ``1 − max(sim to validated primary iBGC)``; forced
@@ -439,7 +436,7 @@ def project_partial_ibgcs(
       * ``domain_novelty`` — fraction of this iBGC's domains not present in any
         primary member of the inherited leaf GCF. NULL when the iBGC carries
         no source-vocabulary domains.
-      * ``umap_projected`` = True; ``classification_run`` set to the target
+      * ``is_partial`` = True; ``classification_run`` set to the target
         run; ``classified_at`` updated.
 
     iBGCs whose top-K similarity sum is below ``min_total_similarity`` (or
@@ -536,23 +533,12 @@ def project_partial_ibgcs(
 
     pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
 
-    primary_meta = {
-        ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family)
-        for ibgc in IntegratedBgc.objects.filter(id__in=primary_ids).only(
-            "id", "umap_x", "umap_y", "gene_cluster_family"
+    primary_leaf = dict(
+        IntegratedBgc.objects.filter(id__in=primary_ids).values_list(
+            "id", "gene_cluster_family"
         )
-    }
-    pri_coords = np.array(
-        [
-            [
-                primary_meta[int(x)][0] if primary_meta[int(x)][0] is not None else 0.0,
-                primary_meta[int(x)][1] if primary_meta[int(x)][1] is not None else 0.0,
-            ]
-            for x in pri_row_ids.tolist()
-        ],
-        dtype=np.float32,
     )
-    pri_leaf_paths = [primary_meta[int(x)][2] for x in pri_row_ids.tolist()]
+    pri_leaf_paths = [primary_leaf[int(x)] for x in pri_row_ids.tolist()]
 
     validated_ids = _validated_ibgc_ids()
     validated_col_set = {pri_id_to_row[v] for v in validated_ids if v in pri_id_to_row}
@@ -622,10 +608,6 @@ def project_partial_ibgcs(
             if top_sum < min_total_similarity:
                 continue
 
-            weights_norm = top_vals / top_sum
-            umap_x = float((pri_coords[top_cols, 0] * weights_norm).sum())
-            umap_y = float((pri_coords[top_cols, 1] * weights_norm).sum())
-
             votes: Counter[str] = Counter()
             for col, val in zip(top_cols.tolist(), top_vals.tolist()):
                 p = pri_leaf_paths[col]
@@ -665,9 +647,7 @@ def project_partial_ibgcs(
             update_batch.append(
                 IntegratedBgc(
                     id=int(q_ibgc_id),
-                    umap_x=umap_x,
-                    umap_y=umap_y,
-                    umap_projected=True,
+                    is_partial=True,
                     gene_cluster_family=best_leaf,
                     novelty_score=novelty,
                     domain_novelty=domain_novelty,
@@ -689,9 +669,7 @@ def project_partial_ibgcs(
         IntegratedBgc.objects.bulk_update(
             update_batch,
             [
-                "umap_x",
-                "umap_y",
-                "umap_projected",
+                "is_partial",
                 "gene_cluster_family",
                 "novelty_score",
                 "domain_novelty",

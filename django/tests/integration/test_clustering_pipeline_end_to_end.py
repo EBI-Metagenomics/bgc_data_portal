@@ -6,12 +6,12 @@ then drives the domain+adjacency hierarchical-CPM-Leiden pipeline and the KNN
 partial-projection step. Asserts the contract the dashboard relies on:
 
   * a ``ClusteringRun`` is persisted and every clusterable iBGC gets a leaf
-    ``gene_cluster_family`` path + UMAP coords
+    ``gene_cluster_family`` path (and no 2D layout)
   * the run's artifacts + scoring cache land under ``CLUSTERING_ARTIFACTS_DIR``
   * partial-only iBGCs are excluded from community detection, then projected
-    onto a family by ``reclassify_bgcs`` (``umap_projected=True``)
+    onto a family by ``reclassify_bgcs`` (``is_partial=True``)
 
-Requires igraph/leidenalg/umap, so it skips in the plain web image and runs
+Requires igraph/leidenalg, so it skips in the plain web image and runs
 in the worker/ml image.
 """
 
@@ -143,14 +143,13 @@ def test_clustering_classifies_primaries_then_projects_partials(tmp_path):
         assert run.sha256 == result["sha256"]
         assert result["n_leaf_communities"] >= 1
 
-        # ── Every clusterable iBGC got a leaf path + coords ───────────────
+        # ── Every clusterable iBGC got a leaf path ────────────────────────
         primaries = IntegratedBgc.objects.filter(id__in=primary_ids)
         assert primaries.count() == 10
         for ibgc in primaries:
             assert ibgc.gene_cluster_family, ibgc.accession
-            assert ibgc.umap_x is not None and ibgc.umap_y is not None
             assert ibgc.classification_run_id == run.pk
-            assert ibgc.umap_projected is False
+            assert ibgc.is_partial is False
 
         # Domain-family separation: the two disjoint signature sets must land
         # in different leaf GCFs. Derive family from each iBGC's domains via
@@ -175,6 +174,7 @@ def test_clustering_classifies_primaries_then_projects_partials(tmp_path):
         artifacts_dir = Path(result["artifacts_dir"])
         assert artifacts_dir.is_dir()
         assert (artifacts_dir / "scoring_cache" / "M_domains.npz").exists()
+        assert not (artifacts_dir / "umap_scatter.html").exists()  # layout removed
 
         # ── Partials excluded from clustering, then projected ─────────────
         partials_pre = IntegratedBgc.objects.filter(id__in=partial_ids)
@@ -187,8 +187,7 @@ def test_clustering_classifies_primaries_then_projects_partials(tmp_path):
         assert rc["classified"] >= 1
 
         partials_post = IntegratedBgc.objects.filter(id__in=partial_ids)
-        projected = [p for p in partials_post if p.umap_projected]
+        projected = [p for p in partials_post if p.is_partial]
         assert projected, "no partial iBGC was projected"
         for p in projected:
             assert p.gene_cluster_family
-            assert p.umap_x is not None and p.umap_y is not None

@@ -8,16 +8,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ChemOnt ontology for chemical-structure similarity search (chemical query +
-# IC precompute run in this worker). Baked in before the code layer so it stays
-# cached across Skaffold code syncs. ``/data/<subdir>`` mounts don't shadow it.
-# Vendored in-repo (vendor/chemont/) rather than fetched from
-# classyfire.wishartlab.com, which is frequently unreachable. ChemOnt is a
-# static ontology (data-version 2.1, 2016), so the copy never goes stale.
-RUN mkdir -p /data/chemont
-COPY vendor/chemont/ChemOnt_2_1.obo /data/chemont/ChemOnt_2_1.obo
-ENV CHEMONT_OBO_PATH=/data/chemont/ChemOnt_2_1.obo
-
 WORKDIR /app
 
 # ── Layer A: heavy ML packages (rarely change → maximise cache) ─────────────

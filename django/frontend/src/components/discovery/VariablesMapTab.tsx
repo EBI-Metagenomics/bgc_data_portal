@@ -267,7 +267,6 @@ export function VariablesMapTab() {
       is_partial: boolean;
       is_validated: boolean;
       is_type_strain: boolean;
-      umap_projected: boolean;
       is_asset: boolean;
       classification_path?: string | null;
       novelty_score?: number | null;
@@ -288,7 +287,6 @@ export function VariablesMapTab() {
         is_partial: sp?.is_partial ?? false,
         is_validated: sp?.is_validated ?? false,
         is_type_strain: sp?.is_type_strain ?? false,
-        umap_projected: sp?.umap_projected ?? false,
         is_asset: sp?.is_asset ?? id < 0,
         classification_path: sp?.classification_path,
         novelty_score: sp?.novelty_score,
@@ -329,7 +327,6 @@ export function VariablesMapTab() {
           is_partial: refDetail.is_partial,
           is_validated: refDetail.is_validated,
           is_type_strain: refDetail.is_type_strain,
-          umap_projected: refDetail.umap_projected,
           is_asset: refDetail.id < 0,
           classification_path: refDetail.classification_path,
           novelty_score: refDetail.novelty_score,

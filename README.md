@@ -185,7 +185,7 @@ make test-e2e             # run the browser suite
 | Component          | Technology                                          |
 |--------------------|-----------------------------------------------------|
 | Web framework      | Django 5 + Django Ninja (OpenAPI)                   |
-| Database           | PostgreSQL + pgvector                               |
+| Database           | PostgreSQL 18                                       |
 | Cache              | PostgreSQL (Django DatabaseCache)                   |
 | Background tasks   | django-tasks + django-tasks-db (`db_worker`)        |
 | Production server  | Gunicorn (static served by NGINX in Kubernetes)    |
@@ -203,7 +203,7 @@ django/
   discovery/          # v2 Discovery app (iBGC-first): models, api, tasks, services/
   mgnify_bgcs/        # legacy app (pre-v2, being retired)
   tests/              # unit / integration / e2e
-db/                   # Postgres (pgvector) init
+db/                   # Postgres image
 deployments/chart/    # Helm chart — single source of truth for all deploys
 docs/                 # in-app Quarto docs
 ```

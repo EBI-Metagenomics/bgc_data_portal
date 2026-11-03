@@ -84,7 +84,6 @@ django/
         enrichment.py     # Builds the versioned BGC-core vs flank domain enrichment table
         knn_graph.py      # Union top-k KNN graph
         leiden.py         # Hierarchical CPM Leiden
-        layout.py         # UMAP (precomputed_knn) → DRL fallback
         adjacency.py      # Adjacency-pair matrix builder
         membership.py     # iBGC × domain binary matrix builder
         integrated.py  # IntegratedBGC table builder
@@ -101,7 +100,7 @@ django/
 
 ## Key Patterns
 
-**iBGC-first** — In v2 the dashboard surfaces ``IntegratedBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the iBGC. `IntegratedBGC.umap_projected = True` marks coords averaged from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered.
+**iBGC-first** — In v2 the dashboard surfaces ``IntegratedBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the iBGC. `IntegratedBGC.is_partial = True` marks iBGCs whose GCF / novelty were projected from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered. There is no 2D layout (UMAP was removed); the Variables map is the only scatter view.
 
 **Composite similarity** — Replaces the retired ESM embedding HNSW. Each `ClusteringRun` records its `similarity_metric` (ADR 0003, monorepo `docs/architecture/adr/`): `cosine_idf_enrich` = `w_d · cos_w(domains) + w_a · cos_w(adjacency-pairs)` with per-feature weights `idf ** idf_exponent × enrich` (defaults 0.6/0.4, exponent 0.5), or `dice` = the same composite with Sørensen–Dice (older runs, rollback). Every consumer (novelty, Find similar, architecture search, asset upload, partial projection) scores with the active run's metric and weights. ``run_clustering_pipeline`` builds the iBGC×iBGC matrix and persists it under `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`. The cache feeds iBGC novelty scoring and the `/query/similar-ibgc/` endpoint.
 
@@ -120,7 +119,7 @@ django/
 | Component | Technology |
 |-----------|-----------|
 | Web framework | Django 5 + Django Ninja |
-| Database | PostgreSQL (pgvector kept for legacy embeddings until P1.4b drops them) |
+| Database | PostgreSQL 18 (pgvector dropped, migration 0009) |
 | Cache | PostgreSQL (Django DatabaseCache) |
 | Background tasks | django-tasks + django-tasks-db (`manage.py db_worker`) |
 | Production server | Gunicorn |

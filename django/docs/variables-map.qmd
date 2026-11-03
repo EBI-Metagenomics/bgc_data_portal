@@ -5,7 +5,7 @@ subtitle: "Plot any two metrics against each other"
 
 The **Variables map** plots your matching iBGCs as a scatter, with metrics you choose on the X and Y axes. It is the view to use when you want to see *relationships* between attributes — for example, which novel clusters are also large, or how similarity to your query trades off against novelty.
 
-It shows the same result set as the [BGC roster](bgc-roster.qmd) and [UMAP](umap.qmd); only the presentation differs.
+It shows the same result set as the [BGC roster](bgc-roster.qmd); only the presentation differs.
 
 ![The Variables map. Pick any metric for each axis; each point is one iBGC, coloured by gene cluster family.](images/variables-map.png)
 
@@ -37,6 +37,6 @@ The map omits iBGCs whose chosen axis value cannot be computed. For example, **d
 
 ## Related pages
 
-- [BGC Roster](bgc-roster.qmd) · [UMAP](umap.qmd)
+- [BGC Roster](bgc-roster.qmd)
 - [Scores & Metrics](scores-metrics.qmd)
 - [Sequence Search](sequence-search.qmd) — the source of the identity/coverage axes

@@ -8,7 +8,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Recompute all discovery scores (novelty, assembly aggregates, GCF, catalogs, UMAP)"
+    help = "Recompute all discovery scores (assembly aggregates, GCF, catalogs, iBGC classes)"
 
     def add_arguments(self, parser):
         parser.add_argument(

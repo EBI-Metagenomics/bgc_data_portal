@@ -31,8 +31,6 @@ export function TopFiltersStrip() {
         return "Clear architecture";
       case "similar_ibgc":
         return "Clear similar";
-      case "chemical":
-        return "Clear chemical";
       default:
         return "Clear query";
     }
@@ -86,7 +84,7 @@ export function TopFiltersStrip() {
  * talking.
  *
  * When the filter matches more than ``cap`` iBGCs, the banner warns the
- * user that the UMAP + Variables maps are showing a deterministic sample
+ * user that the Variables map is showing a deterministic sample
  * so they can narrow further if needed.
  */
 function ResultScopeBanner() {

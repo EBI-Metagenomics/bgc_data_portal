@@ -1,7 +1,7 @@
 """Aggregation statistics for the Discovery Platform stats panels.
 
 iBGC is the unit of every stats panel — ``compute_bgc_stats`` takes an
-``IntegratedBgc`` queryset. Domain / NP / ChemOnt aggregations reach
+``IntegratedBgc`` queryset. Domain / NP aggregations reach
 their targets through range-overlap joins on the contig (no more
 through-BGC FK chain). For unfiltered views, reads from PrecomputedStats
 to avoid full-table scans.
@@ -210,7 +210,6 @@ def compute_bgc_stats(ibgc_qs) -> dict:
     complete_count = total_ibgcs - partial_count
 
     np_class_sunburst = _build_np_class_sunburst(ibgc_qs)
-    chemont_sunburst = _build_chemont_sunburst(ibgc_qs)
 
     # Distribution over the normalised product class (IntegratedBgc.bgc_class),
     # the same field the "BGC Class" filter targets.
@@ -230,7 +229,6 @@ def compute_bgc_stats(ibgc_qs) -> dict:
         "complete_count": complete_count,
         "partial_count": partial_count,
         "np_class_sunburst": np_class_sunburst,
-        "chemont_sunburst": chemont_sunburst,
         "bgc_class_distribution": bgc_class_distribution,
         "total_bgcs": total_ibgcs,
     }
@@ -323,79 +321,6 @@ def _build_np_class_sunburst(ibgc_qs) -> list[dict]:
                 nodes[l3_id]["count"] += 1
 
     return list(nodes.values())
-
-
-def _build_chemont_sunburst(ibgc_qs) -> list[dict]:
-    """Flat sunburst list for ChemOnt chemical class hierarchy across iBGCs.
-
-    Joins ``discovery_cds_chemont`` → ``discovery_cds`` → ``discovery_ibgc``
-    via range overlap. Each (iBGC, chemont_id) pair contributes one count.
-    """
-    ibgc_ids = list(ibgc_qs.values_list("id", flat=True))
-    if not ibgc_ids:
-        return []
-
-    with connection.cursor() as cur:
-        cur.execute(
-            """
-            SELECT ch.chemont_id,
-                   MAX(ch.chemont_name) AS chemont_name,
-                   COUNT(DISTINCT i.id) AS cnt
-            FROM discovery_cds_chemont ch
-            JOIN discovery_cds c ON c.id = ch.cds_id
-            JOIN discovery_ibgc i
-              ON i.contig_id = c.contig_id
-             AND i.bgc_range && c.cds_range
-            WHERE i.id = ANY(%s::bigint[])
-            GROUP BY ch.chemont_id
-            """,
-            [ibgc_ids],
-        )
-        rows = cur.fetchall()
-
-    if not rows:
-        return []
-
-    try:
-        from common_core.chemont.ontology import get_ontology
-
-        ont = get_ontology()
-    except (FileNotFoundError, ImportError):
-        return [
-            {"id": cid, "label": cname, "parent": "", "count": cnt}
-            for cid, cname, cnt in rows
-        ]
-
-    direct_counts: dict[str, int] = {cid: cnt for cid, _cname, cnt in rows}
-    name_map: dict[str, str] = {cid: cname or "" for cid, cname, _cnt in rows}
-
-    relevant_ids: set[str] = set(direct_counts.keys())
-    for cid in list(direct_counts.keys()):
-        for ancestor in ont.get_ancestors(cid):
-            relevant_ids.add(ancestor.id)
-            if ancestor.id not in name_map:
-                name_map[ancestor.id] = ancestor.name
-
-    nodes: dict[str, dict] = {}
-    for tid in relevant_ids:
-        term = ont.get_term(tid)
-        parent = ""
-        if term and term.parent_ids:
-            for pid in term.parent_ids:
-                if pid in relevant_ids:
-                    parent = pid
-                    break
-        nodes[tid] = {
-            "id": tid,
-            "label": name_map.get(tid, tid),
-            "parent": parent,
-            "count": direct_counts.get(tid, 0),
-        }
-
-    return list(nodes.values())
-
-
-# ── Platform overview ─────────────────────────────────────────────────────────
 
 
 def generate_discovery_stats() -> dict:

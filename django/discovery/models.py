@@ -5,8 +5,7 @@ Core entity hierarchy (top-down):
     DashboardAssembly
         └─ DashboardContig
             ├─ ContigCds                 (CDS on contig; range-indexed)
-            │     ├─ ContigDomain        (domain hits; denormalised contig FK)
-            │     └─ CdsChemOnt          (ChemOnt class per CDS)
+            │     └─ ContigDomain        (domain hits; denormalised contig FK)
             ├─ ConsensusBgc (cBGC)       (chained-overlap region; MGYB-XXXXXX)
             │     └─ IntegratedBgc (iBGC) (core operational unit; MGYB-XXXXXX-YY)
             │           ├─ SourceBgcPrediction (per-tool prediction)
@@ -472,7 +471,7 @@ class IntegratedBgc(models.Model):
       * Non-validated antiSMASH predictions that do not overlap any
         already-built iBGC on the same contig become their own iBGC.
 
-    Clustering writes ``gene_cluster_family``, ``umap_x``/``umap_y``,
+    Clustering writes ``gene_cluster_family``, ``is_partial``,
     ``novelty_score`` and ``domain_novelty`` here. Source predictions do
     not duplicate these — they are derived from ``integrated_bgc`` on
     read.
@@ -522,14 +521,12 @@ class IntegratedBgc(models.Model):
         db_index=True,
         help_text="ltree dot-path, e.g. 42.7.3 (leaf of the hierarchy)",
     )
-    umap_x = models.FloatField(null=True, blank=True)
-    umap_y = models.FloatField(null=True, blank=True)
-    umap_projected = models.BooleanField(
+    is_partial = models.BooleanField(
         default=False,
         help_text=(
-            "True when umap_x/y were derived by averaging top-K nearest primary "
-            "iBGC coordinates (partials reclassified via KNN). False when the "
-            "iBGC was included in the main UMAP layout."
+            "True when the iBGC was not in the primary clustering pass and its "
+            "GCF / novelty were projected from its top-K nearest primary iBGCs. "
+            "False when it was clustered directly."
         ),
     )
     novelty_score = models.FloatField(
@@ -600,7 +597,7 @@ class SourceBgcPrediction(models.Model):
     prediction's ``claimed_by_tools`` contribution is whatever overlap its
     ``bgc_range`` has with each CDS in its owning iBGC.
 
-    Scoring, classification and UMAP fields live on ``IntegratedBgc``; do
+    Scoring and classification fields live on ``IntegratedBgc``; do
     not duplicate them here. ``integrated_bgc`` is NULL only for partials
     or predictions that fail to land in any iBGC at build time.
 
@@ -870,54 +867,6 @@ class ContigDomain(models.Model):
         return f"{self.domain_acc} on CDS {self.cds_id}"
 
 
-# ── CDS ChemOnt ───────────────────────────────────────────────────────────────
-
-
-class CdsChemOnt(models.Model):
-    """Deepest ChemOnt class predicted by CHAMOIS for a single CDS.
-
-    The class is chosen with cross-iBGC evidence: per-iBGC ``chamois explain
-    --cds`` outputs are conceptually concatenated and, for each protein,
-    the (class, iBGC) cell with the largest gene weight is the argmax. The
-    protein is kept only if ``argmax_weight > 1.0`` AND the iBGC-level
-    probability of the argmax cell is ``> 0.5``. The reported class is the
-    globally deepest descendant of the argmax class whose cross-iBGC max
-    gene weight is also ``> 1.0`` (ties broken by higher weight); else the
-    argmax class itself.
-    """
-
-    id = models.BigAutoField(primary_key=True)
-    cds = models.ForeignKey(
-        ContigCds,
-        on_delete=models.CASCADE,
-        related_name="chemont",
-    )
-    chemont_id = models.CharField(
-        max_length=30,
-        help_text="ChemOnt ontology term ID, e.g. CHEMONTID:0000147",
-    )
-    chemont_name = models.CharField(max_length=255)
-    probability = models.FloatField(
-        default=0.0,
-        help_text="iBGC-level probability of the argmax class for this CDS.",
-    )
-    weight = models.FloatField(
-        default=0.0,
-        help_text="Gene-specific weight of the deepest selected class.",
-    )
-
-    class Meta:
-        db_table = "discovery_cds_chemont"
-        unique_together = [("cds", "chemont_id")]
-        indexes = [
-            models.Index(fields=["chemont_id"], name="idx_cdschemont_cid"),
-            models.Index(fields=["cds"], name="idx_cdschemont_cds"),
-        ]
-
-    def __str__(self):
-        return f"{self.chemont_id} ({self.chemont_name})"
-
-
 # ── Clustering ────────────────────────────────────────────────────────────────
 
 
@@ -1009,7 +958,6 @@ class ClusteringRun(models.Model):
 
     igraph_version = models.CharField(max_length=50, blank=True, default="")
     leidenalg_version = models.CharField(max_length=50, blank=True, default="")
-    umap_version = models.CharField(max_length=50, blank=True, default="")
     scipy_version = models.CharField(max_length=50, blank=True, default="")
 
     sha256 = models.CharField(max_length=64, unique=True)
@@ -1157,9 +1105,7 @@ class IbgcClusteringSnapshot(models.Model):
         on_delete=models.CASCADE,
         related_name="clustering_snapshots",
     )
-    umap_x = models.FloatField(null=True, blank=True)
-    umap_y = models.FloatField(null=True, blank=True)
-    umap_projected = models.BooleanField(default=False)
+    is_partial = models.BooleanField(default=False)
     gene_cluster_family = models.CharField(max_length=512, blank=True, default="")
     novelty_score = models.FloatField(null=True, blank=True)
     domain_novelty = models.FloatField(null=True, blank=True)
@@ -1231,45 +1177,6 @@ class IbgcNaturalProduct(models.Model):
         return self.name
 
 
-class IbgcChemOnt(models.Model):
-    """ChemOnt classes assigned to an iBGC from a *characterised structure*.
-
-    Produced by running ClassyFire on an :class:`IbgcNaturalProduct` SMILES
-    (see the ``classify_ibgc_natural_products`` command). This complements the
-    gene-based predictions in :class:`CdsChemOnt` (from CHAMOIS): where a BGC
-    has a known compound, this carries the accurate structure-derived
-    classification. The chemical-similarity search and the ChemOnt IC
-    computation pool both sources per iBGC.
-    """
-
-    id = models.BigAutoField(primary_key=True)
-    ibgc = models.ForeignKey(
-        IntegratedBgc,
-        on_delete=models.CASCADE,
-        related_name="structure_chemont",
-    )
-    chemont_id = models.CharField(max_length=30)
-    chemont_name = models.CharField(max_length=255, blank=True, default="")
-    # Provenance: the InChIKey of the SMILES this classification came from.
-    inchikey = models.CharField(max_length=27, blank=True, default="")
-
-    class Meta:
-        db_table = "discovery_ibgc_chemont"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["ibgc", "chemont_id"],
-                name="uniq_ibgcchemont_ibgc_cid",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["chemont_id"], name="idx_ibgcchemont_cid"),
-            models.Index(fields=["ibgc"], name="idx_ibgcchemont_ibgc"),
-        ]
-
-    def __str__(self):
-        return f"{self.chemont_id} ({self.chemont_name})"
-
-
 # ── Catalog tables with precomputed counts ───────────────────────────────────
 
 
@@ -1320,8 +1227,7 @@ class PrecomputedStats(models.Model):
     """Precomputed aggregate statistics to avoid full-table scans.
 
     Keys include ``genome_global``, ``bgc_global``, ``taxonomy_sunburst``,
-    ``np_class_sunburst``, ``bgc_class_distribution``, ``chemont_ic``,
-    ``chemont_sunburst``.
+    ``np_class_sunburst``, ``bgc_class_distribution``.
     """
 
     key = models.CharField(max_length=100, primary_key=True)

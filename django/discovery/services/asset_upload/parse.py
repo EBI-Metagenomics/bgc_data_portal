@@ -25,7 +25,6 @@ from .schemas import (
     AssetAssembly,
     AssetBgc,
     AssetCds,
-    AssetCdsChemOnt,
     AssetContig,
     AssetData,
     AssetDetector,
@@ -288,28 +287,6 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
                     np_class_path=row.get("np_class_path", ""),
                     structure_svg_base64=row.get("structure_svg_base64", ""),
                     morgan_fp_b64=row.get("morgan_fp_base64", ""),
-                )
-            )
-
-    # ── Per-CDS ChemOnt classifications (optional) ──────────────────────
-    if "cds_chemont.tsv" in members:
-        for row in _reader(members["cds_chemont.tsv"]):
-            key = (
-                row["contig_sha256"],
-                _to_int(row["bgc_start"]),
-                _to_int(row["bgc_end"]),
-                row["detector_name"],
-            )
-            if key not in bgc_keys:
-                continue
-            data.cds_chemont.append(
-                AssetCdsChemOnt(
-                    bgc_key=key,
-                    protein_id_str=row.get("protein_id_str", ""),
-                    chemont_id=row.get("chemont_id", ""),
-                    chemont_name=row.get("chemont_name", ""),
-                    probability=_to_float(row.get("probability"), default=0.0),
-                    weight=_to_float(row.get("weight"), default=0.0),
                 )
             )
 

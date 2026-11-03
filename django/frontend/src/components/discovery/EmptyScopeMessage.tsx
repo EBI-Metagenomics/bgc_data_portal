@@ -4,7 +4,7 @@ import { Filter } from "lucide-react";
  * Empty-state placeholder shown when the dashboard has no active scope —
  * i.e. no filter chip is set and no Run Query result is loaded.
  *
- * The roster, UMAP map and Variables map all render this in lieu of
+ * The roster and Variables map both render this in lieu of
  * firing an unbounded fetch on landing, since at multi-million-iBGC scale
  * "show everything" is not a meaningful default.
  */

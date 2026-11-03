@@ -4,7 +4,7 @@ apiVersion: v2
 name: bgc-data-portal-chart
 description: >-
   BGC Data Portal — Django web app, Celery worker, and their backing services
-  (PostgreSQL/pgvector, Redis, RabbitMQ). One chart, rendered for three targets:
+  (PostgreSQL, Redis, RabbitMQ). One chart, rendered for three targets:
   laptop/self-host (chart defaults), cloud-dev and cloud-prod (values supplied by
   the private mgnify-bgcs-deployer repo).
 type: application

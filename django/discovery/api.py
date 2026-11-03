@@ -34,8 +34,6 @@ from discovery.api_schemas import (
     AssetStatusResponse,
     AssetUploadAccepted,
     BgcClassOption,
-    ChemOntAnnotationNode,
-    ChemOntClassNode,
     CombinedQueryAccepted,
     CombinedQueryRequest,
     CombinedRosterItem,
@@ -60,7 +58,6 @@ from discovery.api_schemas import (
     IbgcRegionOut,
     IbgcRosterItem,
     IbgcScatterPoint,
-    IbgcUmapPoint,
     InterproAnnotationOut,
     NaturalProductSummary,
     NpClassLevel,
@@ -88,7 +85,6 @@ from discovery.api_schemas import (
 )
 from discovery.models import (
     AssemblySource,
-    CdsChemOnt,
     ClusteringRun,
     ContigCds,
     ContigDomain,
@@ -135,142 +131,6 @@ discovery_router = Router(tags=["Discovery Platform"], throttle=default_throttle
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _expand_chemont_ids(ids: list[str]) -> list[str]:
-    """Expand selected ChemOnt class ids to include all descendant classes.
-
-    Each CDS carries only its *deepest* ChemOnt class, so selecting a parent
-    node in the filter tree must match anything in that subtree. We expand each
-    selected id to its ontology descendants. If the OBO ontology is missing or
-    unloadable, we fall back to the literal ids (exact match) so the filter
-    degrades gracefully rather than 500ing. The expanded list is bounded by the
-    ontology size (~4.8k terms), well under psycopg's parameter cap.
-    """
-    expanded = set(ids)
-    try:
-        from common_core.chemont.ontology import get_ontology
-
-        ont = get_ontology()
-    except (FileNotFoundError, ImportError):
-        return list(expanded)
-    for cid in ids:
-        for term in ont.get_descendants(cid):
-            expanded.add(term.id)
-    return list(expanded)
-
-
-def _build_chemont_tree_from_cds(cds_chemont_rows) -> list[ChemOntAnnotationNode]:
-    """Aggregate per-CDS ChemOnt rows into a hierarchical tree.
-
-    *cds_chemont_rows* is an iterable of ``CdsChemOnt``-like objects
-    (each carrying a single deepest ChemOnt class per CDS). Identical classes
-    across CDSs are unified — ``probability`` is the max across rows and
-    ``n_cds`` is the count.
-
-    The ontology (if loaded) is used to fill in intermediate ancestors that
-    connect annotated leaves; those ancestors are emitted with
-    ``probability=None`` and ``n_cds`` equal to the sum of annotated descendants
-    in this aggregation.
-    """
-    # Aggregate per chemont_id
-    agg: dict[str, list] = {}  # cid -> [name, max_prob, n_cds]
-    for r in cds_chemont_rows:
-        cur = agg.get(r.chemont_id)
-        if cur is None:
-            agg[r.chemont_id] = [r.chemont_name, r.probability, 1]
-        else:
-            cur[1] = max(cur[1], r.probability)
-            cur[2] += 1
-
-    if not agg:
-        return []
-
-    annotated_ids = set(agg.keys())
-    name_map: dict[str, str] = {cid: v[0] for cid, v in agg.items()}
-    prob_map: dict[str, float] = {cid: v[1] for cid, v in agg.items()}
-    n_cds_map: dict[str, int] = {cid: v[2] for cid, v in agg.items()}
-
-    # Try loading the ontology for accurate hierarchy.
-    ont = None
-    try:
-        from common_core.chemont.ontology import get_ontology
-
-        ont = get_ontology()
-    except (FileNotFoundError, ImportError):
-        pass
-
-    children_of: dict[str, list[str]] = {}
-    roots: list[str] = []
-    depth_map: dict[str, int] = {}
-
-    if ont is not None:
-        # Ontology available: walk to real ancestors and keep those that have
-        # an annotated descendant.
-        all_ids: set[str] = set(annotated_ids)
-        for cid in annotated_ids:
-            for anc in ont.get_ancestors(cid):
-                all_ids.add(anc.id)
-                if anc.id not in name_map:
-                    name_map[anc.id] = anc.name
-
-        def _has_annotated_descendant(tid: str, visited: set[str]) -> bool:
-            if tid in annotated_ids:
-                return True
-            visited.add(tid)
-            for child_id in ont._children.get(tid, []):
-                if child_id in all_ids and child_id not in visited:
-                    if _has_annotated_descendant(child_id, visited):
-                        return True
-            return False
-
-        relevant: set[str] = set()
-        for tid in all_ids:
-            if _has_annotated_descendant(tid, set()):
-                relevant.add(tid)
-
-        for tid in relevant:
-            term = ont.get_term(tid)
-            if term is None:
-                if tid in annotated_ids:
-                    roots.append(tid)
-                continue
-            depth_map[tid] = term.depth
-            has_relevant_parent = False
-            for pid in term.parent_ids:
-                if pid in relevant:
-                    children_of.setdefault(pid, []).append(tid)
-                    has_relevant_parent = True
-            if not has_relevant_parent:
-                roots.append(tid)
-    else:
-        # No ontology — leaves only, no hierarchy.
-        for cid in annotated_ids:
-            roots.append(cid)
-        depth_map = {cid: 0 for cid in annotated_ids}
-
-    def _to_node(tid: str) -> ChemOntAnnotationNode:
-        kid_ids = sorted(children_of.get(tid, []), key=lambda c: name_map.get(c, c))
-        kid_nodes = [_to_node(c) for c in kid_ids]
-        # n_cds: annotated terms keep their own count; intermediate ancestors
-        # accumulate from descendants.
-        if tid in n_cds_map:
-            n_cds = n_cds_map[tid]
-        else:
-            n_cds = sum(k.n_cds for k in kid_nodes)
-        return ChemOntAnnotationNode(
-            chemont_id=tid,
-            name=name_map.get(tid, tid),
-            depth=depth_map.get(tid, 0),
-            probability=prob_map.get(tid),  # None for intermediate ancestors
-            n_cds=n_cds,
-            children=kid_nodes,
-        )
-
-    return sorted(
-        [_to_node(r) for r in roots],
-        key=lambda n: n.name,
-    )
 
 
 def _paginate(page: int, page_size: int, total_count: int):
@@ -652,8 +512,7 @@ def _ibgc_span_bp():
 
 
 # Soft cap applied uniformly across the dashboard's "show me all matching
-# iBGCs" surfaces: /ibgcs/umap/ (map points), /ibgcs/scatter/ (Variables map
-# points), and the client-side top-K clip on scored query results. The
+# iBGCs" surfaces: /ibgcs/scatter/ (Variables map points) and the client-side top-K clip on scored query results. The
 # roster paginates and is *not* capped here. ``/ibgcs/count/`` surfaces this
 # value so the UI can warn before firing the heavier requests.
 DASHBOARD_RESULT_CAP = 5_000
@@ -673,7 +532,7 @@ def _cache_ibgc_idset(ids: list[int]) -> tuple[str, int]:
     """Persist an ordered iBGC id allow-list in the cache and return ``(token, n)``.
 
     The dashboard's Run Query result can be thousands of ids; threading them
-    back through ``/ibgcs/roster|umap|scatter|count/`` as an ``ibgc_ids`` CSV
+    back through ``/ibgcs/roster|scatter|count/`` as an ``ibgc_ids`` CSV
     blows past gunicorn's request-line limit (HTTP 414). Instead we stash the
     list server-side — the same DatabaseCache + token pattern as the shortlist
     Report — and the GET endpoints reference it via ``ibgc_ids_token``.
@@ -733,9 +592,9 @@ def _pick_representative_ibgc_id(ibgc_id: int) -> int | None:
 
 def _ibgc_is_partial(ibgc: IntegratedBgc) -> bool:
     """An iBGC is "partial" when it didn't go through the primary clustering
-    pass — either no clustering run touched it, or it was projected from a
-    KNN average of its primary neighbours (``umap_projected=True``)."""
-    return bool(ibgc.umap_projected) or ibgc.classification_run_id is None
+    pass — either no clustering run touched it, or its GCF / novelty were
+    projected from its top-K primary neighbours (``is_partial=True``)."""
+    return bool(ibgc.is_partial) or ibgc.classification_run_id is None
 
 
 # ── Asset-iBGC injection helpers ───────────────────────────────────────────
@@ -770,7 +629,6 @@ def _ibgc_filters_active(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    chemont_ids: str | None = None,
     np_classes: str | None = None,
     accession: str | None = None,
     bgc_accession: str | None = None,
@@ -812,7 +670,6 @@ def _ibgc_filters_active(
             assembly_type,
             leaf_path_prefix,
             bgc_class,
-            chemont_ids,
             np_classes,
             accession,
             bgc_accession,
@@ -837,7 +694,7 @@ def _asset_only_mode(
     load. DB rows re-enter the response — with the asset rows still pinned on
     top — as soon as the caller either:
       * supplies an explicit ``ibgc_ids`` allow-list (a Run Query result from
-        a sequence/domain/chemical/similar-iBGC search), or
+        a sequence/domain/similar-iBGC search), or
       * applies any chip / slider filter (``filters_active``).
     """
     return bool(asset_token) and not parsed_ids and not filters_active
@@ -856,7 +713,6 @@ def _asset_row_to_roster_item(row: dict) -> IbgcRosterItem:
         is_partial=bool(row.get("is_partial", False)),
         is_validated=bool(row.get("is_validated", False)),
         is_type_strain=bool(row.get("is_type_strain", False)),
-        umap_projected=bool(row.get("umap_projected", False)),
         parent_assembly_id=row.get("parent_assembly_id"),
         parent_assembly_accession=row.get("parent_assembly_accession"),
         organism_name=row.get("organism_name"),
@@ -865,24 +721,6 @@ def _asset_row_to_roster_item(row: dict) -> IbgcRosterItem:
         best_hit_protein_id=row.get("best_hit_protein_id"),
         best_pident=row.get("best_pident"),
         best_qcoverage=row.get("best_qcoverage"),
-        is_asset=True,
-    )
-
-
-def _asset_row_to_umap_point(row: dict) -> IbgcUmapPoint | None:
-    if row.get("umap_x") is None or row.get("umap_y") is None:
-        return None
-    return IbgcUmapPoint(
-        id=int(row["id"]),
-        label=row.get("label", ""),
-        umap_x=float(row["umap_x"]),
-        umap_y=float(row["umap_y"]),
-        classification_path=row.get("classification_path", "") or "",
-        novelty_score=row.get("novelty_score"),
-        is_partial=bool(row.get("is_partial", False)),
-        is_validated=bool(row.get("is_validated", False)),
-        is_type_strain=bool(row.get("is_type_strain", False)),
-        umap_projected=bool(row.get("umap_projected", False)),
         is_asset=True,
     )
 
@@ -912,7 +750,6 @@ def _asset_row_to_scatter_point(
         is_partial=bool(row.get("is_partial", False)),
         is_validated=bool(row.get("is_validated", False)),
         is_type_strain=bool(row.get("is_type_strain", False)),
-        umap_projected=bool(row.get("umap_projected", False)),
         is_asset=True,
     )
 
@@ -946,7 +783,6 @@ def _ibgc_to_roster_item(
         is_partial=_ibgc_is_partial(ibgc),
         is_validated=is_validated,
         is_type_strain=is_type_strain,
-        umap_projected=ibgc.umap_projected,
         parent_assembly_id=parent_assembly.id if parent_assembly else None,
         parent_assembly_accession=(
             parent_assembly.assembly_accession if parent_assembly else None
@@ -978,7 +814,7 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
     type-strain assembly. Mirrors the ``is_validated`` accumulator.
 
     The SourceBgcPrediction lookup is chunked so the generated SQL stays under the
-    DEBUG-mode SQL formatter's token limit on large id lists (umap / scatter
+    DEBUG-mode SQL formatter's token limit on large id lists (scatter
     can request several thousand iBGCs in one call).
     """
     facts: dict[int, dict] = {
@@ -1161,7 +997,6 @@ def _apply_ibgc_filters(
     assembly_type: str | None = None,  # AssemblyType label (metagenome/genome/region)
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    chemont_ids: str | None = None,  # CSV of ChemOnt class ids
     np_classes: str | None = None,  # CSV of NP-class names (any level)
     accession: str | None = None,  # Smart single-field accession (any kind)
     bgc_accession: str | None = None,  # Deprecated: legacy BGC-only accession field
@@ -1175,7 +1010,7 @@ def _apply_ibgc_filters(
 ):
     """Apply iBGC-level filters to a ``IntegratedBgc`` queryset.
 
-    Used by ``/ibgcs/roster/``, ``/ibgcs/umap/``, ``/ibgcs/scatter/`` and the
+    Used by ``/ibgcs/roster/``, ``/ibgcs/scatter/`` and the
     iBGC-collapsed query endpoints (``/query/ibgc-domain/``,
     ``/query/ibgc-sequence/status/``) so the same filter surface is
     available regardless of how the initial iBGC id set was produced.
@@ -1187,15 +1022,14 @@ def _apply_ibgc_filters(
 
     Joins through ``source_bgcs → assembly`` are used for
     ``source_names``, ``assembly_type``, ``assembly_ids`` and
-    ``bgc_accession``; through ``source_bgcs → cds_list → chemont`` for
-    ``chemont_ids``. All such filters apply ``.distinct()``.
+    ``bgc_accession``. All such filters apply ``.distinct()``.
     """
     if ibgc_ids is not None:
         qs = qs.filter(id__in=ibgc_ids)
     if not include_partials:
         # Primary iBGCs only: row was clustered directly (not projected) and
         # has a classification run.
-        qs = qs.filter(classification_run_id__isnull=False, umap_projected=False)
+        qs = qs.filter(classification_run_id__isnull=False, is_partial=False)
     if validated_only:
         qs = qs.filter(source_predictions__is_validated=True).distinct()
     if min_length_kb is not None or max_length_kb is not None:
@@ -1255,15 +1089,6 @@ def _apply_ibgc_filters(
             qs = qs.filter(bgc_class__startswith="Hybrid")
         else:
             qs = qs.filter(bgc_class__iexact=bgc_class)
-    if chemont_ids:
-        ids = [c.strip() for c in chemont_ids.split(",") if c.strip()]
-        if ids:
-            # Selecting a parent class matches its whole subtree: CDS carry only
-            # their deepest class, so expand to descendant ids via the ontology.
-            ids = _expand_chemont_ids(ids)
-            qs = qs.filter(
-                source_predictions__integrated_bgc__contig__cds_list__chemont__chemont_id__in=ids  # TODO(v2-range-overlap): scope by bgc_range && cds_range
-            ).distinct()
     if np_classes:
         names = [n.strip() for n in np_classes.split(",") if n.strip()]
         if names:
@@ -1272,7 +1097,7 @@ def _apply_ibgc_filters(
             # "Polyketide.Macrolide.Erythromycin"). The L1/L2/L3 checkbox tree
             # sends a flat CSV of selected names; match an iBGC if any of its
             # natural products carries a selected name as a path segment at any
-            # level (OR semantics, mirroring the chemont filter).
+            # level (OR semantics).
             np_q = Q()
             for name in names:
                 np_q |= (
@@ -1340,9 +1165,9 @@ def _apply_ibgc_filters(
         # Free-text fallback for landing-page keyword search: match iBGCs
         # whose contig domains carry the term in their name / description /
         # InterPro description. Scopes to the iBGC's contig (denormalised
-        # ``ContigDomain.contig`` FK, single join); like ``chemont_ids`` it
-        # does NOT yet clip to the iBGC's ``bgc_range`` so a hit elsewhere on
-        # the same contig can match. See the chemont TODO(v2-range-overlap).
+        # ``ContigDomain.contig`` FK, single join); it does NOT yet clip to
+        # the iBGC's ``bgc_range`` so a hit elsewhere on the same contig can
+        # match. TODO(v2-range-overlap).
         term = domain_text.strip()
         if term:
             qs = qs.filter(
@@ -1370,7 +1195,6 @@ def ibgc_count(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    chemont_ids: str | None = None,
     np_classes: str | None = None,
     accession: str | None = None,
     bgc_accession: str | None = None,
@@ -1386,7 +1210,7 @@ def ibgc_count(
 ):
     """Cheap COUNT over the iBGC filter surface.
 
-    The v2 dashboard hits this before firing /ibgcs/roster/, /ibgcs/umap/ and
+    The v2 dashboard hits this before firing /ibgcs/roster/ and
     /ibgcs/scatter/ so it can (a) gate the empty-state CTA when no scope is
     set and (b) warn the user when the result will be sampled by the maps
     (count > ``DASHBOARD_RESULT_CAP``).
@@ -1409,7 +1233,6 @@ def ibgc_count(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
         np_classes=np_classes,
         accession=accession,
         bgc_accession=bgc_accession,
@@ -1440,7 +1263,6 @@ def ibgc_count(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            chemont_ids=chemont_ids,
             np_classes=np_classes,
             accession=accession,
             bgc_accession=bgc_accession,
@@ -1485,7 +1307,7 @@ def ibgc_idset(request, body: IbgcIdSetRequest):
 def _apply_ibgc_sort(qs, sort_by: str, order: str, parsed_ids: list[int] | None):
     """Order an ``IntegratedBgc`` queryset the way ``/ibgcs/roster/`` does.
 
-    Shared by the roster and the UMAP/scatter map endpoints so the maps'
+    Shared by the roster and the scatter map endpoint so the map'
     top-``max_points`` sample is exactly the roster's leading rows — not an
     unrelated ``id``-stride subset. Mirrors the roster's two cases:
 
@@ -1558,7 +1380,6 @@ def ibgc_roster(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    chemont_ids: str | None = None,
     np_classes: str | None = None,
     accession: str | None = None,
     bgc_accession: str | None = None,
@@ -1596,7 +1417,6 @@ def ibgc_roster(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
         np_classes=np_classes,
         accession=accession,
         bgc_accession=bgc_accession,
@@ -1628,7 +1448,6 @@ def ibgc_roster(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            chemont_ids=chemont_ids,
             np_classes=np_classes,
             accession=accession,
             bgc_accession=bgc_accession,
@@ -1643,7 +1462,7 @@ def ibgc_roster(
     # ``sort_by=similarity`` honours the caller-supplied order of ``ibgc_ids``
     # (dashboard passes them similarity-descending after Find Similar / Sequence
     # search); every other key sorts the stored columns NULLS LAST. Shared with
-    # the UMAP/scatter map endpoints so all three surfaces agree on rank.
+    # the scatter map endpoint so both surfaces agree on rank.
     qs = _apply_ibgc_sort(qs, sort_by, order, parsed_ids)
 
     asset_rows = _get_asset_roster_rows(asset_token)
@@ -1714,7 +1533,6 @@ def ibgc_ids(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    chemont_ids: str | None = None,
     np_classes: str | None = None,
     accession: str | None = None,
     bgc_accession: str | None = None,
@@ -1753,7 +1571,6 @@ def ibgc_ids(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
         np_classes=np_classes,
         accession=accession,
         bgc_accession=bgc_accession,
@@ -1785,7 +1602,6 @@ def ibgc_ids(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            chemont_ids=chemont_ids,
             np_classes=np_classes,
             accession=accession,
             bgc_accession=bgc_accession,
@@ -1849,126 +1665,6 @@ def ibgc_ids(
 
 
 @discovery_router.get(
-    "/ibgcs/umap/",
-    response=list[IbgcUmapPoint],
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def ibgc_umap(
-    request,
-    include_partials: bool = True,
-    max_points: int = DASHBOARD_RESULT_CAP,
-    sort_by: str = "novelty_score",
-    order: str = "desc",
-    validated_only: bool = False,
-    detector_tools: str | None = None,
-    source_tools: str | None = None,  # deprecated alias for detector_tools
-    source_names: str | None = None,
-    assembly_type: str | None = None,
-    leaf_path_prefix: str | None = None,
-    bgc_class: str | None = None,
-    chemont_ids: str | None = None,
-    np_classes: str | None = None,
-    accession: str | None = None,
-    bgc_accession: str | None = None,
-    assembly_accession: str | None = None,
-    assembly_ids: str | None = None,
-    organism: str | None = None,
-    biome_lineage: str | None = None,
-    taxonomy_path: str | None = None,
-    domain_text: str | None = None,
-    ibgc_ids: str | None = None,
-    ibgc_ids_token: str | None = None,
-    asset_token: str | None = None,
-):
-    """All iBGC UMAP coordinates. ``umap_projected`` marks partial-derived coords.
-
-    Accepts the same filter surface as ``/ibgcs/roster/`` so the v2 dashboard
-    can keep the UMAP map in lockstep with the roster after a Run Query.
-    """
-    parsed_ids = _parse_ibgc_id_scope(ibgc_ids, ibgc_ids_token)
-
-    filters_active = _ibgc_filters_active(
-        include_partials=include_partials,
-        validated_only=validated_only,
-        detector_tools=detector_tools,
-        source_tools=source_tools,
-        source_names=source_names,
-        assembly_type=assembly_type,
-        leaf_path_prefix=leaf_path_prefix,
-        bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
-        np_classes=np_classes,
-        accession=accession,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-        assembly_ids=assembly_ids,
-        organism=organism,
-        biome_lineage=biome_lineage,
-        taxonomy_path=taxonomy_path,
-        domain_text=domain_text,
-    )
-    if _asset_only_mode(asset_token, parsed_ids, filters_active):
-        db_points: list[IbgcUmapPoint] = []
-    else:
-        qs = IntegratedBgc.objects.exclude(umap_x__isnull=True).exclude(
-            umap_y__isnull=True
-        )
-        qs = _apply_ibgc_filters(
-            qs,
-            ibgc_ids=parsed_ids,
-            include_partials=include_partials,
-            validated_only=validated_only,
-            detector_tools=detector_tools,
-            source_tools=source_tools,
-            source_names=source_names,
-            assembly_type=assembly_type,
-            leaf_path_prefix=leaf_path_prefix,
-            bgc_class=bgc_class,
-            chemont_ids=chemont_ids,
-            np_classes=np_classes,
-            accession=accession,
-            bgc_accession=bgc_accession,
-            assembly_accession=assembly_accession,
-            assembly_ids=assembly_ids,
-            organism=organism,
-            biome_lineage=biome_lineage,
-            taxonomy_path=taxonomy_path,
-            domain_text=domain_text,
-        )
-
-        # Sample the roster's top ``max_points`` (same sort), not an id-stride
-        # subset — so the map shows exactly the iBGCs the roster surfaces first.
-        # ``ORDER BY <score> NULLS LAST LIMIT`` is the same query shape the
-        # roster runs per page, so it's index-bounded rather than a full sort.
-        qs = _apply_ibgc_sort(qs, sort_by, order, parsed_ids)
-        all_ibgcs = list(qs[:max_points])
-
-        facts = _ibgc_member_facts([n.id for n in all_ibgcs])
-        db_points = [
-            IbgcUmapPoint(
-                id=ibgc.id,
-                label=_ibgc_label(ibgc.id),
-                umap_x=ibgc.umap_x,
-                umap_y=ibgc.umap_y,
-                classification_path=ibgc.gene_cluster_family or "",
-                novelty_score=ibgc.novelty_score,
-                is_partial=_ibgc_is_partial(ibgc),
-                is_validated=facts[ibgc.id]["is_validated"],
-                is_type_strain=facts[ibgc.id]["is_type_strain"],
-                umap_projected=ibgc.umap_projected,
-            )
-            for ibgc in all_ibgcs
-        ]
-    asset_points: list[IbgcUmapPoint] = []
-    for row in _get_asset_roster_rows(asset_token):
-        pt = _asset_row_to_umap_point(row)
-        if pt is not None:
-            asset_points.append(pt)
-    return asset_points + db_points
-
-
-@discovery_router.get(
     "/ibgcs/scatter/",
     response=list[IbgcScatterPoint],
     include_in_schema=False,
@@ -1989,7 +1685,6 @@ def ibgc_scatter(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    chemont_ids: str | None = None,
     np_classes: str | None = None,
     accession: str | None = None,
     bgc_accession: str | None = None,
@@ -2028,7 +1723,6 @@ def ibgc_scatter(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
         np_classes=np_classes,
         accession=accession,
         bgc_accession=bgc_accession,
@@ -2051,7 +1745,6 @@ def ibgc_scatter(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            chemont_ids=chemont_ids,
             np_classes=np_classes,
             accession=accession,
             bgc_accession=bgc_accession,
@@ -2116,7 +1809,6 @@ def ibgc_scatter(
                     and ibgc.classification_run_id is None,
                     is_validated=facts[ibgc.id]["is_validated"],
                     is_type_strain=facts[ibgc.id]["is_type_strain"],
-                    umap_projected=ibgc.umap_projected,
                 )
             )
     asset_points: list[IbgcScatterPoint] = []
@@ -2128,9 +1820,9 @@ def ibgc_scatter(
 
 
 # NOTE: this catch-all path-param route MUST come after every other
-# `/ibgcs/<literal>/` route above (roster, umap, scatter, …) — Django Ninja
+# `/ibgcs/<literal>/` route above (roster, scatter, …) — Django Ninja
 # matches in declaration order, so an earlier `{ibgc_id}` would swallow
-# "umap" / "scatter" and 422 on int parsing.
+# "scatter" and 422 on int parsing.
 def _asset_token_header(request) -> str | None:
     """Frontend passes the active asset token via ``X-Asset-Token`` so the
     negative-id dispatcher can resolve asset iBGCs out of Redis without
@@ -2210,21 +1902,6 @@ def ibgc_detail(request, ibgc_id: int):
             )
         )
 
-    # ChemOnt tree across CDS overlapping the iBGC's range (CDS are
-    # contig-anchored in v2; membership is range-overlap, not a FK).
-    _ibgc_cds_ids = (
-        ContigCds.objects.filter(
-            contig_id=ibgc.contig_id,
-            cds_range__overlap=ibgc.bgc_range,
-        ).values_list("id", flat=True)
-        if ibgc.bgc_range is not None
-        else ContigCds.objects.none()
-    )
-    chemont_rows = CdsChemOnt.objects.filter(cds_id__in=_ibgc_cds_ids).only(
-        "chemont_id", "chemont_name", "probability"
-    )
-    chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
-
     member_items = [
         IbgcMemberBgc(
             id=m.id,
@@ -2254,15 +1931,11 @@ def ibgc_detail(request, ibgc_id: int):
         is_partial=_ibgc_is_partial(ibgc),
         is_validated=is_validated,
         is_type_strain=is_type_strain,
-        umap_projected=ibgc.umap_projected,
-        umap_x=ibgc.umap_x,
-        umap_y=ibgc.umap_y,
         parent_assembly=parent,
         region_endpoint_url=f"/api/discovery/ibgcs/{ibgc.id}/region/",
         member_bgcs=member_items,
         domain_architecture=domain_arch,
         natural_products=np_items,
-        chemont_tree=chemont_tree,
     )
 
 
@@ -2762,11 +2435,6 @@ def _validate_criterion_params(ctype: str, params) -> dict:
             "min_pident": params.min_pident,
             "min_qcov": params.min_qcov,
         }
-    elif ctype == "chemical":
-        if not (params.smiles or "").strip():
-            raise HttpError(400, "chemical criterion requires a smiles string")
-        if not (0.0 <= params.similarity_threshold <= 1.0):
-            raise HttpError(400, "similarity_threshold must be between 0 and 1")
     elif ctype == "similar":
         if not params.ibgc_id:
             raise HttpError(400, "similar criterion requires an ibgc_id")
@@ -2905,7 +2573,7 @@ def combined_query_endpoint(request, body: CombinedQueryRequest):
 
     Accepts a list of scoring ``criteria`` (each with a stable per-instance
     ``id``) plus the standard narrowing ``filters``. The criteria are
-    AND-intersected server-side; slow sub-searches (sequence/chemical) make this
+    AND-intersected server-side; slow sub-searches (sequence) make this
     always-async. Returns ``202`` with a ``task_id``; poll
     ``GET /query/combined/status/{task_id}/`` (roster) and ``…/scores/``
     (Variables map).
@@ -3226,110 +2894,6 @@ def np_classes(request):
         ]
 
     return _build(tree)
-
-
-@discovery_router.get(
-    "/filters/chemont-classes/",
-    response=list[ChemOntClassNode],
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def chemont_classes(request):
-    """Return a hierarchical tree of ChemOnt classes with BGC counts.
-
-    Uses the ChemOnt OBO ontology when available; otherwise the tree is flat
-    (since each CDS only carries its deepest class, hierarchy can only be
-    reconstructed via the ontology).
-    """
-    # Popularity counts for the filter dropdown: distinct CDS classified to
-    # each chemont_id. CDS are contig-anchored in v2 (no BGC FK), and the
-    # per-iBGC count would need a range-overlap aggregation; distinct-CDS is a
-    # cheap, stable proxy for relative class frequency.
-    rows = list(
-        CdsChemOnt.objects.values("chemont_id", "chemont_name").annotate(
-            cnt=Count("cds", distinct=True)
-        )
-    )
-
-    if not rows:
-        return []
-
-    direct_counts: dict[str, int] = {}
-    name_map: dict[str, str] = {}
-    for r in rows:
-        direct_counts[r["chemont_id"]] = r["cnt"]
-        name_map[r["chemont_id"]] = r["chemont_name"]
-
-    annotated_ids = set(direct_counts.keys())
-
-    # Try loading the ontology for hierarchy information.
-    ont = None
-    try:
-        from common_core.chemont.ontology import get_ontology
-
-        ont = get_ontology()
-    except (FileNotFoundError, ImportError):
-        pass
-
-    # Build parent→children mapping.
-    # Strategy: use the ontology if available, otherwise infer hierarchy from
-    # co-occurrence patterns in the data.  Since the ETL stores full lineage
-    # paths, if two annotated IDs share a parent-child relationship in the
-    # ontology, both will be present in the DB.
-    children_map: dict[str, list[str]] = {}
-    root_ids: list[str] = []
-
-    if ont is not None:
-        # Ontology available: use real parent_ids.
-        # Include ancestors of annotated terms so the tree is connected.
-        relevant_ids = set(annotated_ids)
-        for cid in list(annotated_ids):
-            for ancestor in ont.get_ancestors(cid):
-                relevant_ids.add(ancestor.id)
-                if ancestor.id not in name_map:
-                    name_map[ancestor.id] = ancestor.name
-
-        for tid in relevant_ids:
-            term = ont.get_term(tid)
-            if term is None:
-                if tid in annotated_ids:
-                    root_ids.append(tid)
-                continue
-            has_relevant_parent = False
-            for pid in term.parent_ids:
-                if pid in relevant_ids:
-                    children_map.setdefault(pid, []).append(tid)
-                    has_relevant_parent = True
-            if not has_relevant_parent:
-                root_ids.append(tid)
-    else:
-        # No ontology: each CDS carries only its deepest class, so we can't
-        # reconstruct hierarchy. Return a flat list of leaves.
-        for cid in annotated_ids:
-            root_ids.append(cid)
-
-    # Propagate counts upward.
-    def _count(tid: str) -> int:
-        c = direct_counts.get(tid, 0)
-        for child_id in children_map.get(tid, []):
-            c += _count(child_id)
-        return c
-
-    def _build_tree(tid: str) -> ChemOntClassNode:
-        return ChemOntClassNode(
-            chemont_id=tid,
-            name=name_map.get(tid, tid),
-            count=_count(tid),
-            children=sorted(
-                [_build_tree(c) for c in children_map.get(tid, [])],
-                key=lambda n: n.name,
-            ),
-        )
-
-    return sorted(
-        [_build_tree(r) for r in root_ids],
-        key=lambda n: n.name,
-    )
 
 
 @discovery_router.get(
@@ -3873,12 +3437,6 @@ def ibgc_region(request, ibgc_id: int):
         ):
             domains_by_cds.setdefault(d.cds_id, []).append(d)
 
-    # Per-CDS ChemOnt (deepest class per CDS, when present).
-    chemont_by_cds: dict[int, CdsChemOnt] = {}
-    if cds_ids:
-        for ch in CdsChemOnt.objects.filter(cds_id__in=cds_ids):
-            chemont_by_cds.setdefault(ch.cds_id, ch)
-
     cds_list_out: list[RegionCdsOut] = []
     domain_list_out: list[RegionDomainOut] = []
     for cds in cds_rows:
@@ -3934,7 +3492,6 @@ def ibgc_region(request, ibgc_id: int):
         seq_obj = getattr(cds, "seq", None)
         sequence = seq_obj.get_sequence() if seq_obj else ""
 
-        chemont_hit = chemont_by_cds.get(cds.id)
         cds_list_out.append(
             RegionCdsOut(
                 protein_id=cds.protein_id_str,
@@ -3948,10 +3505,6 @@ def ibgc_region(request, ibgc_id: int):
                 sequence=sequence,
                 pfam=pfam,
                 interpro=[InterproAnnotationOut(**r) for r in interpro],
-                chemont_id=chemont_hit.chemont_id if chemont_hit else None,
-                chemont_name=chemont_hit.chemont_name if chemont_hit else None,
-                chemont_probability=chemont_hit.probability if chemont_hit else None,
-                chemont_weight=chemont_hit.weight if chemont_hit else None,
                 claimed_by_tools=sorted(claimed),
             )
         )

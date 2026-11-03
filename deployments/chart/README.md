@@ -17,7 +17,7 @@ Two ways in, depending on whether you can reach the image registry:
 ### A. Build from source — no registry needed (recommended)
 
 The app images build entirely from public base images (`python:3.12-slim`,
-`pgvector/pgvector`, …), so you never touch a private registry. From a checkout
+`postgres:18-trixie`, …), so you never touch a private registry. From a checkout
 of the app repo:
 
 ```bash

@@ -94,7 +94,6 @@ export function LoadAssetChip() {
           setState({ kind: "loaded", summary: resp.summary });
           // Asset roster/maps/count must re-fetch so the new rows surface.
           queryClient.invalidateQueries({ queryKey: ["ibgc-roster"] });
-          queryClient.invalidateQueries({ queryKey: ["ibgc-umap"] });
           queryClient.invalidateQueries({ queryKey: ["ibgc-scatter"] });
           queryClient.invalidateQueries({ queryKey: ["ibgc-count"] });
           toast.success(
@@ -205,7 +204,6 @@ export function LoadAssetChip() {
     setAsset(null, null);
     setState({ kind: "idle" });
     queryClient.invalidateQueries({ queryKey: ["ibgc-roster"] });
-    queryClient.invalidateQueries({ queryKey: ["ibgc-umap"] });
     queryClient.invalidateQueries({ queryKey: ["ibgc-scatter"] });
     queryClient.invalidateQueries({ queryKey: ["ibgc-count"] });
   }, [assetToken, clearPolling, queryClient, setAsset]);

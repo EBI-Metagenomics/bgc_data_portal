@@ -8,7 +8,9 @@ dropped ``representative_bgc_id``), and nothing exercised these endpoints with
 data — the schema-less dev DB had masked every one.
 
 Covers the endpoints the v2 dashboard loads on the golden path:
-roster, detail, region, and the detector / chemont-class filter dropdowns.
+roster, detail, region, and the detector filter dropdown — plus the
+UMAP / ChemOnt removal contract (removed fields absent, old ``chemont_ids``
+URLs still served).
 """
 
 from __future__ import annotations
@@ -16,7 +18,6 @@ from __future__ import annotations
 import re
 
 import pytest
-from discovery.models import CdsChemOnt
 from tests.factories.discovery_models import (
     ContigCdsFactory,
     ContigDomainFactory,
@@ -40,7 +41,7 @@ def client():
 @pytest.fixture
 def seeded_ibgc(db):
     """A clustered iBGC: validated antiSMASH source prediction, an overlapping
-    CDS with a PFAM domain + a ChemOnt class — enough to drive every endpoint
+    CDS with a PFAM domain — enough to drive every endpoint
     under test through its real (range-overlap) query paths."""
     ibgc = IntegratedBgcFactory(start_pos=1000, end_pos=5000)
     ibgc.gene_cluster_family = "cluster.0001.0000.0000"
@@ -60,13 +61,6 @@ def seeded_ibgc(db):
     )
     cds = ContigCdsFactory(contig=ibgc.contig, start_pos=1100, end_pos=1400)
     ContigDomainFactory(cds=cds, ref_db="PFAM", domain_acc="PF00001")
-    CdsChemOnt.objects.create(
-        cds=cds,
-        chemont_id="CHEMONTID:0001",
-        chemont_name="Terpenes",
-        probability=0.9,
-        weight=0.5,
-    )
     return ibgc
 
 
@@ -95,6 +89,9 @@ def test_detail_returns_200_with_accessions_and_architecture(client, seeded_ibgc
     assert CBGC_RE.match(d["cbgc_accession"]), d["cbgc_accession"]
     assert d["region_endpoint_url"] == f"/api/discovery/ibgcs/{seeded_ibgc.id}/region/"
     assert "representative_bgc_id" not in d
+    # UMAP / ChemOnt removal: the fields are gone, is_partial stays.
+    assert not {"umap_x", "umap_y", "umap_projected", "chemont_tree"} & set(d)
+    assert "is_partial" in d
     # Range-overlap domain architecture picked up the PFAM domain.
     accs = {item["domain_acc"] for item in d["domain_architecture"]}
     assert "PF00001" in accs
@@ -111,6 +108,8 @@ def test_region_endpoint_attributes_tools_per_cds(client, seeded_ibgc):
     assert len(d["cds_list"]) >= 1
     # The overlapping CDS is claimed by the antiSMASH source prediction.
     assert any("antiSMASH" in cds["claimed_by_tools"] for cds in d["cds_list"])
+    for cds in d["cds_list"]:
+        assert not [k for k in cds if k.startswith("chemont")], cds.keys()
 
 
 def test_asset_region_endpoint_serves_negative_id_from_cache():
@@ -206,12 +205,34 @@ def test_filter_detectors_endpoint(client, seeded_ibgc):
 
 
 @pytest.mark.django_db
-def test_filter_chemont_classes_endpoint(client, seeded_ibgc):
-    # Previously 500: Count("cds__bgc") — CDS are contig-anchored in v2.
-    resp = client.get("/api/discovery/filters/chemont-classes/")
-    assert resp.status_code == 200, resp.content
-    ids = {node["chemont_id"] for node in resp.json()}
-    assert "CHEMONTID:0001" in ids
+@pytest.mark.parametrize(
+    "path, extra",
+    [
+        ("/api/discovery/ibgcs/roster/", {"page": 1, "page_size": 50}),
+        ("/api/discovery/ibgcs/count/", {}),
+        ("/api/discovery/ibgcs/scatter/", {}),
+    ],
+)
+def test_old_urls_with_chemont_ids_still_work(client, seeded_ibgc, path, extra):
+    """Shared links from before the ChemOnt removal carry ``chemont_ids``;
+    the param is ignored, not rejected, and does not narrow the result."""
+    plain = client.get(path, extra)
+    legacy = client.get(path, {**extra, "chemont_ids": "CHEMONTID:0001,CHEMONTID:0002"})
+    assert plain.status_code == legacy.status_code == 200, legacy.content
+    assert legacy.json() == plain.json()
+
+
+@pytest.mark.django_db
+def test_removed_umap_and_chemont_endpoints(client, seeded_ibgc):
+    assert client.get("/api/discovery/filters/chemont-classes/").status_code == 404
+    # /ibgcs/umap/ now falls through to the /ibgcs/{ibgc_id}/ route.
+    assert client.get("/api/discovery/ibgcs/umap/").status_code in (404, 422)
+    roster = client.get("/api/discovery/ibgcs/roster/", {"page": 1, "page_size": 5})
+    for row in roster.json()["items"]:
+        assert "umap_projected" not in row
+    scatter = client.get("/api/discovery/ibgcs/scatter/").json()
+    for pt in scatter:
+        assert "umap_projected" not in pt
 
 
 @pytest.fixture

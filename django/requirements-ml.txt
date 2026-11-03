@@ -2,9 +2,7 @@
 # ESM / torch / transformers were removed when protein-sequence search moved
 # from cosine-on-embeddings to phmmer against an on-disk reference DB
 # (see discovery.services.protein_search).
-rdkit==2025.03.2
 pyhmmer==0.11.1
-umap-learn==0.5.12
 scikit-learn>=1.6
 hdbscan>=0.8.38
 matplotlib>=3.8
@@ -12,7 +10,3 @@ igraph>=0.9
 leidenalg>=0.10
 pandas>=2.0
 plotly>=5.20
-# common-core with the [chemont] extra (rdkit + pydantic-settings + PyYAML).
-# Lives here (worker-only) so the web image stays rdkit-free; the worker installs
-# this on top of the no-extra spec in requirements-web.txt (pip applies the union).
-mgnify-bgcs-common-core[chemont] @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@mgnify-bgcs-common-core-v1.7.0

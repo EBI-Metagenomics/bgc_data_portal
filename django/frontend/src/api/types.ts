@@ -94,17 +94,7 @@ export interface ParentAssemblySummary {
   url: string;
 }
 
-export interface ChemOntAnnotationNode {
-  chemont_id: string;
-  name: string;
-  depth: number;
-  probability: number | null; // null for intermediate (unannotated) ancestors
-  n_cds: number;              // CDSs contributing — propagated up from descendants
-  children: ChemOntAnnotationNode[];
-}
-
-// Curated per-BGC compound (SMILES, structure). No longer carries CHAMOIS-derived
-// ChemOnt classes — those are aggregated at BGC / iBGC level in `chemont_tree`.
+// Curated per-BGC compound (SMILES, structure).
 export interface NaturalProductSummary {
   id: number;
   name: string;
@@ -126,7 +116,6 @@ export interface BgcDetail {
   domain_architecture: DomainArchitectureItem[];
   parent_assembly: ParentAssemblySummary | null;
   natural_products: NaturalProductSummary[];
-  chemont_tree: ChemOntAnnotationNode[];
 }
 
 export interface BgcScatterPoint {
@@ -139,14 +128,6 @@ export interface BgcScatterPoint {
   novelty_score: number;
   domain_novelty: number;
   similarity_score: number | null;
-}
-
-export interface ValidatedReferencePoint {
-  accession: string;
-  compound_name: string;
-  bgc_class: string;
-  umap_x: number;
-  umap_y: number;
 }
 
 // ── Filter schemas ────────────────────────────────────────────────────────
@@ -169,13 +150,6 @@ export interface NpClassLevel {
   name: string;
   count: number;
   children: NpClassLevel[];
-}
-
-export interface ChemOntClassNode {
-  chemont_id: string;
-  name: string;
-  count: number;
-  children: ChemOntClassNode[];
 }
 
 export interface DomainOption {
@@ -317,12 +291,6 @@ export interface RegionCds {
   // Same source data as `pfam` but collapsed by InterPro entry (fallback to
   // signature accession when no entry is mapped).
   interpro: InterproAnnotation[];
-  // Deepest CHAMOIS ChemOnt class assigned to this CDS (null when below the
-  // probability / weight thresholds).
-  chemont_id: string | null;
-  chemont_name: string | null;
-  chemont_probability: number | null;
-  chemont_weight: number | null;
   // Source tools whose prediction range covers this CDS within the owning
   // iBGC (range-overlap attribution). Populated by the iBGC region endpoint;
   // empty for the per-prediction BGC region endpoint.
@@ -423,174 +391,6 @@ export interface ShortlistExportRequest {
   ids: number[];
 }
 
-// ── Assessment schemas ───────────────────────────────────────────────────
-
-export interface AssessmentAccepted {
-  task_id: string;
-  asset_type: "assembly" | "bgc";
-}
-
-export interface AssessmentStatusResponse {
-  status: "PENDING" | "SUCCESS" | "FAILURE" | "UNKNOWN";
-  result: AssemblyAssessmentResult | BgcAssessmentResult | null;
-}
-
-// -- Assembly assessment --
-
-export interface PercentileRank {
-  dimension: string;
-  label: string;
-  value: number;
-  percentile_all: number;
-  percentile_type_strain: number;
-}
-
-export interface BgcNoveltyItem {
-  bgc_id: number;
-  accession: string;
-  classification_path: string;
-  novelty_vs_validated: number;
-  novelty_vs_db: number;
-  domain_novelty: number;
-  is_partial: boolean;
-  size_kb: number;
-  nearest_validated_accession: string | null;
-  nearest_validated_distance: number | null;
-}
-
-export interface RedundancyCell {
-  bgc_id: number;
-  accession: string;
-  classification_path: string;
-  gcf_family_id: string | null;
-  gcf_member_count: number;
-  gcf_has_validated: boolean;
-  gcf_has_type_strain: boolean;
-  status: "novel_gcf" | "known_gcf_no_type_strain" | "known_gcf_type_strain";
-}
-
-export interface AssessChemicalSpacePoint {
-  bgc_id: number;
-  accession: string;
-  umap_x: number;
-  umap_y: number;
-  classification_path: string;
-  nearest_validated_distance: number;
-  is_sparse: boolean;
-}
-
-export interface RadarReference {
-  dimension: string;
-  label: string;
-  db_mean: number;
-  db_p90: number;
-}
-
-export interface AssemblyAssessmentResult {
-  assembly_id: number;
-  accession: string;
-  organism_name: string | null;
-  is_type_strain: boolean;
-  percentile_ranks: PercentileRank[];
-  db_rank: number;
-  db_total: number;
-  bgc_novelty_breakdown: BgcNoveltyItem[];
-  redundancy_matrix: RedundancyCell[];
-  chemical_space_points: AssessChemicalSpacePoint[];
-  validated_reference_points: ValidatedReferencePoint[];
-  mean_nearest_validated_distance: number;
-  sparse_fraction: number;
-  radar_references: RadarReference[];
-}
-
-// -- BGC assessment --
-
-export interface GcfDomainFrequency {
-  domain_acc: string;
-  domain_name: string;
-  description: string | null;
-  frequency: number;
-  category: "core" | "variable" | "rare";
-}
-
-export interface GcfTaxonomyCount {
-  taxonomy_label: string;
-  count: number;
-}
-
-export interface GcfTaxonomyNode {
-  id: string;
-  label: string;
-  parent: string;
-  count: number;
-  rank: string;
-}
-
-
-export interface GcfMemberPoint {
-  bgc_id: number;
-  umap_x: number;
-  umap_y: number;
-  is_type_strain: boolean;
-  accession: string;
-  distance_to_representative: number;
-}
-
-export interface GcfContext {
-  gcf_id: number;
-  family_id: string;
-  member_count: number;
-  validated_count: number;
-  mean_novelty: number;
-  known_chemistry_annotation: string | null;
-  validated_accession: string | null;
-  domain_frequency: GcfDomainFrequency[];
-  taxonomy_distribution: GcfTaxonomyCount[];
-  taxonomy_hierarchy: GcfTaxonomyNode[];
-  member_points: GcfMemberPoint[];
-}
-
-export interface DomainDifferential {
-  domain_acc: string;
-  domain_name: string;
-  in_submitted: boolean;
-  gcf_frequency: number;
-  category: "core" | "variable" | "absent";
-}
-
-export interface NoveltyDecomposition {
-  sequence_novelty: number;
-  chemistry_novelty: number;
-  architecture_novelty: number;
-}
-
-export interface AssessNearestNeighborPoint {
-  bgc_id: number | null;
-  validated_accession: string | null;
-  umap_x: number;
-  umap_y: number;
-  distance: number;
-  label: string;
-  is_validated: boolean;
-}
-
-export interface BgcAssessmentResult {
-  bgc_id: number;
-  accession: string;
-  classification_path: string;
-  gcf_context: GcfContext | null;
-  distance_to_gcf_representative: number | null;
-  is_novel_singleton: boolean;
-  domain_differential: DomainDifferential[];
-  novelty: NoveltyDecomposition;
-  submitted_point: AssessChemicalSpacePoint | null;
-  nearest_neighbors: AssessNearestNeighborPoint[];
-  validated_reference_points: ValidatedReferencePoint[];
-  submitted_domains: DomainArchitectureItem[];
-  nearest_validated_accession: string | null;
-  nearest_validated_bgc_id: number | null;
-}
-
 // ── iBGC (Integrated BGC) schemas ──────────────────────────────────────
 
 export interface IbgcRosterItem {
@@ -611,7 +411,6 @@ export interface IbgcRosterItem {
   is_partial: boolean;
   is_validated: boolean;
   is_type_strain: boolean;
-  umap_projected: boolean;
   parent_assembly_id: number | null;
   parent_assembly_accession: string | null;
   /** Collection / data source of the parent assembly (e.g. GTDB, MIBiG). */
@@ -633,8 +432,8 @@ export interface PaginatedIbgcRosterResponse {
 
 /** One scored hit in a compact query-result payload (see QueryScoresResponse).
  *  similarity_score is the query's native score (bitscore for sequence, the
- *  run's composite similarity for domain/architecture, ChemOnt BMA for
- *  chemical); best_* are sequence-only. */
+ *  run's composite similarity for domain/architecture); best_* are
+ *  sequence-only. */
 export interface QueryScoreRow {
   id: number;
   similarity_score: number | null;
@@ -662,7 +461,6 @@ export type CriterionType =
   | "domain"
   | "architecture"
   | "sequence"
-  | "chemical"
   | "similar";
 
 /** One scoring criterion instance. ``id`` is a stable, client-generated
@@ -690,7 +488,6 @@ export interface CombinedQueryFilters {
   assembly_type?: string | null;
   leaf_path_prefix?: string | null;
   bgc_class?: string | null;
-  chemont_ids?: string | null;
   np_classes?: string | null;
   accession?: string | null;
   assembly_ids?: string | null;
@@ -794,16 +591,12 @@ export interface IbgcDetail {
   is_partial: boolean;
   is_validated: boolean;
   is_type_strain: boolean;
-  umap_projected: boolean;
-  umap_x: number | null;
-  umap_y: number | null;
   parent_assembly: ParentAssemblySummary | null;
   /** Relative URL of the merged region payload (GET /ibgcs/{id}/region/). */
   region_endpoint_url: string | null;
   member_bgcs: IbgcMemberBgc[];
   domain_architecture: DomainArchitectureItem[];
   natural_products: NaturalProductSummary[];
-  chemont_tree: ChemOntAnnotationNode[];
 }
 
 export interface IbgcScatterPoint {
@@ -818,23 +611,7 @@ export interface IbgcScatterPoint {
   is_partial: boolean;
   is_validated: boolean;
   is_type_strain: boolean;
-  umap_projected: boolean;
   similarity_score: number | null;
-  /** Asset iBGC sourced from an ephemeral upload (negative id). */
-  is_asset?: boolean;
-}
-
-export interface IbgcUmapPoint {
-  id: number;
-  label: string;
-  umap_x: number;
-  umap_y: number;
-  classification_path: string;
-  novelty_score: number | null;
-  is_partial: boolean;
-  is_validated: boolean;
-  is_type_strain: boolean;
-  umap_projected: boolean;
   /** Asset iBGC sourced from an ephemeral upload (negative id). */
   is_asset?: boolean;
 }

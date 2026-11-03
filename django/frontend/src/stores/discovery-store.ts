@@ -15,9 +15,9 @@ import { useFilterStore } from "@/stores/filter-store";
  * + compare slot reset on reload. URL state lives in route params, not here.
  */
 
-export type ResultsTab = "roster" | "variables" | "umap";
+export type ResultsTab = "roster" | "variables";
 
-/** Sort keys shared by the roster and the UMAP/Variables maps. The maps cap
+/** Sort keys shared by the roster and the Variables map. The map caps
  *  at 5k points server-side and sample the roster's top rows in this order, so
  *  "what's in the roster is what's in the plots". Mirrors the backend
  *  ``_apply_ibgc_sort`` accepted keys. */
@@ -45,7 +45,6 @@ export type SearchSource =
   | "sequence"
   | "domain"
   | "domain_architecture"
-  | "chemical"
   | "similar_ibgc"
   | null;
 
@@ -73,8 +72,8 @@ interface DiscoveryState {
   setVariablesAxes: (x: IbgcScatterAxis, y: IbgcScatterAxis) => void;
 
   // Roster sort — lifted out of <IbgcRosterTable> into the store so the
-  // UMAP + Variables maps can sample their top-5k by the SAME order the
-  // roster displays (the server caps and sorts all three identically).
+  // Variables map can sample its top-5k by the SAME order the roster
+  // displays (the server caps and sorts both identically).
   rosterSortBy: RosterSortKey;
   rosterOrder: "asc" | "desc";
   setRosterSort: (sortBy: RosterSortKey, order: "asc" | "desc") => void;
@@ -152,7 +151,6 @@ export interface AppliedIbgcFilters {
   taxonomyPath: string;
   bgcClass: string;
   gcfPath: string;
-  chemontIds: string[];
   // Flattened NP-class names selected across the L1/L2/L3 tree.
   npClasses: string[];
   biomeLineage: string;
@@ -175,7 +173,6 @@ export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   taxonomyPath: "",
   bgcClass: "",
   gcfPath: "",
-  chemontIds: [],
   npClasses: [],
   biomeLineage: "",
   accession: "",
@@ -193,7 +190,6 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
   return (
     applied.sourceNames.length === 0 &&
     applied.detectorTools.length === 0 &&
-    applied.chemontIds.length === 0 &&
     applied.npClasses.length === 0 &&
     applied.assemblyType === "" &&
     applied.taxonomyPath === "" &&
@@ -219,9 +215,8 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
  * ``ibgc_ids_token`` for large ones) and merged by each consumer, so a
  * multi-thousand-id result never overflows the GET request line.
  *
- * Used by ``IbgcRosterTable``, the UMAP hook, the Variables-Map scatter hook
- * and the count hook so all four stay in lockstep with the same filter
- * contract.
+ * Used by ``IbgcRosterTable``, the Variables-Map scatter hook and the count
+ * hook so all three stay in lockstep with the same filter contract.
  */
 export function appliedFiltersToApiParams(
   applied: AppliedIbgcFilters,
@@ -238,9 +233,6 @@ export function appliedFiltersToApiParams(
   if (applied.taxonomyPath) params.taxonomy_path = applied.taxonomyPath;
   if (applied.bgcClass) params.bgc_class = applied.bgcClass;
   if (applied.gcfPath) params.leaf_path_prefix = applied.gcfPath;
-  if (applied.chemontIds.length > 0) {
-    params.chemont_ids = applied.chemontIds.join(",");
-  }
   if (applied.npClasses.length > 0) {
     params.np_classes = applied.npClasses.join(",");
   }
@@ -279,7 +271,6 @@ export function snapshotFiltersToApplied(): AppliedIbgcFilters {
     taxonomyPath: f.taxonomyPath,
     bgcClass: f.bgcClass,
     gcfPath: f.gcfPath,
-    chemontIds: f.chemontIds,
     npClasses: [...f.npClassL1, ...f.npClassL2, ...f.npClassL3],
     biomeLineage: f.biomeLineage,
     accession: f.accession,

@@ -1,6 +1,6 @@
 # Web-only requirements — pure Django/API stack; no ML or science heavyweights.
 # Use this file for the web/dev image to keep build times fast.
-# ML packages (torch, transformers, esm, rdkit, pyhmmer, umap-learn) live in requirements-ml.txt.
+# ML / science packages (pyhmmer, igraph, leidenalg, …) live in requirements-ml.txt.
 
 Django==5.2.15
 # Background tasks: django-tasks API + the Postgres-backed db backend, run by
@@ -12,7 +12,6 @@ gunicorn==23.0.0
 uvicorn[standard]==0.30.1
 psycopg[binary]==3.1.18
 dj-database-url==2.1.0
-pgvector==0.4.1
 orjson>=3.10.3
 pydantic>=2
 plotly==5.22.0
@@ -40,7 +39,6 @@ django-ninja==1.4
 # Worker hot-reload in dev (db_worker --reload uses watchdog under DEBUG)
 watchdog==4.0.1
 biopython==1.85
-# Web image installs common-core WITHOUT the [chemont] extra: the web pod never
-# runs rdkit (the chemont rdkit imports are all function-local and only execute
-# in the Celery worker). The worker pulls [chemont] via requirements-ml.txt.
-mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@mgnify-bgcs-common-core-v1.7.0
+# Pinned to the common-core commit that drops CHAMOIS / ESM-C / ChemOnt / UMAP
+# (clustering output schema v3; v1/v2 tarballs still import).
+mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@6513e7247925cd63442fff7202c2c325297ffb1d

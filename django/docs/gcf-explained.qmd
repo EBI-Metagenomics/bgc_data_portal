@@ -44,7 +44,6 @@ GCF membership turns individual scores into decisions:
 
 - **Filter:** the **GCF** chip restricts the catalogue to a family and its descendants. See [Filtering](filtering.qmd).
 - **iBGC detail:** the GCF chip shows the cluster's family path; **click it** to filter the whole discovery platform to that family — a quick pivot from one cluster to its relatives.
-- **UMAP:** points are coloured by family, so a tight single-colour clump is one GCF. See [UMAP](umap.qmd).
 - **Report:** the **GCF distribution** sunburst shows how a shortlist spreads across families. See [The Report](report.qmd).
 - **Domain novelty:** computed within the leaf GCF — the fraction of a cluster's domains unique among its family members.
 
@@ -58,5 +57,5 @@ GCF membership turns individual scores into decisions:
 
 - [Scores & Metrics](scores-metrics.qmd) — domain novelty and the similarity behind clustering
 - [MIBiG & Validated BGCs](mibig-validated.qmd) — what "validated member" means
-- [UMAP](umap.qmd) · [Find Similar iBGCs](similar-ibgc.qmd)
+- [Find Similar iBGCs](similar-ibgc.qmd)
 - [Glossary](glossary.qmd)

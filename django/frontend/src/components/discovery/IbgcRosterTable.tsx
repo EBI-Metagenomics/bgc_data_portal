@@ -57,7 +57,7 @@ const fixed1 = (v: number) => v.toFixed(1);
 const fixed3 = (v: number) => v.toFixed(3);
 
 /** Cell formatter for a criterion metric: bitscore/identity/coverage read more
- *  naturally at 1 dp; Dice / ChemOnt / match-fraction scores at 3 dp. */
+ *  naturally at 1 dp; Dice / match-fraction scores at 3 dp. */
 function fmtFor(type: string, metricKey: string): (v: number) => string {
   if (metricKey === "pident" || metricKey === "qcoverage") return fixed1;
   if (type === "sequence" && metricKey === "value") return fixed1; // bitscore
@@ -189,8 +189,8 @@ function fmtScore(v: number | null): string {
 export function IbgcRosterTable() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
-  // Roster sort lives in the discovery store so the UMAP/Variables maps can
-  // sample their top-5k by the same order (see store ``rosterSortBy``).
+  // Roster sort lives in the discovery store so the Variables map can
+  // sample its top-5k by the same order (see store ``rosterSortBy``).
   const sortBy = useDiscoveryStore((s) => s.rosterSortBy);
   const order = useDiscoveryStore((s) => s.rosterOrder);
   const setRosterSort = useDiscoveryStore((s) => s.setRosterSort);
@@ -527,7 +527,7 @@ function IbgcRosterRow({
     <IbgcContextMenu
       ibgcId={ibgc.id}
       ibgcLabel={ibgc.accession || ibgc.label}
-      isPartial={ibgc.umap_projected}
+      isPartial={ibgc.is_partial}
       isAsset={ibgc.is_asset}
     >
       <TableRow

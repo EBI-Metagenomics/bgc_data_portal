@@ -27,14 +27,6 @@ A normalised label for the kind of biosynthetic machinery — Polyketide, NRPS, 
 
 The environment an assembly came from, following the GOLD ecosystem classification (e.g. *Marine*, *Marine sediment*). See [Biome Ontology](biome-ontology.qmd).
 
-### CHAMOIS
-
-The tool that predicts a cluster's product chemistry (as [ChemOnt](chemont.qmd) classes) from its protein sequences. See [How the Data Is Built](how-data-is-built.qmd).
-
-### ChemOnt
-
-A hierarchical chemical-structure ontology (from ClassyFire) used to label predicted product chemistry. See [ChemOnt](chemont.qmd).
-
 ### Composite similarity
 
 The weighted combination of domain similarity and adjacency similarity (each a [weighted cosine](#weighted-cosine)) used to compare clusters. The basis for clustering, find-similar, and novelty. See [Scores & Metrics](scores-metrics.qmd).
@@ -69,7 +61,7 @@ The curated database of experimentally validated BGCs. Loaded as **validated** i
 
 ### Partial
 
-An iBGC that runs off the edge of its contig and may be incomplete. Placed onto the maps and scored by its nearest complete neighbours. See [UMAP](umap.qmd).
+An iBGC that runs off the edge of its contig and may be incomplete. Assigned to a family and scored by its nearest complete neighbours. See [Scores & Metrics](scores-metrics.qmd).
 
 ### Reference / Compare
 
@@ -116,4 +108,4 @@ The similarity used for domain and adjacency similarity: a cosine over the featu
 ## Related pages
 
 - [Key Concepts](key-concepts.qmd) · [Scores & Metrics](scores-metrics.qmd)
-- [Gene Cluster Families](gcf-explained.qmd) · [BGC Classes](bgc-classes.qmd) · [ChemOnt](chemont.qmd)
+- [Gene Cluster Families](gcf-explained.qmd) · [BGC Classes](bgc-classes.qmd)

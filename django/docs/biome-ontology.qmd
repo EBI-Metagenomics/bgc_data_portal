@@ -56,7 +56,7 @@ These are trends, not rules — novel chemistry can come from anywhere.
 
 ## Tips
 
-- Start broad (a top-level domain), scan the [UMAP](umap.qmd), then narrow to a sub-environment that looks interesting.
+- Start broad (a top-level domain), scan the [roster](bgc-roster.qmd) and [Variables map](variables-map.qmd), then narrow to a sub-environment that looks interesting.
 - Use biome to contextualise novelty: a moderately novel cluster from an under-sampled habitat can be more interesting than the same score from a heavily studied one.
 - Database coverage reflects public sequencing biases — soil and human gut are densely sampled; extreme environments less so.
 
@@ -64,4 +64,4 @@ These are trends, not rules — novel chemistry can come from anywhere.
 
 - [What's in the Catalogue](datasets.qmd) — the marine collections
 - [Filtering](filtering.qmd)
-- [BGC Classes](bgc-classes.qmd) · [ChemOnt](chemont.qmd) · [Glossary](glossary.qmd)
+- [BGC Classes](bgc-classes.qmd) · [Glossary](glossary.qmd)

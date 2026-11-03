@@ -7,6 +7,11 @@ import {
   useDiscoveryStore,
 } from "@/stores/discovery-store";
 
+/** Query params from retired features (ChemOnt class filter, SMILES chemical
+ *  search). Hydration below is allow-list based so these are never read; they
+ *  are stripped on mount so old shared links don't keep re-sharing them. */
+const LEGACY_URL_PARAMS = ["chemont_ids", "smiles", "similarity_threshold"];
+
 export function useUrlSync() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialized = useRef(false);
@@ -15,6 +20,17 @@ export function useUrlSync() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
+
+    if (LEGACY_URL_PARAMS.some((k) => searchParams.has(k))) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          LEGACY_URL_PARAMS.forEach((k) => next.delete(k));
+          return next;
+        },
+        { replace: true }
+      );
+    }
 
     const sourceNamesParam = searchParams.get("source_names");
     if (sourceNamesParam) {

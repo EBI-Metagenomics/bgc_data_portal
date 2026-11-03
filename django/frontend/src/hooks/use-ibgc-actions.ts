@@ -31,7 +31,7 @@ interface UseIbgcActionsOptions {
   /** When set to "reference", "Set as reference iBGC" is shown disabled
    *  because this iBGC is already pinned in the reference slot. */
   variant?: "reference" | "compare";
-  /** When true the iBGC is a partial (umap_projected) — find-similar is
+  /** When true the iBGC is a partial (is_partial) — find-similar is
    *  disabled because the backend rejects partial seeds. */
   isPartial?: boolean;
   /** When true the iBGC is sourced from an uploaded asset (negative id).

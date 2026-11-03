@@ -6,12 +6,11 @@ import {
 } from "@/stores/discovery-store";
 import { IbgcRosterTable } from "./IbgcRosterTable";
 import { VariablesMapTab } from "./VariablesMapTab";
-import { UmapMapTab } from "./UmapMapTab";
 
 /**
- * The Results card. Three tabs share a single right-click context menu and
+ * The Results card. Both tabs share a single right-click context menu and
  * a single left-click handler (sets `compareIbgcId` in the discovery store).
- * Each tab renders the same underlying iBGC set in a different projection.
+ * Each tab renders the same underlying iBGC set in a different view.
  */
 export function ResultsCard() {
   const activeTab = useDiscoveryStore((s) => s.activeResultsTab);
@@ -26,15 +25,12 @@ export function ResultsCard() {
         data-testid="results-tabs"
       >
         <div className="border-b px-3 pt-2" data-tour="results-tabs">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="roster" data-testid="results-tab-roster">
               BGC roster
             </TabsTrigger>
             <TabsTrigger value="variables" data-testid="results-tab-variables">
               Variables map
-            </TabsTrigger>
-            <TabsTrigger value="umap" data-testid="results-tab-umap">
-              UMAP
             </TabsTrigger>
           </TabsList>
         </div>
@@ -49,12 +45,6 @@ export function ResultsCard() {
           className="flex-1 overflow-hidden p-0 data-[state=inactive]:hidden"
         >
           <VariablesMapTab />
-        </TabsContent>
-        <TabsContent
-          value="umap"
-          className="flex-1 overflow-hidden p-0 data-[state=inactive]:hidden"
-        >
-          <UmapMapTab />
         </TabsContent>
       </Tabs>
     </Card>

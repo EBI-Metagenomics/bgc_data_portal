@@ -4,7 +4,7 @@ import { postSimilarIbgcQuery } from "@/api/ibgcs";
 
 /**
  * Top-K iBGCs by composite similarity to a seed iBGC id. Replaces the
- * retired embedding-based `useSimilarBgcQuery`. The seed must be a primary
+ * retired `useSimilarBgcQuery`. The seed must be a primary
  * iBGC in the latest ClusteringRun (the backend rejects partials in v1).
  */
 export function useSimilarIbgcQuery(seedIbgcId: number | null, k = 25) {

@@ -76,7 +76,7 @@ kiwisolver==1.5.0
     # via matplotlib
 matplotlib==3.10.9
     # via seaborn
-mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@22aee5b02b5b4e74b579895f17b1e5317ce44d68
+mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@6513e7247925cd63442fff7202c2c325297ffb1d
     # via -r requirements-web.txt
 numpy==2.0.1
     # via
@@ -85,7 +85,6 @@ numpy==2.0.1
     #   contourpy
     #   matplotlib
     #   pandas
-    #   pgvector
     #   scipy
     #   seaborn
 orjson==3.11.9
@@ -100,8 +99,6 @@ pandas==3.0.3
     # via
     #   -r requirements-web.txt
     #   seaborn
-pgvector==0.4.1
-    # via -r requirements-web.txt
 pillow==12.2.0
     # via matplotlib
 plotly==5.22.0

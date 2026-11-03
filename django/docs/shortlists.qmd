@@ -7,7 +7,7 @@ The **shortlist** is where you gather the iBGCs worth keeping. It accumulates ac
 
 ## Adding iBGCs
 
-- **Right-click → Add to shortlist** on any iBGC, in the [roster](bgc-roster.qmd), on a [map](umap.qmd), or in a [detail panel](ibgc-detail.qmd).
+- **Right-click → Add to shortlist** on any iBGC, in the [roster](bgc-roster.qmd), on the [Variables map](variables-map.qmd), or in a [detail panel](ibgc-detail.qmd).
 - **Add all to shortlist** in the roster footer adds every iBGC matching the current query at once.
 
 The shortlist holds up to **1,000 iBGCs**. If a bulk add would exceed the cap, the platform adds what it can and tells you how many were skipped; if the query matched more than were considered, it notes that too, so you know the selection was truncated.

@@ -117,8 +117,9 @@ def inspect_tarball(raw: bytes) -> ValidatedTarball:
                 )
 
             if basename not in ALLOWED_FILES:
-                # Bundles produced by upstream pipelines (e.g. ESM embedding
-                # exports) sometimes carry extra TSVs we don't consume here.
+                # Bundles produced by upstream pipelines sometimes carry extra
+                # TSVs we don't consume here (e.g. cds_chemont.tsv /
+                # embeddings_*.tsv from pre-removal ETL runs).
                 # Skip them — safety gates above (path-traversal, symlink,
                 # nested-path, entry/size caps) have already rejected
                 # anything dangerous, and the parser only reads allow-listed

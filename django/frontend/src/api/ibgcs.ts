@@ -7,7 +7,6 @@ import type {
   IbgcRegionData,
   IbgcScatterAxis,
   IbgcScatterPoint,
-  IbgcUmapPoint,
   PaginatedIbgcRosterResponse,
 } from "./types";
 
@@ -27,7 +26,6 @@ export interface IbgcFilterParams {
   assembly_type?: string;
   leaf_path_prefix?: string;
   bgc_class?: string;
-  chemont_ids?: string;
   /** CSV of selected NP-class names (any of L1/L2/L3). */
   np_classes?: string;
   /** Single smart accession field — backend auto-detects assembly / contig /
@@ -69,7 +67,7 @@ export function fetchIbgcRoster(params: IbgcRosterParams = {}) {
 }
 
 /** Cheap COUNT over the iBGC filter surface. Fired before the heavier
- *  roster/UMAP/scatter calls to drive the empty-state guard and the
+ *  roster/scatter calls to drive the empty-state guard and the
  *  "Showing X of Y, sampled" banner. */
 export function fetchIbgcCount(
   params: IbgcFilterParams & { ibgc_ids?: string; ibgc_ids_token?: string } = {},
@@ -159,24 +157,6 @@ export function toMapSortBy(sortBy: string): IbgcMapSortBy {
     default:
       return "similarity";
   }
-}
-
-export interface IbgcUmapParams extends IbgcFilterParams {
-  max_points?: number;
-  /** Pass the roster's active sort so the map samples the same top iBGCs. */
-  sort_by?: IbgcMapSortBy;
-  order?: "asc" | "desc";
-  /** Comma-separated iBGC ids — restricts the UMAP to this allow-list. */
-  ibgc_ids?: string;
-  /** Token for a server-cached allow-list (alternative to ``ibgc_ids``). */
-  ibgc_ids_token?: string;
-}
-
-export function fetchIbgcUmap(params: IbgcUmapParams = {}) {
-  return apiGet<IbgcUmapPoint[]>(
-    "/ibgcs/umap/",
-    params as Record<string, string | number | boolean | undefined>,
-  );
 }
 
 export interface IbgcScatterParams extends IbgcFilterParams {

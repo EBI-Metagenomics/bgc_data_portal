@@ -30,7 +30,7 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
 
   // ── BGC-level scores ───────────────────────────────────────────────
   novelty_score_bgc: {
-    text: "Cosine distance (0\u20131) to the nearest validated (MIBiG) BGC in embedding space. 0 = identical to a known cluster; 1 = maximally distant from all known chemistry.",
+    text: "Distance (0\u20131) to the nearest validated (MIBiG) BGC, i.e. 1 \u2212 its composite protein-domain similarity. 0 = matches a known cluster; 1 = nothing validated resembles it.",
     docsUrl: "scores-metrics.html#bgc-level-scores",
   },
   domain_novelty: {
@@ -38,13 +38,13 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     docsUrl: "scores-metrics.html#bgc-level-scores",
   },
   nearest_validated_distance: {
-    text: "Raw cosine distance to the closest validated (MIBiG) BGC. Lower values mean this cluster closely resembles a known characterised compound.",
+    text: "Raw distance (1 \u2212 composite protein-domain similarity) to the closest validated (MIBiG) BGC. Lower values mean this cluster closely resembles a known characterised compound.",
     docsUrl: "scores-metrics.html#bgc-level-scores",
   },
 
   // ── Concepts ───────────────────────────────────────────────────────
   gcf_definition: {
-    text: "Gene Cluster Family \u2014 a group of BGCs from different assemblies that share high sequence-embedding similarity. A large GCF with zero validated members is an uncharacterised but widespread biosynthetic strategy.",
+    text: "Gene Cluster Family \u2014 a group of BGCs from different assemblies that share high protein-domain composite similarity. A large GCF with zero validated members is an uncharacterised but widespread biosynthetic strategy.",
     docsUrl: "gcf-explained.html",
   },
   mibig_validated: {
@@ -58,10 +58,6 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
   type_strain: {
     text: "A designated reference strain for its species, typically available for purchase from a culture collection (e.g. DSMZ, ATCC). Enable the Type Strain filter to restrict to purchasable organisms.",
     docsUrl: "glossary.html#type-strain",
-  },
-  chemont_class: {
-    text: "Chemical Ontology (ChemOnt) classification \u2014 a hierarchical taxonomy of ~4,825 chemical classes describing the predicted product chemistry. Independent of BGC class, which describes the enzymatic machinery.",
-    docsUrl: "chemont.html",
   },
   bgc_class_toggle: {
     text: "Filter by biosynthetic machinery type (Polyketide, NRP, RiPP, Terpene, Saccharide, Alkaloid, Other). These reflect the enzymatic strategy, not the product\u2019s chemical structure.",
@@ -80,10 +76,6 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
   architecture_search: {
     text: "Composite similarity over a positional domain architecture. Each iBGC is scored as w\u00B7S(domain set) + (1\u2212w)\u00B7S(adjacent-pair set), where S is the clustering run's similarity: a cosine weighted towards rare, BGC-core domains (S\u00F8rensen-Dice on older runs). Adjacency rewards matching neighbour pairs in the supplied order; the domain set measures unordered overlap. Slide right to favour bag-of-domains; slide left to favour gene-order similarity. Accessions outside the clustering run's vocabulary are silently dropped.",
     docsUrl: "domain-query.html#architecture-mode-arch",
-  },
-  tanimoto: {
-    text: "ChemOnt semantic similarity (0\u20131). The query SMILES is classified into ChemOnt chemical-ontology terms (via ClassyFire); each iBGC is scored by how closely its predicted ChemOnt classes match, weighted by class specificity. 1.0 = same chemistry.",
-    docsUrl: "chemical-search.html",
   },
   phmmer_bitscore: {
     text: "HMMER bit score for the full target sequence. Higher = more significant. 30 is HMMER's conventional weak-significance cut; \u2265200 indicates a very strong homolog.",

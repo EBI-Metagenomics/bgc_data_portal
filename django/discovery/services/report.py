@@ -62,7 +62,7 @@ def _taxonomy_phylum(
 
 
 def _is_partial(ibgc: IntegratedBgc) -> bool:
-    return bool(ibgc.umap_projected) or ibgc.classification_run_id is None
+    return bool(ibgc.is_partial) or ibgc.classification_run_id is None
 
 
 def _fetch_domain_rows_for_ibgcs(ibgc_ids: list[int]) -> list[tuple]:

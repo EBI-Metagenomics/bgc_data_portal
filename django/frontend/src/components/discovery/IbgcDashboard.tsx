@@ -17,8 +17,8 @@ import { ProteinInfoPanel } from "./ProteinInfoPanel";
  *   │              │  Reference iBGC detail                       │
  *   │   Results    ├────────────────────────────────────────────┤
  *   │   (Roster |  │  Compare iBGC detail                         │
- *   │   Variables ├────────────────────────────────────────────┤
- *   │    | UMAP)   │  Protein Information (collapsible)          │
+ *   │   Variables)├────────────────────────────────────────────┤
+ *   │              │  Protein Information (collapsible)          │
  *   └──────────────┴────────────────────────────────────────────┘
  */
 export function IbgcDashboard() {

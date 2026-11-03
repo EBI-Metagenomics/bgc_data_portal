@@ -116,7 +116,7 @@ class Command(BaseCommand):
             default=True,
             help=(
                 "Compute iBGC novelty_score and domain_novelty inline with the "
-                "clustering apply step, and chain a partial-iBGC UMAP projection "
+                "clustering apply step, and chain a partial-iBGC projection "
                 "task after reclassify (default true)."
             ),
         )

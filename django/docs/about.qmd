@@ -20,7 +20,7 @@ Development is supported by:
 - **EMBL** — core funding for EMBL-EBI and the Microbiome Informatics team.
 - **Wellcome Trust** — grant funding for MGnify and related infrastructure.
 
-The platform builds on data and tools from the wider natural products community, including [antiSMASH](https://antismash.secondarymetabolites.org/), [GECCO](https://gecco.embl.de/), SanntiS, [MIBiG](https://mibig.secondarymetabolites.org/), [Pfam / InterPro](https://www.ebi.ac.uk/interpro/), and [ClassyFire/ChemOnt](http://classyfire.wishartlab.com/).
+The platform builds on data and tools from the wider natural products community, including [antiSMASH](https://antismash.secondarymetabolites.org/), [GECCO](https://gecco.embl.de/), SanntiS, [MIBiG](https://mibig.secondarymetabolites.org/), and [Pfam / InterPro](https://www.ebi.ac.uk/interpro/).
 
 ## Citation
 

@@ -3,13 +3,13 @@ title: "BGC Classes"
 subtitle: "How clusters are classified by their biosynthetic machinery"
 ---
 
-A **BGC class** describes the *type of enzymatic logic* a cluster uses to assemble its product — the assembly line, not the molecule that comes off it. (For the molecule, see the predicted [ChemOnt](chemont.qmd) chemistry.) The class is a normalised label derived from the protein domains detected in the cluster, so it reflects the genetics, not a chemical assay.
+A **BGC class** describes the *type of enzymatic logic* a cluster uses to assemble its product — the assembly line, not the molecule that comes off it. The class is a normalised label derived from the protein domains detected in the cluster, so it reflects the genetics, not a chemical assay.
 
 The class appears as the **Class** column in the [roster](bgc-roster.qmd), a chip in the [iBGC detail](ibgc-detail.qmd), and the **BGC class** [filter](filtering.qmd).
 
 ## Why class and chemistry differ
 
-A Polyketide cluster uses polyketide synthase (PKS) enzymes to extend a carbon chain. The product might be a macrolide, an aromatic polyketide, or a linear polyketide — different molecules, same machinery. The class tells you about the assembly line; the [ChemOnt](chemont.qmd) annotation tells you about the product.
+A Polyketide cluster uses polyketide synthase (PKS) enzymes to extend a carbon chain. The product might be a macrolide, an aromatic polyketide, or a linear polyketide — different molecules, same machinery. The class tells you about the assembly line, not the product.
 
 ## The major classes
 
@@ -78,16 +78,15 @@ Some clusters encode enzymes from more than one class (for example a PKS–NRPS 
 
 ## Filtering by class
 
-The **BGC class** filter lets you pick a broad class or a subclass; selecting a broad class includes its subclasses. Combine it with the [ChemOnt](chemont.qmd) filter when you want a specific product chemistry within a class (e.g. polyketide clusters predicted to make macrolides).
+The **BGC class** filter lets you pick a broad class or a subclass; selecting a broad class includes its subclasses. Combine it with other chips — taxonomy, biome, GCF — to narrow a class to a lineage, environment, or family.
 
 ## Tips
 
-- Class reflects the *enzyme*, not the *product*; use ChemOnt to filter by predicted chemistry.
+- Class reflects the *enzyme*, not the *product*.
 - Hybrids are common in actinobacteria — expect many when exploring *Streptomyces*.
 - Confirm a class by clicking into the cluster's genes in the [protein panel](protein-panel.qmd) to read its domain architecture directly.
 
 ## Related pages
 
-- [ChemOnt](chemont.qmd) — classification by predicted product chemistry
 - [Protein Panel](protein-panel.qmd) — the domains a class is derived from
 - [Gene Cluster Families](gcf-explained.qmd) · [Glossary](glossary.qmd)

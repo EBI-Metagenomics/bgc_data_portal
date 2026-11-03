@@ -29,7 +29,7 @@ const QUERY_RESULT_CAP = 5_000;
  * On every press it (a) snapshots the current filter-chip values into
  * ``discovery-store.appliedFilters`` — that's what the roster/maps key off, so
  * toggling chips alone does NOT refetch — and (b) resolves any active scoring
- * searches (domain conditions, architecture, sequence, chemical) into a single
+ * searches (domain conditions, architecture, sequence) into a single
  * combined multi-criterion query whose criteria are AND-intersected server-side.
  *
  * The combined query returns one score column per criterion (keyed by the
@@ -52,8 +52,6 @@ export function useRunIbgcQuery() {
   const sequenceMinBitscore = useQueryStore((s) => s.sequenceMinBitscore);
   const sequenceMinPident = useQueryStore((s) => s.sequenceMinPident);
   const sequenceMinQcov = useQueryStore((s) => s.sequenceMinQcov);
-  const smilesQuery = useQueryStore((s) => s.smilesQuery);
-  const similarityThreshold = useQueryStore((s) => s.similarityThreshold);
 
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
   const setCombinedResult = useDiscoveryStore((s) => s.setCombinedResult);
@@ -76,7 +74,6 @@ export function useRunIbgcQuery() {
     const archActive = archAccs.length > 0;
     const booleanActive = domainText.trim().length > 0;
     const sequenceActive = sequenceQuery.trim().length > 0;
-    const chemicalActive = smilesQuery.trim().length > 0;
 
     // Each active surface becomes one criterion. The current query builder
     // supports a single instance per type, so the type doubles as the stable
@@ -118,16 +115,6 @@ export function useRunIbgcQuery() {
         },
       });
     }
-    if (chemicalActive) {
-      criteria.push({
-        id: "chemical",
-        type: "chemical",
-        params: {
-          smiles: smilesQuery,
-          similarity_threshold: similarityThreshold,
-        },
-      });
-    }
 
     if (criteria.length === 0) {
       // Filters-only run: clear any prior scored-query allow-list so the roster
@@ -164,17 +151,15 @@ export function useRunIbgcQuery() {
 
       // Legacy back-fill: the existing roster/maps read a single similarity
       // map + sequence sub-metric maps + a ``searchSource`` label. Derive them
-      // from the dominant criterion (sequence > chemical > architecture >
+      // from the dominant criterion (sequence > architecture >
       // domain) so those views keep working until per-criterion columns land.
       const source: SearchSource = sequenceActive
         ? "sequence"
-        : chemicalActive
-          ? "chemical"
-          : archActive
-            ? "domain_architecture"
-            : booleanActive
-              ? "domain"
-              : null;
+        : archActive
+          ? "domain_architecture"
+          : booleanActive
+            ? "domain"
+            : null;
       const sourceType =
         source === "domain_architecture" ? "architecture" : source;
       const sourceCol =
@@ -306,7 +291,7 @@ function pollCombinedScores(
     abortController,
     (id) => fetchCombinedQueryScores(id),
     {
-      slow: "Still searching… sequence and chemical criteria can take several minutes. Keep this tab open.",
+      slow: "Still searching… sequence criteria can take several minutes. Keep this tab open.",
       timeout:
         "Query exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
     },

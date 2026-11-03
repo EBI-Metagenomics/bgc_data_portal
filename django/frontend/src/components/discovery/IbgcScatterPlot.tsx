@@ -10,7 +10,6 @@ interface IbgcPoint {
   is_partial: boolean;
   is_validated: boolean;
   is_type_strain: boolean;
-  umap_projected: boolean;
   /** Negative-id iBGC sourced from an ephemeral asset upload — rendered
    *  with a distinct marker so the user spots their submitted data. */
   is_asset?: boolean;
@@ -31,8 +30,8 @@ interface Props {
 // the cluster lineage, i.e. the first segment of the classification path
 // (e.g. "42" of "42.7.3"). Shape still encodes status (see buildTraces), so
 // the legend communicates shape only and the legend title notes the colour
-// meaning. A deterministic hash keeps a group's colour stable across the
-// UMAP/Variables tabs and across filter changes.
+// meaning. A deterministic hash keeps a group's colour stable across
+// filter changes.
 const GCF_PALETTE = [
   "#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
   "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#86bcb6",
@@ -58,7 +57,7 @@ function gcfColor(path?: string | null): string {
 }
 
 /**
- * Shared Plotly scatter for both Variables Map and UMAP tabs.
+ * Plotly scatter for the Variables Map tab.
  *
  *  - Left click → set compare slot
  *  - Right click on the focused point → opens the shared context menu via
@@ -268,8 +267,7 @@ function buildTraces(
 
   // Highlight reference / compare points with halo traces on top. The two
   // slots get distinct rings + legend entries so users can tell the pinned
-  // reference apart from the left-click "compare" slot — same convention
-  // across UMAP and Variables Map. The compare halo draws first so that when
+  // reference apart from the left-click "compare" slot. The compare halo draws first so that when
   // the same iBGC is both reference and compare, the reference ring wins.
   const compareOnly = points.filter(
     (p) => p.id === compareIbgcId && p.id !== referenceIbgcId,

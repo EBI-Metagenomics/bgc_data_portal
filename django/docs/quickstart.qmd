@@ -22,16 +22,16 @@ Press **Run Query**. A banner reports how many iBGCs match your filters. Until y
 
 ## 3. Triage in the BGC Roster
 
-The left panel shows results three ways via tabs. Start on the **BGC roster** — a sortable table, one row per iBGC.
+The left panel shows results two ways via tabs. Start on the **BGC roster** — a sortable table, one row per iBGC.
 
 - Click the **Novelty** column header to sort. The most novel candidates (least like any validated cluster) rise to the top.
 - Each row shows the iBGC accession, predicted class, size, novelty, domain novelty, the detection tools, and the parent assembly. Badges flag **Validated**, **Type Strain**, and **Partial** iBGCs.
 
-Switch to the **Variables map** tab to plot two metrics against each other (e.g. Novelty vs Size), or **UMAP** to see how the matches group — similar iBGCs sit close together, coloured by gene cluster family.
+Switch to the **Variables map** tab to plot two metrics against each other (e.g. Novelty vs Size); points are coloured by gene cluster family.
 
 ## 4. Inspect and compare
 
-- **Left-click** an interesting row (or a point on a map). It loads into the **Compare** panel on the right, showing its location, source predictions, GCF, predicted compounds, and scores, with a gene-level region plot.
+- **Left-click** an interesting row (or a point on the Variables map). It loads into the **Compare** panel on the right, showing its location, source predictions, GCF, known compounds, and scores, with a gene-level region plot.
 - **Right-click** a row for more actions: **Set as reference iBGC** pins it to the top panel so you can compare others against it; **Find similar iBGCs** expands your search around it; **Add to shortlist** collects it.
 - **Click any gene** in a detail panel to load its protein — sequence and domain annotations — into the **Protein Information** panel at the bottom.
 

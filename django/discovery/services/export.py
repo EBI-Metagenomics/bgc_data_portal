@@ -245,9 +245,8 @@ def build_ibgc_json(ibgc: IntegratedBgc) -> dict:
             "novelty_score": ibgc.novelty_score,
             "domain_novelty": ibgc.domain_novelty,
         },
-        "umap_projected": ibgc.umap_projected,
+        "is_partial": bool(ibgc.is_partial) or ibgc.classification_run_id is None,
         "gene_cluster_family": ibgc.gene_cluster_family,
-        "umap": {"x": ibgc.umap_x, "y": ibgc.umap_y},
         "cds": cds_items,
         "domains": domain_items,
     }

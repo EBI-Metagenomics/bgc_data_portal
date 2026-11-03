@@ -94,7 +94,6 @@ class ClusteringRunAdmin(admin.ModelAdmin):
         "n_leaf_communities",
         "igraph_version",
         "leidenalg_version",
-        "umap_version",
         "scipy_version",
     )
 

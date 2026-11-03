@@ -123,7 +123,7 @@ selfhost:
 # pyproject.toml, which isn't copied into the image (/app == django/). Set the
 # settings module inline so in-pod pytest finds Django.
 #
-# Heavy clustering libs (igraph/leidenalg/umap) and pyhmmer live only in the
+# Heavy clustering libs (igraph/leidenalg) and pyhmmer live only in the
 # worker image, so the clustering + protein-search tests importorskip in the
 # django pod. Run TEST_POD=bgc-data-portal-worker to exercise those too.
 TEST_POD ?= bgc-data-portal-django
@@ -166,7 +166,7 @@ reset-db:
 # Post-load steps that materialise the iBGC table and a clustering run so the
 # dashboard (and the e2e suite) have something to render. Run AFTER loading raw
 # data with `make seed-real-data`. Executes in the worker pod, which has the
-# clustering libs (igraph/leidenalg/umap); --sync runs in-process.
+# clustering libs (igraph/leidenalg); --sync runs in-process.
 e2e-seed:
 	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
 	  env DJANGO_SETTINGS_MODULE=bgc_data_portal.settings \

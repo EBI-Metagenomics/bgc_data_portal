@@ -19,15 +19,13 @@ Pipeline:
    and compute:
 
    * ``gene_cluster_family`` — weighted-vote leaf path of the K neighbours
-   * ``umap_x`` / ``umap_y`` — similarity-weighted average of neighbours'
-     coordinates
    * ``novelty_score``       — ``1 − max(sim to validated primary iBGC)``
    * ``domain_novelty``      — fraction of this iBGC's domains not present
      in any primary member of the inherited leaf GCF
 
    iBGCs without any source-vocabulary overlap keep ``None``/``""`` for the
-   four quantities — they still appear in the roster, just dimmed on the
-   maps.
+   three quantities — they still appear in the roster, just dimmed on the
+   Variables map.
 
 4. Materialise per-iBGC Redis payloads (manifest, roster rows, IbgcDetail,
    region, architecture) under the ``asset:{token}:*`` keyspace.
@@ -54,7 +52,6 @@ from .matrices import (
 from .schemas import (
     AssetBgc,
     AssetCds,
-    AssetCdsChemOnt,
     AssetData,
     AssetDomain,
     AssetNaturalProduct,
@@ -88,12 +85,9 @@ class VirtualIbgc:
     cds: list[AssetCds] = field(default_factory=list)
     domains: list[AssetDomain] = field(default_factory=list)
     natural_products: list[AssetNaturalProduct] = field(default_factory=list)
-    cds_chemont: list[AssetCdsChemOnt] = field(default_factory=list)
 
     # Derived during projection
-    umap_x: float | None = None
-    umap_y: float | None = None
-    umap_projected: bool = False
+    projected: bool = False
     novelty_score: float | None = None
     domain_novelty: float | None = None
     gene_cluster_family: str = ""
@@ -129,11 +123,6 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
     cds_by_bgc = data.cds_by_bgc()
     domains_by_bgc = data.domains_by_bgc()
     nps_by_bgc = data.nps_by_bgc()
-    cds_chemont_by_bgc_protein: dict[
-        tuple[tuple[str, int, int, str], str], AssetCdsChemOnt
-    ] = {}
-    for cls in data.cds_chemont:
-        cds_chemont_by_bgc_protein[(cls.bgc_key, cls.protein_id_str)] = cls
 
     virtual: list[VirtualIbgc] = []
     next_neg_id = -1
@@ -181,16 +170,11 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
             cds_rows: list[AssetCds] = []
             dom_rows: list[AssetDomain] = []
             np_rows: list[AssetNaturalProduct] = []
-            cds_chemont_rows: list[AssetCdsChemOnt] = []
             for b in members:
                 bcds = cds_by_bgc.get(b.key, [])
                 cds_rows.extend(bcds)
                 dom_rows.extend(domains_by_bgc.get(b.key, []))
                 np_rows.extend(nps_by_bgc.get(b.key, []))
-                for c in bcds:
-                    hit = cds_chemont_by_bgc_protein.get((b.key, c.protein_id_str))
-                    if hit is not None:
-                        cds_chemont_rows.append(hit)
 
             is_partial = all(m.is_partial for m in members) and not any(
                 m.is_validated for m in members
@@ -213,7 +197,6 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
                 cds=cds_rows,
                 domains=dom_rows,
                 natural_products=np_rows,
-                cds_chemont=cds_chemont_rows,
             )
             virtual.append(vibgc)
             next_neg_id -= 1
@@ -272,12 +255,12 @@ def _project_against_run(
     virtual_ibgcs: list[VirtualIbgc],
     run,
 ) -> None:
-    """Fill ``umap_x/y``, ``gene_cluster_family``, ``novelty_score``, and
-    ``domain_novelty`` on each virtual iBGC by KNN-projecting against the
-    primary iBGCs of ``run``.
+    """Fill ``gene_cluster_family``, ``novelty_score`` and ``domain_novelty``
+    on each virtual iBGC by KNN-projecting against the primary iBGCs of
+    ``run``.
 
     Mutates ``virtual_ibgcs`` in place. Virtual iBGCs with no source-vocab
-    overlap with the primary matrix are left unprojected (the four fields
+    overlap with the primary matrix are left unprojected (the three fields
     stay at their default ``None`` / ``""``).
     """
     if not virtual_ibgcs:
@@ -285,7 +268,7 @@ def _project_against_run(
 
     import numpy as np
 
-    from discovery.models import IntegratedBgc, SourceBgcPrediction
+    from discovery.models import SourceBgcPrediction
     from discovery.services.clustering.bgc_similarity import (
         compute_composite_similarity_block,
     )
@@ -332,23 +315,6 @@ def _project_against_run(
         log.warning("Scoring cache has no primary rows — skipping projection")
         return
 
-    # Primary metadata for coord averaging + leaf voting.
-    primary_meta = {
-        ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family or "")
-        for ibgc in IntegratedBgc.objects.filter(
-            id__in=[int(x) for x in pri_row_ids.tolist()]
-        ).only("id", "umap_x", "umap_y", "gene_cluster_family")
-    }
-    pri_coords = np.array(
-        [
-            [
-                primary_meta.get(int(x), (0.0, 0.0, ""))[0] or 0.0,
-                primary_meta.get(int(x), (0.0, 0.0, ""))[1] or 0.0,
-            ]
-            for x in pri_row_ids.tolist()
-        ],
-        dtype=np.float32,
-    )
     pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
 
     validated_ibgc_ids = set(
@@ -406,10 +372,7 @@ def _project_against_run(
         if top_sum < min_total_similarity:
             continue
 
-        weights_norm = top_vals / top_sum
-        vibgc.umap_x = float((pri_coords[top_cols, 0] * weights_norm).sum())
-        vibgc.umap_y = float((pri_coords[top_cols, 1] * weights_norm).sum())
-        vibgc.umap_projected = True
+        vibgc.projected = True
 
         votes: Counter[str] = Counter()
         for col, val in zip(top_cols.tolist(), top_vals.tolist()):
@@ -510,9 +473,6 @@ def _roster_row(vibgc: VirtualIbgc) -> dict[str, Any]:
         "is_partial": vibgc.is_partial,
         "is_validated": vibgc.is_validated,
         "is_type_strain": vibgc.is_type_strain,
-        "umap_projected": vibgc.umap_projected,
-        "umap_x": vibgc.umap_x,
-        "umap_y": vibgc.umap_y,
         "parent_assembly_id": None,
         "parent_assembly_accession": vibgc.assembly_accession,
         "organism_name": vibgc.organism_name,
@@ -558,25 +518,6 @@ def _ibgc_detail(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> dict[str, Any]
             }
         )
 
-    # Aggregate per-CDS chemont rows into a flat tree (no ontology lookup in
-    # the asset path — keep it light; the frontend renders leaves directly).
-    chemont_aggregate: dict[str, dict[str, Any]] = {}
-    for c in vibgc.cds_chemont:
-        cur = chemont_aggregate.get(c.chemont_id)
-        if cur is None:
-            chemont_aggregate[c.chemont_id] = {
-                "chemont_id": c.chemont_id,
-                "name": c.chemont_name,
-                "depth": 0,
-                "probability": c.probability,
-                "n_cds": 1,
-                "children": [],
-            }
-        else:
-            cur["probability"] = max(cur["probability"] or 0.0, c.probability)
-            cur["n_cds"] += 1
-    chemont_tree = list(chemont_aggregate.values())
-
     return {
         "id": vibgc.neg_id,
         "label": vibgc.label,
@@ -591,9 +532,6 @@ def _ibgc_detail(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> dict[str, Any]
         "is_partial": vibgc.is_partial,
         "is_validated": vibgc.is_validated,
         "is_type_strain": vibgc.is_type_strain,
-        "umap_projected": vibgc.umap_projected,
-        "umap_x": vibgc.umap_x,
-        "umap_y": vibgc.umap_y,
         "parent_assembly": parent_assembly,
         # Use the iBGC's own negative id as the representative — the region
         # endpoint resolves it back through asset_cache.read_region(token, id).
@@ -601,7 +539,6 @@ def _ibgc_detail(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> dict[str, Any]
         "member_bgcs": member_items,
         "domain_architecture": _ordered_architecture(vibgc, sources),
         "natural_products": nps,
-        "chemont_tree": chemont_tree,
     }
 
 
@@ -621,9 +558,6 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
     ] = defaultdict(list)
     for d in vibgc.domains:
         domains_by_cds_pid[(d.bgc_key, d.cds_protein_id)].append(d)
-    chemont_by_cds: dict[tuple[tuple[str, int, int, str], str], AssetCdsChemOnt] = {
-        (c.bgc_key, c.protein_id_str): c for c in vibgc.cds_chemont
-    }
 
     from discovery.services.architecture import collapse_to_interpro_rows
 
@@ -682,7 +616,6 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
                 }
             )
 
-        chemont_hit = chemont_by_cds.get((cds.bgc_key, cds.protein_id_str))
         cds_list.append(
             {
                 "protein_id": cds.protein_id_str,
@@ -696,12 +629,6 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
                 "sequence": sequence,
                 "pfam": pfam,
                 "interpro": interpro,
-                "chemont_id": chemont_hit.chemont_id if chemont_hit else None,
-                "chemont_name": chemont_hit.chemont_name if chemont_hit else None,
-                "chemont_probability": (
-                    chemont_hit.probability if chemont_hit else None
-                ),
-                "chemont_weight": chemont_hit.weight if chemont_hit else None,
             }
         )
 
@@ -799,7 +726,7 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
         ),
         "clustering_run_id": run.id if run is not None else None,
         "projected": run is not None,
-        "n_projected": sum(1 for v in virtual_ibgcs if v.umap_projected),
+        "n_projected": sum(1 for v in virtual_ibgcs if v.projected),
     }
     asset_cache.write_manifest(token, summary)
     asset_cache.mark_success(token, task_id=task_id, summary=summary)

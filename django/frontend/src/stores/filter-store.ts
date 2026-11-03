@@ -10,7 +10,6 @@ interface FilterState {
   npClassL1: string[];
   npClassL2: string[];
   npClassL3: string[];
-  chemontIds: string[];
   search: string;
   /** Free-text term searched against the iBGC's domain annotations
    *  (domain name / description / InterPro description). Populated by the
@@ -33,7 +32,6 @@ interface FilterState {
   setBgcClass: (v: string) => void;
   setGcfPath: (v: string) => void;
   setNpClass: (level: "l1" | "l2" | "l3", values: string[]) => void;
-  setChemontIds: (ids: string[]) => void;
   setSearch: (v: string) => void;
   setDomainText: (v: string) => void;
   setBiomeLineage: (v: string) => void;
@@ -54,7 +52,6 @@ const initialState = {
   npClassL1: [] as string[],
   npClassL2: [] as string[],
   npClassL3: [] as string[],
-  chemontIds: [] as string[],
   search: "",
   domainText: "",
   biomeLineage: "",
@@ -86,7 +83,6 @@ export const useFilterStore = create<FilterState>((set) => ({
           ? { npClassL2: values, exploreQueryTriggered: false }
           : { npClassL3: values, exploreQueryTriggered: false }
     ),
-  setChemontIds: (ids) => set({ chemontIds: ids, exploreQueryTriggered: false }),
   setSearch: (v) => set({ search: v, exploreQueryTriggered: false }),
   setDomainText: (v) => set({ domainText: v, exploreQueryTriggered: false }),
   setBiomeLineage: (v) => set({ biomeLineage: v, exploreQueryTriggered: false }),

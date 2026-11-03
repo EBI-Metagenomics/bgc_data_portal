@@ -1,32 +1,26 @@
 """Post-clustering MIBiG validation artifacts.
 
 After a clustering run has been applied (iBGCs updated with their leaf
-``gene_cluster_family`` and UMAP coords), this module emits three files
-under ``settings.CLUSTERING_ARTIFACTS_DIR / <run_sha[:12]>/``:
+``gene_cluster_family``), this module emits two files under
+``settings.CLUSTERING_ARTIFACTS_DIR / <run_sha[:12]>/``:
 
 * ``mibig_validation.tsv``                  — one row per validated iBGC
-* ``umap_scatter.html``                     — Plotly UMAP, MIBiG colored by NP class
 * ``mibig_class_cluster_heatmap.html``      — Plotly heatmap (class × leaf cluster)
 
 The TSV captures cluster assignments + purity metrics for each validated
 iBGC, giving a direct quality check against curated NP taxonomies. The
-visualizations are interactive (Plotly HTML, plotly.js loaded from CDN) so
-the run dir stays compact.
+heatmap is interactive (Plotly HTML, plotly.js loaded from CDN) so the run
+dir stays compact. (A UMAP scatter used to be emitted too; the 2D layout was
+removed.)
 
 "MIBiG class" is derived from the top-level segment of the iBGC's first
 ``IbgcNaturalProduct.np_class_path``. iBGCs without an NP record fall back
-to the generic ``"validated"`` bucket so they still appear in the overlays.
-
-The gray-background trace in the UMAP plot is capped at
-``MAX_BACKGROUND_IBGCS`` randomly sampled non-validated iBGCs (deterministic
-via the run seed); every validated iBGC is always drawn through its colored
-per-class overlay.
+to the generic ``"validated"`` bucket so they still appear in the heatmap.
 """
 
 from __future__ import annotations
 
 import logging
-import random
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -34,24 +28,21 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 TOP_N_CLUSTERS_FOR_HEATMAP = 50
-MAX_BACKGROUND_IBGCS = 5_000
 
 UNCLASSIFIED_BUCKET = "validated"
 
 
-def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
-    """Materialize the TSV + two HTML files for an applied ClusteringRun.
+def emit_run_artifacts(run, *, ibgc_ids, leaf_paths) -> Path:
+    """Materialize the TSV + heatmap HTML for an applied ClusteringRun.
 
     Parameters
     ----------
     run : ClusteringRun
         The just-completed run (must already have ``sha256`` populated).
     ibgc_ids : sequence[int]
-        Row-aligned iBGC ids — matches ``leaf_paths`` and ``coords`` indices.
+        Row-aligned iBGC ids — matches ``leaf_paths`` indices.
     leaf_paths : sequence[str]
         Leaf cluster path per iBGC (``DashboardGCF.family_path``-style ltree).
-    coords : ndarray (n, 2)
-        UMAP coords per iBGC.
 
     Returns
     -------
@@ -63,10 +54,7 @@ def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
     out_dir = Path(settings.CLUSTERING_ARTIFACTS_DIR) / run.sha256[:12]
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    ibgc_lookup = {
-        int(ibgc_id): (leaf_paths[i], float(coords[i, 0]), float(coords[i, 1]))
-        for i, ibgc_id in enumerate(ibgc_ids)
-    }
+    ibgc_lookup = {int(ibgc_id): leaf_paths[i] for i, ibgc_id in enumerate(ibgc_ids)}
     mibig_rows = _collect_validated_rows(ibgc_lookup)
 
     if mibig_rows:
@@ -77,25 +65,14 @@ def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
             run_sha=run.sha256,
         )
     else:
-        log.warning(
-            "emit_run_artifacts: no validated iBGCs — skipping TSV and heatmap; "
-            "emitting monochrome UMAP only"
-        )
-
-    _build_umap_plot_html(
-        ibgc_lookup,
-        mibig_rows,
-        out_dir / "umap_scatter.html",
-        run_sha=run.sha256,
-        seed=int(run.seed or 0),
-    )
+        log.warning("emit_run_artifacts: no validated iBGCs — skipping TSV and heatmap")
 
     log.info("emit_run_artifacts: wrote artifacts to %s", out_dir)
     return out_dir
 
 
 def _collect_validated_rows(
-    ibgc_lookup: dict[int, tuple[str, float, float]],
+    ibgc_lookup: dict[int, str],
 ) -> list[dict[str, Any]]:
     """Pull validated iBGCs and join with cluster info + NP class breakdown.
 
@@ -159,10 +136,9 @@ def _collect_validated_rows(
 
     rows: list[dict[str, Any]] = []
     for ibgc_id in validated_ibgc_ids:
-        cluster_info = ibgc_lookup.get(int(ibgc_id))
-        if cluster_info is None:
+        leaf_path = ibgc_lookup.get(int(ibgc_id))
+        if leaf_path is None:
             continue
-        leaf_path, ux, uy = cluster_info
         class_path = np_paths_by_ibgc.get(int(ibgc_id), "")
         class_top = class_path.split(".", 1)[0] if class_path else UNCLASSIFIED_BUCKET
         rows.append(
@@ -173,8 +149,6 @@ def _collect_validated_rows(
                     sorted(pred_accessions_by_ibgc.get(int(ibgc_id), []))
                 ),
                 "leaf_cluster_path": leaf_path,
-                "umap_x": ux,
-                "umap_y": uy,
                 "mibig_class_top": class_top,
                 "mibig_class_full_path": class_path,
             }
@@ -214,8 +188,6 @@ def _build_mibig_validation_tsv(
                 "level_1_cluster": level_parts[1] if len(level_parts) > 1 else "",
                 "level_2_cluster": level_parts[2] if len(level_parts) > 2 else "",
                 "level_3_cluster": level_parts[3] if len(level_parts) > 3 else "",
-                "umap_x": row["umap_x"],
-                "umap_y": row["umap_y"],
                 "mibig_class_top": cls_top,
                 "mibig_class_full_path": row["mibig_class_full_path"],
                 "leaf_cluster_mibig_count": mibig_count_in_leaf,
@@ -229,100 +201,6 @@ def _build_mibig_validation_tsv(
     )
     df.to_csv(out_path, sep="\t", index=False)
     log.info("MIBiG validation TSV: %d rows → %s", len(df), out_path)
-
-
-def _sample_background_coords(
-    ibgc_lookup: dict[int, tuple[str, float, float]],
-    mibig_ibgc_ids: set[int],
-    *,
-    cap: int,
-    seed: int,
-) -> tuple[list[tuple[float, float]], int]:
-    """Pick the gray-background iBGCs: random sample of non-validated, capped at ``cap``."""
-    items = [
-        (x, y)
-        for ibgc_id, (_path, x, y) in ibgc_lookup.items()
-        if ibgc_id not in mibig_ibgc_ids
-    ]
-    total = len(items)
-    if cap > 0 and total > cap:
-        rng = random.Random(seed)
-        items = rng.sample(items, cap)
-    return items, total
-
-
-def _build_umap_plot_html(
-    ibgc_lookup: dict[int, tuple[str, float, float]],
-    mibig_rows: list[dict[str, Any]],
-    out_path: Path,
-    *,
-    run_sha: str,
-    seed: int,
-) -> None:
-    import plotly.graph_objects as go
-
-    fig = go.Figure()
-    mibig_ibgc_ids = {int(row["integrated_bgc_id"]) for row in mibig_rows}
-    bg_items, total_non_mibig = _sample_background_coords(
-        ibgc_lookup,
-        mibig_ibgc_ids,
-        cap=MAX_BACKGROUND_IBGCS,
-        seed=seed,
-    )
-    if bg_items:
-        xs = [x for x, _ in bg_items]
-        ys = [y for _, y in bg_items]
-        if total_non_mibig > len(bg_items):
-            bg_name = (
-                f"non-validated iBGCs (sample of {len(bg_items):,}"
-                f" / {total_non_mibig:,})"
-            )
-        else:
-            bg_name = f"non-validated iBGCs ({len(bg_items):,})"
-        fig.add_trace(
-            go.Scattergl(
-                x=xs,
-                y=ys,
-                mode="markers",
-                marker=dict(size=4, color="lightgray", opacity=0.5),
-                name=bg_name,
-                hoverinfo="skip",
-            )
-        )
-
-    if mibig_rows:
-        rows_by_class: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for row in mibig_rows:
-            rows_by_class[row["mibig_class_top"]].append(row)
-        for class_top in sorted(rows_by_class):
-            cluster_rows = rows_by_class[class_top]
-            fig.add_trace(
-                go.Scatter(
-                    x=[r["umap_x"] for r in cluster_rows],
-                    y=[r["umap_y"] for r in cluster_rows],
-                    mode="markers",
-                    marker=dict(size=7),
-                    name=class_top,
-                    text=[
-                        f"{r['ibgc_accession']}<br>"
-                        f"{r['mibig_class_full_path'] or '(no NP record)'}<br>"
-                        f"cluster={r['leaf_cluster_path']}"
-                        for r in cluster_rows
-                    ],
-                    hoverinfo="text",
-                )
-            )
-
-    fig.update_layout(
-        title=f"MIBiG cluster overlay — run {run_sha[:12]}",
-        xaxis_title="UMAP-1",
-        yaxis_title="UMAP-2",
-        yaxis=dict(scaleanchor="x", scaleratio=1),
-        legend=dict(orientation="v", x=1.02, y=1.0),
-        template="plotly_white",
-    )
-    fig.write_html(out_path, include_plotlyjs="cdn")
-    log.info("UMAP scatter HTML → %s", out_path)
 
 
 def _build_confusion_heatmap_html(

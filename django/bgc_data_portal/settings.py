@@ -114,7 +114,6 @@ INSTALLED_APPS = [
     "matomo",
     "django_tasks",
     "django_tasks_db",
-    "pgvector",
     "csp",
     "discovery",
 ]
@@ -296,18 +295,6 @@ CACHE_TIMEOUT = 60 * 60 * 24 * 7  # 1 week
 # can read what the web pod wrote. Defaults under MEDIA_ROOT's PVC.
 UPLOAD_STAGING_DIR: Path = Path(
     os.environ.get("UPLOAD_STAGING_DIR", BASE_DIR / "data" / "upload_staging")
-)
-
-# ClassyFire — query-side SMILES → ChemOnt classification for chemical search.
-# The public service is used by default; query classifications are cached by
-# InChIKey (Redis) so known/repeat compounds skip the network entirely.
-CLASSYFIRE_URL = os.getenv("CLASSYFIRE_URL", "http://classyfire.wishartlab.com")
-CLASSYFIRE_TIMEOUT = float(os.getenv("CLASSYFIRE_TIMEOUT", "30"))  # per HTTP call (s)
-CLASSYFIRE_POLL_TIMEOUT = float(
-    os.getenv("CLASSYFIRE_POLL_TIMEOUT", "90")
-)  # novel-compound poll budget (s)
-CHEMONT_CLASSIFY_CACHE_TTL = int(
-    os.getenv("CHEMONT_CLASSIFY_CACHE_TTL", str(60 * 60 * 24 * 30))  # 30 days
 )
 
 # Matomo

@@ -107,24 +107,6 @@ class ParentAssemblySummary(Schema):
     url: str = ""
 
 
-class ChemOntAnnotationNode(Schema):
-    """A node in an aggregated ChemOnt classification tree.
-
-    Built from per-CDS CHAMOIS predictions: each CDS contributes its deepest
-    ChemOnt class; identical classes are unified across CDSs (max probability,
-    sum of CDS counts). Intermediate ancestors get a row whenever they sit on
-    the lineage between annotated leaves; ``probability`` is ``None`` for those
-    and ``n_cds`` is the sum of annotated descendants.
-    """
-
-    chemont_id: str
-    name: str
-    depth: int = 0
-    probability: float | None = None
-    n_cds: int = 0
-    children: list["ChemOntAnnotationNode"] = []
-
-
 class NaturalProductSummary(Schema):
     """Curated per-iBGC natural product (SMILES, structure)."""
 
@@ -134,13 +116,6 @@ class NaturalProductSummary(Schema):
     smiles_svg: str = ""
     structure_thumbnail: str = ""
     np_class_path: str = ""
-
-
-class ValidatedReferencePoint(Schema):
-    accession: str
-    classification_path: str = ""
-    umap_x: float
-    umap_y: float
 
 
 # ── iBGC (Integrated BGC) schemas ──────────────────────────────────────────
@@ -168,7 +143,6 @@ class IbgcRosterItem(Schema):
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False  # any source BGC sits on a type-strain assembly
-    umap_projected: bool = False
     parent_assembly_id: int | None = None
     parent_assembly_accession: str | None = None
     parent_assembly_collection: str | None = None  # assembly source name
@@ -210,8 +184,8 @@ class QueryScoreRow(Schema):
     result allow-list and metric maps — the full roster rows are fetched
     separately via ``/ibgcs/roster/?ibgc_ids=…``. ``similarity_score`` is
     the query's native score (phmmer bitscore for sequence search, the
-    clustering run's composite similarity for domain/architecture, ChemOnt
-    BMA for chemical). The ``best_*`` fields are
+    clustering run's composite similarity for domain/architecture). The
+    ``best_*`` fields are
     populated for sequence search only.
     """
 
@@ -250,12 +224,11 @@ class CombinedQueryCriterion(Schema):
     * ``domain`` — ``domains_text``, ``logic`` (``and``/``or``), ``threshold``
     * ``architecture`` — ``architecture`` (list), ``weight``, ``k``, ``threshold``
     * ``sequence`` — ``sequence``, ``min_bitscore``, ``min_pident``, ``min_qcov``
-    * ``chemical`` — ``smiles``, ``similarity_threshold``
     * ``similar`` — ``ibgc_id``, ``k``
     """
 
     id: str
-    type: str  # domain | architecture | sequence | chemical | similar
+    type: str  # domain | architecture | sequence | similar
     params: dict = {}
 
 
@@ -280,7 +253,6 @@ class CombinedQueryFilters(Schema):
     assembly_type: str | None = None
     leaf_path_prefix: str | None = None
     bgc_class: str | None = None
-    chemont_ids: str | None = None
     np_classes: str | None = None
     accession: str | None = None
     bgc_accession: str | None = None
@@ -396,15 +368,11 @@ class IbgcDetail(Schema):
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
-    umap_projected: bool = False
-    umap_x: float | None = None
-    umap_y: float | None = None
     parent_assembly: ParentAssemblySummary | None = None
     region_endpoint_url: str | None = None  # /api/discovery/ibgcs/{id}/region/
     member_bgcs: list[IbgcMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
     natural_products: list[NaturalProductSummary] = []
-    chemont_tree: list[ChemOntAnnotationNode] = []
 
 
 class IbgcScatterPoint(Schema):
@@ -420,24 +388,7 @@ class IbgcScatterPoint(Schema):
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
-    umap_projected: bool = False
     similarity_score: float | None = None
-    is_asset: bool = False
-
-
-class IbgcUmapPoint(Schema):
-    """Point for the UMAP tab; ``umap_projected`` flags partial-iBGC inferred coords."""
-
-    id: int
-    label: str
-    umap_x: float
-    umap_y: float
-    classification_path: str = ""
-    novelty_score: float | None = None
-    is_partial: bool = False
-    is_validated: bool = False
-    is_type_strain: bool = False
-    umap_projected: bool = False
     is_asset: bool = False
 
 
@@ -446,7 +397,7 @@ class IbgcCountResponse(Schema):
 
     Used by the v2 Discovery dashboard to drive the empty-state guard and
     the "showing X of Y, sampled" banner *before* firing the expensive
-    roster / UMAP / Variables-map requests. Same filter surface as
+    roster / Variables-map requests. Same filter surface as
     ``/ibgcs/roster/``.
     """
 
@@ -678,13 +629,6 @@ class NpClassLevel(Schema):
     children: list["NpClassLevel"] = []
 
 
-class ChemOntClassNode(Schema):
-    chemont_id: str
-    name: str
-    count: int
-    children: list["ChemOntClassNode"] = []
-
-
 class DomainOption(Schema):
     acc: str
     name: str
@@ -733,11 +677,6 @@ class PaginatedDetectorResponse(Schema):
 # ── Query mode schemas ────────────────────────────────────────────────────────
 
 
-class ChemicalQueryRequest(Schema):
-    smiles: str
-    similarity_threshold: float = 0.5
-
-
 class SequenceQueryRequest(Schema):
     sequence: str
     # phmmer hit must pass all three thresholds. Defaults are tuned for
@@ -780,8 +719,7 @@ class QueryResultBgc(Schema):
     domain_novelty: float = 0.0
     is_partial: bool = False
     # For sequence queries `similarity_score` carries the best bitscore; for
-    # other modes it keeps the mode-specific score (composite similarity,
-    # ChemOnt, etc.).
+    # other modes it keeps the mode-specific score (composite similarity).
     similarity_score: float = 0.0
     # Sequence-query-specific metrics (populated only by the protein search).
     best_bitscore: float | None = None
@@ -801,10 +739,6 @@ class PaginatedQueryResultResponse(Schema):
 
 
 class SequenceQueryAccepted(Schema):
-    task_id: str
-
-
-class ChemicalQueryAccepted(Schema):
     task_id: str
 
 
@@ -869,7 +803,6 @@ class BgcStatsResponse(Schema):
     complete_count: int = 0
     partial_count: int = 0
     np_class_sunburst: list[SunburstNode] = []
-    chemont_sunburst: list[SunburstNode] = []
     bgc_class_distribution: list[BgcClassCount] = []
     total_bgcs: int = 0
 
@@ -932,11 +865,6 @@ class RegionCdsOut(Schema):
     pfam: list[PfamAnnotationOut] = []
     # Non-redundant InterPro-entry annotations for the protein info card.
     interpro: list[InterproAnnotationOut] = []
-    # Deepest ChemOnt class predicted by CHAMOIS for this CDS.
-    chemont_id: str | None = None
-    chemont_name: str | None = None
-    chemont_probability: float | None = None
-    chemont_weight: float | None = None
     # Tools whose source-BGC prediction range covers this CDS, within the
     # owning iBGC. Range-overlap derived at request time; not stored.
     # Empty for the per-prediction BGC region endpoint.

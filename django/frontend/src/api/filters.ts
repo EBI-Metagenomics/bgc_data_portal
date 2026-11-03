@@ -1,7 +1,6 @@
 import { apiGet } from "./client";
 import type {
   BgcClassOption,
-  ChemOntClassNode,
   NpClassLevel,
   PaginatedDomainResponse,
   PaginatedGcfResponse,
@@ -20,10 +19,6 @@ export function fetchBgcClasses() {
 
 export function fetchNpClasses() {
   return apiGet<NpClassLevel[]>("/filters/np-classes/");
-}
-
-export function fetchChemOntClasses() {
-  return apiGet<ChemOntClassNode[]>("/filters/chemont-classes/");
 }
 
 export interface DomainSearchParams {

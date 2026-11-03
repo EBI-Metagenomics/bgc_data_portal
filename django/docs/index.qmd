@@ -7,21 +7,21 @@ subtitle: "Mine genomic and metagenomic assemblies for biosynthetic gene cluster
 
 The MGnify BGCs Discovery Platform helps you find biosynthetic gene clusters (BGCs) worth detailed analysis or experimental work. It holds a large catalogue of BGCs detected in public genomes and metagenomes, each scored for novelty. You filter, search, compare, and shortlist candidates in one place, and you can upload your own BGC predictions to compare them against the catalogue.
 
-![The discovery platform: the filter strip and database counts on top, results (roster, maps) on the left, and detail panels on the right.](images/overview.png)
+![The discovery platform: the filter strip and database counts on top, results (roster, Variables map) on the left, and detail panels on the right.](images/overview.png)
 
 ## Collection of integrated BGC predictions (iBGC)
 
 Different BGC detection tools (antiSMASH, GECCO, SanntiS) often disagree about the exact boundaries of a cluster, and the same region can be called more than once. To give you one clean record instead of several overlapping predictions, the platform consolidates overlapping predictions on the same contig into a single **integrated BGC (iBGC)**.
 
-The iBGC is the unit you work with everywhere in the discovery platform — it is what the **BGC Roster** lists, what the maps plot, what you score, compare, and shortlist. Each iBGC keeps a record of the source predictions it was built from and the tools that called them. See [Key Concepts](key-concepts.qmd) for the full vocabulary.
+The iBGC is the unit you work with everywhere in the discovery platform — it is what the **BGC Roster** lists, what the Variables map plots, what you score, compare, and shortlist. Each iBGC keeps a record of the source predictions it was built from and the tools that called them. See [Key Concepts](key-concepts.qmd) for the full vocabulary.
 
 ## How you work: query → triage → shortlist → export
 
 The discovery platform follows one workflow:
 
-1. **Build a query.** Add filter chips to narrow the catalogue by taxonomy, biome, BGC class, chemical class, gene cluster family, and more. For a targeted search, add an advanced chip — by protein domain, protein sequence, or chemical structure. You can also [load your own assembly](load-asset.qmd) and project it into the catalogue for comparison.
+1. **Build a query.** Add filter chips to narrow the catalogue by taxonomy, biome, BGC class, gene cluster family, and more. For a targeted search, add an advanced chip — by protein domain or protein sequence. You can also [load your own assembly](load-asset.qmd) and project it into the catalogue for comparison.
 2. **Run the query.** Nothing loads until you press **Run Query**. A banner then reports how many iBGCs match.
-3. **Triage the matches.** Results appear three ways: the [**BGC Roster**](bgc-roster.qmd) (a sortable table), the [**Variables Map**](variables-map.qmd) (plot any two metrics against each other), and the [**UMAP**](umap.qmd) (where similar iBGCs cluster together). Sort by **novelty** to surface candidates least like known, validated clusters.
+3. **Triage the matches.** Results appear two ways: the [**BGC Roster**](bgc-roster.qmd) (a sortable table) and the [**Variables Map**](variables-map.qmd) (plot any two metrics against each other). Sort by **novelty** to surface candidates least like known, validated clusters.
 4. **Inspect and compare.** Right-click an iBGC to pin it as a **reference**; left-click others to load them into the **compare** panel beside it. Click any gene to see its protein and domain annotations.
 5. **Shortlist and export.** Add the promising iBGCs to your shortlist, then **Generate Report** to materialise it and download GenBank files, tables, or JSON.
 
@@ -41,12 +41,12 @@ The catalogue is assembled from public genomic resources and an in-house annotat
 - **Genomes and metagenomes** from MGnify, GTDB, BacDive type-strain isolates, and other public collections.
 - **Validated BGCs** from MIBiG, which provide the known reference points that novelty is measured against.
 
-Each assembly is run through the annotation pipeline (gene calling → domain annotation → BGC detection → chemical-class prediction), and the resulting BGCs are integrated, clustered into families, and scored. See [How the Data Is Built](how-data-is-built.qmd) for the methods and [What's in the Catalogue](datasets.qmd) for the current data sources (marine focus).
+Each assembly is run through the annotation pipeline (gene calling → domain annotation → BGC detection), and the resulting BGCs are integrated, clustered into families, and scored. See [How the Data Is Built](how-data-is-built.qmd) for the methods and [What's in the Catalogue](datasets.qmd) for the current data sources (marine focus).
 
 ## Where to go next
 
 - **New here?** Read [Key Concepts](key-concepts.qmd), then follow the [Quickstart](quickstart.qmd).
 - **Want the discovery platform layout?** See the [Discovery Platform Overview](dashboard-overview.qmd).
-- **Have a specific target?** See [Search Overview](search-overview.qmd) for domain, sequence, and chemical searches.
+- **Have a specific target?** See [Search Overview](search-overview.qmd) for domain, sequence, and find-similar searches.
 - **Want to understand the scores?** Read [Scores & Metrics](scores-metrics.qmd).
 - **Curious about the data?** See [How the Data Is Built](how-data-is-built.qmd) and [What's in the Catalogue](datasets.qmd).

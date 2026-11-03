@@ -18,7 +18,6 @@ The **Protein Information** panel sits at the bottom of the discovery platform a
 | **Gene Caller** | The gene-prediction tool that called the gene. |
 | **Strand** | `+` or `−`. |
 | **Start / End** | Coordinates on the contig. |
-| **ChemOnt Class** | When predicted: the [ChemOnt](chemont.qmd) chemical class for this protein, with its probability and weight. |
 
 ### InterPro annotations
 
@@ -45,4 +44,3 @@ For a natural product chemist, the domain table is the most direct read on what 
 - [iBGC Detail](ibgc-detail.qmd) — where you click the genes
 - [Domain Search](domain-query.qmd) — query the catalogue by these domains
 - [Sequence Search](sequence-search.qmd) — paste a copied sequence to find related clusters
-- [ChemOnt](chemont.qmd)

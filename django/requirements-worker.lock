@@ -80,30 +80,19 @@ joblib==1.4.2
     # via
     #   -r requirements-web.txt
     #   hdbscan
-    #   pynndescent
     #   scikit-learn
 kiwisolver==1.5.0
     # via matplotlib
 leidenalg==0.12.0
     # via -r requirements-ml.txt
-llvmlite==0.47.0
-    # via
-    #   numba
-    #   pynndescent
 matplotlib==3.10.9
     # via
     #   -r requirements-ml.txt
     #   seaborn
-mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@22aee5b02b5b4e74b579895f17b1e5317ce44d68
-    # via
-    #   -r requirements-ml.txt
-    #   -r requirements-web.txt
+mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@6513e7247925cd63442fff7202c2c325297ffb1d
+    # via -r requirements-web.txt
 narwhals==2.22.1
     # via scikit-learn
-numba==0.65.1
-    # via
-    #   pynndescent
-    #   umap-learn
 numpy==2.0.1
     # via
     #   -r requirements-web.txt
@@ -111,14 +100,10 @@ numpy==2.0.1
     #   contourpy
     #   hdbscan
     #   matplotlib
-    #   numba
     #   pandas
-    #   pgvector
-    #   rdkit
     #   scikit-learn
     #   scipy
     #   seaborn
-    #   umap-learn
 orjson==3.11.9
     # via -r requirements-web.txt
 packaging==26.2
@@ -132,12 +117,8 @@ pandas==3.0.3
     #   -r requirements-ml.txt
     #   -r requirements-web.txt
     #   seaborn
-pgvector==0.4.1
-    # via -r requirements-web.txt
 pillow==12.2.0
-    # via
-    #   matplotlib
-    #   rdkit
+    # via matplotlib
 plotly==5.22.0
     # via
     #   -r requirements-ml.txt
@@ -162,8 +143,6 @@ pydantic-settings==2.14.1
     # via mgnify-bgcs-common-core
 pyhmmer==0.11.1
     # via -r requirements-ml.txt
-pynndescent==0.6.0
-    # via umap-learn
 pyparsing==3.3.2
     # via matplotlib
 pyrodigal==3.6.3
@@ -182,25 +161,17 @@ pyyaml==6.0.3
     # via
     #   mgnify-bgcs-common-core
     #   uvicorn
-rdkit==2025.3.2
-    # via
-    #   -r requirements-ml.txt
-    #   mgnify-bgcs-common-core
 requests==2.32.3
     # via -r requirements-web.txt
 scikit-learn==1.9.0
     # via
     #   -r requirements-ml.txt
     #   hdbscan
-    #   pynndescent
-    #   umap-learn
 scipy==1.14.1
     # via
     #   -r requirements-web.txt
     #   hdbscan
-    #   pynndescent
     #   scikit-learn
-    #   umap-learn
 seaborn==0.13.2
     # via -r requirements-web.txt
 six==1.17.0
@@ -216,9 +187,7 @@ texttable==1.7.0
 threadpoolctl==3.6.0
     # via scikit-learn
 tqdm==4.67.1
-    # via
-    #   -r requirements-web.txt
-    #   umap-learn
+    # via -r requirements-web.txt
 typing-extensions==4.15.0
     # via
     #   anyio
@@ -234,8 +203,6 @@ typing-inspection==0.4.2
     # via
     #   pydantic
     #   pydantic-settings
-umap-learn==0.5.12
-    # via -r requirements-ml.txt
 urllib3==2.7.0
     # via requests
 uvicorn==0.30.1

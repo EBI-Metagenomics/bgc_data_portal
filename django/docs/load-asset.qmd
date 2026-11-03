@@ -3,7 +3,7 @@ title: "Load Asset"
 subtitle: "Compare your own assembly against the catalogue"
 ---
 
-**Load Asset** lets you bring your own data into the discovery platform. You upload a packaged analysis of an assembly, and the platform projects its clusters into the catalogue so you can see them in the roster and on the maps alongside everything else — scored and positioned the same way as catalogue iBGCs.
+**Load Asset** lets you bring your own data into the discovery platform. You upload a packaged analysis of an assembly, and the platform projects its clusters into the catalogue so you can see them in the roster and on the Variables map alongside everything else — scored the same way as catalogue iBGCs.
 
 This replaces the older "upload and evaluate" workflow: instead of a separate evaluation page, your clusters become first-class iBGCs in the same discovery platform you already use.
 
@@ -16,7 +16,7 @@ The upload is small and intended for one assembly at a time.
 ## What happens after upload
 
 1. The file uploads and the projection runs as a background job — the chip shows **queued** then **projecting**. Large assets can take a few minutes; keep the tab open.
-2. When it finishes, your clusters appear as iBGCs flagged **SUBMITTED** (shown in amber) at the top of the [roster](bgc-roster.qmd) and as points on the [Variables map](variables-map.qmd) and [UMAP](umap.qmd).
+2. When it finishes, your clusters appear as iBGCs flagged **SUBMITTED** (shown in amber) at the top of the [roster](bgc-roster.qmd) and as points on the [Variables map](variables-map.qmd).
 3. Each submitted iBGC is **projected** against the catalogue's clustering: it is assigned to the nearest gene cluster family and given novelty and domain-novelty scores, so you can read it against catalogue clusters directly.
 
 The chip shows the assembly accession and the number of iBGCs projected. Hover it for the organism name.
