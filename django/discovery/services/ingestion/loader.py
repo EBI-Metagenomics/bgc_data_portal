@@ -38,6 +38,7 @@ from __future__ import annotations
 import base64
 import csv
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -55,8 +56,10 @@ from discovery.models import (
     DashboardDomain,
     IntegratedBgc,
     SourceBgcPrediction,
+    Taxon,
 )
 from discovery.services.go_slim import go_slim_for_terms
+from discovery.services.taxonomy import RANKS
 from django.db.backends.postgresql.psycopg_any import NumericRange
 from django.db.models import Avg, Count, Max
 from django.db.models.expressions import RawSQL
@@ -86,6 +89,7 @@ ALL_DISCOVERY_TABLES = [
     "discovery_precomputed_stats",
     "discovery_contig_sequence",
     "discovery_contig",
+    "discovery_taxon",
     "discovery_assembly",
     "discovery_detector",
     "discovery_assembly_source",
@@ -242,6 +246,92 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
     return lookup
 
 
+LTREE_PATH_RE = re.compile(r"[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*")
+TAXA_REQUIRED_COLUMNS = {"taxid", "name", "rank", "ltree_path", "taxdump_version"}
+TAXON_IDENTITY = ("name", "rank", "parent_taxid", "ltree_path")
+
+
+def _int_or_none(value: str | None) -> int | None:
+    value = (value or "").strip()
+    return int(value) if value else None
+
+
+def load_taxa(data_dir: Path, *, allow_taxon_changes: bool = False) -> int:
+    """Load taxa.tsv → Taxon (upsert on taxid). Returns the number of rows.
+
+    ``taxa.tsv`` comes from the ETL's ``etl.taxonomy.harmonise_contigs`` and
+    holds every taxon that ``contigs.tsv`` points at (leaf + canonical-rank
+    ancestors). Blank rank columns are NULL.
+
+    A Taxon row is a function of (taxid, taxdump). If an incoming row differs
+    in name, rank, parent or lineage path from the stored one, the data was
+    harmonised against a different taxdump: the stored contigs still carry the
+    old ``taxonomy_path`` labels, so silently updating the Taxon would make the
+    taxonomy tree and the rank labels disagree. That aborts the load unless
+    ``allow_taxon_changes`` (a deliberate taxdump bump, followed by
+    re-harmonising the existing contigs).
+    """
+    path = data_dir / "taxa.tsv"
+    if not path.exists():
+        logger.info("taxa.tsv not found, skipping")
+        return 0
+
+    taxa: dict[int, Taxon] = {}
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        missing = TAXA_REQUIRED_COLUMNS - set(reader.fieldnames or [])
+        if missing:
+            raise ValueError(f"taxa.tsv lacks columns {sorted(missing)}")
+        for line_no, row in enumerate(reader, start=2):
+            if not LTREE_PATH_RE.fullmatch(row["ltree_path"]):
+                raise ValueError(
+                    f"taxa.tsv line {line_no}: invalid ltree_path {row['ltree_path']!r}"
+                )
+            fields: dict[str, object] = {
+                "taxid": int(row["taxid"]),
+                "name": row["name"],
+                "rank": row["rank"],
+                "parent_taxid": _int_or_none(row.get("parent_taxid")),
+                "ltree_path": row["ltree_path"],
+                "deepest_informative_rank": row.get("deepest_informative_rank") or "",
+                "taxdump_version": row["taxdump_version"],
+            }
+            for rank in RANKS:
+                fields[f"{rank}_name"] = row.get(f"{rank}_name") or ""
+                fields[f"{rank}_taxid"] = _int_or_none(row.get(f"{rank}_taxid"))
+            taxa[int(row["taxid"])] = Taxon(**fields)
+    if not taxa:
+        return 0
+
+    if not allow_taxon_changes:
+        ids = list(taxa)
+        changed: list[int] = []
+        for i in range(0, len(ids), 1000):
+            for stored in Taxon.objects.filter(taxid__in=ids[i : i + 1000]):
+                new = taxa[stored.taxid]
+                if any(getattr(stored, a) != getattr(new, a) for a in TAXON_IDENTITY):
+                    changed.append(stored.taxid)
+        if changed:
+            raise ValueError(
+                f"taxa.tsv redefines {len(changed)} stored taxon(s) "
+                f"(e.g. {sorted(changed)[:10]}): harmonised against a different "
+                "taxdump? Re-harmonise the existing contigs, or pass "
+                "--allow-taxon-changes for a deliberate taxdump bump."
+            )
+
+    Taxon.objects.bulk_create(
+        list(taxa.values()),
+        batch_size=BATCH_SIZE,
+        update_conflicts=True,
+        unique_fields=["taxid"],
+        update_fields=[
+            f.name for f in Taxon._meta.concrete_fields if f.name != "taxid"
+        ],
+    )
+    logger.info("Loaded %d taxa", len(taxa))
+    return len(taxa)
+
+
 def load_contigs(
     data_dir: Path,
     assembly_lookup: dict[str, int],
@@ -250,18 +340,21 @@ def load_contigs(
 ) -> dict[str, int]:
     """Load contigs.tsv → DashboardContig. Returns ``{sequence_sha256: contig_id}``.
 
-    Contigs already linked to a ``Taxon`` keep their canonical
-    ``taxonomy_path``: the ETL still emits rank-less legacy paths, which
-    would silently undo ``apply_taxonomy_mapping``. ``retaxonomy=True``
-    takes the TSV path instead and unlinks the taxon so the contig is
-    picked up by the next ``apply_taxonomy_mapping`` run.
+    Rows with a ``taxid`` (harmonised by the ETL; ``taxonomy_path`` is already
+    canonical) set ``taxon`` and ``taxonomy_path`` as given. The taxid must
+    exist in ``Taxon`` — load ``taxa.tsv`` first.
+
+    Rows without one are legacy: their rank-less ``taxonomy_path`` would
+    silently undo a canonical path, so contigs already linked to a ``Taxon``
+    keep theirs. ``retaxonomy=True`` takes the TSV path instead and unlinks the
+    taxon so the contig is picked up by the next ``apply_taxonomy_mapping`` run.
     """
     path = data_dir / "contigs.tsv"
     if not path.exists():
         logger.warning("contigs.tsv not found, skipping")
         return {}
 
-    rows: list[DashboardContig] = []
+    by_sha: dict[str, DashboardContig] = {}
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
@@ -274,44 +367,66 @@ def load_contigs(
                     row.get("accession", row["sequence_sha256"]),
                 )
                 continue
-            rows.append(
-                DashboardContig(
-                    assembly_id=assembly_id,
-                    sequence_sha256=row["sequence_sha256"],
-                    accession=row.get("accession", ""),
-                    length=int(row.get("length", 0)),
-                    taxonomy_path=row.get("taxonomy_path", ""),
-                )
+            by_sha[row["sequence_sha256"]] = DashboardContig(
+                assembly_id=assembly_id,
+                sequence_sha256=row["sequence_sha256"],
+                accession=row.get("accession", ""),
+                length=int(row.get("length", 0)),
+                taxonomy_path=row.get("taxonomy_path", ""),
+                taxon_id=_int_or_none(row.get("taxid")),
             )
 
-    rows = list({o.sequence_sha256: o for o in rows}.values())
-    update_fields = ["assembly", "accession", "length", "taxonomy_path"]
-    if retaxonomy:
-        update_fields += ["taxon", "taxonomy_path_legacy"]
-    else:
-        linked: dict[str, str] = {}
-        shas = [o.sequence_sha256 for o in rows]
-        for i in range(0, len(shas), BATCH_SIZE):
-            linked.update(
-                DashboardContig.objects.filter(
-                    sequence_sha256__in=shas[i : i + BATCH_SIZE],
-                    taxon__isnull=False,
-                ).values_list("sequence_sha256", "taxonomy_path")
+    harmonised = [o for o in by_sha.values() if o.taxon_id is not None]
+    legacy = [o for o in by_sha.values() if o.taxon_id is None]
+
+    if harmonised:
+        unknown = {o.taxon_id for o in harmonised} - set(
+            Taxon.objects.values_list("taxid", flat=True)
+        )
+        if unknown:
+            raise ValueError(
+                f"contigs.tsv references {len(unknown)} taxid(s) absent from Taxon "
+                f"(e.g. {sorted(unknown)[:10]}): load taxa.tsv with them first."
             )
-        for o in rows:
-            if o.sequence_sha256 in linked:
-                o.taxonomy_path = linked[o.sequence_sha256]
-        if linked:
-            logger.info(
-                "Kept canonical taxonomy_path for %d taxon-linked contigs", len(linked)
-            )
-    DashboardContig.objects.bulk_create(
-        rows,
-        batch_size=BATCH_SIZE,
-        update_conflicts=True,
-        unique_fields=["sequence_sha256"],
-        update_fields=update_fields,
-    )
+        DashboardContig.objects.bulk_create(
+            harmonised,
+            batch_size=BATCH_SIZE,
+            update_conflicts=True,
+            unique_fields=["sequence_sha256"],
+            update_fields=["assembly", "accession", "length", "taxonomy_path", "taxon"],
+        )
+        logger.info("Loaded %d contigs with a taxid", len(harmonised))
+
+    if legacy:
+        update_fields = ["assembly", "accession", "length", "taxonomy_path"]
+        if retaxonomy:
+            update_fields += ["taxon", "taxonomy_path_legacy"]
+        else:
+            linked: dict[str, str] = {}
+            shas = [o.sequence_sha256 for o in legacy]
+            for i in range(0, len(shas), BATCH_SIZE):
+                linked.update(
+                    DashboardContig.objects.filter(
+                        sequence_sha256__in=shas[i : i + BATCH_SIZE],
+                        taxon__isnull=False,
+                    ).values_list("sequence_sha256", "taxonomy_path")
+                )
+            for o in legacy:
+                if o.sequence_sha256 in linked:
+                    o.taxonomy_path = linked[o.sequence_sha256]
+            if linked:
+                logger.info(
+                    "Kept canonical taxonomy_path for %d taxon-linked contigs",
+                    len(linked),
+                )
+        DashboardContig.objects.bulk_create(
+            legacy,
+            batch_size=BATCH_SIZE,
+            update_conflicts=True,
+            unique_fields=["sequence_sha256"],
+            update_fields=update_fields,
+        )
+
     lookup = dict(DashboardContig.objects.values_list("sequence_sha256", "id"))
     logger.info("Loaded %d contigs", len(lookup))
     return lookup
@@ -900,6 +1015,7 @@ def run_pipeline(
     truncate: bool = False,
     skip_stats: bool = False,
     retaxonomy: bool = False,
+    allow_taxon_changes: bool = False,
 ) -> None:
     """Execute the full discovery data loading pipeline.
 
@@ -922,6 +1038,7 @@ def run_pipeline(
 
     detector_lookup = load_detectors(data_dir)
     assembly_lookup = load_assemblies(data_dir)
+    load_taxa(data_dir, allow_taxon_changes=allow_taxon_changes)
     contig_lookup = load_contigs(data_dir, assembly_lookup, retaxonomy=retaxonomy)
     load_contig_sequences(data_dir, contig_lookup)
 

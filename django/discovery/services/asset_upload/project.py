@@ -232,6 +232,42 @@ def _latest_clustering_run():
     return ClusteringRun.objects.order_by("-created_at").first()
 
 
+class LeafColumnSums:
+    """Lazy, memoised per-leaf column sums of the primary domain matrix.
+
+    ``get(leaf)`` returns the 1-D column-sum vector over the primary rows whose
+    leaf path is ``leaf`` (or ``None`` for an unknown / empty leaf). Only the
+    leaves actually requested are ever summed, so memory scales with the number
+    of distinct leaves an upload lands in, not with the size of the run.
+    """
+
+    def __init__(self, M_domains, leaf_paths) -> None:
+        self._M = M_domains.tocsr() if hasattr(M_domains, "tocsr") else M_domains
+        self._rows: dict[str, list[int]] = defaultdict(list)
+        for i, p in enumerate(leaf_paths):
+            if p:
+                self._rows[p].append(i)
+        self._cache: dict[str, Any] = {}
+
+    def get(self, leaf: str | None):
+        if not leaf:
+            return None
+        if leaf in self._cache:
+            return self._cache[leaf]
+        rows = self._rows.get(leaf)
+        if not rows:
+            return None
+        import numpy as np
+
+        sums = np.asarray(self._M[rows].sum(axis=0)).reshape(-1)
+        self._cache[leaf] = sums
+        return sums
+
+    @property
+    def n_computed(self) -> int:
+        return len(self._cache)
+
+
 def _project_against_run(
     virtual_ibgcs: list[VirtualIbgc],
     run,
@@ -324,14 +360,12 @@ def _project_against_run(
         pri_id_to_row[v] for v in validated_ibgc_ids if v in pri_id_to_row
     }
 
-    leaf_to_rows: dict[str, list[int]] = defaultdict(list)
-    for i, p in enumerate(pri_leaf_paths):
-        if p:
-            leaf_to_rows[p].append(i)
-    leaf_col_sums: dict[str, np.ndarray] = {
-        leaf: np.asarray(M_dom_pri[rows].sum(axis=0)).reshape(-1)
-        for leaf, rows in leaf_to_rows.items()
-    }
+    # Per-leaf domain column sums, computed lazily for the leaves the asset
+    # rows actually inherit. Materialising them for every leaf is
+    # n_leaves × n_domain_cols dense — ~9.4 GiB for the 2026-10 prod run
+    # (57k leaves × 22k cols, uint64) — which OOM-killed the worker on every
+    # upload regardless of upload size.
+    leaf_col_sums = LeafColumnSums(M_dom_pri, pri_leaf_paths)
 
     # Build asset matrices on the primary's column space.
     M_dom_q = build_asset_domain_matrix(
