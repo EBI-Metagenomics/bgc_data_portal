@@ -6,6 +6,7 @@ import { AssemblyTypeFilter } from "./AssemblyTypeFilter";
 import { TaxonomyFilter } from "./TaxonomyFilter";
 import { BiomeLineageFilter } from "./BiomeLineageFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
+import { NpcFilter } from "./NpcFilter";
 import { GcfFilter } from "./GcfFilter";
 import { AccessionsFilter } from "./AccessionsFilter";
 import { DomainsFilter } from "./DomainsFilter";
@@ -36,6 +37,7 @@ export function FilterPanel() {
       <TaxonomyFilter />
       <BiomeLineageFilter />
       <BgcClassFilter />
+      <NpcFilter />
       <GcfFilter />
       <AccessionsFilter />
       <LengthFilter />

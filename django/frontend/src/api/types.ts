@@ -146,10 +146,28 @@ export interface BgcClassOption {
   count: number;
 }
 
-export interface NpClassLevel {
+/** NPClassifier ontology node (pathway → superclass → class) with iBGC counts.
+ *  ``term_id`` is the ``npc_terms`` filter value; selecting a node also matches
+ *  its descendants. A multi-parent superclass appears under each parent. */
+export interface NpcTreeNode {
+  term_id: string;
+  level: "pathway" | "superclass" | "class";
   name: string;
+  /** iBGCs labelled with exactly this term (any confidence). */
   count: number;
-  children: NpClassLevel[];
+  confident_count: number;
+  children: NpcTreeNode[];
+}
+
+/** NPClassifier label of an iBGC (union of its source predictions). */
+export interface NpcLabel {
+  term_id: string;
+  level: "pathway" | "superclass" | "class";
+  name: string;
+  score: number | null;
+  confident: boolean;
+  sources: string[];
+  detector_tools: string[];
 }
 
 export interface DomainOption {
@@ -380,7 +398,7 @@ export interface BgcStatsResponse {
   score_distributions: ScoreDistribution[];
   complete_count: number;
   partial_count: number;
-  np_class_sunburst: SunburstNode[];
+  npc_sunburst: SunburstNode[];
   bgc_class_distribution: BgcClassCount[];
   total_bgcs: number;
 }
@@ -488,7 +506,8 @@ export interface CombinedQueryFilters {
   assembly_type?: string | null;
   leaf_path_prefix?: string | null;
   bgc_class?: string | null;
-  np_classes?: string | null;
+  npc_terms?: string | null;
+  npc_confident?: boolean;
   accession?: string | null;
   assembly_ids?: string | null;
   organism?: string | null;
@@ -564,9 +583,15 @@ export interface IbgcMemberBgc {
   id: number;
   accession: string;
   detector_name: string | null;
+  detector_version: string | null;
   is_partial: boolean;
   is_validated: boolean;
   size_kb: number;
+  /** Detector-native region score (SanntiS 1.0 mean ORF score, GECCO p). */
+  score: number | null;
+  /** Detector BGC probability (SanntiS 1.0: 1 − p_non_bgc). */
+  probability: number | null;
+  classification_path: string;
 }
 
 export interface IbgcDetail {
@@ -597,6 +622,7 @@ export interface IbgcDetail {
   member_bgcs: IbgcMemberBgc[];
   domain_architecture: DomainArchitectureItem[];
   natural_products: NaturalProductSummary[];
+  npc_labels: NpcLabel[];
 }
 
 export interface IbgcScatterPoint {

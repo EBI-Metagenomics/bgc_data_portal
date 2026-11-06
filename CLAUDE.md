@@ -44,6 +44,8 @@ pre-commit run --all-files
 docker compose exec django python manage.py migrate
 docker compose exec django python manage.py collectstatic
 docker compose exec django python manage.py build_integrated_bgcs
+#   (also rebuilds the per-iBGC NPClassifier labels; standalone: aggregate_npc_labels)
+docker compose exec django python manage.py load_npc_ontology   # NPClassifier terms (idempotent; run_pipeline does it too)
 
 # Clustering is an HPC handoff in prod (CLUSTERING_HPC_MODE=True):
 #   1. export signature matrices, ship to HPC, run `bgc-cluster run`
@@ -99,6 +101,8 @@ django/
 ```
 
 ## Key Patterns
+
+**NPClassifier search** — SanntiS 1.0 predicts the NPClassifier pathway / superclass of each region and MIBiG entries carry curated labels. The ETL stages them in `bgc_np_classes.tsv`; the loader writes `SourceBgcNpcLabel`, `build_integrated_bgcs` unions them into `IbgcNpcLabel`, and the `npc_terms` filter (plus `npc_confident`) expands a selected term to its descendants over the DAG in `common_core.npc`. The tree comes from `/filters/npc-tree/`.
 
 **iBGC-first** — In v2 the dashboard surfaces ``IntegratedBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the iBGC. `IntegratedBGC.is_partial = True` marks iBGCs whose GCF / novelty were projected from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered. There is no 2D layout (UMAP was removed); the Variables map is the only scatter view.
 

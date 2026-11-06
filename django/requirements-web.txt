@@ -39,6 +39,7 @@ django-ninja==1.4
 # Worker hot-reload in dev (db_worker --reload uses watchdog under DEBUG)
 watchdog==4.0.1
 biopython==1.85
-# Pinned to the common-core commit that drops CHAMOIS / ESM-C / ChemOnt / UMAP
+# Pinned to the common-core commit that vendors the NPClassifier ontology
+# (common_core.npc) on top of the CHAMOIS / ESM-C / ChemOnt / UMAP removal
 # (clustering output schema v3; v1/v2 tarballs still import).
-mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@6513e7247925cd63442fff7202c2c325297ffb1d
+mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@c5f12e65ab408553a64c3fc523c69eaeaad9b419

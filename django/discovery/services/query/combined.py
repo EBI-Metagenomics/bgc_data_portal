@@ -44,7 +44,8 @@ FILTER_KEYS = (
     "assembly_type",
     "leaf_path_prefix",
     "bgc_class",
-    "np_classes",
+    "npc_terms",
+    "npc_confident",
     "accession",
     "bgc_accession",
     "assembly_accession",
@@ -87,7 +88,9 @@ def _filter_candidate_ids(candidate_ids: list[int], filters: dict) -> set[int]:
     from discovery.api import _apply_ibgc_filters
     from discovery.models import IntegratedBgc
 
-    kwargs = {k: filters[k] for k in FILTER_KEYS if k in filters and filters[k] is not None}
+    kwargs = {
+        k: filters[k] for k in FILTER_KEYS if k in filters and filters[k] is not None
+    }
     base = IntegratedBgc.objects.filter(id__in=candidate_ids)
     qs = _apply_ibgc_filters(base, ibgc_ids=None, **kwargs)
     return set(qs.values_list("id", flat=True))
@@ -98,7 +101,9 @@ def _filter_all_ids(filters: dict, cap: int) -> list[int]:
     from discovery.api import _apply_ibgc_filters
     from discovery.models import IntegratedBgc
 
-    kwargs = {k: filters[k] for k in FILTER_KEYS if k in filters and filters[k] is not None}
+    kwargs = {
+        k: filters[k] for k in FILTER_KEYS if k in filters and filters[k] is not None
+    }
     qs = _apply_ibgc_filters(IntegratedBgc.objects.all(), ibgc_ids=None, **kwargs)
     return list(qs.values_list("id", flat=True)[: cap + 1])
 

@@ -1,7 +1,7 @@
 import { apiGet } from "./client";
 import type {
   BgcClassOption,
-  NpClassLevel,
+  NpcTreeNode,
   PaginatedDomainResponse,
   PaginatedGcfResponse,
   PaginatedSourceResponse,
@@ -17,8 +17,8 @@ export function fetchBgcClasses() {
   return apiGet<BgcClassOption[]>("/filters/bgc-classes/");
 }
 
-export function fetchNpClasses() {
-  return apiGet<NpClassLevel[]>("/filters/np-classes/");
+export function fetchNpcTree() {
+  return apiGet<NpcTreeNode[]>("/filters/npc-tree/");
 }
 
 export interface DomainSearchParams {

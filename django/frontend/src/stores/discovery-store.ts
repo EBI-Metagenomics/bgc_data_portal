@@ -151,8 +151,10 @@ export interface AppliedIbgcFilters {
   taxonomyPath: string;
   bgcClass: string;
   gcfPath: string;
-  // Flattened NP-class names selected across the L1/L2/L3 tree.
-  npClasses: string[];
+  // Selected NPClassifier term ids (descendants matched server-side) and
+  // whether only confident labels count.
+  npcTerms: string[];
+  npcConfidentOnly: boolean;
   biomeLineage: string;
   // Single smart accession field (assembly / contig / BGC / iBGC / protein).
   accession: string;
@@ -173,7 +175,8 @@ export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   taxonomyPath: "",
   bgcClass: "",
   gcfPath: "",
-  npClasses: [],
+  npcTerms: [],
+  npcConfidentOnly: true,
   biomeLineage: "",
   accession: "",
   assemblyIds: "",
@@ -190,7 +193,7 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
   return (
     applied.sourceNames.length === 0 &&
     applied.detectorTools.length === 0 &&
-    applied.npClasses.length === 0 &&
+    applied.npcTerms.length === 0 &&
     applied.assemblyType === "" &&
     applied.taxonomyPath === "" &&
     applied.bgcClass === "" &&
@@ -233,8 +236,9 @@ export function appliedFiltersToApiParams(
   if (applied.taxonomyPath) params.taxonomy_path = applied.taxonomyPath;
   if (applied.bgcClass) params.bgc_class = applied.bgcClass;
   if (applied.gcfPath) params.leaf_path_prefix = applied.gcfPath;
-  if (applied.npClasses.length > 0) {
-    params.np_classes = applied.npClasses.join(",");
+  if (applied.npcTerms.length > 0) {
+    params.npc_terms = applied.npcTerms.join(",");
+    if (!applied.npcConfidentOnly) params.npc_confident = "false";
   }
   if (applied.biomeLineage) params.biome_lineage = applied.biomeLineage;
   if (applied.accession) params.accession = applied.accession;
@@ -271,7 +275,8 @@ export function snapshotFiltersToApplied(): AppliedIbgcFilters {
     taxonomyPath: f.taxonomyPath,
     bgcClass: f.bgcClass,
     gcfPath: f.gcfPath,
-    npClasses: [...f.npClassL1, ...f.npClassL2, ...f.npClassL3],
+    npcTerms: f.npcTerms,
+    npcConfidentOnly: f.npcConfidentOnly,
     biomeLineage: f.biomeLineage,
     accession: f.accession,
     assemblyIds: f.assemblyIds,

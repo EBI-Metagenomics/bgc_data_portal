@@ -13,15 +13,16 @@ the values now reflect iBGC-level counts.
 
 import random
 
+from django.db import connection
+from django.db.models import Avg, Count, Q
+
 from discovery.models import (
     AssemblyType,
     DashboardAssembly,
-    IbgcNaturalProduct,
     IntegratedBgc,
     SourceBgcPrediction,
 )
-from django.db import connection
-from django.db.models import Avg, Count, Q
+from discovery.services.npc import build_npc_sunburst
 
 MAX_BOXPLOT_VALUES = 10_000
 
@@ -209,7 +210,7 @@ def compute_bgc_stats(ibgc_qs) -> dict:
     partial_count = len(partial_ids)
     complete_count = total_ibgcs - partial_count
 
-    np_class_sunburst = _build_np_class_sunburst(ibgc_qs)
+    npc_sunburst = build_npc_sunburst(ibgc_qs, confident_only=True)
 
     # Distribution over the normalised product class (IntegratedBgc.bgc_class),
     # the same field the "BGC Class" filter targets.
@@ -228,7 +229,7 @@ def compute_bgc_stats(ibgc_qs) -> dict:
         "score_distributions": score_distributions,
         "complete_count": complete_count,
         "partial_count": partial_count,
-        "np_class_sunburst": np_class_sunburst,
+        "npc_sunburst": npc_sunburst,
         "bgc_class_distribution": bgc_class_distribution,
         "total_bgcs": total_ibgcs,
     }
@@ -279,48 +280,6 @@ def _compute_core_domains(ibgc_qs, total_ibgcs: int) -> list[dict]:
         }
         for acc, name, ibgc_count in rows
     ]
-
-
-def _build_np_class_sunburst(ibgc_qs) -> list[dict]:
-    """Flat sunburst list for NP chemical class hierarchy across iBGCs."""
-    paths = (
-        IbgcNaturalProduct.objects.filter(ibgc__in=ibgc_qs)
-        .exclude(np_class_path="")
-        .values_list("np_class_path", flat=True)
-    )
-
-    nodes: dict[str, dict] = {}
-    for path in paths:
-        parts = path.split(".")
-        l1 = parts[0] if len(parts) > 0 else ""
-        l2 = parts[1] if len(parts) > 1 else ""
-        l3 = parts[2] if len(parts) > 2 else ""
-        if not l1:
-            continue
-
-        l1_id = f"l1:{l1}"
-        if l1_id not in nodes:
-            nodes[l1_id] = {"id": l1_id, "label": l1, "parent": "", "count": 0}
-        nodes[l1_id]["count"] += 1
-
-        if l2:
-            l2_id = f"l2:{l1}/{l2}"
-            if l2_id not in nodes:
-                nodes[l2_id] = {"id": l2_id, "label": l2, "parent": l1_id, "count": 0}
-            nodes[l2_id]["count"] += 1
-
-            if l3:
-                l3_id = f"l3:{l1}/{l2}/{l3}"
-                if l3_id not in nodes:
-                    nodes[l3_id] = {
-                        "id": l3_id,
-                        "label": l3,
-                        "parent": l2_id,
-                        "count": 0,
-                    }
-                nodes[l3_id]["count"] += 1
-
-    return list(nodes.values())
 
 
 def generate_discovery_stats() -> dict:

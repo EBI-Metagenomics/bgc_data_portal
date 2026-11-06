@@ -19,9 +19,24 @@ import csv
 import json
 import logging
 import math
-import re
 from io import StringIO
 
+from django.db.models import (
+    Avg,
+    Case,
+    Count,
+    Exists,
+    ExpressionWrapper,
+    F,
+    FloatField,
+    Func,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    When,
+)
+from django.http import HttpResponse
 from ninja import Router
 from ninja.errors import HttpError
 
@@ -60,7 +75,8 @@ from discovery.api_schemas import (
     IbgcScatterPoint,
     InterproAnnotationOut,
     NaturalProductSummary,
-    NpClassLevel,
+    NpcLabelOut,
+    NpcTreeNode,
     PaginatedAssemblyAggregationResponse,
     PaginatedAssemblyResponse,
     PaginatedDetectorResponse,
@@ -95,6 +111,7 @@ from discovery.models import (
     DashboardGCF,
     DiscoveryStats,
     IbgcNaturalProduct,
+    IbgcNpcLabel,
     IntegratedBgc,
     SourceBgcPrediction,
 )
@@ -103,27 +120,13 @@ from discovery.services.architecture import (
     collapse_to_interpro_rows,
     ibgc_architecture,
 )
+from discovery.services.npc import expand_term_ids, npc_tree, parse_term_csv
 from discovery.services.stats import compute_assembly_stats
 from discovery.throttling import (
     default_throttle,
     search_throttle,
     upload_throttle,
 )
-from django.db.models import (
-    Avg,
-    Case,
-    Count,
-    ExpressionWrapper,
-    F,
-    FloatField,
-    Func,
-    IntegerField,
-    OuterRef,
-    Q,
-    Subquery,
-    When,
-)
-from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
@@ -629,7 +632,8 @@ def _ibgc_filters_active(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    np_classes: str | None = None,
+    npc_terms: str | None = None,  # CSV of NPClassifier term ids (+descendants)
+    npc_confident: bool = True,  # confident labels only (abstention tier)
     accession: str | None = None,
     bgc_accession: str | None = None,
     assembly_accession: str | None = None,
@@ -670,7 +674,7 @@ def _ibgc_filters_active(
             assembly_type,
             leaf_path_prefix,
             bgc_class,
-            np_classes,
+            npc_terms,
             accession,
             bgc_accession,
             assembly_accession,
@@ -997,7 +1001,8 @@ def _apply_ibgc_filters(
     assembly_type: str | None = None,  # AssemblyType label (metagenome/genome/region)
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    np_classes: str | None = None,  # CSV of NP-class names (any level)
+    npc_terms: str | None = None,  # CSV of NPClassifier term ids (+descendants)
+    npc_confident: bool = True,  # confident labels only (abstention tier)
     accession: str | None = None,  # Smart single-field accession (any kind)
     bgc_accession: str | None = None,  # Deprecated: legacy BGC-only accession field
     assembly_accession: str | None = None,  # Deprecated: legacy assembly-only field
@@ -1089,24 +1094,20 @@ def _apply_ibgc_filters(
             qs = qs.filter(bgc_class__startswith="Hybrid")
         else:
             qs = qs.filter(bgc_class__iexact=bgc_class)
-    if np_classes:
-        names = [n.strip() for n in np_classes.split(",") if n.strip()]
-        if names:
-            # NP-class names are segments of the dot-delimited ``np_class_path``
-            # ltree on each iBGC natural product (e.g.
-            # "Polyketide.Macrolide.Erythromycin"). The L1/L2/L3 checkbox tree
-            # sends a flat CSV of selected names; match an iBGC if any of its
-            # natural products carries a selected name as a path segment at any
-            # level (OR semantics).
-            np_q = Q()
-            for name in names:
-                np_q |= (
-                    Q(natural_products__np_class_path__iexact=name)
-                    | Q(natural_products__np_class_path__istartswith=name + ".")
-                    | Q(natural_products__np_class_path__icontains="." + name + ".")
-                    | Q(natural_products__np_class_path__iendswith="." + name)
-                )
-            qs = qs.filter(np_q).distinct()
+    if npc_terms:
+        selected = parse_term_csv(npc_terms)
+        if selected:
+            # NPClassifier terms (pathway / superclass / class). A selected term
+            # matches an iBGC labelled with it or with any descendant (OR across
+            # the selection); ``npc_confident`` keeps only labels the detector
+            # called confidently (curated labels always are).
+            wanted = expand_term_ids(selected)
+            label_qs = IbgcNpcLabel.objects.filter(
+                ibgc=OuterRef("pk"), term_id__in=wanted
+            )
+            if npc_confident:
+                label_qs = label_qs.filter(confident=True)
+            qs = qs.filter(Exists(label_qs))
     if accession:
         # Single smart accession field: auto-detect iBGC / prediction / cBGC /
         # assembly / contig / protein and apply the matching join. Supersedes
@@ -1195,7 +1196,8 @@ def ibgc_count(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    np_classes: str | None = None,
+    npc_terms: str | None = None,  # CSV of NPClassifier term ids (+descendants)
+    npc_confident: bool = True,  # confident labels only (abstention tier)
     accession: str | None = None,
     bgc_accession: str | None = None,
     assembly_accession: str | None = None,
@@ -1233,7 +1235,8 @@ def ibgc_count(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        np_classes=np_classes,
+        npc_terms=npc_terms,
+        npc_confident=npc_confident,
         accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
@@ -1263,7 +1266,8 @@ def ibgc_count(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            np_classes=np_classes,
+            npc_terms=npc_terms,
+            npc_confident=npc_confident,
             accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
@@ -1380,7 +1384,8 @@ def ibgc_roster(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    np_classes: str | None = None,
+    npc_terms: str | None = None,  # CSV of NPClassifier term ids (+descendants)
+    npc_confident: bool = True,  # confident labels only (abstention tier)
     accession: str | None = None,
     bgc_accession: str | None = None,
     assembly_accession: str | None = None,
@@ -1417,7 +1422,8 @@ def ibgc_roster(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        np_classes=np_classes,
+        npc_terms=npc_terms,
+        npc_confident=npc_confident,
         accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
@@ -1448,7 +1454,8 @@ def ibgc_roster(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            np_classes=np_classes,
+            npc_terms=npc_terms,
+            npc_confident=npc_confident,
             accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
@@ -1533,7 +1540,8 @@ def ibgc_ids(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    np_classes: str | None = None,
+    npc_terms: str | None = None,  # CSV of NPClassifier term ids (+descendants)
+    npc_confident: bool = True,  # confident labels only (abstention tier)
     accession: str | None = None,
     bgc_accession: str | None = None,
     assembly_accession: str | None = None,
@@ -1571,7 +1579,8 @@ def ibgc_ids(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        np_classes=np_classes,
+        npc_terms=npc_terms,
+        npc_confident=npc_confident,
         accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
@@ -1602,7 +1611,8 @@ def ibgc_ids(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            np_classes=np_classes,
+            npc_terms=npc_terms,
+            npc_confident=npc_confident,
             accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
@@ -1685,7 +1695,8 @@ def ibgc_scatter(
     assembly_type: str | None = None,
     leaf_path_prefix: str | None = None,
     bgc_class: str | None = None,
-    np_classes: str | None = None,
+    npc_terms: str | None = None,  # CSV of NPClassifier term ids (+descendants)
+    npc_confident: bool = True,  # confident labels only (abstention tier)
     accession: str | None = None,
     bgc_accession: str | None = None,
     assembly_accession: str | None = None,
@@ -1723,7 +1734,8 @@ def ibgc_scatter(
         assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
-        np_classes=np_classes,
+        npc_terms=npc_terms,
+        npc_confident=npc_confident,
         accession=accession,
         bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
@@ -1745,7 +1757,8 @@ def ibgc_scatter(
             assembly_type=assembly_type,
             leaf_path_prefix=leaf_path_prefix,
             bgc_class=bgc_class,
-            np_classes=np_classes,
+            npc_terms=npc_terms,
+            npc_confident=npc_confident,
             accession=accession,
             bgc_accession=bgc_accession,
             assembly_accession=assembly_accession,
@@ -1907,11 +1920,30 @@ def ibgc_detail(request, ibgc_id: int):
             id=m.id,
             accession=m.prediction_accession,
             detector_name=m.detector.tool if m.detector else None,
+            detector_version=m.detector.version if m.detector else None,
             is_partial=m.is_partial,
             is_validated=m.is_validated,
             size_kb=m.size_kb,
+            score=m.score,
+            probability=m.probability,
+            classification_path=m.classification_path,
         )
         for m in members
+    ]
+
+    npc_items = [
+        NpcLabelOut(
+            term_id=lab.term_id,
+            level=lab.term.level,
+            name=lab.term.name,
+            score=lab.score,
+            confident=lab.confident,
+            sources=list(lab.sources or []),
+            detector_tools=list(lab.detector_tools or []),
+        )
+        for lab in IbgcNpcLabel.objects.filter(ibgc_id=ibgc_id)
+        .select_related("term")
+        .order_by("term__level", "-confident", "-score", "term__name")
     ]
 
     return IbgcDetail(
@@ -1936,6 +1968,7 @@ def ibgc_detail(request, ibgc_id: int):
         member_bgcs=member_items,
         domain_architecture=domain_arch,
         natural_products=np_items,
+        npc_labels=npc_items,
     )
 
 
@@ -2073,12 +2106,13 @@ def report_snapshot(request, body: ReportSnapshotRequest):
     """
     import hashlib
 
+    from django.core.cache import cache
+
     from discovery.services.report import (
         MAX_SHORTLIST,
         REPORT_TTL_SECONDS,
         build_report_payload,
     )
-    from django.core.cache import cache
 
     ids = sorted({int(i) for i in body.ibgc_ids})
     if not ids:
@@ -2847,53 +2881,26 @@ def bgc_classes(request):
 
 
 @discovery_router.get(
-    "/filters/np-classes/",
-    response=list[NpClassLevel],
+    "/filters/npc-tree/",
+    response=list[NpcTreeNode],
     include_in_schema=False,
     auth=first_party_gate,
 )
-def np_classes(request):
-    paths = IbgcNaturalProduct.objects.exclude(np_class_path="").values_list(
-        "np_class_path", flat=True
-    )
+def npc_tree_endpoint(request):
+    """NPClassifier ontology (pathway → superclass → class) with iBGC counts.
 
-    tree: dict = {}
-    for path in paths:
-        parts = path.split(".")
-        l1 = parts[0] if len(parts) > 0 else ""
-        l2 = parts[1] if len(parts) > 1 else ""
-        l3 = parts[2] if len(parts) > 2 else ""
+    ``count`` / ``confident_count`` are iBGCs carrying that exact term; the
+    ``npc_terms`` filter also matches descendants of a selected term. Served
+    from a short cache: the ontology is fixed and counts change only on load.
+    """
+    from django.core.cache import cache
 
-        if not l1:
-            continue
-        if l1 not in tree:
-            tree[l1] = {"count": 0, "children": {}}
-        tree[l1]["count"] += 1
-
-        if l2:
-            if l2 not in tree[l1]["children"]:
-                tree[l1]["children"][l2] = {"count": 0, "children": {}}
-            tree[l1]["children"][l2]["count"] += 1
-
-            if l3:
-                if l3 not in tree[l1]["children"][l2]["children"]:
-                    tree[l1]["children"][l2]["children"][l3] = {
-                        "count": 0,
-                        "children": {},
-                    }
-                tree[l1]["children"][l2]["children"][l3]["count"] += 1
-
-    def _build(level: dict) -> list[NpClassLevel]:
-        return [
-            NpClassLevel(
-                name=name,
-                count=data["count"],
-                children=_build(data["children"]),
-            )
-            for name, data in sorted(level.items())
-        ]
-
-    return _build(tree)
+    key = "discovery:npc-tree:v1"
+    tree = cache.get(key)
+    if tree is None:
+        tree = npc_tree()
+        cache.set(key, tree, 300)
+    return tree
 
 
 @discovery_router.get(

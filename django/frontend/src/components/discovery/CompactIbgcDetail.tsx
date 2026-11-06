@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   NaturalProductSummary,
+  NpcLabel,
   ParentAssemblySummary,
 } from "@/api/types";
 
@@ -136,6 +137,7 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">
         <KpiStrip
           naturalProducts={ibgc.natural_products}
+          npcLabels={ibgc.npc_labels ?? []}
           parentAssembly={ibgc.parent_assembly}
           bgcClass={ibgc.bgc_class}
           isValidated={ibgc.is_validated}
@@ -198,6 +200,7 @@ function RegionStrip({ ibgcId }: { ibgcId: number | null }) {
 
 interface KpiStripProps {
   naturalProducts: NaturalProductSummary[];
+  npcLabels: NpcLabel[];
   parentAssembly: ParentAssemblySummary | null;
   bgcClass: string;
   isValidated: boolean;
@@ -213,6 +216,7 @@ const CHIP_CLICKABLE = "cursor-pointer transition-colors hover:bg-muted/60";
 
 function KpiStrip({
   naturalProducts,
+  npcLabels,
   parentAssembly,
   bgcClass,
   isValidated,
@@ -303,8 +307,68 @@ function KpiStrip({
           naturalProducts={naturalProducts}
           molviewSmiles={firstSmiles}
         />
+
+        <NpcChip labels={npcLabels} />
       </div>
     </TooltipProvider>
+  );
+}
+
+/** NPClassifier product class of the iBGC: the confident pathway(s) in the
+ *  chip, every label (with score, confidence and provenance) in the tooltip.
+ *  Click a label to filter the dashboard by that term. */
+function NpcChip({ labels }: { labels: NpcLabel[] }) {
+  const setNpcTerms = useFilterStore((s) => s.setNpcTerms);
+  const pathways = labels.filter((l) => l.level === "pathway");
+  const confident = pathways.filter((l) => l.confident);
+  const shown = confident.length > 0 ? confident : pathways;
+  const text =
+    shown.length === 0
+      ? "—"
+      : shown.map((l) => l.name).join(" | ") +
+        (confident.length === 0 ? " ?" : "");
+
+  const body = (
+    <span className={cn(CHIP_BASE, labels.length > 0 && CHIP_CLICKABLE)}>
+      <span className="text-muted-foreground">NP class</span>
+      <span className="font-semibold">{text}</span>
+    </span>
+  );
+  if (labels.length === 0) return body;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{body}</TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        className="max-w-sm border bg-popover text-popover-foreground shadow-md"
+      >
+        <div className="space-y-1 text-xs">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+            NPClassifier labels
+          </div>
+          {labels.map((l) => (
+            <button
+              key={l.term_id}
+              type="button"
+              className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-accent"
+              title={`Filter by ${l.level} ${l.name}`}
+              onClick={() => setNpcTerms([l.term_id])}
+            >
+              <span className="w-16 shrink-0 text-[10px] uppercase text-muted-foreground">
+                {l.level}
+              </span>
+              <span className="flex-1 truncate font-medium">{l.name}</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {l.score != null ? l.score.toFixed(2) : ""}
+                {l.confident ? "" : " (low)"}
+                {l.sources.includes("curated") ? " curated" : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

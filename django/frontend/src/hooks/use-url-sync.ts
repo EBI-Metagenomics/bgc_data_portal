@@ -10,7 +10,12 @@ import {
 /** Query params from retired features (ChemOnt class filter, SMILES chemical
  *  search). Hydration below is allow-list based so these are never read; they
  *  are stripped on mount so old shared links don't keep re-sharing them. */
-const LEGACY_URL_PARAMS = ["chemont_ids", "smiles", "similarity_threshold"];
+const LEGACY_URL_PARAMS = [
+  "chemont_ids",
+  "smiles",
+  "similarity_threshold",
+  "np_classes",
+];
 
 export function useUrlSync() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -53,6 +58,14 @@ export function useUrlSync() {
 
     const taxonomyPath = searchParams.get("taxonomy_path");
     if (taxonomyPath) useFilterStore.getState().setTaxonomyPath(taxonomyPath);
+
+    const npcTerms = searchParams.get("npc_terms");
+    if (npcTerms) {
+      useFilterStore.getState().setNpcTerms(npcTerms.split(",").filter(Boolean));
+    }
+    if (searchParams.get("npc_confident") === "false") {
+      useFilterStore.getState().setNpcConfidentOnly(false);
+    }
 
     const assemblyType = searchParams.get("assembly_type");
     if (assemblyType) useFilterStore.getState().setAssemblyType(assemblyType);
@@ -97,6 +110,8 @@ export function useUrlSync() {
         updateUrl("bgc_class", state.bgcClass);
         updateUrl("search", state.search);
         updateUrl("taxonomy_path", state.taxonomyPath);
+        updateUrl("npc_terms", state.npcTerms.join(","));
+        updateUrl("npc_confident", state.npcConfidentOnly ? "" : "false");
         updateUrl("assembly_type", state.assemblyType);
         updateUrl("biome_lineage", state.biomeLineage);
         updateUrl("accession", state.accession);

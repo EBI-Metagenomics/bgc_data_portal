@@ -38,6 +38,9 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from typing import Any
 
+from django.db import transaction
+from django.db.backends.postgresql.psycopg_any import NumericRange
+
 from discovery.models import (
     AccessionEntityType,
     ConsensusBgc,
@@ -49,8 +52,6 @@ from discovery.services.accession_registry import (
     lookup_or_mint_ibgc,
     tombstone_unused,
 )
-from django.db import transaction
-from django.db.backends.postgresql.psycopg_any import NumericRange
 
 log = logging.getLogger(__name__)
 
@@ -224,6 +225,12 @@ def build_integrated_bgcs(
 
     recompute_ibgc_classes()
     _rebuild_catalog_tables()
+
+    # NPClassifier labels: union of the members' labels per iBGC (SanntiS 1.0
+    # predictions, curated MIBiG labels) for the npc_terms filter and badges.
+    from discovery.services.npc import aggregate_ibgc_npc_labels
+
+    counts["n_npc_labels"] = aggregate_ibgc_npc_labels()
 
     log.info("iBGC build complete: %s", counts)
     return counts

@@ -253,7 +253,8 @@ class CombinedQueryFilters(Schema):
     assembly_type: str | None = None
     leaf_path_prefix: str | None = None
     bgc_class: str | None = None
-    np_classes: str | None = None
+    npc_terms: str | None = None
+    npc_confident: bool = True
     accession: str | None = None
     bgc_accession: str | None = None
     assembly_accession: str | None = None
@@ -346,9 +347,29 @@ class IbgcMemberBgc(Schema):
     id: int
     accession: str  # prediction_accession
     detector_name: str | None = None
+    detector_version: str | None = None
     is_partial: bool = False
     is_validated: bool = False
     size_kb: float = 0.0
+    score: float | None = (
+        None  # detector-native region score (SanntiS 1.0 mean ORF score, GECCO p)
+    )
+    probability: float | None = (
+        None  # detector BGC probability (SanntiS 1.0: 1 - p_non_bgc)
+    )
+    classification_path: str = ""  # raw per-tool class string
+
+
+class NpcLabelOut(Schema):
+    """NPClassifier label of an iBGC (union of its source predictions)."""
+
+    term_id: str
+    level: str  # pathway | superclass | class
+    name: str
+    score: float | None = None
+    confident: bool = False
+    sources: list[str] = []  # predicted | curated
+    detector_tools: list[str] = []
 
 
 class IbgcDetail(Schema):
@@ -373,6 +394,7 @@ class IbgcDetail(Schema):
     member_bgcs: list[IbgcMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
     natural_products: list[NaturalProductSummary] = []
+    npc_labels: list[NpcLabelOut] = []
 
 
 class IbgcScatterPoint(Schema):
@@ -623,10 +645,15 @@ class BgcClassOption(Schema):
     count: int
 
 
-class NpClassLevel(Schema):
+class NpcTreeNode(Schema):
+    """NPClassifier ontology node (pathway → superclass → class) with iBGC counts."""
+
+    term_id: str  # e.g. NPC:pathway:polyketides — the npc_terms filter value
+    level: str
     name: str
-    count: int
-    children: list["NpClassLevel"] = []
+    count: int  # iBGCs labelled with exactly this term (any confidence)
+    confident_count: int
+    children: list["NpcTreeNode"] = []
 
 
 class DomainOption(Schema):
@@ -802,7 +829,9 @@ class BgcStatsResponse(Schema):
     score_distributions: list[ScoreDistribution] = []
     complete_count: int = 0
     partial_count: int = 0
-    np_class_sunburst: list[SunburstNode] = []
+    npc_sunburst: list[SunburstNode] = (
+        []
+    )  # NPClassifier pathway/superclass/class (confident labels)
     bgc_class_distribution: list[BgcClassCount] = []
     total_bgcs: int = 0
 

@@ -26,8 +26,10 @@ export interface IbgcFilterParams {
   assembly_type?: string;
   leaf_path_prefix?: string;
   bgc_class?: string;
-  /** CSV of selected NP-class names (any of L1/L2/L3). */
-  np_classes?: string;
+  /** CSV of NPClassifier term ids; descendants of each term also match. */
+  npc_terms?: string;
+  /** "false" to include non-confident (abstained) SanntiS labels. */
+  npc_confident?: string;
   /** Single smart accession field — backend auto-detects assembly / contig /
    *  BGC / iBGC / region / protein. */
   accession?: string;

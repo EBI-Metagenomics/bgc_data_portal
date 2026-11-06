@@ -12,10 +12,12 @@ Pipeline phases (in dependency order):
   6. Domains              → ContigDomain (FK to ContigCds + denormalised contig FK)
   9–10. Assembly + catalog score recomputation
 
-Natural products are NOT loaded here — they're per-iBGC and the iBGC table
-is built downstream by ``build_integrated_bgcs``. The operator runs
-``python manage.py load_natural_products --data-dir <dir>`` after the iBGC
-build.
+  4b. NPClassifier labels  → SourceBgcNpcLabel (bgc_np_classes.tsv, optional; the
+      ontology is upserted first from ``common_core.npc``)
+
+iBGCs and their per-iBGC NPClassifier label union are built downstream by
+``build_integrated_bgcs``. Curated natural products (``natural_products.tsv``)
+have no loader step in the staged path.
 
 Expected directory layout::
 
@@ -28,7 +30,8 @@ Expected directory layout::
       cds.tsv                   (optional)
       cds_sequences.tsv         (optional)
       domains.tsv               (optional)
-      natural_products.tsv      (read by load_natural_products step, not here)
+      bgc_np_classes.tsv        (optional; NPClassifier labels per BGC)
+      natural_products.tsv      (optional; not read by the staged loader)
 
 Legacy files from pre-removal staged tarballs (``cds_chemont.tsv``,
 ``embeddings_bgc.tsv``, ``embeddings_protein.tsv``) and the ``umap_x`` /
@@ -78,6 +81,8 @@ SEQUENCE_INSERT_BATCH_SIZE = 500  # smaller SQL batches for large binary payload
 # Truncation order (FK CASCADE would handle it, but explicit is safer).
 ALL_DISCOVERY_TABLES = [
     "discovery_accession_alias",
+    "discovery_ibgc_npc_label",
+    "discovery_source_bgc_npc_label",
     "discovery_ibgc_natural_product",
     "discovery_ibgc_clustering_snapshot",
     "discovery_gcf",
@@ -490,6 +495,98 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
 # ── Source predictions + cBGC assignment ─────────────────────────────────────
 
 
+def _float_or_none(value: str | None) -> float | None:
+    """Optional float column of the staged TSVs (``""`` / missing → None)."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _json_or_none(value: str | None):
+    """Optional JSON column of the staged TSVs (``""`` / missing / invalid → None)."""
+    if not value:
+        return None
+    import json
+
+    try:
+        parsed = json.loads(value)
+    except ValueError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def load_bgc_np_classes(
+    data_dir: Path,
+    source_bgc_lookup: dict[tuple[str, int, int, str], int],
+) -> int:
+    """Load the optional ``bgc_np_classes.tsv`` → ``SourceBgcNpcLabel``.
+
+    Rows name a source prediction by ``(contig_sha256, bgc_start, bgc_end,
+    detector_name)`` and an ontology term by ``np_term_id``; rows whose BGC or
+    term is unknown are skipped with a warning. The ontology must be loaded
+    first (``load_npc_ontology``).
+    """
+    path = data_dir / "bgc_np_classes.tsv"
+    if not path.exists():
+        return 0
+    from discovery.models import NpcTerm, SourceBgcNpcLabel
+
+    known_terms = set(NpcTerm.objects.values_list("term_id", flat=True))
+    batch: list[SourceBgcNpcLabel] = []
+    total = skipped_bgc = skipped_term = 0
+
+    def _flush() -> None:
+        nonlocal total
+        if batch:
+            SourceBgcNpcLabel.objects.bulk_create(batch, ignore_conflicts=True)
+            total += len(batch)
+            batch.clear()
+
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            key = (
+                row["contig_sha256"],
+                int(row["bgc_start"]),
+                int(row["bgc_end"]),
+                row["detector_name"],
+            )
+            sbgc_id = source_bgc_lookup.get(key)
+            if sbgc_id is None:
+                skipped_bgc += 1
+                continue
+            term_id = (row.get("np_term_id") or "").strip()
+            if term_id not in known_terms:
+                skipped_term += 1
+                continue
+            batch.append(
+                SourceBgcNpcLabel(
+                    source_bgc_id=sbgc_id,
+                    term_id=term_id,
+                    rank=int(row.get("rank") or 1),
+                    score=_float_or_none(row.get("score")),
+                    confident=(row.get("confident") or "").lower() in ("true", "1"),
+                    source=(row.get("source") or SourceBgcNpcLabel.SOURCE_PREDICTED)[
+                        :16
+                    ],
+                )
+            )
+            if len(batch) >= BATCH_SIZE:
+                _flush()
+    _flush()
+    if skipped_bgc or skipped_term:
+        logger.warning(
+            "bgc_np_classes.tsv: skipped %d rows with unknown BGC "
+            "and %d with unknown term",
+            skipped_bgc,
+            skipped_term,
+        )
+    logger.info("Loaded %d source-prediction NPClassifier labels", total)
+    return total
+
+
 def _build_source_bgc_lookup() -> dict[tuple[str, int, int, str], int]:
     """Return ``{(contig_sha256, start, end, detector_name): source_bgc_id}``."""
     lookup: dict[tuple[str, int, int, str], int] = {}
@@ -600,6 +697,9 @@ def load_source_bgcs(
                     ],
                     is_partial=row.get("is_partial", "").lower() in ("true", "1"),
                     is_validated=row.get("is_validated", "").lower() in ("true", "1"),
+                    score=_float_or_none(row.get("score")),
+                    probability=_float_or_none(row.get("probability")),
+                    attributes=_json_or_none(row.get("attributes_json")),
                     detector_id=detector_id,
                     cbgc_id=cbgc_id,
                     bgc_number=bgc_number,
@@ -954,9 +1054,8 @@ def run_pipeline(
     """Execute the full discovery data loading pipeline.
 
     Notes:
-      * iBGCs and natural products are NOT created here — both are
-        post-load steps that run via ``build_integrated_bgcs`` and
-        ``load_natural_products`` respectively. ``compute_assembly_scores``
+      * iBGCs (and their NPClassifier label union) are NOT created here —
+        they are built by ``build_integrated_bgcs``. ``compute_assembly_scores``
         and ``compute_catalog_counts`` therefore expect to be run again
         after those steps; the call inside this function gives ingest-time
         counts of zero iBGCs, which is fine if you chain the steps via the
@@ -976,8 +1075,15 @@ def run_pipeline(
     contig_lookup = load_contigs(data_dir, assembly_lookup, retaxonomy=retaxonomy)
     load_contig_sequences(data_dir, contig_lookup)
 
-    # Source predictions + cBGC envelopes (with stable accessions).
-    load_source_bgcs(data_dir, contig_lookup, detector_lookup, assembly_lookup)
+    # NPClassifier ontology (idempotent) → source predictions + cBGC envelopes
+    # (with stable accessions) → their NPClassifier labels.
+    from discovery.services.npc import load_npc_ontology
+
+    load_npc_ontology()
+    source_bgc_lookup = load_source_bgcs(
+        data_dir, contig_lookup, detector_lookup, assembly_lookup
+    )
+    load_bgc_np_classes(data_dir, source_bgc_lookup)
 
     # CDS / domains — contig-anchored, deduped at insert.
     cds_lookup = load_cds(data_dir, contig_lookup)
@@ -990,8 +1096,8 @@ def run_pipeline(
         compute_catalog_counts()
 
     logger.info(
-        "Loader complete. Next steps (operator):\n"
-        "  python manage.py build_integrated_bgcs\n"
-        "  python manage.py load_natural_products --data-dir %s",
+        "Loader complete. Next step (operator): python manage.py build_integrated_bgcs "
+        "(rebuilds iBGCs, classes, catalog counts and NPClassifier labels; "
+        "data dir %s)",
         data_dir,
     )
