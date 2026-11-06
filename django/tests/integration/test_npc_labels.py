@@ -92,7 +92,7 @@ def loaded(tmp_path, db) -> Path:
 @pytest.mark.django_db
 def test_ontology_loads_idempotently():
     counts = load_npc_ontology()
-    assert counts == {"terms": 771, "edges": 786}
+    assert counts == {"terms": 777, "edges": 792}
     assert load_npc_ontology() == counts
     assert NpcTerm.objects.filter(level="pathway").count() == 7
     assert NpcTermEdge.objects.filter(child_id=MACRO).count() == 2
