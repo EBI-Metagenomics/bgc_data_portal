@@ -20,13 +20,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# ── Layer A: heavy ML packages (rarely change → maximise cache) ─────────────
-COPY requirements-ml.lock .
-RUN pip install --upgrade pip && pip install -r requirements-ml.lock
-
-# ── Layer B: remaining deps (full resolved set; ML already satisfied) ────────
+# ── Dependencies (web stack + science packages, one resolved lock) ──────────
 COPY requirements-worker.lock .
-RUN pip install -r requirements-worker.lock
+RUN pip install --upgrade pip && pip install -r requirements-worker.lock
 
-# ── Layer C: application code (changes often) ───────────────────────────────
+# ── Application code (changes often) ────────────────────────────────────────
 COPY . .

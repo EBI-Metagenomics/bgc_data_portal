@@ -290,7 +290,7 @@ lock:
 	docker run --rm -v "$(CURDIR)/django:/w" -w /w python:$(PY_VERSION)-slim sh -c '\
 	  apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1 && \
 	  pip install -q uv && \
-	  for f in web ml worker dev; do \
+	  for f in web worker dev; do \
 	    echo "  - requirements-$$f.lock" && \
 	    uv pip compile requirements-$$f.txt -o requirements-$$f.lock \
 	      --python-platform $(PY_PLATFORM) --python-version $(PY_VERSION) \
