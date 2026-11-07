@@ -25,7 +25,6 @@ interface FilterState {
   // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
   minLengthKb: number | null;
   maxLengthKb: number | null;
-  exploreQueryTriggered: boolean;
 
   setSourceNames: (v: string[]) => void;
   setDetectorTools: (v: string[]) => void;
@@ -41,7 +40,6 @@ interface FilterState {
   setAccession: (v: string) => void;
   setAssemblyIds: (v: string) => void;
   setLengthRangeKb: (min: number | null, max: number | null) => void;
-  runExploreQuery: () => void;
   clearFilters: () => void;
 }
 
@@ -61,31 +59,29 @@ const initialState = {
   assemblyIds: "",
   minLengthKb: null as number | null,
   maxLengthKb: null as number | null,
-  exploreQueryTriggered: false,
 };
 
 export const useFilterStore = create<FilterState>((set) => ({
   ...initialState,
 
-  setSourceNames: (v) => set({ sourceNames: v, exploreQueryTriggered: false }),
+  setSourceNames: (v) => set({ sourceNames: v }),
 
-  setDetectorTools: (v) => set({ detectorTools: v, exploreQueryTriggered: false }),
+  setDetectorTools: (v) => set({ detectorTools: v }),
 
-  setTaxonomyPath: (value) => set({ taxonomyPath: value, exploreQueryTriggered: false }),
+  setTaxonomyPath: (value) => set({ taxonomyPath: value }),
 
-  setAssemblyType: (v) => set({ assemblyType: v, exploreQueryTriggered: false }),
+  setAssemblyType: (v) => set({ assemblyType: v }),
 
-  setBgcClass: (v) => set({ bgcClass: v, exploreQueryTriggered: false }),
-  setGcfPath: (v) => set({ gcfPath: v, exploreQueryTriggered: false }),
-  setNpcTerms: (v) => set({ npcTerms: v, exploreQueryTriggered: false }),
-  setNpcConfidentOnly: (v) => set({ npcConfidentOnly: v, exploreQueryTriggered: false }),
-  setSearch: (v) => set({ search: v, exploreQueryTriggered: false }),
-  setDomainText: (v) => set({ domainText: v, exploreQueryTriggered: false }),
-  setBiomeLineage: (v) => set({ biomeLineage: v, exploreQueryTriggered: false }),
-  setAccession: (v) => set({ accession: v, exploreQueryTriggered: false }),
-  setAssemblyIds: (v) => set({ assemblyIds: v, exploreQueryTriggered: false }),
+  setBgcClass: (v) => set({ bgcClass: v }),
+  setGcfPath: (v) => set({ gcfPath: v }),
+  setNpcTerms: (v) => set({ npcTerms: v }),
+  setNpcConfidentOnly: (v) => set({ npcConfidentOnly: v }),
+  setSearch: (v) => set({ search: v }),
+  setDomainText: (v) => set({ domainText: v }),
+  setBiomeLineage: (v) => set({ biomeLineage: v }),
+  setAccession: (v) => set({ accession: v }),
+  setAssemblyIds: (v) => set({ assemblyIds: v }),
   setLengthRangeKb: (min, max) =>
-    set({ minLengthKb: min, maxLengthKb: max, exploreQueryTriggered: false }),
-  runExploreQuery: () => set({ exploreQueryTriggered: true }),
+    set({ minLengthKb: min, maxLengthKb: max }),
   clearFilters: () => set(initialState),
 }));

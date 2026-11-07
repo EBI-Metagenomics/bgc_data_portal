@@ -2,7 +2,6 @@ import { apiGet } from "./client";
 import type {
   BgcClassOption,
   NpcTreeNode,
-  PaginatedDomainResponse,
   PaginatedGcfResponse,
   PaginatedSourceResponse,
   PaginatedDetectorResponse,
@@ -19,19 +18,6 @@ export function fetchBgcClasses() {
 
 export function fetchNpcTree() {
   return apiGet<NpcTreeNode[]>("/filters/npc-tree/");
-}
-
-export interface DomainSearchParams {
-  search?: string;
-  page?: number;
-  page_size?: number;
-}
-
-export function fetchDomains(params: DomainSearchParams = {}) {
-  return apiGet<PaginatedDomainResponse>(
-    "/filters/domains/",
-    params as Record<string, string | number | boolean | undefined>
-  );
 }
 
 export interface GcfSearchParams {

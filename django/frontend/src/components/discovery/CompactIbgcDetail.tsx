@@ -19,14 +19,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
-  NaturalProductSummary,
   NpcLabel,
   ParentAssemblySummary,
 } from "@/api/types";
-
-function molviewHref(smiles: string): string {
-  return `https://app.molview.com/?smiles=${encodeURIComponent(smiles)}`;
-}
 
 interface Props {
   ibgcId: number | null;
@@ -136,7 +131,6 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">
         <KpiStrip
-          naturalProducts={ibgc.natural_products}
           npcLabels={ibgc.npc_labels ?? []}
           parentAssembly={ibgc.parent_assembly}
           bgcClass={ibgc.bgc_class}
@@ -199,7 +193,6 @@ function RegionStrip({ ibgcId }: { ibgcId: number | null }) {
 }
 
 interface KpiStripProps {
-  naturalProducts: NaturalProductSummary[];
   npcLabels: NpcLabel[];
   parentAssembly: ParentAssemblySummary | null;
   bgcClass: string;
@@ -215,7 +208,6 @@ const CHIP_BASE =
 const CHIP_CLICKABLE = "cursor-pointer transition-colors hover:bg-muted/60";
 
 function KpiStrip({
-  naturalProducts,
   npcLabels,
   parentAssembly,
   bgcClass,
@@ -225,9 +217,6 @@ function KpiStrip({
   novelty,
   domainNovelty,
 }: KpiStripProps) {
-  // Compounds chip count = curated natural products (e.g. MIBiG compounds).
-  const compoundsCount = naturalProducts.length;
-  const firstSmiles = naturalProducts.find((np) => np.smiles)?.smiles;
   const parentAcc = parentAssembly?.accession ?? "—";
   const setGcfPath = useFilterStore((s) => s.setGcfPath);
 
@@ -302,12 +291,6 @@ function KpiStrip({
           <span className="font-semibold">{fmt(domainNovelty, 2)}</span>
         </span>
 
-        <CompoundsChip
-          count={compoundsCount}
-          naturalProducts={naturalProducts}
-          molviewSmiles={firstSmiles}
-        />
-
         <NpcChip labels={npcLabels} />
       </div>
     </TooltipProvider>
@@ -369,80 +352,5 @@ function NpcChip({ labels }: { labels: NpcLabel[] }) {
         </div>
       </TooltipContent>
     </Tooltip>
-  );
-}
-
-function CompoundsChip({
-  count,
-  naturalProducts,
-  molviewSmiles,
-}: {
-  count: number;
-  naturalProducts: NaturalProductSummary[];
-  molviewSmiles: string | undefined;
-}) {
-  const chipBody = (
-    <>
-      <span className="text-muted-foreground">compounds</span>
-      <span className="font-semibold">{String(count)}</span>
-    </>
-  );
-
-  const trigger = molviewSmiles ? (
-    <a
-      href={molviewHref(molviewSmiles)}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
-    >
-      {chipBody}
-    </a>
-  ) : (
-    <span className={CHIP_BASE}>{chipBody}</span>
-  );
-
-  if (count === 0) return trigger;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-      <TooltipContent
-        side="bottom"
-        className="max-w-sm border bg-popover text-popover-foreground shadow-md"
-      >
-        <CompoundsTooltipBody naturalProducts={naturalProducts} />
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function CompoundsTooltipBody({
-  naturalProducts,
-}: {
-  naturalProducts: NaturalProductSummary[];
-}) {
-  return (
-    <div className="space-y-3 text-xs">
-      {naturalProducts.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
-            Curated compounds
-          </div>
-          {naturalProducts.map((np) => (
-            <div
-              key={np.id}
-              className="space-y-1 border-b border-border/40 pb-2 last:border-0 last:pb-0"
-            >
-              <div className="font-medium">{np.name || "(unnamed)"}</div>
-              {np.np_class_path && (
-                <div className="text-[10px] text-muted-foreground">
-                  {np.np_class_path.replace(/\./g, " > ")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }

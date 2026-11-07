@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useFilterStore } from "@/stores/filter-store";
-import { useSelectionStore } from "@/stores/selection-store";
 import {
   snapshotFiltersToApplied,
   useDiscoveryStore,
@@ -76,11 +75,6 @@ export function useUrlSync() {
     const accession = searchParams.get("accession");
     if (accession) useFilterStore.getState().setAccession(accession);
 
-    const assemblyId = searchParams.get("assembly");
-    if (assemblyId) {
-      useSelectionStore.getState().setActiveAssemblyId(Number(assemblyId));
-    }
-
     // Auto-run query when redirected from landing page keyword search.
     // The v2 dashboard's roster + maps key off ``discovery-store``'s
     // ``appliedFilters`` (populated by the Run Query button), NOT the
@@ -115,9 +109,6 @@ export function useUrlSync() {
         updateUrl("assembly_type", state.assemblyType);
         updateUrl("biome_lineage", state.biomeLineage);
         updateUrl("accession", state.accession);
-      }),
-      useSelectionStore.subscribe((state) => {
-        updateUrl("assembly", state.activeAssemblyId?.toString() ?? "");
       }),
     ];
 

@@ -8,10 +8,11 @@
  * payload (the same field mapping the React panels use), not snapshotted from
  * the DOM, so the export does not depend on render timing.
  *
- * The full ``plotly.js-dist-min`` build is used (the app's runtime bundle is
- * the *basic* dist, which lacks the ``sunburst`` trace the report relies on).
- * It is fetched lazily from our own origin at click time, so it never bloats
- * the main app chunk.
+ * The full ``plotly.js-dist-min`` build is inlined; the app's runtime charts
+ * already use the full build too (``react-plotly.js`` resolves
+ * ``plotly.js/dist/plotly``), so both render the same trace types, including
+ * ``sunburst``. The dist file is fetched lazily from our own origin at click
+ * time, so it never bloats the main app chunk.
  */
 import type {
   CategoryCount,
