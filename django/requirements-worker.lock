@@ -47,7 +47,7 @@ igraph==1.0.0
     #   leidenalg
 leidenalg==0.12.0
     # via -r requirements-ml.txt
-mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@cb1d719aa02a46fd97e4a2819d0cdc9c17601471
+mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@c4fefd4b5c039e1cd574df5540414c1d3d2f4158
     # via -r requirements-web.txt
 narwhals==2.28.0
     # via plotly
