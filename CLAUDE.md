@@ -1,152 +1,124 @@
 # CLAUDE.md — BGC Data Portal
 
 Django 5 web portal and REST API for Biosynthetic Gene Clusters (BGCs) in MGnify.
+`README.md` is the canonical developer guide; this file is the short version.
 
 ## Common Commands
 
-### Local dev (Docker Compose)
+Local dev runs on a k3d cluster through Skaffold (no docker-compose):
 
 ```bash
-docker compose up --build                          # Start full stack
-docker compose exec django pytest -q               # Run all tests
-docker compose exec django pytest tests/unit/test_foo.py -q          # Single file
-docker compose exec django pytest tests/unit/test_foo.py::test_name -q  # Single test
-
-# E2E (run outside the container; needs `playwright install chromium` once).
-# The SPA mounts at /dashboard/; Skaffold forwards django:80 -> :8080.
-make test-e2e                                          # all v2 specs
-pytest tests/e2e/playwright/specs/test_v2_discovery_journey.py -q \
-    --e2e-v2-base-url http://localhost:8080/dashboard  # v2 iBGC-first dashboard
+make dev                      # build dev images, deploy the chart, hot-reload at :8080
+make test-unit                # pytest django/tests/unit (inside the django pod)
+make test-integration         # pytest django/tests/integration
+make test-e2e                 # Playwright specs against http://localhost:8080/dashboard
+make shell                    # bash in the django pod
+make logs-django / logs-worker
 ```
 
-A fresh dev DB needs the v2 schema + seed data before the e2e suite has
-anything to render (the squashed migration is skipped on an upgraded-in-place
-DB — see `make reset-db`):
+A fresh dev DB needs schema + data before the dashboard has anything to render:
 
 ```bash
-make reset-db                 # rebuild the v2 schema (DESTRUCTIVE, dev only)
-make seed-real-data           # load raw discovery data (set STAGED_FILES_DIR)
-make e2e-seed                 # build iBGCs + a clustering run
-make test-e2e                 # run the browser suite
+make reset-db                 # rebuild the schema (DESTRUCTIVE, dev only)
+make seed-real-data           # load staged ETL tarballs (STAGED_FILES_DIR)
+make e2e-seed                 # build_integrated_bgcs
 ```
+
+Running the suite outside the cluster: point `DATABASE_URL` at any Postgres 18,
+set `DJANGO_SECRET_KEY` and `ALLOWED_HOSTS`, then `pytest -q` from the repo root
+(`pyproject.toml` holds the pytest config).
 
 ### Code quality
 
 ```bash
-ruff check . --fix      # Lint
-black django/           # Format
+ruff check . --fix
+ruff format .
 pre-commit run --all-files
 ```
 
-### Management commands
+### Management commands (run in a pod: `kubectl exec -n <ns> deploy/bgc-data-portal-worker -- python manage.py …`)
 
 ```bash
-docker compose exec django python manage.py migrate
-docker compose exec django python manage.py collectstatic
-docker compose exec django python manage.py build_integrated_bgcs
-#   (also rebuilds the per-iBGC NPClassifier labels; standalone: aggregate_npc_labels)
-docker compose exec django python manage.py load_npc_ontology   # NPClassifier terms (idempotent; run_pipeline does it too)
+manage.py load_discovery_data <dir> [--truncate]   # staged ETL TSVs -> DB
+manage.py build_integrated_bgcs                     # rebuild iBGCs (+ NPClassifier label union, stats)
+manage.py load_npc_ontology                         # NPClassifier terms (idempotent; the loader runs it too)
 
-# Clustering is an HPC handoff in prod (CLUSTERING_HPC_MODE=True):
-#   1. export signature matrices, ship to HPC, run `bgc-cluster run`
-docker compose exec django python manage.py export_clustering_inputs --run-tag <tag>
-#   2. (HPC) sbatch deployments/cronjobs/slurm/bgc_clustering_cpu.sh in.tgz out.tgz
-#   3. import the result tarball back into the DB
-docker compose exec django python manage.py import_clustering_results /data/clustering_artifacts/imports/<tag>.tgz
-#   rollback: restore per-iBGC columns from a previous run's snapshot
-docker compose exec django python manage.py set_active_clustering_run --sha <previous_sha>
-
-# Dev-only (CLUSTERING_HPC_MODE unset): in-portal clustering still works.
-docker compose exec django python manage.py run_bgc_clustering --apply
-docker compose exec django python manage.py reclassify_bgcs --run <pk>
-docker compose exec django python manage.py recompute_all_scores
-docker compose exec django python manage.py update_discovery_stats
+# Clustering is an HPC handoff: export, run `bgc-cluster` (common-core) on HPC, import.
+manage.py export_clustering_inputs --run-tag <tag>
+manage.py import_clustering_results /data/clustering_artifacts/imports/<tag>.tgz
+manage.py set_active_clustering_run --sha <previous_sha>   # rollback to a prior run
+manage.py reclassify_bgcs --run <pk>                       # partial / non-primary iBGCs
+manage.py recompute_all_scores
+manage.py build_protein_search_index --rebuild|--append    # phmmer index (worker pod)
+manage.py update_discovery_stats
 ```
-
 
 ## Architecture
 
 ```
 django/
-  bgc_data_portal/        # Project settings, root URLs, template views
-  discovery/              # v2 Discovery app (iBGC-first)
-    models.py             # ORM models (IntegratedBGC, DashboardBgc, ClusteringRun, …)
+  bgc_data_portal/        # Settings, root URLs, template views (landing, about, docs, SPA host)
+  discovery/              # The app (iBGC-first)
+    models.py             # ORM models (IntegratedBgc, SourceBgcPrediction, ClusteringRun, …)
     api.py                # Django Ninja REST API (OpenAPI at /api/docs)
     api_schemas.py        # Pydantic schemas for API I/O
     tasks.py              # django-tasks background tasks
-    cache_utils.py        # cache + job-status helpers
-    services/             # Business logic layer
-      clustering/         # Domain+adjacency similarity (weighted cosine; Dice on older runs) → KNN → hierarchical Leiden
-        pipeline.py       # Orchestrator (persists per-run scoring cache)
-        ibgc_scoring.py    # iBGC novelty + domain_novelty + partial projection
-        reclassify.py     # KNN reclassification of non-primary DashboardBgcs
-        metrics.py        # Sørensen–Dice similarity
-        bgc_similarity.py # Composite weighted-mean Dice (in-portal Dice path)
-        feature_weights.py # Per-run IDF ** p × enrichment weights (ADR 0003)
-        enrichment.py     # Builds the versioned BGC-core vs flank domain enrichment table
-        knn_graph.py      # Union top-k KNN graph
-        leiden.py         # Hierarchical CPM Leiden
-        adjacency.py      # Adjacency-pair matrix builder
-        membership.py     # iBGC × domain binary matrix builder
-        integrated.py  # IntegratedBGC table builder
+    services/             # Business logic
+      clustering/         # iBGC similarity + scoring against the active ClusteringRun
+        ibgc_scoring.py   # novelty, domain_novelty, partial projection
+        similarity_on_demand.py  # Find-similar / architecture search from the scoring cache
+        membership.py, adjacency.py, feature_weights.py, enrichment.py  # feature matrices (ADR 0003)
+        integrated.py     # IntegratedBgc table builder
+        reclassify.py     # KNN reclassification of non-primary iBGCs
+      ingestion/          # Staged-TSV loader (load_discovery_data)
+      asset_upload/       # "Load asset" tarball: parse, validate, project virtual iBGCs
       protein_search/     # phmmer-based sequence search
+      query/              # Combined query criteria (domains, architecture, sequence)
       report.py           # Shortlist Report payload builder
-      stats.py            # Aggregations for BGC/Assembly stats panels
-      ingestion/          # Stream-based NDJSON package ingestion
-  mgnify_bgcs/            # Legacy app (pre-v2; being retired by P1.4b)
-  tests/
-    unit/
-    integration/
-    e2e/playwright/
+  frontend/               # React + TypeScript (Vite) SPA, built into static/dashboard
+  docs/                   # Quarto user docs served at /docs/
+  tests/                  # unit/, integration/, e2e/playwright/
+deployments/chart/        # The one Helm chart (laptop, self-host, cloud via deployer values)
 ```
 
 ## Key Patterns
 
-**NPClassifier search** — SanntiS 1.0 predicts the NPClassifier pathway / superclass of each region and MIBiG entries carry curated labels. The ETL stages them in `bgc_np_classes.tsv`; the loader writes `SourceBgcNpcLabel`, `build_integrated_bgcs` unions them into `IbgcNpcLabel`, and the `npc_terms` filter (plus `npc_confident`) expands a selected term to its descendants over the DAG in `common_core.npc`. The tree comes from `/filters/npc-tree/`.
+**iBGC-first** — The dashboard surfaces `IntegratedBgc` rows, each consolidating
+one or more `SourceBgcPrediction` detections. `is_partial=True` marks iBGCs whose
+GCF / novelty were projected from top-K primary neighbours; `False` means the row
+was clustered directly. There is no 2D layout; the Variables map is the only scatter.
 
-**iBGC-first** — In v2 the dashboard surfaces ``IntegratedBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the iBGC. `IntegratedBGC.is_partial = True` marks iBGCs whose GCF / novelty were projected from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered. There is no 2D layout (UMAP was removed); the Variables map is the only scatter view.
+**Composite similarity** — Each `ClusteringRun` records its `similarity_metric`
+(ADR 0003): `cosine_idf_enrich` = `w_d · cos_w(domains) + w_a · cos_w(adjacency)`
+with per-feature weights `idf ** idf_exponent × enrich` (defaults 0.6/0.4, 0.5), or
+`dice` for older runs. Every consumer (novelty, Find similar, architecture search,
+asset upload, partial projection) scores with the active run's metric and weights
+from `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`.
 
-**Composite similarity** — Replaces the retired ESM embedding HNSW. Each `ClusteringRun` records its `similarity_metric` (ADR 0003, monorepo `docs/architecture/adr/`): `cosine_idf_enrich` = `w_d · cos_w(domains) + w_a · cos_w(adjacency-pairs)` with per-feature weights `idf ** idf_exponent × enrich` (defaults 0.6/0.4, exponent 0.5), or `dice` = the same composite with Sørensen–Dice (older runs, rollback). Every consumer (novelty, Find similar, architecture search, asset upload, partial projection) scores with the active run's metric and weights. ``run_clustering_pipeline`` builds the iBGC×iBGC matrix and persists it under `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`. The cache feeds iBGC novelty scoring and the `/query/similar-ibgc/` endpoint.
+**NPClassifier search** — SanntiS 1.0 predicts NPClassifier pathway / superclass;
+MIBiG entries carry curated labels. The loader writes `SourceBgcNpcLabel`,
+`build_integrated_bgcs` unions them into `IbgcNpcLabel`, and the `npc_terms` filter
+(plus `npc_confident`) expands a term to its descendants over `common_core.npc`.
 
-**iBGC scoring** — `novelty_score = 1 − max(sim to validated iBGC)` and `domain_novelty = |domains unique within leaf GCF| / |domains|` (NULL for singleton GCFs / iBGCs without source-vocab domains). Computed inline by the pipeline (primary iBGCs) and by `project_partial_ibgcs` (partials, after reclassify).
+**Async search** — `POST /query/combined/` enqueues a django-tasks job (Postgres
+`django-tasks-db` backend, `manage.py db_worker`); the UI polls
+`/query/combined/status/{task_id}/scores/`. Sequence search uses pyhmmer phmmer.
 
-**Async search** — POST to a search endpoint returns HTTP 202 with a `task_id`; poll the job-status endpoint for results. All search tasks run through django-tasks (Postgres `django-tasks-db` backend, run by `manage.py db_worker`). Sequence search uses pyhmmer's phmmer.
+**Shortlist Report** — Stateless. `POST /report/snapshot/` materialises the payload
+in the cache under a deterministic `sha256(sorted ids)[:32]` token (24 h TTL);
+`GET /report/{token}/` serves it. The shortlist holds up to 1,000 iBGCs.
 
-**Shortlist Report** — Stateless. `POST /report/snapshot/` accepts ≤100 iBGC ids and returns a deterministic `sha256(sorted ids)[:32]` token after materialising the payload in the cache (Postgres DatabaseCache, `report:{token}` with 24h TTL). `GET /report/{token}/` serves the cached payload. No DB table; reload-safe within the TTL window.
-
-**Ingestion** — stream-based NDJSON packages; all writes are idempotent upserts keyed on stable identifiers.
-
-**API docs** — Swagger UI at `/api/docs`, ReDoc at `/api/redoc`.
+**API access** — Endpoints in `/api/docs` are open and rate-limited per client IP.
+UI-only endpoints (`include_in_schema=False`) accept same-origin browser traffic
+only (`discovery/security.py`). There are no write endpoints.
 
 ## Stack
 
 | Component | Technology |
 |-----------|-----------|
 | Web framework | Django 5 + Django Ninja |
-| Database | PostgreSQL 18 (pgvector dropped, migration 0009) |
-| Cache | PostgreSQL (Django DatabaseCache) |
-| Background tasks | django-tasks + django-tasks-db (`manage.py db_worker`) |
-| Production server | Gunicorn |
-| Local dev | Docker Compose / Kind |
-
-## Kubernetes Workspace (Claude Code in an isolated pod)
-
-An isolated workspace pod in the Kind cluster where `claude --dangerously-skip-permissions` can run safely. All edits, shell commands, and git ops happen inside the pod.
-
-```bash
-# First time (Max account): log in via OAuth
-make workspace-login              # follow the URL to authenticate
-
-# Enter Claude Code directly
-make workspace-claude
-
-# Or enter a shell first
-make workspace-enter
-
-# After Claude makes changes, extract them as a patch:
-make workspace-patch           # Creates workspace.patch on host
-make workspace-apply-patch     # Applies the patch to host repo
-
-# Refresh workspace with latest host code:
-make workspace-sync-in
-```
+| Database, cache, task queue | PostgreSQL 18 (DatabaseCache, django-tasks-db) |
+| Background worker | `manage.py db_worker` |
+| Production server | Gunicorn behind the k8s ingress |
+| Frontend | React 18 + TypeScript + Vite + Tailwind, Plotly |
+| Local dev | k3d + Skaffold + the Helm chart |

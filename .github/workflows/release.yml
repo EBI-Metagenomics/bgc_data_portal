@@ -78,9 +78,6 @@ jobs:
           - folder: django
             image_name: bgc-data-portal-website-worker
             dockerfile: Dockerfile.worker
-          - folder: db
-            image_name: bgc-data-portal-postgres
-            dockerfile: Dockerfile
 
     steps:
       - name: Checkout
