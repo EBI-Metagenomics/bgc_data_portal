@@ -1,6 +1,6 @@
 """Assign leaf family paths to non-primary BGCs against an existing ClusteringRun.
 
-Independent of ``run_bgc_clustering``: re-run whenever new partial BGCs
+Independent of the clustering import: re-run whenever new partial BGCs
 land or stale assignments need refreshing. Does not reshape the hierarchy.
 """
 
@@ -57,7 +57,7 @@ class Command(BaseCommand):
             latest = ClusteringRun.objects.order_by("-created_at").first()
             if latest is None:
                 raise CommandError(
-                    "No ClusteringRun exists; run `run_bgc_clustering` first"
+                    "No ClusteringRun exists; run `import_clustering_results` first"
                 )
             run_pk = latest.pk
             self.stdout.write(

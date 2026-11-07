@@ -24,8 +24,3 @@ def use_matomo(request):
         return {"use_matomo": False}
 
 
-def base_path(request):
-    """
-    Context processor to provide the base path for the application.
-    """
-    return {"base_path": settings.FORCE_SCRIPT_NAME}

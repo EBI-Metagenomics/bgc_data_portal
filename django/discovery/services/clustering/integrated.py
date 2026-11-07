@@ -265,7 +265,6 @@ def _build_ibgcs_for_contig(
         n_validated_standalone += 1
 
     # 2. Transitive sort-and-sweep merge for GECCO/SanntiS (partial-agnostic).
-    chain_start_idx = len(ibgcs)
     merge_rows.sort(key=lambda r: (r[2], r[3]))
     current: dict[str, Any] | None = None
     for sbgc_id, _cbgc_id, start, end, tool, _, _, _ in merge_rows:

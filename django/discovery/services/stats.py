@@ -1,14 +1,8 @@
 """Aggregation statistics for the Discovery Platform stats panels.
 
-iBGC is the unit of every stats panel — ``compute_bgc_stats`` takes an
-``IntegratedBgc`` queryset. Domain / NP aggregations reach
-their targets through range-overlap joins on the contig (no more
-through-BGC FK chain). For unfiltered views, reads from PrecomputedStats
-to avoid full-table scans.
-
-The legacy ``BgcStatsResponse`` field names (``total_bgcs``,
-``core_domains``, ``bgc_class_distribution``) are kept for API parity —
-the values now reflect iBGC-level counts.
+iBGC is the unit of every stats panel: ``compute_bgc_stats`` takes an
+``IntegratedBgc`` queryset. Domain aggregations reach their targets through
+range-overlap joins on the contig.
 """
 
 import random

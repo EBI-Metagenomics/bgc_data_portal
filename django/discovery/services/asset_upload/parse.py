@@ -29,7 +29,6 @@ from .schemas import (
     AssetData,
     AssetDetector,
     AssetDomain,
-    AssetNaturalProduct,
 )
 from .validate import AssetValidationError, ValidatedTarball
 
@@ -268,35 +267,12 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
                     f"domains.tsv has more than {MAX_DOMAIN_ROWS} rows"
                 )
 
-    # ── natural products (optional) ─────────────────────────────────────
-    if "natural_products.tsv" in members:
-        for row in _reader(members["natural_products.tsv"]):
-            key = (
-                row["contig_sha256"],
-                _to_int(row["bgc_start"]),
-                _to_int(row["bgc_end"]),
-                row["detector_name"],
-            )
-            if key not in bgc_keys:
-                continue
-            data.natural_products.append(
-                AssetNaturalProduct(
-                    bgc_key=key,
-                    name=row.get("name", ""),
-                    smiles=row.get("smiles", ""),
-                    np_class_path=row.get("np_class_path", ""),
-                    structure_svg_base64=row.get("structure_svg_base64", ""),
-                    morgan_fp_b64=row.get("morgan_fp_base64", ""),
-                )
-            )
-
     log.info(
-        "parse_asset_tar: %d assemblies, %d contigs, %d bgcs, %d cds, %d domains, %d nps",
+        "parse_asset_tar: %d assemblies, %d contigs, %d bgcs, %d cds, %d domains",
         len(data.assemblies),
         len(data.contigs),
         len(data.bgcs),
         len(data.cds),
         len(data.domains),
-        len(data.natural_products),
     )
     return data

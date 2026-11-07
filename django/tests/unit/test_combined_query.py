@@ -292,7 +292,7 @@ def test_status_returns_roster_with_per_criterion_scores(client, monkeypatch):
     ids = [a.id, b.id]
     monkeypatch.setattr("discovery.cache_utils.fetch_job", _ready(_cached_result(ids)))
 
-    resp = client.get(f"/api/discovery/query/combined/status/task/")
+    resp = client.get("/api/discovery/query/combined/status/task/")
     assert resp.status_code == 200
     body = resp.json()
     # Column descriptors propagate.

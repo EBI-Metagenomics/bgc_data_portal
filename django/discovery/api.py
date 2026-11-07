@@ -15,15 +15,11 @@ inline. Search and per-prediction download paths are the affected
 handlers; iBGC-keyed handlers are functional under the new schema.
 """
 
-import csv
 import json
 import logging
 import math
-from io import StringIO
 
 from django.db.models import (
-    Avg,
-    Case,
     Count,
     Exists,
     ExpressionWrapper,
@@ -34,18 +30,12 @@ from django.db.models import (
     OuterRef,
     Q,
     Subquery,
-    When,
 )
 from django.http import HttpResponse
 from ninja import Router
 from ninja.errors import HttpError
 
 from discovery.api_schemas import (
-    AccessionResolveOut,
-    AssemblyDetail,
-    AssemblyRosterItem,
-    AssemblyScatterPoint,
-    AssemblyStatsResponse,
     AssetStatusResponse,
     AssetUploadAccepted,
     BgcClassOption,
@@ -61,7 +51,6 @@ from discovery.api_schemas import (
     DetectorOption,
     DiscoveryStatsResponse,
     DomainArchitectureItem,
-    DomainOption,
     GcfOption,
     IbgcArchitectureResponse,
     IbgcCountResponse,
@@ -74,27 +63,21 @@ from discovery.api_schemas import (
     IbgcRosterItem,
     IbgcScatterPoint,
     InterproAnnotationOut,
-    NaturalProductSummary,
     NpcLabelOut,
     NpcTreeNode,
-    PaginatedAssemblyAggregationResponse,
-    PaginatedAssemblyResponse,
     PaginatedDetectorResponse,
-    PaginatedDomainResponse,
     PaginatedGcfResponse,
     PaginatedIbgcRosterResponse,
     PaginatedSourceResponse,
     PaginationMeta,
     ParentAssemblySummary,
     PfamAnnotationOut,
-    QueryResultAssemblyAggregation,
     RegionCdsOut,
     RegionClusterOut,
     RegionDomainOut,
     ReportPayload,
     ReportSnapshotRequest,
     ReportSnapshotResponse,
-    ShortlistExportRequest,
     SimilarIbgcRequest,
     SourceOption,
     TaxonomyNode,
@@ -107,10 +90,8 @@ from discovery.models import (
     DashboardAssembly,
     DashboardBgcClass,
     DashboardDetector,
-    DashboardDomain,
     DashboardGCF,
     DiscoveryStats,
-    IbgcNaturalProduct,
     IbgcNpcLabel,
     IntegratedBgc,
     SourceBgcPrediction,
@@ -121,7 +102,6 @@ from discovery.services.architecture import (
     ibgc_architecture,
 )
 from discovery.services.npc import expand_term_ids, npc_tree, parse_term_csv
-from discovery.services.stats import compute_assembly_stats
 from discovery.throttling import (
     default_throttle,
     search_throttle,
@@ -144,349 +124,13 @@ def _paginate(page: int, page_size: int, total_count: int):
     return page, page_size, total_pages, offset
 
 
-def _assembly_to_roster_item(assembly: DashboardAssembly) -> AssemblyRosterItem:
-    return AssemblyRosterItem(
-        id=assembly.id,
-        accession=assembly.assembly_accession,
-        organism_name=assembly.organism_name,
-        source_name=assembly.source.name if assembly.source else None,
-        assembly_type=assembly.get_assembly_type_display(),
-        is_type_strain=assembly.is_type_strain,
-        type_strain_catalog_url=assembly.type_strain_catalog_url,
-        bgc_count=assembly.bgc_count,
-        l1_class_count=assembly.l1_class_count,
-        bgc_diversity_score=assembly.bgc_diversity_score,
-        bgc_novelty_score=assembly.bgc_novelty_score,
-        bgc_density=assembly.bgc_density,
-        taxonomic_novelty=assembly.taxonomic_novelty,
-    )
-
-
 # ── Shared filter helpers ────────────────────────────────────────────────────
-
-
-def _apply_assembly_filters(
-    qs,
-    *,
-    assembly_ids: str | None = None,
-    assembly_type: str | None = None,
-    source_names: str | None = None,
-    detector_tools: str | None = None,
-    taxonomy_path: str | None = None,
-    search: str | None = None,
-    bgc_class: str | None = None,
-    biome_lineage: str | None = None,
-    bgc_accession: str | None = None,
-    assembly_accession: str | None = None,
-):
-    """Apply common assembly filters to a DashboardAssembly queryset."""
-    if assembly_ids:
-        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
-        if ids:
-            qs = qs.filter(id__in=ids)
-        else:
-            qs = qs.none()
-    if assembly_type:
-        from discovery.models import AssemblyType
-
-        type_map = {v.label: v.value for v in AssemblyType}
-        if assembly_type.lower() in type_map:
-            qs = qs.filter(assembly_type=type_map[assembly_type.lower()])
-    if source_names:
-        names = [n.strip() for n in source_names.split(",") if n.strip()]
-        if names:
-            qs = qs.filter(source__name__in=names)
-    if detector_tools:
-        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
-        if tools:
-            qs = qs.filter(bgcs__detector__tool__in=tools).distinct()
-    if taxonomy_path:
-        from discovery.ltree import filter_contigs_by_taxonomy
-
-        matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
-        qs = qs.filter(contigs__in=matching_contigs).distinct()
-    if search:
-        qs = qs.filter(
-            Q(organism_name__icontains=search) | Q(assembly_accession__icontains=search)
-        )
-    if bgc_class:
-        qs = qs.filter(
-            Q(contigs__ibgcs__gene_cluster_family__istartswith=bgc_class + ".")
-            | Q(contigs__ibgcs__gene_cluster_family__iexact=bgc_class)
-        ).distinct()
-    if biome_lineage:
-        qs = qs.filter(biome_path__icontains=biome_lineage)
-    if bgc_accession:
-        bgc_accession = bgc_accession.strip()
-        upper = bgc_accession.upper()
-        if "." in upper and upper.startswith("MGYB"):
-            # Structured accession: exact match
-            qs = qs.filter(
-                source_bgcs__prediction_accession__iexact=bgc_accession
-            ).distinct()
-        elif upper.startswith("MGYB") and "." not in upper:
-            # cBGC accession (e.g. MGYB-ABC123). Resolve via the registry
-            # (including any alias) and filter by the live cBGC id.
-            from discovery.services.accession_registry import resolve as _acc_resolve
-
-            resolved = _acc_resolve(upper)
-            if resolved is not None and resolved.current_id is not None:
-                qs = qs.filter(contigs__ibgcs__cbgc_id=resolved.current_id).distinct()
-            else:
-                qs = qs.filter(
-                    source_bgcs__prediction_accession__icontains=bgc_accession
-                ).distinct()
-        else:
-            qs = qs.filter(
-                source_bgcs__prediction_accession__icontains=bgc_accession
-            ).distinct()
-    if assembly_accession:
-        qs = qs.filter(assembly_accession__icontains=assembly_accession)
-    return qs
 
 
 # ── Assembly endpoints ───────────────────────────────────────────────────────
 
 
-@discovery_router.get("/assemblies/", response=PaginatedAssemblyResponse)
-def assembly_roster(
-    request,
-    page: int = 1,
-    page_size: int = 25,
-    sort_by: str = "bgc_novelty_score",
-    order: str = "desc",
-    search: str | None = None,
-    taxonomy_path: str | None = None,
-    source_names: str | None = None,
-    detector_tools: str | None = None,
-    bgc_class: str | None = None,
-    biome_lineage: str | None = None,
-    bgc_accession: str | None = None,
-    assembly_accession: str | None = None,
-    assembly_ids: str | None = None,
-    assembly_type: str | None = None,
-):
-    qs = DashboardAssembly.objects.select_related("source").all()
-    qs = _apply_assembly_filters(
-        qs,
-        assembly_ids=assembly_ids,
-        assembly_type=assembly_type,
-        source_names=source_names,
-        detector_tools=detector_tools,
-        taxonomy_path=taxonomy_path,
-        search=search,
-        bgc_class=bgc_class,
-        biome_lineage=biome_lineage,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-    )
-
-    score_fields = {
-        "bgc_count",
-        "bgc_diversity_score",
-        "bgc_novelty_score",
-        "bgc_density",
-        "taxonomic_novelty",
-        "l1_class_count",
-    }
-    prefix = "-" if order == "desc" else ""
-
-    if sort_by in score_fields:
-        qs = qs.order_by(f"{prefix}{sort_by}")
-    elif sort_by == "organism_name":
-        qs = qs.order_by(f"{prefix}organism_name")
-    else:
-        qs = qs.order_by("-bgc_novelty_score")
-
-    total_count = qs.count()
-    page, page_size, total_pages, offset = _paginate(page, page_size, total_count)
-    page_qs = qs[offset : offset + page_size]
-
-    items = [_assembly_to_roster_item(assembly) for assembly in page_qs]
-
-    return PaginatedAssemblyResponse(
-        items=items,
-        pagination=PaginationMeta(
-            page=page,
-            page_size=page_size,
-            total_count=total_count,
-            total_pages=total_pages,
-        ),
-    )
-
-
-@discovery_router.get("/assemblies/{assembly_id}/", response=AssemblyDetail)
-def assembly_detail(request, assembly_id: int):
-    try:
-        assembly = DashboardAssembly.objects.select_related("source").get(
-            id=assembly_id
-        )
-    except DashboardAssembly.DoesNotExist:
-        raise HttpError(404, "Assembly not found")
-
-    return AssemblyDetail(
-        id=assembly.id,
-        accession=assembly.assembly_accession,
-        organism_name=assembly.organism_name,
-        source_name=assembly.source.name if assembly.source else None,
-        assembly_type=assembly.get_assembly_type_display(),
-        is_type_strain=assembly.is_type_strain,
-        type_strain_catalog_url=assembly.type_strain_catalog_url,
-        assembly_size_mb=assembly.assembly_size_mb,
-        biome_path=assembly.biome_path,
-        url=assembly.url,
-        bgc_count=assembly.bgc_count,
-        l1_class_count=assembly.l1_class_count,
-        bgc_diversity_score=assembly.bgc_diversity_score,
-        bgc_novelty_score=assembly.bgc_novelty_score,
-        bgc_density=assembly.bgc_density,
-        taxonomic_novelty=assembly.taxonomic_novelty,
-    )
-
-
-@discovery_router.get(
-    "/assembly-scatter/",
-    response=list[AssemblyScatterPoint],
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def assembly_scatter(
-    request,
-    x_axis: str = "bgc_diversity_score",
-    y_axis: str = "bgc_novelty_score",
-    source_names: str | None = None,
-    detector_tools: str | None = None,
-    taxonomy_path: str | None = None,
-    bgc_class: str | None = None,
-    assembly_ids: str | None = None,
-):
-    allowed_axes = {
-        "bgc_diversity_score",
-        "bgc_novelty_score",
-        "bgc_density",
-        "taxonomic_novelty",
-    }
-    if x_axis not in allowed_axes or y_axis not in allowed_axes:
-        raise HttpError(400, f"Axis must be one of: {', '.join(sorted(allowed_axes))}")
-
-    qs = DashboardAssembly.objects.all()
-    if assembly_ids:
-        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
-        if ids:
-            qs = qs.filter(id__in=ids)
-    if source_names:
-        names = [n.strip() for n in source_names.split(",") if n.strip()]
-        if names:
-            qs = qs.filter(source__name__in=names)
-    if detector_tools:
-        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
-        if tools:
-            qs = qs.filter(bgcs__detector__tool__in=tools).distinct()
-    if taxonomy_path:
-        from discovery.ltree import filter_contigs_by_taxonomy
-
-        matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
-        qs = qs.filter(contigs__in=matching_contigs).distinct()
-    if bgc_class:
-        qs = qs.filter(
-            Q(contigs__ibgcs__gene_cluster_family__istartswith=bgc_class + ".")
-            | Q(contigs__ibgcs__gene_cluster_family__iexact=bgc_class)
-        ).distinct()
-
-    return [
-        AssemblyScatterPoint(
-            id=assembly.id,
-            x=getattr(assembly, x_axis, 0.0) or 0.0,
-            y=getattr(assembly, y_axis, 0.0) or 0.0,
-            organism_name=assembly.organism_name,
-            is_type_strain=assembly.is_type_strain,
-        )
-        for assembly in qs
-    ]
-
-
 # ── BGC endpoints ────────────────────────────────────────────────────────────
-
-
-@discovery_router.get("/bgcs/{bgc_id}/download/")
-def download_bgc(request, bgc_id: int, format: str = "gbk"):
-    """Download a single BGC in GBK, FNA, FAA, or JSON format.
-
-    A source BGC is one tool's sub-prediction inside a consolidated iBGC; in
-    v2 the genomic artifacts (CDS, domains) are reached through the integrated
-    BGC via range overlap, not per-prediction. So this resolves the prediction
-    to its parent iBGC and delegates to the iBGC export builders — the file is
-    the canonical iBGC record (whole span + per-tool BGC features).
-    """
-    valid_formats = {"gbk", "fna", "faa", "json"}
-    fmt = format.lower()
-    if fmt not in valid_formats:
-        raise HttpError(
-            400, f"Invalid format '{format}'. Use: {', '.join(sorted(valid_formats))}"
-        )
-
-    try:
-        ibgc_id = SourceBgcPrediction.objects.values_list(
-            "integrated_bgc_id", flat=True
-        ).get(id=bgc_id)
-    except SourceBgcPrediction.DoesNotExist:
-        raise HttpError(404, "BGC not found")
-
-    if ibgc_id is None:
-        # Partials are NULL-integrated until clustering folds them in.
-        raise HttpError(404, "BGC is not yet integrated into an iBGC")
-
-    ibgc = IntegratedBgc.objects.select_related(
-        "contig", "contig__seq", "contig__assembly", "cbgc"
-    ).get(id=ibgc_id)
-    accession = ibgc.accession
-
-    if fmt == "gbk":
-        from io import StringIO
-
-        from Bio import SeqIO
-
-        from discovery.services.gbk import build_ibgc_genbank_record
-
-        record = build_ibgc_genbank_record(ibgc)
-        handle = StringIO()
-        SeqIO.write([record], handle, "genbank")
-        content = handle.getvalue()
-        return HttpResponse(
-            content,
-            content_type="application/octet-stream",
-            headers={"Content-Disposition": f'attachment; filename="{accession}.gbk"'},
-        )
-
-    if fmt == "fna":
-        from discovery.services.export import build_ibgc_fna
-
-        content = build_ibgc_fna(ibgc)
-        return HttpResponse(
-            content,
-            content_type="text/plain",
-            headers={"Content-Disposition": f'attachment; filename="{accession}.fna"'},
-        )
-
-    if fmt == "faa":
-        from discovery.services.export import build_ibgc_faa
-
-        content = build_ibgc_faa(ibgc)
-        return HttpResponse(
-            content,
-            content_type="text/plain",
-            headers={"Content-Disposition": f'attachment; filename="{accession}.faa"'},
-        )
-
-    # json
-    from discovery.services.export import build_ibgc_json
-
-    data = build_ibgc_json(ibgc)
-    return HttpResponse(
-        json.dumps(data, indent=2),
-        content_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{accession}.json"'},
-    )
 
 
 # ── iBGC (Integrated BGC) endpoints ────────────────────────────────────────
@@ -581,16 +225,6 @@ def _parse_ibgc_id_scope(
 
 def _ibgc_label(ibgc_id: int) -> str:
     return f"iBGC-{ibgc_id}"
-
-
-def _pick_representative_ibgc_id(ibgc_id: int) -> int | None:
-    """Lowest-id source SourceBgcPrediction for an iBGC (deterministic)."""
-    return (
-        SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc_id)
-        .order_by("id")
-        .values_list("id", flat=True)
-        .first()
-    )
 
 
 def _ibgc_is_partial(ibgc: IntegratedBgc) -> bool:
@@ -1901,20 +1535,6 @@ def ibgc_detail(request, ibgc_id: int):
         for r in ibgc_architecture(ibgc_id)
     ]
 
-    # Natural products are iBGC-level in v2 (FK on IbgcNaturalProduct.ibgc).
-    np_items: list[NaturalProductSummary] = []
-    for np_obj in IbgcNaturalProduct.objects.filter(ibgc_id=ibgc_id):
-        np_items.append(
-            NaturalProductSummary(
-                id=np_obj.id,
-                name=np_obj.name,
-                smiles=np_obj.smiles,
-                smiles_svg="",
-                structure_thumbnail=np_obj.structure_svg_base64,
-                np_class_path=np_obj.np_class_path,
-            )
-        )
-
     member_items = [
         IbgcMemberBgc(
             id=m.id,
@@ -1967,7 +1587,6 @@ def ibgc_detail(request, ibgc_id: int):
         region_endpoint_url=f"/api/discovery/ibgcs/{ibgc.id}/region/",
         member_bgcs=member_items,
         domain_architecture=domain_arch,
-        natural_products=np_items,
         npc_labels=npc_items,
     )
 
@@ -2284,127 +1903,6 @@ def report_export_gbk_zip(request, token: str):
 
 
 # ── iBGC-collapsed query endpoints ────────────────────────────────────────────
-
-
-def _ibgc_roster_page_response(
-    qs,
-    *,
-    sort_by: str,
-    order: str,
-    page: int,
-    page_size: int,
-    similarity_lookup: dict[int, float] | None = None,
-    best_hit_protein_lookup: dict[int, str] | None = None,
-    best_pident_lookup: dict[int, float] | None = None,
-    best_qcoverage_lookup: dict[int, float] | None = None,
-) -> PaginatedIbgcRosterResponse:
-    """Sort, paginate, and serialise a filtered ``IntegratedBgc`` queryset.
-
-    Shared between ``/ibgcs/roster/``, ``/query/ibgc-domain/``, and
-    ``/query/ibgc-sequence/status/`` so result shape stays identical.
-    ``similarity_lookup`` is an optional ``{ibgc_id: score}`` map that gets
-    stamped onto each ``IbgcRosterItem.similarity_score`` (used by the
-    query endpoints; ``/ibgcs/roster/`` leaves it null).
-    ``best_hit_protein_lookup`` is filled only by the sequence-search
-    endpoint and carries the protein_id of the winning CDS per iBGC.
-    """
-    sort_map = {
-        "novelty_score": "novelty_score",
-        "domain_novelty": "domain_novelty",
-        "classification_path": "gene_cluster_family",
-        "id": "id",
-    }
-    if sort_by == "size_kb":
-        qs = qs.annotate(_size=_ibgc_span_bp())
-        order_field = "_size"
-    elif sort_by == "similarity_score" and similarity_lookup is not None:
-        # Materialise + sort in Python — similarity isn't a DB column.
-        rows = list(qs)
-        rows.sort(
-            key=lambda n: similarity_lookup.get(n.id, 0.0),
-            reverse=(order == "desc"),
-        )
-        total_count = len(rows)
-        pg, ps, tp, offset = _paginate(page, page_size, total_count)
-        page_rows = rows[offset : offset + ps]
-        facts = _ibgc_member_facts([n.id for n in page_rows])
-        items = [
-            _ibgc_to_roster_item(
-                n,
-                parent_assembly=facts[n.id]["parent_assembly"],
-                n_source_bgcs=facts[n.id]["n_source_bgcs"],
-                is_validated=facts[n.id]["is_validated"],
-                is_type_strain=facts[n.id]["is_type_strain"],
-                contig_accession=facts[n.id]["contig_accession"],
-                cbgc_accession=facts[n.id]["cbgc_accession"],
-                similarity_score=similarity_lookup.get(n.id),
-                best_hit_protein_id=(
-                    best_hit_protein_lookup.get(n.id)
-                    if best_hit_protein_lookup
-                    else None
-                ),
-                best_pident=(
-                    best_pident_lookup.get(n.id) if best_pident_lookup else None
-                ),
-                best_qcoverage=(
-                    best_qcoverage_lookup.get(n.id) if best_qcoverage_lookup else None
-                ),
-            )
-            for n in page_rows
-        ]
-        return PaginatedIbgcRosterResponse(
-            items=items,
-            pagination=PaginationMeta(
-                page=pg,
-                page_size=ps,
-                total_count=total_count,
-                total_pages=tp,
-            ),
-        )
-    else:
-        order_field = sort_map.get(sort_by, "novelty_score")
-
-    descending = order == "desc"
-    qs = qs.order_by(
-        F(order_field).desc(nulls_last=True)
-        if descending
-        else F(order_field).asc(nulls_last=True)
-    )
-    total_count = qs.count()
-    pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_qs = list(qs[offset : offset + ps])
-    facts = _ibgc_member_facts([n.id for n in page_qs])
-    items = [
-        _ibgc_to_roster_item(
-            n,
-            parent_assembly=facts[n.id]["parent_assembly"],
-            n_source_bgcs=facts[n.id]["n_source_bgcs"],
-            is_validated=facts[n.id]["is_validated"],
-            is_type_strain=facts[n.id]["is_type_strain"],
-            contig_accession=facts[n.id]["contig_accession"],
-            cbgc_accession=facts[n.id]["cbgc_accession"],
-            similarity_score=(
-                similarity_lookup.get(n.id) if similarity_lookup else None
-            ),
-            best_hit_protein_id=(
-                best_hit_protein_lookup.get(n.id) if best_hit_protein_lookup else None
-            ),
-            best_pident=(best_pident_lookup.get(n.id) if best_pident_lookup else None),
-            best_qcoverage=(
-                best_qcoverage_lookup.get(n.id) if best_qcoverage_lookup else None
-            ),
-        )
-        for n in page_qs
-    ]
-    return PaginatedIbgcRosterResponse(
-        items=items,
-        pagination=PaginationMeta(
-            page=pg,
-            page_size=ps,
-            total_count=total_count,
-            total_pages=tp,
-        ),
-    )
 
 
 # ── Combined multi-criterion query ─────────────────────────────────────────
@@ -2737,82 +2235,6 @@ def combined_query_scores(request, task_id: str):
     )
 
 
-@discovery_router.get(
-    "/query-results/assemblies/", response=PaginatedAssemblyAggregationResponse
-)
-def query_results_assembly_aggregation(
-    request,
-    bgc_ids: str,
-    page: int = 1,
-    page_size: int = 25,
-    sort_by: str = "hit_count",
-    order: str = "desc",
-):
-    ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
-    if not ids:
-        return PaginatedAssemblyAggregationResponse(
-            items=[],
-            pagination=PaginationMeta(
-                page=1, page_size=page_size, total_count=0, total_pages=0
-            ),
-        )
-
-    # SQL aggregation instead of Python grouping
-    assembly_agg = (
-        SourceBgcPrediction.objects.filter(id__in=ids)
-        .values(
-            "assembly__id",
-            "assembly__assembly_accession",
-            "assembly__organism_name",
-            "assembly__is_type_strain",
-            "assembly__source__name",
-        )
-        .annotate(
-            hit_count=Count("id"),
-            complete_fraction=Avg(
-                Case(
-                    When(is_partial=False, then=1.0),
-                    default=0.0,
-                    output_field=FloatField(),
-                )
-            ),
-        )
-    )
-
-    # Sort
-    sort_map = {
-        "hit_count": "hit_count",
-        "complete_fraction": "complete_fraction",
-    }
-    order_field = sort_map.get(sort_by, "hit_count")
-    prefix = "-" if order == "desc" else ""
-    assembly_agg = assembly_agg.order_by(f"{prefix}{order_field}")
-
-    total_count = assembly_agg.count()
-    pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_agg = assembly_agg[offset : offset + ps]
-
-    items = [
-        QueryResultAssemblyAggregation(
-            assembly_id=row["assembly__id"],
-            accession=row["assembly__assembly_accession"],
-            organism_name=row["assembly__organism_name"],
-            is_type_strain=row["assembly__is_type_strain"],
-            source_name=row.get("assembly__source__name"),
-            hit_count=row["hit_count"],
-            complete_fraction=round(row["complete_fraction"] or 0.0, 4),
-        )
-        for row in page_agg
-    ]
-
-    return PaginatedAssemblyAggregationResponse(
-        items=items,
-        pagination=PaginationMeta(
-            page=pg, page_size=ps, total_count=total_count, total_pages=tp
-        ),
-    )
-
-
 # ── Filter endpoints ─────────────────────────────────────────────────────────
 
 
@@ -2901,48 +2323,6 @@ def npc_tree_endpoint(request):
         tree = npc_tree()
         cache.set(key, tree, 300)
     return tree
-
-
-@discovery_router.get(
-    "/filters/domains/",
-    response=PaginatedDomainResponse,
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def domain_list(
-    request,
-    search: str | None = None,
-    page: int = 1,
-    page_size: int = 50,
-):
-    qs = DashboardDomain.objects.filter(bgc_count__gt=0)
-
-    if search:
-        qs = qs.filter(
-            Q(acc__icontains=search)
-            | Q(name__icontains=search)
-            | Q(description__icontains=search)
-        )
-
-    total_count = qs.count()
-    pg, ps, tp, offset = _paginate(page, page_size, total_count)
-
-    items = [
-        DomainOption(
-            acc=d.acc,
-            name=d.name,
-            description=d.description,
-            count=d.bgc_count,
-        )
-        for d in qs.order_by("-bgc_count")[offset : offset + ps]
-    ]
-
-    return PaginatedDomainResponse(
-        items=items,
-        pagination=PaginationMeta(
-            page=pg, page_size=ps, total_count=total_count, total_pages=tp
-        ),
-    )
 
 
 @discovery_router.get(
@@ -3073,182 +2453,7 @@ def detector_list(
 # ── Stats endpoints ──────────────────────────────────────────────────────────
 
 
-@discovery_router.get(
-    "/stats/assemblies/",
-    response=AssemblyStatsResponse,
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def assembly_stats(
-    request,
-    search: str | None = None,
-    taxonomy_path: str | None = None,
-    source_names: str | None = None,
-    detector_tools: str | None = None,
-    bgc_class: str | None = None,
-    biome_lineage: str | None = None,
-    bgc_accession: str | None = None,
-    assembly_accession: str | None = None,
-    assembly_ids: str | None = None,
-):
-    qs = DashboardAssembly.objects.all()
-    qs = _apply_assembly_filters(
-        qs,
-        assembly_ids=assembly_ids,
-        source_names=source_names,
-        detector_tools=detector_tools,
-        taxonomy_path=taxonomy_path,
-        search=search,
-        bgc_class=bgc_class,
-        biome_lineage=biome_lineage,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-    )
-    return compute_assembly_stats(qs)
-
-
-@discovery_router.get(
-    "/stats/assemblies/export/",
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def export_assembly_stats(
-    request,
-    format: str = "json",
-    search: str | None = None,
-    taxonomy_path: str | None = None,
-    source_names: str | None = None,
-    detector_tools: str | None = None,
-    bgc_class: str | None = None,
-    biome_lineage: str | None = None,
-    bgc_accession: str | None = None,
-    assembly_accession: str | None = None,
-    assembly_ids: str | None = None,
-):
-    qs = DashboardAssembly.objects.all()
-    qs = _apply_assembly_filters(
-        qs,
-        assembly_ids=assembly_ids,
-        source_names=source_names,
-        detector_tools=detector_tools,
-        taxonomy_path=taxonomy_path,
-        search=search,
-        bgc_class=bgc_class,
-        biome_lineage=biome_lineage,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-    )
-    stats = compute_assembly_stats(qs)
-
-    if format == "tsv":
-        return _stats_to_tsv_response(stats, "assembly_stats.tsv")
-
-    response = HttpResponse(
-        json.dumps(stats, default=str),
-        content_type="application/json",
-    )
-    response["Content-Disposition"] = 'attachment; filename="assembly_stats.json"'
-    return response
-
-
-def _stats_to_tsv_response(stats: dict, filename: str) -> HttpResponse:
-    buf = StringIO()
-    writer = csv.writer(buf, delimiter="\t")
-    writer.writerow(["section", "key", "value"])
-
-    for key, value in stats.items():
-        if isinstance(value, list):
-            for i, item in enumerate(value):
-                if isinstance(item, dict):
-                    for k, v in item.items():
-                        writer.writerow([key, f"{i}.{k}", v])
-                else:
-                    writer.writerow([key, str(i), item])
-        else:
-            writer.writerow(["summary", key, value])
-
-    response = HttpResponse(buf.getvalue(), content_type="text/tab-separated-values")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
-
-
 # ── Export endpoints ─────────────────────────────────────────────────────────
-
-
-@discovery_router.post(
-    "/shortlist/assembly/export/",
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def export_assembly_shortlist(request, body: ShortlistExportRequest):
-    if not body.ids:
-        raise HttpError(400, "No assembly IDs provided")
-    if len(body.ids) > 20:
-        raise HttpError(400, "Maximum 20 assemblies per export")
-
-    assemblies = DashboardAssembly.objects.filter(id__in=body.ids)
-
-    buf = StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(
-        [
-            "accession",
-            "organism_name",
-            "biome_path",
-            "is_type_strain",
-            "type_strain_catalog_url",
-            "assembly_size_mb",
-            "bgc_count",
-            "l1_class_count",
-            "bgc_diversity_score",
-            "bgc_novelty_score",
-            "bgc_density",
-            "taxonomic_novelty",
-        ]
-    )
-
-    for g in assemblies:
-        writer.writerow(
-            [
-                g.assembly_accession,
-                g.organism_name,
-                g.biome_path,
-                g.is_type_strain,
-                g.type_strain_catalog_url,
-                g.assembly_size_mb or "",
-                g.bgc_count,
-                g.l1_class_count,
-                g.bgc_diversity_score,
-                g.bgc_novelty_score,
-                g.bgc_density,
-                g.taxonomic_novelty,
-            ]
-        )
-
-    response = HttpResponse(buf.getvalue(), content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="assembly_shortlist.csv"'
-    return response
-
-
-@discovery_router.post(
-    "/shortlist/bgc/export/",
-    include_in_schema=False,
-    auth=first_party_gate,
-)
-def export_bgc_shortlist(request, body: ShortlistExportRequest):
-    """Export BGC shortlist as a multi-record GenBank file."""
-    if not body.ids:
-        raise HttpError(400, "No BGC IDs provided")
-    if len(body.ids) > 20:
-        raise HttpError(400, "Maximum 20 BGCs per export")
-
-    from discovery.services.gbk import build_multi_ibgc_gbk
-
-    gbk_content = build_multi_ibgc_gbk(body.ids)
-
-    response = HttpResponse(gbk_content, content_type="application/octet-stream")
-    response["Content-Disposition"] = 'attachment; filename="bgc_shortlist.gbk"'
-    return response
 
 
 # Assessment endpoints removed in v2 — the Evaluate Asset feature is
@@ -3550,35 +2755,3 @@ def ibgc_region(request, ibgc_id: int):
 # ── Accession resolve ─────────────────────────────────────────────────────────
 
 
-@discovery_router.get("/accessions/resolve/{accession}/", response=AccessionResolveOut)
-def accession_resolve(request, accession: str):
-    """Resolve an ``MGYB-XXXXXX`` (cBGC) or ``MGYB-XXXXXX-YY`` (iBGC) accession.
-
-    Walks ``AccessionAlias`` so tombstoned accessions still find their live
-    successor. Returns ``tombstoned=True`` with a NULL ``current_id`` when
-    the accession has been retired without a replacement.
-    """
-    from discovery.models import AccessionEntityType
-    from discovery.services.accession_registry import resolve as registry_resolve
-
-    canonical = accession.strip().upper()
-    resolved = registry_resolve(canonical)
-    if resolved is None:
-        raise HttpError(404, f"Unknown accession {accession!r}")
-
-    kind = "ibgc" if resolved.kind == AccessionEntityType.IBGC else "cbgc"
-    if resolved.current_id is None:
-        current_url: str | None = None
-    elif kind == "ibgc":
-        current_url = f"/api/discovery/ibgcs/{resolved.current_id}/"
-    else:
-        current_url = f"/api/discovery/cbgcs/{resolved.current_id}/"
-
-    return AccessionResolveOut(
-        accession=resolved.accession,
-        kind=kind,
-        current_id=resolved.current_id,
-        current_url=current_url,
-        tombstoned=resolved.tombstoned,
-        alias_of=resolved.alias_of,
-    )

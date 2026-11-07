@@ -160,9 +160,6 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "bgc_data_portal.context_processors.use_matomo",
             ],
-            "libraries": {
-                "table_tags": "bgc_data_portal.templatetags.table_tags",
-            },
         },
     },
 ]
@@ -207,18 +204,8 @@ CLUSTERING_ARTIFACTS_DIR: Path = Path(
     )
 )
 
-# When True, the in-portal clustering pipeline (run_bgc_clustering) is refused
-# — clustering must run on HPC via the bgc-cluster CLI and be imported back
-# with import_clustering_results. Default off so local compose / dev still
-# works against a small seeded DB.
-CLUSTERING_HPC_MODE: bool = os.environ.get("CLUSTERING_HPC_MODE", "false").lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
 # On-disk phmmer protein search DB (FASTA + .ssi + VERSION).
-# Lives on the shared ML PVC so every Celery worker can read it.
+# Lives on the shared PVC so every db_worker pod can read it.
 PROTEIN_SEARCH_INDEX_DIR: Path = Path(
     os.environ.get(
         "PROTEIN_SEARCH_INDEX_DIR",
@@ -258,7 +245,6 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
-USE_L10N = True
 USE_TZ = True
 
 # Static files
@@ -268,16 +254,6 @@ STATIC_ROOT = BASE_DIR / "staticfiles"  # NOT the same as STATICFILES_DIRS
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
-
-# For development, you might also want:
-# if DEBUG:
-#     from django.conf.urls.static import static
-#     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-
-# if DEBUG:
-# STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-# else:
-# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -316,7 +292,6 @@ MATOMO_SITE_ID = (
 # Scoped to the app's real resource origins:
 #   * 'self'                     — Django pages, the React SPA bundle, /api, static
 #   * assets.emblstatic.net      — EMBL Visual Framework CSS/JS + its woff/svg assets
-#   * code.jquery.com            — jQuery (static portal pages)
 #   * MATOMO_URL                 — analytics tracker + beacon, only when configured
 # Fonts are self-hosted (static/css/fonts.css), so no Google Fonts origins are
 # needed. 'unsafe-inline' is required for styles (VF + Plotly inject <style> blocks
@@ -328,7 +303,6 @@ MATOMO_SITE_ID = (
 # Content-Security-Policy-Report-Only (logs violations without blocking) while
 # validating the dashboard, then unset to enforce.
 _VF_HOST = "https://assets.emblstatic.net"
-_JQUERY_HOST = "https://code.jquery.com"
 
 # The EMBL VF hero/masthead background images (e.g. roundels.png) are served
 # through the embl.org cloudimg proxy, not emblstatic — without these the hero
@@ -344,7 +318,7 @@ _EMBL_CONNECT_HOSTS = [
     "https://embl-communications.github.io",
 ]
 
-_csp_script = [SELF, _VF_HOST, _JQUERY_HOST]
+_csp_script = [SELF, _VF_HOST]
 _csp_style = [SELF, _VF_HOST, "'unsafe-inline'"]
 _csp_font = [SELF, _VF_HOST]
 _csp_img = [SELF, "data:", _VF_HOST, *_EMBL_IMG_HOSTS]

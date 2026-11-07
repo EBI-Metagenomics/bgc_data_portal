@@ -61,10 +61,6 @@ def _full_tarball() -> bytes:
             b"aa\t0\t1000\tantiSMASH:1\tA_1\tPF00001\tDom1\tPfam\t0\t100\n"
             b"aa\t0\t1000\tantiSMASH:1\tA_2\tPF00002\tDom2\tPfam\t0\t100\n"
         ),
-        "natural_products.tsv": (
-            b"contig_sha256\tbgc_start\tbgc_end\tdetector_name\tname\tsmiles\n"
-            b"aa\t0\t1000\tantiSMASH:1\tFooMycin\tCCO\n"
-        ),
     }
     return _pack(members)
 
@@ -86,7 +82,6 @@ def test_parses_full_tarball_round_trip():
     # CDS without a sequence row stays empty (silent — matches loader.py).
     assert data.cds[1].sequence_zlib_b64 == ""
     assert {d.domain_acc for d in data.domains} == {"PF00001", "PF00002"}
-    assert data.natural_products[0].name == "FooMycin"
 
 
 def test_rejects_bgc_referencing_unknown_contig():

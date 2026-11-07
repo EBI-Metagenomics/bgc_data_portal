@@ -37,7 +37,6 @@ def recompute_all_scores() -> None:
     """Master function — orchestrates all score recomputation."""
     logger.info("Starting full score recomputation ...")
     _compute_assembly_aggregates()
-    _compute_percentile_ranks()
     _rebuild_gcf_table()
     recompute_ibgc_classes()
     _rebuild_catalog_tables()
@@ -164,31 +163,6 @@ def _compute_assembly_aggregates() -> None:
         )
 
     logger.info("Assembly aggregates computed")
-
-
-def _compute_percentile_ranks() -> None:
-    """Compute percentile ranks for assembly scores using SQL window functions."""
-    logger.info("Computing percentile ranks ...")
-
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            UPDATE discovery_assembly AS a
-            SET
-                pctl_novelty  = sub.pctl_novelty,
-                pctl_diversity = sub.pctl_diversity,
-                pctl_density  = sub.pctl_density
-            FROM (
-                SELECT
-                    id,
-                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_novelty_score))::numeric, 2) AS pctl_novelty,
-                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_diversity_score))::numeric, 2) AS pctl_diversity,
-                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_density))::numeric, 2) AS pctl_density
-                FROM discovery_assembly
-            ) AS sub
-            WHERE a.id = sub.id
-            """)
-
-    logger.info("Percentile ranks computed")
 
 
 # ── GCF rebuild ──────────────────────────────────────────────────────────────

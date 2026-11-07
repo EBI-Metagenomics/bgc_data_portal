@@ -102,10 +102,6 @@ class DashboardAssembly(models.Model):
     bgc_density = models.FloatField(default=0.0)
     taxonomic_novelty = models.FloatField(default=0.0)
 
-    pctl_diversity = models.FloatField(default=0.0)
-    pctl_novelty = models.FloatField(default=0.0)
-    pctl_density = models.FloatField(default=0.0)
-
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -916,11 +912,9 @@ class ClusteringRun(models.Model):
         default=list,
         help_text="Domain ref_db sources used (upper-case), e.g. ['PFAM','NCBIFAM']",
     )
-    DOMAIN_VOCAB_RAW = "RAW"
     DOMAIN_VOCAB_IPR_PROJECTED = "IPR_PROJECTED"
     DOMAIN_VOCAB_IPR_GAPFILLED = "IPR_GAPFILLED"
     DOMAIN_VOCAB_CHOICES = (
-        (DOMAIN_VOCAB_RAW, "Raw signature accessions"),
         (DOMAIN_VOCAB_IPR_PROJECTED, "IPR entry when available, else signature"),
         (
             DOMAIN_VOCAB_IPR_GAPFILLED,
@@ -1152,57 +1146,6 @@ class IbgcClusteringSnapshot(models.Model):
         return f"snapshot(run={self.clustering_run_id}, ibgc={self.ibgc_id})"
 
 
-# ── iBGC Natural Product ──────────────────────────────────────────────────────
-
-
-class IbgcNaturalProduct(models.Model):
-    """Characterised natural product claimed by an iBGC.
-
-    Re-FK'd from the per-source-BGC model — one row per iBGC × NP.
-    Multiple tools predicting the same NP for the same iBGC collapse to
-    one row at ingest, deduped on ``(ibgc, dedup_hash)`` where
-    ``dedup_hash = sha256(name|smiles)``.
-    """
-
-    id = models.BigAutoField(primary_key=True)
-    ibgc = models.ForeignKey(
-        IntegratedBgc,
-        on_delete=models.CASCADE,
-        related_name="natural_products",
-    )
-    name = models.CharField(max_length=255)
-    smiles = models.TextField(blank=True, default="")
-    dedup_hash = models.CharField(
-        max_length=64,
-        help_text="sha256(name|smiles) hex digest; used for ingest-time dedup",
-    )
-
-    np_class_path = models.CharField(
-        max_length=512,
-        blank=True,
-        default="",
-        help_text="ltree dot-path, e.g. Polyketide.Macrolide.Erythromycin",
-    )
-    structure_svg_base64 = models.TextField(blank=True, default="")
-    morgan_fp = models.BinaryField(null=True, blank=True)
-
-    class Meta:
-        db_table = "discovery_ibgc_natural_product"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["ibgc", "dedup_hash"],
-                name="uniq_np_ibgc_dedup",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["np_class_path"], name="idx_dnp_class_path"),
-            models.Index(fields=["ibgc"], name="idx_dnp_ibgc"),
-        ]
-
-    def __str__(self):
-        return self.name
-
-
 # ── NPClassifier (pathway → superclass → class) ──────────────────────────────
 
 
@@ -1364,27 +1307,6 @@ class DashboardDomain(models.Model):
 
     def __str__(self):
         return f"{self.acc} ({self.name})"
-
-
-# ── Precomputed statistics ───────────────────────────────────────────────────
-
-
-class PrecomputedStats(models.Model):
-    """Precomputed aggregate statistics to avoid full-table scans.
-
-    Keys include ``genome_global``, ``bgc_global``, ``taxonomy_sunburst``,
-    ``npc_sunburst``, ``bgc_class_distribution``.
-    """
-
-    key = models.CharField(max_length=100, primary_key=True)
-    data = models.JSONField(default=dict)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "discovery_precomputed_stats"
-
-    def __str__(self):
-        return self.key
 
 
 # ── Append-only platform overview snapshots ──────────────────────────────────

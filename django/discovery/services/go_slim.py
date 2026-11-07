@@ -85,11 +85,3 @@ def go_slim_for_terms(go_terms: Iterable[str] | None) -> list[str]:
     return sorted(seen)
 
 
-def go_slim_for(domain_acc: str) -> list[str]:  # pragma: no cover - back-compat shim
-    """Deprecated. The previous ``Pfam → slim`` rule has been retired.
-
-    Kept so any in-flight branch that still calls this name still imports.
-    Always returns ``[]``; callers should switch to
-    :func:`go_slim_for_terms` and pass ``ContigDomain.go_terms``.
-    """
-    return []
