@@ -4,6 +4,8 @@ from datetime import datetime
 
 from ninja import Schema
 
+from discovery.services.ibgc_filters import IbgcFilterParams
+
 # ── Pagination ────────────────────────────────────────────────────────────────
 
 
@@ -124,42 +126,9 @@ class CombinedQueryCriterion(Schema):
     params: dict = {}
 
 
-class CombinedQueryFilters(Schema):
-    """Non-scoring narrowing filters applied to the criteria intersection.
-
-    Mirrors the ``_apply_ibgc_filters`` kwargs the single-criterion endpoints
-    accept as query params; every field is optional and defaults to "no narrowing".
-    """
-
-    include_partials: bool = True
-    validated_only: bool = False
-    min_length_kb: float | None = None
-    max_length_kb: float | None = None
-    min_novelty: float | None = None
-    max_novelty: float | None = None
-    min_domain_novelty: float | None = None
-    max_domain_novelty: float | None = None
-    detector_tools: str | None = None
-    source_tools: str | None = None  # deprecated alias for detector_tools
-    source_names: str | None = None
-    assembly_type: str | None = None
-    leaf_path_prefix: str | None = None
-    bgc_class: str | None = None
-    npc_terms: str | None = None
-    npc_confident: bool = True
-    accession: str | None = None
-    bgc_accession: str | None = None
-    assembly_accession: str | None = None
-    assembly_ids: str | None = None
-    organism: str | None = None
-    biome_lineage: str | None = None
-    taxonomy_path: str | None = None
-    domain_text: str | None = None
-
-
 class CombinedQueryRequest(Schema):
     criteria: list[CombinedQueryCriterion] = []
-    filters: CombinedQueryFilters | None = None
+    filters: IbgcFilterParams | None = None
 
 
 class CombinedQueryAccepted(Schema):
