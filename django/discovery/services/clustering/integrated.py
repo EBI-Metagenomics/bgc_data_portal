@@ -39,16 +39,18 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
 from discovery.models import (
     AccessionEntityType,
+    AccessionRegistry,
     ConsensusBgc,
     IntegratedBgc,
     SourceBgcPrediction,
 )
 from discovery.querysets import latest_version_bgcs
 from discovery.services.accession_registry import (
-    lookup_or_mint_ibgc,
+    mint_ibgc_accession,
     tombstone_unused,
 )
 from discovery.services.ingestion.ranges import int4range
@@ -63,30 +65,140 @@ TOOL_ANTISMASH = "antiSMASH"
 MERGE_TOOLS = (TOOL_GECCO, TOOL_SANNTIS)
 
 
+# iBGC rows (and their registry / member updates) are flushed in batches of
+# this size; each flush is three statements regardless of the batch's size.
+_FLUSH_BATCH = 2_000
+
+
 def build_integrated_bgcs(
     *,
     progress_cb: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, Any]:
-    """Rebuild the IntegratedBgc table.
+    """Rebuild the IntegratedBgc table from the latest-version source predictions.
 
-    Returns counts:
-        {
-            "n_ibgcs": int,
-            "n_source_bgcs": int,
-            "n_absorbed_antismash": int,
-            "n_validated_standalone": int,
-            "by_tool": {"GECCO": int, "SanntiS": int, "antiSMASH": int, ...},
+    Runs in one transaction, so readers keep the previous iBGC set until the
+    new one (including classes, catalog tables and NPClassifier labels) is
+    committed. Accessions are stable across rebuilds through the registry;
+    only never-seen coordinates mint a new one. Clustering snapshots are
+    keyed on the accession, so a rebuild does not break rollback.
+
+    Returns counts: ``n_ibgcs``, ``n_source_bgcs``, ``n_absorbed_antismash``
+    (non-validated antiSMASH predictions that overlapped an iBGC and were
+    attributed to it without widening it), ``n_validated_standalone``,
+    ``by_tool`` and ``n_npc_labels``.
+
+    ``progress_cb(phase, processed, total)`` is called per contig; when the
+    cache lives in the same database the updates become visible at commit.
+    """
+    counts: dict[str, Any] = {
+        "n_ibgcs": 0,
+        "n_source_bgcs": 0,
+        "n_absorbed_antismash": 0,
+        "n_validated_standalone": 0,
+        "by_tool": {TOOL_GECCO: 0, TOOL_SANNTIS: 0, TOOL_ANTISMASH: 0},
+    }
+    with transaction.atomic():
+        log.info("Wiping existing IntegratedBgc table")
+        IntegratedBgc.objects.all().delete()
+        SourceBgcPrediction.objects.exclude(integrated_bgc=None).update(
+            integrated_bgc=None
+        )
+        rows_by_contig = _latest_predictions_by_contig()
+        total_contigs = len(rows_by_contig)
+        log.info("Building iBGCs for %d contigs", total_contigs)
+
+        cbgc_accessions = dict(ConsensusBgc.objects.values_list("id", "accession"))
+        # (contig_accession, start, end) -> accession for every iBGC ever seen.
+        registry = {
+            (c, s, e): acc
+            for c, s, e, acc in AccessionRegistry.objects.filter(
+                entity_type=AccessionEntityType.IBGC
+            ).values_list("contig_accession", "start_pos", "end_pos", "accession")
         }
 
-    ``n_absorbed_antismash`` counts non-validated antiSMASH predictions
-    that overlapped an existing iBGC — they get ``integrated_bgc`` set to
-    that iBGC (for ``claimed_by_tools`` attribution) but did not widen
-    its interval.
-    """
-    log.info("Wiping existing IntegratedBgc table")
-    IntegratedBgc.objects.all().delete()
-    SourceBgcPrediction.objects.exclude(integrated_bgc=None).update(integrated_bgc=None)
+        pending: list[tuple[IntegratedBgc, list[int]]] = []
+        for processed, (contig_id, rows) in enumerate(rows_by_contig.items(), 1):
+            ibgcs, absorbed_anti, validated_standalone = _build_ibgcs_for_contig(rows)
+            counts["n_absorbed_antismash"] += absorbed_anti
+            counts["n_validated_standalone"] += validated_standalone
+            contig_accession = rows[0][7]
+            cbgc_of_sbgc = {sbgc_id: cbgc_id for sbgc_id, cbgc_id, *_ in rows}
 
+            for start, end, source_tools, member_ids, absorbed_ids in ibgcs:
+                # Every member shares the same cBGC (overlapping predictions on
+                # a contig land in the same cBGC envelope in the loader).
+                cbgc_id = next(
+                    (cbgc_of_sbgc[i] for i in member_ids if cbgc_of_sbgc.get(i)),
+                    None,
+                )
+                if cbgc_id is None:
+                    log.warning(
+                        "iBGC at contig=%s [%d,%d] has no cBGC; skipping",
+                        contig_id,
+                        start,
+                        end,
+                    )
+                    continue
+                key = (contig_accession, start, end)
+                accession = registry.get(key)
+                if accession is None:
+                    accession = mint_ibgc_accession(
+                        cbgc_accession=cbgc_accessions[cbgc_id],
+                        contig_accession=contig_accession,
+                        start_pos=start,
+                        end_pos=end,
+                    ).accession
+                    registry[key] = accession
+                pending.append(
+                    (
+                        IntegratedBgc(
+                            accession=accession,
+                            cbgc_id=cbgc_id,
+                            contig_id=contig_id,
+                            bgc_range=int4range(start, end),
+                            source_tools=sorted(source_tools),
+                        ),
+                        list(member_ids) + list(absorbed_ids),
+                    )
+                )
+                counts["n_ibgcs"] += 1
+                counts["n_source_bgcs"] += len(member_ids) + len(absorbed_ids)
+                for tool in source_tools:
+                    counts["by_tool"][tool] = counts["by_tool"].get(tool, 0) + 1
+
+            if len(pending) >= _FLUSH_BATCH:
+                _flush(pending)
+                pending = []
+            if progress_cb is not None:
+                progress_cb("contigs", processed, total_contigs)
+        _flush(pending)
+
+        tombstoned = tombstone_unused(AccessionEntityType.IBGC)
+        log.info("Tombstoned %d stale iBGC registry rows", tombstoned)
+
+        # Product classes, the BGC-class / domain catalog tables and the
+        # NPClassifier label union all derive from the new rows; rebuild them
+        # in the same transaction so filters never see a half-built state.
+        from discovery.services.npc import aggregate_ibgc_npc_labels
+        from discovery.services.scores import (
+            _rebuild_catalog_tables,
+            recompute_ibgc_classes,
+        )
+
+        recompute_ibgc_classes()
+        _rebuild_catalog_tables()
+        counts["n_npc_labels"] = aggregate_ibgc_npc_labels()
+
+    log.info("iBGC build complete: %s", counts)
+    return counts
+
+
+def _latest_predictions_by_contig() -> dict[int, list[tuple]]:
+    """Group latest-version predictions per contig.
+
+    Each row is ``(sbgc_id, cbgc_id, start, end_inclusive, tool, is_partial,
+    is_validated, contig_accession)``.
+    """
     qs = (
         latest_version_bgcs()
         .select_related("detector", "contig")
@@ -101,134 +213,51 @@ def build_integrated_bgcs(
             "detector__tool",
         )
     )
-
-    # Group rows per contig in-memory. Tuple:
-    # (sbgc_id, cbgc_id, start, end, tool, is_partial, is_validated, contig_accession)
-    rows_by_contig: dict[
-        int, list[tuple[int, int, int, int, str | None, bool, bool, str]]
-    ] = defaultdict(list)
+    rows_by_contig: dict[int, list[tuple]] = defaultdict(list)
     for sbgc in qs.iterator():
         rng = sbgc.bgc_range
         if rng is None or rng.lower is None or rng.upper is None:
             continue
-        start = int(rng.lower)
-        end_inclusive = int(rng.upper) - 1
         rows_by_contig[sbgc.contig_id].append(
             (
                 sbgc.id,
                 sbgc.cbgc_id,
-                start,
-                end_inclusive,
+                int(rng.lower),
+                int(rng.upper) - 1,
                 sbgc.detector.tool if sbgc.detector_id else None,
                 bool(sbgc.is_partial),
                 bool(sbgc.is_validated),
                 sbgc.contig.accession or "",
             )
         )
+    return rows_by_contig
 
-    total_contigs = len(rows_by_contig)
-    log.info("Building iBGCs for %d contigs", total_contigs)
 
-    counts = {
-        "n_ibgcs": 0,
-        "n_source_bgcs": 0,
-        "n_absorbed_antismash": 0,
-        "n_validated_standalone": 0,
-        "by_tool": {TOOL_GECCO: 0, TOOL_SANNTIS: 0, TOOL_ANTISMASH: 0},
-    }
-
-    for processed, (contig_id, rows) in enumerate(rows_by_contig.items(), start=1):
-        ibgcs, absorbed_anti, validated_standalone = _build_ibgcs_for_contig(rows)
-        counts["n_absorbed_antismash"] += absorbed_anti
-        counts["n_validated_standalone"] += validated_standalone
-
-        contig_accession = rows[0][7] if rows else ""
-
-        with transaction.atomic():
-            for (
-                interval_start,
-                interval_end,
-                source_tools,
-                member_sbgc_ids,
-                absorbed_sbgc_ids,
-            ) in ibgcs:
-                # Every member shares the same cBGC (overlapping predictions on a
-                # contig land in the same cBGC envelope by construction in the
-                # loader).
-                cbgc_id = next(
-                    (
-                        cbgc_id
-                        for sbgc_id, cbgc_id, *_ in rows
-                        if sbgc_id in member_sbgc_ids and cbgc_id is not None
-                    ),
-                    None,
-                )
-                if cbgc_id is None:
-                    log.warning(
-                        "iBGC at contig=%s [%d,%d] has no cBGC; skipping",
-                        contig_id,
-                        interval_start,
-                        interval_end,
-                    )
-                    continue
-
-                cbgc = ConsensusBgc.objects.get(id=cbgc_id)
-                ibgc = IntegratedBgc.objects.create(
-                    accession="MGYB-PLACEHOLD-XX",  # overwritten below
-                    cbgc=cbgc,
-                    contig_id=contig_id,
-                    bgc_range=int4range(interval_start, interval_end),
-                    source_tools=sorted(source_tools),
-                )
-                mint = lookup_or_mint_ibgc(
-                    cbgc=cbgc,
-                    contig_accession=contig_accession,
-                    start_pos=interval_start,
-                    end_pos=interval_end,
-                    ibgc=ibgc,
-                )
-                if mint.accession != ibgc.accession:
-                    ibgc.accession = mint.accession
-                    ibgc.save(update_fields=["accession"])
-
-                all_member_ids = list(member_sbgc_ids) + list(absorbed_sbgc_ids)
-                SourceBgcPrediction.objects.filter(id__in=all_member_ids).update(
-                    integrated_bgc=ibgc,
-                )
-                counts["n_ibgcs"] += 1
-                counts["n_source_bgcs"] += len(all_member_ids)
-                for tool in source_tools:
-                    counts["by_tool"][tool] = counts["by_tool"].get(tool, 0) + 1
-
-        if progress_cb is not None:
-            progress_cb("contigs", processed, total_contigs)
-
-    # Tombstone iBGC registry entries whose underlying row no longer exists.
-    tombstoned = tombstone_unused(AccessionEntityType.IBGC)
-    log.info("Tombstoned %d stale iBGC registry rows", tombstoned)
-
-    # Derive the normalised product class for every freshly-built iBGC from its
-    # source predictions' classification_path, then rebuild the catalog tables
-    # (DashboardBgcClass / DashboardDomain) so the "BGC Class" + "Domains"
-    # filters reflect the new iBGCs immediately. The build/cluster flow only
-    # triggers a DiscoveryStats refresh otherwise, so without this the catalog
-    # counts go stale until a separate recompute_all_scores run.
-    from discovery.services.scores import (
-        _rebuild_catalog_tables,
-        recompute_ibgc_classes,
+def _flush(pending: list[tuple[IntegratedBgc, list[int]]]) -> None:
+    """Insert a batch of iBGCs and point their registry rows and members at them."""
+    if not pending:
+        return
+    IntegratedBgc.objects.bulk_create([ibgc for ibgc, _ in pending], batch_size=5_000)
+    now = timezone.now()
+    AccessionRegistry.objects.bulk_update(
+        [
+            AccessionRegistry(
+                accession=ibgc.accession, current_ibgc_id=ibgc.id, last_seen_at=now
+            )
+            for ibgc, _ in pending
+        ],
+        ["current_ibgc", "last_seen_at"],
+        batch_size=5_000,
     )
-
-    recompute_ibgc_classes()
-    _rebuild_catalog_tables()
-
-    # NPClassifier labels: union of the members' labels per iBGC (SanntiS 1.0
-    # predictions, curated MIBiG labels) for the npc_terms filter and badges.
-    from discovery.services.npc import aggregate_ibgc_npc_labels
-
-    counts["n_npc_labels"] = aggregate_ibgc_npc_labels()
-
-    log.info("iBGC build complete: %s", counts)
-    return counts
+    SourceBgcPrediction.objects.bulk_update(
+        [
+            SourceBgcPrediction(id=sbgc_id, integrated_bgc_id=ibgc.id)
+            for ibgc, member_ids in pending
+            for sbgc_id in member_ids
+        ],
+        ["integrated_bgc"],
+        batch_size=5_000,
+    )
 
 
 def _build_ibgcs_for_contig(

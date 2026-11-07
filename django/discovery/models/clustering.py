@@ -233,11 +233,9 @@ class IbgcClusteringSnapshot(models.Model):
         on_delete=models.CASCADE,
         related_name="ibgc_snapshots",
     )
-    ibgc = models.ForeignKey(
-        IntegratedBgc,
-        on_delete=models.CASCADE,
-        related_name="clustering_snapshots",
-    )
+    # The accession (not the row id) survives `build_integrated_bgcs`, which
+    # recreates every IntegratedBgc row; rollback resolves it back to a row.
+    ibgc_accession = models.CharField(max_length=20, db_index=True)
     is_partial = models.BooleanField(default=False)
     gene_cluster_family = models.CharField(max_length=512, blank=True, default="")
     novelty_score = models.FloatField(null=True, blank=True)
@@ -247,8 +245,8 @@ class IbgcClusteringSnapshot(models.Model):
         db_table = "discovery_ibgc_clustering_snapshot"
         constraints = [
             models.UniqueConstraint(
-                fields=["clustering_run", "ibgc"],
-                name="uniq_snapshot_run_ibgc",
+                fields=["clustering_run", "ibgc_accession"],
+                name="uniq_snapshot_run_ibgc_accession",
             ),
         ]
         indexes = [
@@ -256,4 +254,4 @@ class IbgcClusteringSnapshot(models.Model):
         ]
 
     def __str__(self):
-        return f"snapshot(run={self.clustering_run_id}, ibgc={self.ibgc_id})"
+        return f"snapshot(run={self.clustering_run_id}, ibgc={self.ibgc_accession})"

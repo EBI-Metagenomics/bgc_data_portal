@@ -281,6 +281,7 @@ class Command(BaseCommand):
         existing = list(
             IntegratedBgc.objects.filter(id__in=_bigint_array_in(ibgc_ids)).only(
                 "id",
+                "accession",
                 "is_partial",
                 "gene_cluster_family",
                 "novelty_score",
@@ -290,7 +291,7 @@ class Command(BaseCommand):
         snaps = [
             IbgcClusteringSnapshot(
                 clustering_run=run,
-                ibgc_id=ibgc.id,
+                ibgc_accession=ibgc.accession,
                 is_partial=ibgc.is_partial,
                 gene_cluster_family=ibgc.gene_cluster_family or "",
                 novelty_score=ibgc.novelty_score,

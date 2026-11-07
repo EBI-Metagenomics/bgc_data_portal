@@ -164,3 +164,36 @@ def test_registry_resolves_minted_accessions(ingested):
     assert ires.kind == AccessionEntityType.IBGC
     assert ires.current_id == ibgc.id
     assert ires.tombstoned is False
+
+
+@pytest.mark.django_db
+def test_rollback_snapshot_survives_an_ibgc_rebuild(ingested):
+    """Snapshots are keyed on the accession, so a rebuild cannot orphan them."""
+    from discovery.models import ClusteringRun, IbgcClusteringSnapshot
+    from django.core.management import call_command
+
+    build_integrated_bgcs()
+    ibgc = IntegratedBgc.objects.order_by("id").first()
+    run = ClusteringRun.objects.create(
+        knn_k=5, leiden_resolutions=[0.1], sha256="a" * 64
+    )
+    IbgcClusteringSnapshot.objects.create(
+        clustering_run=run,
+        ibgc_accession=ibgc.accession,
+        gene_cluster_family="7.3",
+        novelty_score=0.42,
+    )
+
+    # A rebuild recreates every row (new ids, same accessions) and wipes the
+    # classification columns.
+    build_integrated_bgcs()
+    rebuilt = IntegratedBgc.objects.get(accession=ibgc.accession)
+    assert rebuilt.id != ibgc.id
+    assert rebuilt.gene_cluster_family in ("", None)
+    assert IbgcClusteringSnapshot.objects.filter(clustering_run=run).count() == 1
+
+    call_command("set_active_clustering_run", sha=run.sha256[:12])
+    rebuilt.refresh_from_db()
+    assert rebuilt.gene_cluster_family == "7.3"
+    assert rebuilt.novelty_score == pytest.approx(0.42)
+    assert rebuilt.classification_run_id == run.id
