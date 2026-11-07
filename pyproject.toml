@@ -55,6 +55,9 @@ DJANGO_SETTINGS_MODULE = "bgc_data_portal.settings"
 pythonpath = ["django"]
 testpaths = ["django/tests"]
 python_files = ["test_*.py"]
+markers = [
+    "e2e: end-to-end browser tests (pytest-playwright)",
+]
 
 [tool.mypy]
 python_version = "3.12"
