@@ -63,5 +63,9 @@ node_modules/
 django/static/dashboard/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
-CLAUDE.md
+workspace.patch
 bgc_data_portal.egg-info
+
+# Rendered Quarto user docs: built in the Dockerfile `docs` stage
+django/docs/_site/
+django/docs/.quarto/

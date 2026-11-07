@@ -1,5 +1,11 @@
 **/*.sqlite*
 *secret*
 venv
+.venv
 *.db
 frontend/node_modules
+static/dashboard
+staticfiles
+**/__pycache__
+docs/_site
+docs/.quarto

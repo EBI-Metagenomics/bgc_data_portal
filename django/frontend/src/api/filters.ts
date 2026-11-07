@@ -2,7 +2,6 @@ import { apiGet } from "./client";
 import type {
   BgcClassOption,
   NpcTreeNode,
-  PaginatedDomainResponse,
   PaginatedGcfResponse,
   PaginatedSourceResponse,
   PaginatedDetectorResponse,
@@ -21,19 +20,6 @@ export function fetchNpcTree() {
   return apiGet<NpcTreeNode[]>("/filters/npc-tree/");
 }
 
-export interface DomainSearchParams {
-  search?: string;
-  page?: number;
-  page_size?: number;
-}
-
-export function fetchDomains(params: DomainSearchParams = {}) {
-  return apiGet<PaginatedDomainResponse>(
-    "/filters/domains/",
-    params as Record<string, string | number | boolean | undefined>
-  );
-}
-
 export interface GcfSearchParams {
   search?: string;
   level?: number;
@@ -42,9 +28,9 @@ export interface GcfSearchParams {
 }
 
 export function fetchGcfs(params: GcfSearchParams = {}) {
-  return apiGet<PaginatedGcfResponse>(
+  return apiGet<PaginatedGcfResponse, GcfSearchParams>(
     "/filters/gcfs/",
-    params as Record<string, string | number | boolean | undefined>
+    params,
   );
 }
 
@@ -55,9 +41,9 @@ export interface SourceSearchParams {
 }
 
 export function fetchSources(params: SourceSearchParams = {}) {
-  return apiGet<PaginatedSourceResponse>(
+  return apiGet<PaginatedSourceResponse, SourceSearchParams>(
     "/filters/sources/",
-    params as Record<string, string | number | boolean | undefined>
+    params,
   );
 }
 
@@ -68,8 +54,8 @@ export interface DetectorSearchParams {
 }
 
 export function fetchDetectors(params: DetectorSearchParams = {}) {
-  return apiGet<PaginatedDetectorResponse>(
+  return apiGet<PaginatedDetectorResponse, DetectorSearchParams>(
     "/filters/detectors/",
-    params as Record<string, string | number | boolean | undefined>
+    params,
   );
 }

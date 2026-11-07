@@ -10,14 +10,16 @@ Pipeline phases (in dependency order):
   5. CDS                  → ContigCds (deduped on contig + range + strand)
   5.5 CDS sequences       → CdsSequence
   6. Domains              → ContigDomain (FK to ContigCds + denormalised contig FK)
-  9–10. Assembly + catalog score recomputation
 
   4b. NPClassifier labels  → SourceBgcNpcLabel (bgc_np_classes.tsv, optional; the
       ontology is upserted first from ``common_core.npc``)
 
-iBGCs and their per-iBGC NPClassifier label union are built downstream by
-``build_integrated_bgcs``. Curated natural products (``natural_products.tsv``)
-have no loader step in the staged path.
+iBGCs, their per-iBGC NPClassifier label union, assembly scores and catalog
+counts are built downstream by ``build_integrated_bgcs``. Curated natural
+products (``natural_products.tsv``) have no loader step in the staged path.
+
+Every ``load_*`` step maps TSV rows to model instances and streams them
+through :func:`_bulk_upsert`.
 
 Expected directory layout::
 
@@ -43,14 +45,12 @@ from __future__ import annotations
 
 import base64
 import csv
+import json
 import logging
 import re
 import sys
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-
-from django.db.backends.postgresql.psycopg_any import NumericRange
-from django.db.models import Avg, Count, Max
-from django.db.models.expressions import RawSQL
 
 from discovery.models import (
     AssemblySource,
@@ -59,11 +59,8 @@ from discovery.models import (
     ContigDomain,
     ContigSequence,
     DashboardAssembly,
-    DashboardBgcClass,
     DashboardContig,
     DashboardDetector,
-    DashboardDomain,
-    IntegratedBgc,
     SourceBgcPrediction,
     Taxon,
 )
@@ -71,6 +68,7 @@ from discovery.services.go_slim import go_slim_for_terms
 from discovery.services.taxonomy import RANKS
 
 from .cbgc_assigner import CbgcAssigner
+from .ranges import int4range
 from .tsv_copy import truncate_tables
 
 logger = logging.getLogger(__name__)
@@ -83,7 +81,6 @@ ALL_DISCOVERY_TABLES = [
     "discovery_accession_alias",
     "discovery_ibgc_npc_label",
     "discovery_source_bgc_npc_label",
-    "discovery_ibgc_natural_product",
     "discovery_ibgc_clustering_snapshot",
     "discovery_gcf",
     "discovery_domain_hit",
@@ -93,7 +90,6 @@ ALL_DISCOVERY_TABLES = [
     "discovery_ibgc",
     "discovery_cbgc",
     "discovery_accession_registry",
-    "discovery_precomputed_stats",
     "discovery_contig_sequence",
     "discovery_contig",
     "discovery_taxon",
@@ -104,11 +100,6 @@ ALL_DISCOVERY_TABLES = [
     "discovery_domain",
     "discovery_clustering_run",
 ]
-
-
-def _range(start: int, end_inclusive: int) -> NumericRange:
-    """Half-open ``[start, end+1)`` int4range value for Postgres."""
-    return NumericRange(lower=int(start), upper=int(end_inclusive) + 1, bounds="[)")
 
 
 def _version_sort_key(version_str: str) -> int:
@@ -122,10 +113,7 @@ def _version_sort_key(version_str: str) -> int:
 
 
 def _generate_tool_name_code(tool: str, existing_codes: set[str]) -> str:
-    if not tool or not tool.strip():
-        base = "UNK"
-    else:
-        base = tool.strip().upper()[:3]
+    base = tool.strip().upper()[:3] if tool and tool.strip() else "UNK"
     if len(base) < 3:
         base = base.ljust(3, "X")
 
@@ -142,6 +130,63 @@ def _generate_tool_name_code(tool: str, existing_codes: set[str]) -> str:
     raise ValueError(f"Cannot generate unique tool_name_code for {tool!r}")
 
 
+def _bulk_upsert(
+    model,
+    rows: Iterable,
+    *,
+    unique_fields: list[str] | None = None,
+    update_fields: list[str] | None = None,
+    batch_size: int = BATCH_SIZE,
+) -> int:
+    """Write ``rows`` in batches: upsert on ``unique_fields``, or insert-ignore.
+
+    With ``update_fields`` each batch is deduplicated on ``unique_fields``
+    (last occurrence wins) so a repeated key never makes ``ON CONFLICT DO
+    UPDATE`` touch the same row twice in one statement. Without it, rows are
+    inserted with ``ignore_conflicts``. Returns the number of rows written.
+    """
+    key_attrs = [model._meta.get_field(f).attname for f in unique_fields or ()]
+    total = 0
+    batch: list = []
+
+    def _flush() -> None:
+        nonlocal total
+        if not batch:
+            return
+        if update_fields is None:
+            written = list(batch)
+            model.objects.bulk_create(
+                written, batch_size=batch_size, ignore_conflicts=True
+            )
+        else:
+            written = list(
+                {tuple(getattr(o, a) for a in key_attrs): o for o in batch}.values()
+            )
+            model.objects.bulk_create(
+                written,
+                batch_size=batch_size,
+                update_conflicts=True,
+                unique_fields=unique_fields,
+                update_fields=update_fields,
+            )
+        total += len(written)
+        batch.clear()
+
+    for row in rows:
+        batch.append(row)
+        if len(batch) >= batch_size:
+            _flush()
+    _flush()
+    return total
+
+
+def _tsv_rows(path: Path) -> Iterator[dict[str, str]]:
+    """Yield the rows of a staged TSV as dicts (no field-size cap)."""
+    csv.field_size_limit(sys.maxsize)
+    with open(path, newline="") as f:
+        yield from csv.DictReader(f, delimiter="\t")
+
+
 # ── Pipeline steps ───────────────────────────────────────────────────────────
 
 
@@ -156,32 +201,21 @@ def load_detectors(data_dir: Path) -> dict[str, tuple[int, str]]:
         return {}
 
     existing_codes: set[str] = set()
-    rows_to_create: list[DashboardDetector] = []
 
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            tool = row["tool"]
-            version = row["version"]
-            code = _generate_tool_name_code(tool, existing_codes)
-            rows_to_create.append(
-                DashboardDetector(
-                    name=row["name"],
-                    tool=tool,
-                    version=version,
-                    tool_name_code=code,
-                    version_sort_key=_version_sort_key(version),
-                )
+    def rows() -> Iterator[DashboardDetector]:
+        for row in _tsv_rows(path):
+            tool, version = row["tool"], row["version"]
+            yield DashboardDetector(
+                name=row["name"],
+                tool=tool,
+                version=version,
+                tool_name_code=_generate_tool_name_code(tool, existing_codes),
+                version_sort_key=_version_sort_key(version),
             )
 
-    # Dedup on the (tool, version) conflict key — a duplicate within one
-    # bulk_create makes ON CONFLICT DO UPDATE touch a row twice (Postgres
-    # rejects it). Last occurrence wins, matching the upsert.
-    rows_to_create = list({(o.tool, o.version): o for o in rows_to_create}.values())
-    DashboardDetector.objects.bulk_create(
-        rows_to_create,
-        batch_size=BATCH_SIZE,
-        update_conflicts=True,
+    _bulk_upsert(
+        DashboardDetector,
+        rows(),
         unique_fields=["tool", "version"],
         update_fields=["name", "tool_name_code", "version_sort_key"],
     )
@@ -207,35 +241,27 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
             source_cache[name] = obj
         return source_cache[name]
 
-    rows: list[DashboardAssembly] = []
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            source = _get_source(row.get("source", ""))
-            rows.append(
-                DashboardAssembly(
-                    assembly_accession=row["assembly_accession"],
-                    organism_name=row.get("organism_name", ""),
-                    source=source,
-                    assembly_type=int(row.get("assembly_type", 2)),
-                    biome_path=row.get("biome_path", ""),
-                    is_type_strain=row.get("is_type_strain", "").lower()
-                    in ("true", "1"),
-                    type_strain_catalog_url=row.get("type_strain_catalog_url", ""),
-                    assembly_size_mb=(
-                        float(row["assembly_size_mb"])
-                        if row.get("assembly_size_mb")
-                        else None
-                    ),
-                    url=row.get("url", ""),
-                )
+    def rows() -> Iterator[DashboardAssembly]:
+        for row in _tsv_rows(path):
+            yield DashboardAssembly(
+                assembly_accession=row["assembly_accession"],
+                organism_name=row.get("organism_name", ""),
+                source=_get_source(row.get("source", "")),
+                assembly_type=int(row.get("assembly_type", 2)),
+                biome_path=row.get("biome_path", ""),
+                is_type_strain=row.get("is_type_strain", "").lower() in ("true", "1"),
+                type_strain_catalog_url=row.get("type_strain_catalog_url", ""),
+                assembly_size_mb=(
+                    float(row["assembly_size_mb"])
+                    if row.get("assembly_size_mb")
+                    else None
+                ),
+                url=row.get("url", ""),
             )
 
-    rows = list({o.assembly_accession: o for o in rows}.values())
-    DashboardAssembly.objects.bulk_create(
-        rows,
-        batch_size=BATCH_SIZE,
-        update_conflicts=True,
+    _bulk_upsert(
+        DashboardAssembly,
+        rows(),
         unique_fields=["assembly_accession"],
         update_fields=[
             "organism_name",
@@ -326,10 +352,9 @@ def load_taxa(data_dir: Path, *, allow_taxon_changes: bool = False) -> int:
                 "--allow-taxon-changes for a deliberate taxdump bump."
             )
 
-    Taxon.objects.bulk_create(
-        list(taxa.values()),
-        batch_size=BATCH_SIZE,
-        update_conflicts=True,
+    _bulk_upsert(
+        Taxon,
+        taxa.values(),
         unique_fields=["taxid"],
         update_fields=[
             f.name for f in Taxon._meta.concrete_fields if f.name != "taxid"
@@ -362,26 +387,24 @@ def load_contigs(
         return {}
 
     by_sha: dict[str, DashboardContig] = {}
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            assembly_acc = row["assembly_accession"]
-            assembly_id = assembly_lookup.get(assembly_acc)
-            if assembly_id is None:
-                logger.warning(
-                    "Unknown assembly %s for contig %s, skipping",
-                    assembly_acc,
-                    row.get("accession", row["sequence_sha256"]),
-                )
-                continue
-            by_sha[row["sequence_sha256"]] = DashboardContig(
-                assembly_id=assembly_id,
-                sequence_sha256=row["sequence_sha256"],
-                accession=row.get("accession", ""),
-                length=int(row.get("length", 0)),
-                taxonomy_path=row.get("taxonomy_path", ""),
-                taxon_id=_int_or_none(row.get("taxid")),
+    for row in _tsv_rows(path):
+        assembly_acc = row["assembly_accession"]
+        assembly_id = assembly_lookup.get(assembly_acc)
+        if assembly_id is None:
+            logger.warning(
+                "Unknown assembly %s for contig %s, skipping",
+                assembly_acc,
+                row.get("accession", row["sequence_sha256"]),
             )
+            continue
+        by_sha[row["sequence_sha256"]] = DashboardContig(
+            assembly_id=assembly_id,
+            sequence_sha256=row["sequence_sha256"],
+            accession=row.get("accession", ""),
+            length=int(row.get("length", 0)),
+            taxonomy_path=row.get("taxonomy_path", ""),
+            taxon_id=_int_or_none(row.get("taxid")),
+        )
 
     harmonised = [o for o in by_sha.values() if o.taxon_id is not None]
     legacy = [o for o in by_sha.values() if o.taxon_id is None]
@@ -395,10 +418,9 @@ def load_contigs(
                 f"contigs.tsv references {len(unknown)} taxid(s) absent from Taxon "
                 f"(e.g. {sorted(unknown)[:10]}): load taxa.tsv with them first."
             )
-        DashboardContig.objects.bulk_create(
+        _bulk_upsert(
+            DashboardContig,
             harmonised,
-            batch_size=BATCH_SIZE,
-            update_conflicts=True,
             unique_fields=["sequence_sha256"],
             update_fields=["assembly", "accession", "length", "taxonomy_path", "taxon"],
         )
@@ -426,10 +448,9 @@ def load_contigs(
                     "Kept canonical taxonomy_path for %d taxon-linked contigs",
                     len(linked),
                 )
-        DashboardContig.objects.bulk_create(
+        _bulk_upsert(
+            DashboardContig,
             legacy,
-            batch_size=BATCH_SIZE,
-            update_conflicts=True,
             unique_fields=["sequence_sha256"],
             update_fields=update_fields,
         )
@@ -446,48 +467,24 @@ def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
         logger.info("contig_sequences.tsv not found, skipping")
         return 0
 
-    batch: list[ContigSequence] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        csv.field_size_limit(sys.maxsize)
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
+    def rows() -> Iterator[ContigSequence]:
+        for row in _tsv_rows(path):
             contig_sha = row["contig_sha256"]
             contig_id = contig_lookup.get(contig_sha)
             if contig_id is None:
                 logger.warning("Unknown contig %s for sequence, skipping", contig_sha)
                 continue
+            yield ContigSequence(
+                contig_id=contig_id, data=base64.b64decode(row["sequence_base64"])
+            )
 
-            raw_zlib = base64.b64decode(row["sequence_base64"])
-            batch.append(ContigSequence(contig_id=contig_id, data=raw_zlib))
-
-            if len(batch) >= BATCH_SIZE:
-                # Dedup on the ``contig`` conflict key so a doubly-listed
-                # contig doesn't make ON CONFLICT DO UPDATE touch a row twice
-                # in one statement (mirrors load_cds_sequences).
-                deduped = list({obj.contig_id: obj for obj in batch}.values())
-                ContigSequence.objects.bulk_create(
-                    deduped,
-                    update_conflicts=True,
-                    unique_fields=["contig"],
-                    update_fields=["data"],
-                    batch_size=SEQUENCE_INSERT_BATCH_SIZE,
-                )
-                total += len(deduped)
-                batch.clear()
-
-    if batch:
-        deduped = list({obj.contig_id: obj for obj in batch}.values())
-        ContigSequence.objects.bulk_create(
-            deduped,
-            update_conflicts=True,
-            unique_fields=["contig"],
-            update_fields=["data"],
-            batch_size=SEQUENCE_INSERT_BATCH_SIZE,
-        )
-        total += len(deduped)
-
+    total = _bulk_upsert(
+        ContigSequence,
+        rows(),
+        unique_fields=["contig"],
+        update_fields=["data"],
+        batch_size=SEQUENCE_INSERT_BATCH_SIZE,
+    )
     logger.info("Loaded %d contig sequences", total)
     return total
 
@@ -509,8 +506,6 @@ def _json_or_none(value: str | None):
     """Optional JSON column of the staged TSVs (``""`` / missing / invalid → None)."""
     if not value:
         return None
-    import json
-
     try:
         parsed = json.loads(value)
     except ValueError:
@@ -535,18 +530,11 @@ def load_bgc_np_classes(
     from discovery.models import NpcTerm, SourceBgcNpcLabel
 
     known_terms = set(NpcTerm.objects.values_list("term_id", flat=True))
-    batch: list[SourceBgcNpcLabel] = []
-    total = skipped_bgc = skipped_term = 0
+    skipped_bgc = skipped_term = 0
 
-    def _flush() -> None:
-        nonlocal total
-        if batch:
-            SourceBgcNpcLabel.objects.bulk_create(batch, ignore_conflicts=True)
-            total += len(batch)
-            batch.clear()
-
-    with open(path, newline="") as f:
-        for row in csv.DictReader(f, delimiter="\t"):
+    def rows() -> Iterator[SourceBgcNpcLabel]:
+        nonlocal skipped_bgc, skipped_term
+        for row in _tsv_rows(path):
             key = (
                 row["contig_sha256"],
                 int(row["bgc_start"]),
@@ -561,21 +549,16 @@ def load_bgc_np_classes(
             if term_id not in known_terms:
                 skipped_term += 1
                 continue
-            batch.append(
-                SourceBgcNpcLabel(
-                    source_bgc_id=sbgc_id,
-                    term_id=term_id,
-                    rank=int(row.get("rank") or 1),
-                    score=_float_or_none(row.get("score")),
-                    confident=(row.get("confident") or "").lower() in ("true", "1"),
-                    source=(row.get("source") or SourceBgcNpcLabel.SOURCE_PREDICTED)[
-                        :16
-                    ],
-                )
+            yield SourceBgcNpcLabel(
+                source_bgc_id=sbgc_id,
+                term_id=term_id,
+                rank=int(row.get("rank") or 1),
+                score=_float_or_none(row.get("score")),
+                confident=(row.get("confident") or "").lower() in ("true", "1"),
+                source=(row.get("source") or SourceBgcNpcLabel.SOURCE_PREDICTED)[:16],
             )
-            if len(batch) >= BATCH_SIZE:
-                _flush()
-    _flush()
+
+    total = _bulk_upsert(SourceBgcNpcLabel, rows())
     if skipped_bgc or skipped_term:
         logger.warning(
             "bgc_np_classes.tsv: skipped %d rows with unknown BGC "
@@ -651,63 +634,58 @@ def load_source_bgcs(
 
     assigner = CbgcAssigner(on_pre_merge=_flush_batch)
 
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            contig_sha = row["contig_sha256"]
-            contig_id = contig_lookup.get(contig_sha)
-            if contig_id is None:
-                logger.warning(
-                    "Unknown contig %s, skipping source prediction", contig_sha
-                )
-                continue
+    for row in _tsv_rows(path):
+        contig_sha = row["contig_sha256"]
+        contig_id = contig_lookup.get(contig_sha)
+        if contig_id is None:
+            logger.warning("Unknown contig %s, skipping source prediction", contig_sha)
+            continue
 
-            detector_name = row["detector_name"]
-            det_info = detector_lookup.get(detector_name)
-            if det_info is None:
-                logger.warning(
-                    "Unknown detector %s, skipping source prediction", detector_name
-                )
-                continue
-            detector_id, tool_code = det_info
+        detector_name = row["detector_name"]
+        det_info = detector_lookup.get(detector_name)
+        if det_info is None:
+            logger.warning(
+                "Unknown detector %s, skipping source prediction", detector_name
+            )
+            continue
+        detector_id, tool_code = det_info
 
-            start = int(row["start_position"])
-            end = int(row["end_position"])
+        start = int(row["start_position"])
+        end = int(row["end_position"])
 
-            cbgc_id, bgc_number, prediction_accession = assigner.assign(
+        cbgc_id, bgc_number, prediction_accession = assigner.assign(
+            contig_id=contig_id,
+            contig_accession=contig_accession_by_id.get(contig_id, "") or contig_sha,
+            start=start,
+            end=end,
+            detector_id=detector_id,
+            tool_code=tool_code,
+        )
+
+        assembly_id = contig_to_assembly.get(contig_id)
+
+        batch.append(
+            SourceBgcPrediction(
+                assembly_id=assembly_id,
                 contig_id=contig_id,
-                contig_accession=contig_accession_by_id.get(contig_id, "")
-                or contig_sha,
-                start=start,
-                end=end,
+                prediction_accession=prediction_accession,
+                bgc_range=int4range(start, end),
+                classification_path=(row.get("classification_path") or "").strip()[
+                    :255
+                ],
+                is_partial=row.get("is_partial", "").lower() in ("true", "1"),
+                is_validated=row.get("is_validated", "").lower() in ("true", "1"),
+                score=_float_or_none(row.get("score")),
+                probability=_float_or_none(row.get("probability")),
+                attributes=_json_or_none(row.get("attributes_json")),
                 detector_id=detector_id,
-                tool_code=tool_code,
+                cbgc_id=cbgc_id,
+                bgc_number=bgc_number,
             )
+        )
 
-            assembly_id = contig_to_assembly.get(contig_id)
-
-            batch.append(
-                SourceBgcPrediction(
-                    assembly_id=assembly_id,
-                    contig_id=contig_id,
-                    prediction_accession=prediction_accession,
-                    bgc_range=_range(start, end),
-                    classification_path=(row.get("classification_path") or "").strip()[
-                        :255
-                    ],
-                    is_partial=row.get("is_partial", "").lower() in ("true", "1"),
-                    is_validated=row.get("is_validated", "").lower() in ("true", "1"),
-                    score=_float_or_none(row.get("score")),
-                    probability=_float_or_none(row.get("probability")),
-                    attributes=_json_or_none(row.get("attributes_json")),
-                    detector_id=detector_id,
-                    cbgc_id=cbgc_id,
-                    bgc_number=bgc_number,
-                )
-            )
-
-            if len(batch) >= BATCH_SIZE:
-                _flush_batch()
+        if len(batch) >= BATCH_SIZE:
+            _flush_batch()
 
     _flush_batch()
 
@@ -743,50 +721,31 @@ def load_cds(
         logger.info("cds.tsv not found, skipping")
         return {}
 
-    batch: list[ContigCds] = []
-    total = 0
     seen: set[tuple[int, int, int, int]] = set()  # (contig_id, lower, upper, strand)
 
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            contig_sha = row["contig_sha256"]
-            contig_id = contig_lookup.get(contig_sha)
+    def rows() -> Iterator[ContigCds]:
+        for row in _tsv_rows(path):
+            contig_id = contig_lookup.get(row["contig_sha256"])
             if contig_id is None:
                 continue
-
-            start = int(row["start_position"])
-            end = int(row["end_position"])
             strand = int(row["strand"])
-            cds_range = _range(start, end)
-
+            cds_range = int4range(int(row["start_position"]), int(row["end_position"]))
             dedup_key = (contig_id, cds_range.lower, cds_range.upper, strand)
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
-
-            batch.append(
-                ContigCds(
-                    contig_id=contig_id,
-                    cds_range=cds_range,
-                    strand=strand,
-                    protein_id_str=row["protein_id_str"],
-                    protein_length=int(row.get("protein_length", 0)),
-                    gene_caller=row.get("gene_caller", ""),
-                    cluster_representative=row.get("cluster_representative", ""),
-                    protein_sha256=row.get("protein_sha256", ""),
-                )
+            yield ContigCds(
+                contig_id=contig_id,
+                cds_range=cds_range,
+                strand=strand,
+                protein_id_str=row["protein_id_str"],
+                protein_length=int(row.get("protein_length", 0)),
+                gene_caller=row.get("gene_caller", ""),
+                cluster_representative=row.get("cluster_representative", ""),
+                protein_sha256=row.get("protein_sha256", ""),
             )
 
-            if len(batch) >= BATCH_SIZE:
-                ContigCds.objects.bulk_create(batch, ignore_conflicts=True)
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        ContigCds.objects.bulk_create(batch, ignore_conflicts=True)
-        total += len(batch)
-
+    total = _bulk_upsert(ContigCds, rows())
     logger.info("Loaded %d CDS rows", total)
 
     # Lookup keyed by (contig_id, protein_id_str) — the natural per-gene key.
@@ -811,47 +770,25 @@ def load_cds_sequences(
         logger.info("cds_sequences.tsv not found, skipping")
         return 0
 
-    batch: list[CdsSequence] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        csv.field_size_limit(sys.maxsize)
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            contig_sha = row.get("contig_sha256", "")
-            contig_id = contig_lookup.get(contig_sha)
+    def rows() -> Iterator[CdsSequence]:
+        for row in _tsv_rows(path):
+            contig_id = contig_lookup.get(row.get("contig_sha256", ""))
             if contig_id is None:
                 continue
             cds_id = cds_lookup.get((contig_id, row["protein_id_str"]))
             if cds_id is None:
                 continue
+            yield CdsSequence(
+                cds_id=cds_id, data=base64.b64decode(row["sequence_base64"])
+            )
 
-            raw_zlib = base64.b64decode(row["sequence_base64"])
-            batch.append(CdsSequence(cds_id=cds_id, data=raw_zlib))
-
-            if len(batch) >= BATCH_SIZE:
-                deduped = list({obj.cds_id: obj for obj in batch}.values())
-                CdsSequence.objects.bulk_create(
-                    deduped,
-                    update_conflicts=True,
-                    unique_fields=["cds"],
-                    update_fields=["data"],
-                    batch_size=SEQUENCE_INSERT_BATCH_SIZE,
-                )
-                total += len(deduped)
-                batch.clear()
-
-    if batch:
-        deduped = list({obj.cds_id: obj for obj in batch}.values())
-        CdsSequence.objects.bulk_create(
-            deduped,
-            update_conflicts=True,
-            unique_fields=["cds"],
-            update_fields=["data"],
-            batch_size=SEQUENCE_INSERT_BATCH_SIZE,
-        )
-        total += len(deduped)
-
+    total = _bulk_upsert(
+        CdsSequence,
+        rows(),
+        unique_fields=["cds"],
+        update_fields=["data"],
+        batch_size=SEQUENCE_INSERT_BATCH_SIZE,
+    )
     logger.info("Loaded %d CDS sequences", total)
     return total
 
@@ -871,22 +808,16 @@ def load_domains(
         logger.info("domains.tsv not found, skipping")
         return 0
 
-    batch: list[ContigDomain] = []
-    total = 0
     seen: set[tuple[int, str, int, int]] = set()
 
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            contig_sha = row.get("contig_sha256", "")
-            contig_id = contig_lookup.get(contig_sha)
+    def rows() -> Iterator[ContigDomain]:
+        for row in _tsv_rows(path):
+            contig_id = contig_lookup.get(row.get("contig_sha256", ""))
             if contig_id is None:
                 continue
-            protein_id = row.get("protein_id_str", "")
-            cds_id = cds_lookup.get((contig_id, protein_id))
+            cds_id = cds_lookup.get((contig_id, row.get("protein_id_str", "")))
             if cds_id is None:
                 continue
-
             domain_acc = row["domain_acc"]
             d_start = int(row.get("start_position", 0))
             d_end = int(row.get("end_position", 0))
@@ -894,40 +825,26 @@ def load_domains(
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
-
             go_terms_raw = (row.get("go_terms") or "").strip()
             go_terms = [t for t in go_terms_raw.split("|") if t] if go_terms_raw else []
-
-            batch.append(
-                ContigDomain(
-                    cds_id=cds_id,
-                    contig_id=contig_id,
-                    domain_acc=domain_acc,
-                    domain_name=row.get("domain_name", ""),
-                    domain_description=row.get("domain_description", ""),
-                    ref_db=row.get("ref_db", ""),
-                    start_position=d_start,
-                    end_position=d_end,
-                    score=float(row["score"]) if row.get("score") else None,
-                    url=row.get("url", ""),
-                    go_slim=go_slim_for_terms(go_terms),
-                    interpro_entry_acc=row.get("interpro_entry_acc", ""),
-                    interpro_entry_description=row.get(
-                        "interpro_entry_description", ""
-                    ),
-                    go_terms=go_terms,
-                )
+            yield ContigDomain(
+                cds_id=cds_id,
+                contig_id=contig_id,
+                domain_acc=domain_acc,
+                domain_name=row.get("domain_name", ""),
+                domain_description=row.get("domain_description", ""),
+                ref_db=row.get("ref_db", ""),
+                start_position=d_start,
+                end_position=d_end,
+                score=float(row["score"]) if row.get("score") else None,
+                url=row.get("url", ""),
+                go_slim=go_slim_for_terms(go_terms),
+                interpro_entry_acc=row.get("interpro_entry_acc", ""),
+                interpro_entry_description=row.get("interpro_entry_description", ""),
+                go_terms=go_terms,
             )
 
-            if len(batch) >= BATCH_SIZE:
-                ContigDomain.objects.bulk_create(batch, ignore_conflicts=True)
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        ContigDomain.objects.bulk_create(batch, ignore_conflicts=True)
-        total += len(batch)
-
+    total = _bulk_upsert(ContigDomain, rows())
     logger.info("Loaded %d domain rows", total)
     return total
 
@@ -947,99 +864,6 @@ def _log_ignored_legacy_files(data_dir: Path) -> list[str]:
     return present
 
 
-# ── Post-load computations ───────────────────────────────────────────────────
-
-
-def compute_assembly_scores() -> None:
-    """Recompute denormalised counts on DashboardAssembly from loaded iBGCs.
-
-    Runs after the iBGC table is built (i.e. after ``build_integrated_bgcs``).
-    ``bgc_count`` reflects iBGC count per assembly; ``l1_class_count`` /
-    ``bgc_novelty_score`` likewise iBGC-derived.
-    """
-    logger.info("Computing assembly iBGC counts/scores ...")
-
-    # iBGCs per assembly via contig FK chain: ibgc.contig.assembly.
-    assemblies = DashboardAssembly.objects.annotate(
-        _ibgc_count=Count("contigs__ibgcs", distinct=True),
-        _l1_class_count=Count(
-            RawSQL("SPLIT_PART(discovery_ibgc.gene_cluster_family, '.', 1)", []),
-            distinct=True,
-        ),
-        _avg_novelty=Avg("contigs__ibgcs__novelty_score"),
-    )
-
-    batch = []
-    for asm in assemblies.iterator():
-        asm.bgc_count = asm._ibgc_count
-        asm.l1_class_count = asm._l1_class_count
-        asm.bgc_novelty_score = asm._avg_novelty or 0.0
-        batch.append(asm)
-        if len(batch) >= BATCH_SIZE:
-            DashboardAssembly.objects.bulk_update(
-                batch,
-                ["bgc_count", "l1_class_count", "bgc_novelty_score"],
-                batch_size=BATCH_SIZE,
-            )
-            batch.clear()
-
-    if batch:
-        DashboardAssembly.objects.bulk_update(
-            batch,
-            ["bgc_count", "l1_class_count", "bgc_novelty_score"],
-            batch_size=BATCH_SIZE,
-        )
-
-    logger.info("Assembly scores computed")
-
-
-def compute_catalog_counts() -> None:
-    """Recompute BGC class and domain catalog counts (iBGC-derived)."""
-    from discovery.services.scores import recompute_ibgc_classes
-
-    logger.info("Computing catalog counts ...")
-
-    # iBGC product classes — derive the normalised IntegratedBgc.bgc_class
-    # from each iBGC's source predictions, then count distinct iBGCs per label.
-    recompute_ibgc_classes()
-    class_counts = (
-        IntegratedBgc.objects.exclude(bgc_class="")
-        .values("bgc_class")
-        .annotate(cnt=Count("id"))
-    )
-    DashboardBgcClass.objects.all().delete()
-    DashboardBgcClass.objects.bulk_create(
-        [
-            DashboardBgcClass(name=r["bgc_class"], bgc_count=r["cnt"])
-            for r in class_counts
-        ],
-        batch_size=BATCH_SIZE,
-    )
-
-    # Domain counts — distinct iBGC reach per domain acc.
-    # ContigDomain.contig is denormalised so the join chain is short.
-    domain_counts = ContigDomain.objects.values("domain_acc").annotate(
-        cnt=Count("contig__ibgcs", distinct=True),
-        domain_name=Max("domain_name"),
-        ref_db=Max("ref_db"),
-    )
-    DashboardDomain.objects.all().delete()
-    DashboardDomain.objects.bulk_create(
-        [
-            DashboardDomain(
-                acc=r["domain_acc"],
-                name=r["domain_name"] or "",
-                ref_db=r["ref_db"] or "",
-                bgc_count=r["cnt"],
-            )
-            for r in domain_counts
-        ],
-        batch_size=BATCH_SIZE,
-    )
-
-    logger.info("Catalog counts computed")
-
-
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 
@@ -1047,19 +871,13 @@ def run_pipeline(
     data_dir: str | Path,
     *,
     truncate: bool = False,
-    skip_stats: bool = False,
     retaxonomy: bool = False,
     allow_taxon_changes: bool = False,
 ) -> None:
     """Execute the full discovery data loading pipeline.
 
-    Notes:
-      * iBGCs (and their NPClassifier label union) are NOT created here —
-        they are built by ``build_integrated_bgcs``. ``compute_assembly_scores``
-        and ``compute_catalog_counts`` therefore expect to be run again
-        after those steps; the call inside this function gives ingest-time
-        counts of zero iBGCs, which is fine if you chain the steps via the
-        operator runbook.
+    iBGCs (with their NPClassifier label union), assembly scores and catalog
+    counts are NOT created here — ``build_integrated_bgcs`` builds them next.
     """
     data_dir = Path(data_dir)
     if not data_dir.is_dir():
@@ -1090,10 +908,6 @@ def run_pipeline(
     load_cds_sequences(data_dir, contig_lookup, cds_lookup)
     load_domains(data_dir, contig_lookup, cds_lookup)
     _log_ignored_legacy_files(data_dir)
-
-    if not skip_stats:
-        compute_assembly_scores()
-        compute_catalog_counts()
 
     logger.info(
         "Loader complete. Next step (operator): python manage.py build_integrated_bgcs "

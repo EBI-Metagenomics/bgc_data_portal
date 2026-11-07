@@ -32,6 +32,12 @@ def build_report_ibgc_tsv(ibgc_rows: list[dict]) -> str:
     """
     buf = StringIO()
     writer = csv.writer(buf, delimiter="\t", lineterminator="\n")
+
+    def text(value) -> str:
+        # Spreadsheets treat a leading = + - @ as a formula; prefix with a quote.
+        value = value or ""
+        return f"'{value}" if value[:1] in "=+-@" else value
+
     writer.writerow(
         [
             "ibgc_accession",
@@ -61,9 +67,9 @@ def build_report_ibgc_tsv(ibgc_rows: list[dict]) -> str:
             [
                 r.get("label") or r.get("accession") or "",
                 r.get("parent_assembly_accession") or "",
-                r.get("organism_name") or "",
-                r.get("taxonomy_phylum") or "",
-                r.get("biome_path") or "",
+                text(r.get("organism_name")),
+                text(r.get("taxonomy_phylum")),
+                text(r.get("biome_path")),
                 r.get("contig_accession") or "",
                 "" if r.get("start") is None else r.get("start"),
                 "" if r.get("end") is None else r.get("end"),

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import Plot from "react-plotly.js";
+import { Plot } from "@/lib/plotly";
 import { useReport, useReportSnapshot } from "@/hooks/use-report";
 import { useDiscoveryStore } from "@/stores/discovery-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +58,8 @@ export function ReportPage() {
   const ibgcsParam = searchParams.get("ibgcs");
 
   const snapshot = useReportSnapshot();
+  // ``mutate`` is referentially stable (TanStack Query), unlike ``snapshot``.
+  const mintSnapshot = snapshot.mutate;
   const assetToken = useDiscoveryStore((s) => s.assetToken);
   const { data, isLoading, isError, error } = useReport(token);
 
@@ -71,7 +73,7 @@ export function ReportPage() {
       .map((s) => parseInt(s, 10))
       .filter((n) => Number.isFinite(n));
     if (ids.length === 0) return;
-    snapshot.mutate(
+    mintSnapshot(
       { ibgcIds: ids, assetToken },
       {
         onSuccess: (resp) => {
@@ -79,8 +81,7 @@ export function ReportPage() {
         },
       },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, ibgcsParam]);
+  }, [token, ibgcsParam, assetToken, mintSnapshot, setSearchParams]);
 
   if (!token && !ibgcsParam) {
     return (

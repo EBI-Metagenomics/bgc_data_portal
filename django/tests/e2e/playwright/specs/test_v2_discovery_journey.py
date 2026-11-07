@@ -85,14 +85,14 @@ def test_v2_roster_surfaces_ibgc_accessions(page, e2e_v2_base_url):
         pytest.skip("No iBGCs in the dataset — skipping accession test")
 
     row_text = rows.first.inner_text()
-    assert ACCESSION_RE.search(
-        row_text
-    ), f"No MGYB accession visible in roster row: {row_text!r}"
+    assert ACCESSION_RE.search(row_text), (
+        f"No MGYB accession visible in roster row: {row_text!r}"
+    )
     # iBGCs carry the two-char per-cBGC suffix; a bare cBGC accession here
     # would mean the roster is rendering the wrong entity.
-    assert IBGC_ACCESSION_RE.search(
-        row_text
-    ), f"Expected a suffixed iBGC accession in roster row: {row_text!r}"
+    assert IBGC_ACCESSION_RE.search(row_text), (
+        f"Expected a suffixed iBGC accession in roster row: {row_text!r}"
+    )
 
 
 @pytest.mark.e2e

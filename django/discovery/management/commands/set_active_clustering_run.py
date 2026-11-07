@@ -88,12 +88,15 @@ class Command(BaseCommand):
         )
 
         snaps = list(IbgcClusteringSnapshot.objects.filter(clustering_run=target))
-        snap_by_id = {s.ibgc_id: s for s in snaps}
+        snap_by_accession = {s.ibgc_accession: s for s in snaps}
         now = timezone.now()
 
-        ibgcs = list(IntegratedBgc.objects.filter(id__in=list(snap_by_id.keys())))
+        # Snapshots are keyed on the accession so they outlive iBGC rebuilds.
+        ibgcs = list(
+            IntegratedBgc.objects.filter(accession__in=list(snap_by_accession))
+        )
         for ibgc in ibgcs:
-            s = snap_by_id[ibgc.id]
+            s = snap_by_accession[ibgc.accession]
             ibgc.is_partial = s.is_partial
             ibgc.gene_cluster_family = s.gene_cluster_family or ""
             ibgc.novelty_score = s.novelty_score

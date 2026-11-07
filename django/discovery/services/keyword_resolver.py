@@ -136,8 +136,7 @@ def _try_bgc_accession(keyword: str) -> dict | None:
 
 def _try_assembly_accession(keyword: str) -> dict | None:
     if not (
-        _ASSEMBLY_ACCESSION_RE.match(keyword)
-        or _MIBIG_ACCESSION_RE.match(keyword)
+        _ASSEMBLY_ACCESSION_RE.match(keyword) or _MIBIG_ACCESSION_RE.match(keyword)
     ):
         return None
     from discovery.models import DashboardAssembly
@@ -270,14 +269,6 @@ def _try_organism_name(keyword: str) -> dict | None:
     return None
 
 
-def _try_natural_product(keyword: str) -> dict | None:
-    from discovery.models import IbgcNaturalProduct
-
-    if IbgcNaturalProduct.objects.filter(name__icontains=keyword).exists():
-        return _build_result("search", keyword, "natural_product")
-    return None
-
-
 # Resolution order — first match wins.
 _RESOLVERS = [
     _try_bgc_accession,
@@ -288,5 +279,4 @@ _RESOLVERS = [
     _try_biome,
     _try_taxonomy,
     _try_organism_name,
-    _try_natural_product,
 ]

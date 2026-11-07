@@ -8,7 +8,6 @@ from pathlib import Path
 
 import dj_database_url
 from csp.constants import NONE, SELF
-
 from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables from .env file
@@ -19,8 +18,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Core settings
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN")
-PROJECT_USER_TOKEN = os.getenv("PROJECT_USER_TOKEN")
 DEBUG = os.getenv("DJANGO_DEBUG", default="False").lower() == "true"
 
 IS_COLLECTSTATIC = "collectstatic" in sys.argv
@@ -52,36 +49,46 @@ API_FIRST_PARTY_GATE_ENABLED = (
 
 # Per-client-IP rate limiting (see discovery/throttling.py). Rates are
 # "<count>/<period>" with period one of s|m|h|d; tune per deployment via env
-# without code changes. Counters live in the Redis cache (shared across
-# workers/pods). Disabled automatically in the test suite.
+# without code changes. Counters live in the default cache (Postgres
+# DatabaseCache, shared across workers/pods). Disabled in the test suite.
 API_THROTTLE_ENABLED = os.getenv("API_THROTTLE_ENABLED", "true").lower() == "true"
 API_THROTTLE_RATES = {
     "default": os.getenv("API_THROTTLE_DEFAULT", "300/m"),
     "search": os.getenv("API_THROTTLE_SEARCH", "30/m"),
     "upload": os.getenv("API_THROTTLE_UPLOAD", "20/h"),
 }
-# Number of trusted reverse proxies in front of Django (e.g. k8s ingress, LB).
-# Lets the throttle read the real client IP from X-Forwarded-For instead of a
-# spoofable left-most value. Leave unset in local dev (no proxy); set to the
-# proxy count in prod. Consumed by Django-Ninja's throttle ident resolver.
+# Number of trusted reverse proxies in front of Django (k8s ingress, LB).
+# Django-Ninja's throttle keys on the client IP it derives from
+# X-Forwarded-For; without this count it uses the whole header, which a client
+# can spoof to get a fresh throttle bucket per request. The chart sets it to 1
+# (the ingress); leave it unset only in local dev (no proxy).
 _ninja_num_proxies = os.getenv("NINJA_NUM_PROXIES")
 if _ninja_num_proxies:
     NINJA_NUM_PROXIES = int(_ninja_num_proxies)
+elif not DEBUG and not IS_COLLECTSTATIC and "pytest" not in sys.modules:
+    raise ImproperlyConfigured(
+        "Set NINJA_NUM_PROXIES to the number of reverse proxies in front of "
+        "Django (1 behind the k8s ingress); the per-IP throttle depends on it"
+    )
 
 # Allow overriding the externally mounted base path (used for URL reversing, static paths, etc.)
 # Default remains the production prefix to keep existing behaviour, but can be overridden in dev.
 FORCE_SCRIPT_NAME = os.getenv("DJANGO_FORCE_SCRIPT_NAME", "")
 
+# Django always sits behind the k8s ingress (or runserver in dev), so trust the
+# proxy's Host and X-Forwarded-Proto. Do not expose gunicorn directly.
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+if not DEBUG:
+    # Only the Django admin uses session/CSRF cookies; mark them Secure.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 STATIC_URL = f"{FORCE_SCRIPT_NAME}/static/"
 
 # Internal IPs
-INTERNAL_IPS = [
-    "127.0.0.1",
-    "0.0.0.0",
-]
+INTERNAL_IPS = ["127.0.0.1"]
 
 
 def _show_debug_toolbar(request):
@@ -94,9 +101,7 @@ def _show_debug_toolbar(request):
     """
     if not DEBUG or "pytest" in sys.modules:
         return False
-    if request.headers.get("X-No-Debug-Toolbar"):
-        return False
-    return True
+    return not request.headers.get("X-No-Debug-Toolbar")
 
 
 DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": _show_debug_toolbar}
@@ -152,9 +157,6 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "bgc_data_portal.context_processors.use_matomo",
             ],
-            "libraries": {
-                "table_tags": "bgc_data_portal.templatetags.table_tags",
-            },
         },
     },
 ]
@@ -172,10 +174,9 @@ DATABASES = {
 # Background tasks — django-tasks with the Postgres-backed django-tasks-db
 # backend (no broker, no Redis result store). The DB-poll worker claims rows
 # with SELECT … FOR UPDATE SKIP LOCKED, so multiple worker pods are safe.
-# Two queues mirror the old Celery routing: "default" and the dedicated
-# "scores" queue. Run a worker with:
+# Two queues: "default" (searches, uploads, stats) and "scores" (long
+# recomputes). Run a worker with:
 #   python manage.py db_worker --queue-name default,scores
-# Tests override TASKS to the in-process ImmediateBackend (see test settings).
 TASKS = {
     "default": {
         "BACKEND": "django_tasks_db.DatabaseBackend",
@@ -199,18 +200,8 @@ CLUSTERING_ARTIFACTS_DIR: Path = Path(
     )
 )
 
-# When True, the in-portal clustering pipeline (run_bgc_clustering) is refused
-# — clustering must run on HPC via the bgc-cluster CLI and be imported back
-# with import_clustering_results. Default off so local compose / dev still
-# works against a small seeded DB.
-CLUSTERING_HPC_MODE: bool = os.environ.get("CLUSTERING_HPC_MODE", "false").lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
 # On-disk phmmer protein search DB (FASTA + .ssi + VERSION).
-# Lives on the shared ML PVC so every Celery worker can read it.
+# Lives on the shared PVC so every db_worker pod can read it.
 PROTEIN_SEARCH_INDEX_DIR: Path = Path(
     os.environ.get(
         "PROTEIN_SEARCH_INDEX_DIR",
@@ -221,8 +212,8 @@ PROTEIN_SEARCH_INDEX_DIR: Path = Path(
 # Intra-query parallelism for the phmmer scan. A single sequence query is split
 # across this many threads, each scanning a slice of the resident protein block
 # (pyhmmer releases the GIL during the C search), giving near-linear speedup.
-# This is orthogonal to Celery prefork --concurrency=1: one task at a time, but
-# that task uses all the worker pod's cores. NB: pyhmmer's own `cpus=` param
+# One worker handles one task at a time, but that task uses all the pod's
+# cores. NB: pyhmmer's own `cpus=` param
 # parallelises across *queries*, so it does nothing for a single query — the
 # split is done by us. Defaults to the pod's core count, capped at 8.
 PROTEIN_SEARCH_CPUS: int = int(
@@ -250,7 +241,6 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
-USE_L10N = True
 USE_TZ = True
 
 # Static files
@@ -260,16 +250,6 @@ STATIC_ROOT = BASE_DIR / "staticfiles"  # NOT the same as STATICFILES_DIRS
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
-
-# For development, you might also want:
-# if DEBUG:
-#     from django.conf.urls.static import static
-#     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-
-# if DEBUG:
-# STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-# else:
-# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -308,7 +288,6 @@ MATOMO_SITE_ID = (
 # Scoped to the app's real resource origins:
 #   * 'self'                     — Django pages, the React SPA bundle, /api, static
 #   * assets.emblstatic.net      — EMBL Visual Framework CSS/JS + its woff/svg assets
-#   * code.jquery.com            — jQuery (static portal pages)
 #   * MATOMO_URL                 — analytics tracker + beacon, only when configured
 # Fonts are self-hosted (static/css/fonts.css), so no Google Fonts origins are
 # needed. 'unsafe-inline' is required for styles (VF + Plotly inject <style> blocks
@@ -320,7 +299,6 @@ MATOMO_SITE_ID = (
 # Content-Security-Policy-Report-Only (logs violations without blocking) while
 # validating the dashboard, then unset to enforce.
 _VF_HOST = "https://assets.emblstatic.net"
-_JQUERY_HOST = "https://code.jquery.com"
 
 # The EMBL VF hero/masthead background images (e.g. roundels.png) are served
 # through the embl.org cloudimg proxy, not emblstatic — without these the hero
@@ -336,7 +314,7 @@ _EMBL_CONNECT_HOSTS = [
     "https://embl-communications.github.io",
 ]
 
-_csp_script = [SELF, _VF_HOST, _JQUERY_HOST]
+_csp_script = [SELF, _VF_HOST]
 _csp_style = [SELF, _VF_HOST, "'unsafe-inline'"]
 _csp_font = [SELF, _VF_HOST]
 _csp_img = [SELF, "data:", _VF_HOST, *_EMBL_IMG_HOSTS]

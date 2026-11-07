@@ -59,8 +59,12 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
   docker:
     name: Build & Push Services
+    needs: test
     runs-on: ubuntu-latest
     # workflow_call / workflow_dispatch always pass `inputs.ref`; a bare dev push
     # has no inputs but lands on refs/heads/dev. (Under workflow_call the github
@@ -72,15 +76,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - folder: django
-            image_name: bgc-data-portal-website
-            dockerfile: Dockerfile
-          - folder: django
-            image_name: bgc-data-portal-website-worker
-            dockerfile: Dockerfile.worker
-          - folder: db
-            image_name: bgc-data-portal-postgres
-            dockerfile: Dockerfile
+          - image_name: bgc-data-portal-website
+            target: web
+          - image_name: bgc-data-portal-website-worker
+            target: worker
 
     steps:
       - name: Checkout
@@ -146,8 +145,9 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.folder }}
-          file: ./${{ matrix.folder }}/${{ matrix.dockerfile }}
+          context: ./django
+          file: ./django/Dockerfile
+          target: ${{ matrix.target }}
           push: true
           tags: ${{ steps.tags.outputs.tags }}
 

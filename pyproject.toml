@@ -1,62 +1,31 @@
-[build-system]
-requires = ["setuptools>=69"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-py-modules = []
-
-[project]
-name = "bgc-data-portal"
-dynamic = ["version"]
-requires-python = ">=3.12"
-# Runtime dependencies are managed in django/requirements.txt.
-# Dev-only dependencies are in django/requirements-dev.txt.
-# See django/requirements-web.txt for the fast dev image subset.
-
-[project.optional-dependencies]
-dev = [
-    "mgnify-bgcs-common-core[hpc-cpu] @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git",
-    "Django==5.0.4",
-    "pytest>=7",
-    "pytest-django>=4.5",
-    "playwright>=1.40",
-    "pytest-playwright>=0.4",
-    "requests",
-    "factory-boy>=3.3",
-    "faker>=25",
-    "pytest-factoryboy>=2.7",
-    # goatools is only needed to regenerate discovery/services/data/go_slim_map.json
-    # via `manage.py refresh_go_slim_map`; runtime reads the prebuilt JSON.
-    "goatools>=1.4",
-]
-# Opt-in for HPC nodes with CUDA 12. Installs on top of `dev`:
-#   pip install -e '.[dev,dev-gpu]'
-# RAPIDS wheels are Linux x86_64 + CUDA 12 only; conda/mamba is the safer
-# install path on most HPC sites — see common-core's README.
-dev-gpu = [
-    "mgnify-bgcs-common-core[hpc-gpu] @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git",
-]
+# Tooling configuration only. Runtime dependencies live in
+# django/requirements-*.txt (+ .lock); there is no installable package.
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
-exclude = ["django/migrations", "django/staticfiles"]
+target-version = "py312"
+extend-exclude = [
+    "django/discovery/migrations",
+    "django/staticfiles",
+    "django/static",
+    "django/frontend",
+    "django/docs",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
-
-[tool.black]
-line-length = 88
-target-version = ["py310"]
-exclude = "migrations"
+# E/F: pyflakes + pycodestyle, I: import order, UP: modern syntax,
+# B: bugbear, SIM: simplifications, C4: comprehensions.
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+ignore = [
+    "E501",  # line length is the formatter's job; long strings/URLs are fine
+    "B905",  # zip(strict=...) adds noise on same-length lists
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "bgc_data_portal.settings"
 pythonpath = ["django"]
 testpaths = ["django/tests"]
 python_files = ["test_*.py"]
-
-[tool.mypy]
-python_version = "3.12"
-ignore_missing_imports = true
-exclude = ["migrations/"]
+markers = [
+    "e2e: end-to-end browser tests (pytest-playwright)",
+]

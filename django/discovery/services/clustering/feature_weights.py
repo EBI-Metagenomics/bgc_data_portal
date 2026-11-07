@@ -173,6 +173,7 @@ def load_run_weights(artifacts_dir: Path) -> RunWeights | None:
     return RunWeights(
         domain_weights=np.load(d / DOMAIN_WEIGHTS_FILE),
         pair_weights=np.load(d / PAIR_WEIGHTS_FILE),
+        # allow_pickle: the vocab arrays are object dtype (string / tuple labels).
         domain_accs=np.load(d / DOMAIN_ACCS_FILE, allow_pickle=True),
         pair_vocab=np.load(d / PAIR_VOCAB_FILE, allow_pickle=True),
     )

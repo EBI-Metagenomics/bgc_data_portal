@@ -1,31 +1,31 @@
-import type Shepherd from "shepherd.js";
+import type { StepOptions, Tour } from "shepherd.js";
 import { buildDocsUrl } from "@/lib/router-base";
 
-type StepDef = Shepherd.Step.StepOptions;
+type StepDef = StepOptions;
 
 const skipBtn = {
   text: "Skip tour",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.cancel();
   },
   secondary: true,
 };
 const backBtn = {
   text: "Back",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.back();
   },
   secondary: true,
 };
 const nextBtn = {
   text: "Next",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.next();
   },
 };
 const finishBtn = {
   text: "Finish",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.complete();
   },
 };

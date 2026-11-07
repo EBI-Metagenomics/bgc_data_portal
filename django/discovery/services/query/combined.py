@@ -7,15 +7,16 @@ intersection, and returns a JSON-serialisable result dict the API status/scores
 endpoints render. Each criterion instance keeps its own score payload, so the
 roster and Variables map can surface one (or more) sortable column per criterion.
 
-This runs inside the ``combined_query`` worker task. It is deliberately free of
-any Ninja/web-layer types; ``_apply_ibgc_filters`` is imported lazily from the
-API module at call time (the only runtime coupling, and not an import cycle since
-that import is function-local on both sides).
+This runs inside the ``combined_query`` worker task. Narrowing uses the shared
+``IbgcFilterParams`` / ``apply_ibgc_filters`` from ``services.ibgc_filters``.
 """
 
 from __future__ import annotations
 
 import logging
+
+from discovery.models import IntegratedBgc
+from discovery.services.ibgc_filters import IbgcFilterParams, apply_ibgc_filters
 
 from .criteria import (
     CRITERION_METRICS,
@@ -25,36 +26,6 @@ from .criteria import (
 )
 
 log = logging.getLogger(__name__)
-
-# Filter kwargs accepted by ``api._apply_ibgc_filters`` (minus ``ibgc_ids``,
-# which the orchestrator sets itself). Mirrors that function's signature; keep
-# in sync if a new narrowing filter is added there.
-FILTER_KEYS = (
-    "include_partials",
-    "validated_only",
-    "min_length_kb",
-    "max_length_kb",
-    "min_novelty",
-    "max_novelty",
-    "min_domain_novelty",
-    "max_domain_novelty",
-    "detector_tools",
-    "source_tools",
-    "source_names",
-    "assembly_type",
-    "leaf_path_prefix",
-    "bgc_class",
-    "npc_terms",
-    "npc_confident",
-    "accession",
-    "bgc_accession",
-    "assembly_accession",
-    "assembly_ids",
-    "organism",
-    "biome_lineage",
-    "taxonomy_path",
-    "domain_text",
-)
 
 
 def criterion_label(ctype: str, params, index_within_type: int, type_count: int) -> str:
@@ -80,31 +51,21 @@ def criterion_label(ctype: str, params, index_within_type: int, type_count: int)
 
 
 def _filter_candidate_ids(candidate_ids: list[int], filters: dict) -> set[int]:
-    """Narrow ``candidate_ids`` through ``api._apply_ibgc_filters``.
+    """Narrow ``candidate_ids`` through the shared iBGC filters.
 
     Applied to the (bounded) candidate set rather than the whole table, so the
     join-heavy filters stay cheap. Returns the surviving id set.
     """
-    from discovery.api import _apply_ibgc_filters
-    from discovery.models import IntegratedBgc
-
-    kwargs = {
-        k: filters[k] for k in FILTER_KEYS if k in filters and filters[k] is not None
-    }
     base = IntegratedBgc.objects.filter(id__in=candidate_ids)
-    qs = _apply_ibgc_filters(base, ibgc_ids=None, **kwargs)
+    qs = apply_ibgc_filters(base, IbgcFilterParams.model_validate(filters))
     return set(qs.values_list("id", flat=True))
 
 
 def _filter_all_ids(filters: dict, cap: int) -> list[int]:
     """Filter-only fallback (no scoring criteria): apply filters across the table."""
-    from discovery.api import _apply_ibgc_filters
-    from discovery.models import IntegratedBgc
-
-    kwargs = {
-        k: filters[k] for k in FILTER_KEYS if k in filters and filters[k] is not None
-    }
-    qs = _apply_ibgc_filters(IntegratedBgc.objects.all(), ibgc_ids=None, **kwargs)
+    qs = apply_ibgc_filters(
+        IntegratedBgc.objects.all(), IbgcFilterParams.model_validate(filters)
+    )
     return list(qs.values_list("id", flat=True)[: cap + 1])
 
 

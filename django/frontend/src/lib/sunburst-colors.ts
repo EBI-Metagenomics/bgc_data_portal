@@ -5,7 +5,7 @@ import type { SunburstNode } from "@/api/types";
  * (e.g. taxonomy by phylum, biome by depth 3). Distinct, reasonably
  * colour-blind-tolerant hues; cycled if there are more groups than colours.
  */
-export const SUNBURST_PALETTE = [
+const SUNBURST_PALETTE = [
   "#3b82f6", // blue
   "#ef4444", // red
   "#10b981", // emerald

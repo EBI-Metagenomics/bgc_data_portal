@@ -15,7 +15,7 @@ The platform runs three detectors:
 
 - **antiSMASH** — rule-based detection with broad, well-known class definitions.
 - **GECCO** — a machine-learning detector.
-- **SanntiS** — a neural detector built on protein-domain annotations.
+- **SanntiS** — a neural detector built on protein-domain annotations. SanntiS 1.0 also reports a BGC probability for each call and predicts the product's class (see [Predicted product class](#predicted-product-class-npclassifier)).
 
 Each tool's call on a contig is recorded as a **source prediction**, tagged with the tool that made it. Detectors frequently overlap or disagree on exact boundaries, which is why the platform integrates them.
 
@@ -58,9 +58,13 @@ Both are shown as "—" when they cannot be computed (for example domain novelty
 
 Wherever the platform compares two clusters — for novelty, for "find similar", for a domain search — it measures similarity from **shared protein domains and how those domains are arranged**, not from raw DNA or protein alignment. This means clusters with the same biosynthetic logic can be matched even when their sequences have diverged. (The exception is [Sequence Search](sequence-search.qmd), which deliberately aligns a query protein against cluster proteins.)
 
+## Predicted product class (NPClassifier)
+
+Beyond the BGC class (the *machinery*), the platform labels what a cluster is likely to *make* using the **NPClassifier** ontology — a three-level hierarchy of natural-product chemistry (pathway → superclass → class, e.g. *Polyketides → Macrolides*). SanntiS 1.0 predicts these labels for every cluster it calls, each with a score and a **confident** / **tentative** flag; validated iBGCs carry the **curated** labels of their MIBiG entry instead. Labels appear in the iBGC detail panel as the "NP class" chip and drive the [Natural product class filter](filtering.qmd). See [iBGC Detail](ibgc-detail.qmd#npclassifier-labels).
+
 ## Known chemistry
 
-Validated iBGCs carry curated compound names, structures, and natural-product classes (from sources such as MIBiG). These appear in the iBGC detail panel as "compound features".
+Validated iBGCs come from experimentally characterised references (MIBiG), so their product is known; the platform records that knowledge as curated NPClassifier labels rather than as compound structures.
 
 ## Shortlist and report
 

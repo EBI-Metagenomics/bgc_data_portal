@@ -19,13 +19,12 @@ from discovery.models import DashboardContig, Taxon
 from discovery.services.ingestion.loader import load_contigs
 from discovery.services.stats import build_taxonomy_sunburst
 from discovery.services.taxonomy import phylum_label, ranked_labels_by_taxon
+from django.core.management import CommandError, call_command
+from django.test import Client
 from tests.factories.discovery_models import (
     DashboardAssemblyFactory,
     DashboardContigFactory,
 )
-
-from django.core.management import CommandError, call_command
-from django.test import Client
 
 pytestmark = pytest.mark.django_db
 
@@ -287,7 +286,6 @@ def test_large_taxon_lookup_avoids_giant_in_list(mapping, legacy_contigs, monkey
     """Unfiltered trees reference ~every taxon; a 12k-element ``IN (...)``
     OOM-killed the dev server via debug-toolbar's SQL formatter."""
     from discovery.services import taxonomy
-
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
 

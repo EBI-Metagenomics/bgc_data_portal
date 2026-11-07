@@ -7,8 +7,9 @@ antiSMASH calls (absorbed when they overlap an existing iBGC, standalone
 otherwise).
 """
 
-from discovery.tasks import build_integrated_bgcs_task, update_discovery_stats_task
 from django.core.management.base import BaseCommand
+
+from discovery.tasks import build_integrated_bgcs_task, update_discovery_stats_task
 
 
 class Command(BaseCommand):
@@ -18,7 +19,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--sync",
             action="store_true",
-            help="Run synchronously in the current process instead of dispatching to Celery",
+            help="Run synchronously in the current process instead of enqueuing a worker task",
         )
         parser.add_argument(
             "--queue",
@@ -45,7 +46,6 @@ class Command(BaseCommand):
                 self._enqueue_stats(queue)
         else:
             # Chain stats onto the build task so it only fires on its success
-            # (the task enqueues the follow-up itself — no Celery canvas).
             res = build_integrated_bgcs_task.using(queue_name=queue).enqueue(
                 then_update_stats=not skip_discovery_stats,
                 stats_queue=queue,

@@ -50,6 +50,8 @@ if TYPE_CHECKING:
     import numpy as np
     import scipy.sparse as sp
 
+from discovery.services.sql import IBGC_DOMAIN_HIT_JOIN
+
 log = logging.getLogger(__name__)
 
 
@@ -84,6 +86,7 @@ def project_to_ipr(domain_acc: str, interpro_entry_acc: str | None) -> str:
 
 
 def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
+    """Upper-case, deduplicated, sorted ``ref_db`` names."""
     return tuple(sorted({s.upper() for s in sources}))
 
 
@@ -170,21 +173,17 @@ def iter_ibgc_domain_labels(
     upper_sources = _normalize_sources(sources)
     gapfill = check_vocab(vocab) == VOCAB_IPR_GAPFILLED
 
-    sql = """
+    sql = f"""
         SELECT i.id              AS ibgc_id,
-               lower(cc.cds_range)   AS cds_start,
-               cc.id             AS cds_id,
-               cd.ref_db         AS ref_db,
-               cd.domain_acc     AS domain_acc,
-               cd.interpro_entry_acc AS ipr_acc,
-               cd.start_position AS dom_start,
-               cd.end_position   AS dom_end
-        FROM discovery_domain_hit cd
-        JOIN discovery_cds cc ON cc.id = cd.cds_id
-        JOIN discovery_ibgc i
-          ON i.contig_id = cc.contig_id
-         AND i.bgc_range && cc.cds_range
-        WHERE UPPER(cd.ref_db) = ANY(%s::text[])
+               lower(c.cds_range)    AS cds_start,
+               c.id              AS cds_id,
+               d.ref_db          AS ref_db,
+               d.domain_acc      AS domain_acc,
+               d.interpro_entry_acc AS ipr_acc,
+               d.start_position  AS dom_start,
+               d.end_position    AS dom_end
+        {IBGC_DOMAIN_HIT_JOIN}
+        WHERE UPPER(d.ref_db) = ANY(%s::text[])
     """
     params: list = [list(query_sources(upper_sources, vocab))]
     if ibgc_ids_subset is not None:

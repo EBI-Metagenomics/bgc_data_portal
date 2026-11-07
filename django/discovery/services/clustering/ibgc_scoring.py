@@ -4,10 +4,10 @@
 Dice for older runs, the IDF × enrichment weighted cosine otherwise. Every
 function here scores with the run's metric and persisted feature weights.
 
-Designed to be called inline at the end of ``run_clustering_pipeline`` with
-the already-built primary-iBGC matrices in memory, or independently from a
-management command after rehydrating the cached matrices from disk
-(see ``services/clustering/pipeline.py``).
+Called by the management commands after an HPC import
+(``import_clustering_results``, ``reclassify_bgcs``); the primary matrices
+are rebuilt from the DB. Shared run helpers (row/weight alignment, the
+scoring-cache rebuild) live in ``services/clustering/run_support.py``.
 
 Score definitions (locked in the v2 redesign):
 
@@ -143,6 +143,7 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
     return {
         "M_domains": sp.load_npz(cache_dir / DOMAINS_FILE),
         "M_pairs": sp.load_npz(cache_dir / PAIRS_FILE),
+        # allow_pickle: the vocab arrays are object dtype (string / tuple labels).
         "ibgc_ids": np.load(cache_dir / IBGC_IDS_FILE, allow_pickle=True),
         "domain_accs": np.load(cache_dir / DOMAIN_ACCS_FILE, allow_pickle=True),
         "pair_vocab": np.load(cache_dir / PAIR_VOCAB_FILE, allow_pickle=True),
@@ -444,25 +445,25 @@ def project_partial_ibgcs(
     unprojected and counted as ``skipped``. ``None`` (default) uses the run's
     ``min_projection_similarity``; the threshold is metric-specific.
     """
-    import scipy.sparse as sp
-
-    from discovery.models import ClusteringRun, IntegratedBgc
-    from discovery.services.clustering.adjacency import (
-        build_ibgc_adjacency_pair_matrix,
-    )
-    from discovery.services.clustering.bgc_similarity import (
-        compute_composite_similarity,
-    )
-    from discovery.services.clustering.membership import build_ibgc_domain_matrix
-    from discovery.services.clustering.reclassify import _align_rows
     from django.utils import timezone
 
+    from discovery.models import ClusteringRun, IntegratedBgc
+    from discovery.services.clustering.membership import DEFAULT_DOMAIN_SOURCES
+
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
-    sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM", "TIGRFAM")
+    sources = tuple(run.domain_sources) or DEFAULT_DOMAIN_SOURCES
     weights = tuple(run.score_weights) if run.score_weights else (0.5, 0.5)
     if min_total_similarity is None:
         min_total_similarity = float(run.min_projection_similarity)
     metric, vocab, run_weights = run_similarity_settings(run)
+
+    def _result(projected: int, skipped: int, scope: int) -> dict:
+        return {
+            "clustering_run_pk": run.pk,
+            "projected": projected,
+            "skipped": skipped,
+            "scope": scope,
+        }
 
     # ── 1. Identify partials ─────────────────────────────────────────────
     partial_ibgc_ids = list(
@@ -472,12 +473,7 @@ def project_partial_ibgcs(
     )
     if not partial_ibgc_ids:
         log.info("project_partial_ibgcs: no partials to project (run=%s)", run.pk)
-        return {
-            "clustering_run_pk": run.pk,
-            "projected": 0,
-            "skipped": 0,
-            "scope": 0,
-        }
+        return _result(0, 0, 0)
 
     primary_ids = list(
         IntegratedBgc.objects.filter(classification_run_id=run.pk)
@@ -490,163 +486,34 @@ def project_partial_ibgcs(
             "project against",
             run.pk,
         )
-        return {
-            "clustering_run_pk": run.pk,
-            "projected": 0,
-            "skipped": len(partial_ibgc_ids),
-            "scope": len(partial_ibgc_ids),
-        }
+        return _result(0, len(partial_ibgc_ids), len(partial_ibgc_ids))
 
     # ── 2. Primary matrices (rebuilt fresh; cache exists for parity only) ─
-    # A weighted run is rebuilt on its own vocabulary so its persisted
-    # weights line up with the columns.
-    M_dom_pri, pri_row_ids, dom_accs = build_ibgc_domain_matrix(
-        sources=sources,
-        ibgc_ids_subset=primary_ids,
-        vocab=vocab,
-        domain_accs_subset=(
-            run_weights.domain_accs.tolist() if run_weights is not None else None
-        ),
-    )
-    if M_dom_pri.shape[0] == 0:
-        return {
-            "clustering_run_pk": run.pk,
-            "projected": 0,
-            "skipped": len(partial_ibgc_ids),
-            "scope": len(partial_ibgc_ids),
-        }
-    M_pair_pri, pri_row_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
-        sources=sources,
-        ibgc_ids_subset=primary_ids,
-        vocab=vocab,
-        pair_vocab_subset=(
-            run_weights.pair_vocab.tolist() if run_weights is not None else None
-        ),
-    )
-    M_pair_pri = _align_rows(M_pair_pri, pri_row_ids_adj, pri_row_ids)
-    n_primary = M_dom_pri.shape[0]
-    if run_weights is not None and M_pair_pri.shape[1] == 0:
-        # No primary has an adjacency pair: keep the run's column space.
-        pair_vocab = run_weights.pair_vocab
-        M_pair_pri = sp.csr_matrix((n_primary, len(pair_vocab)), dtype=np.uint8)
-    feature_weights = _aligned_feature_weights(run_weights, dom_accs, pair_vocab)
-
-    pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
-
-    primary_leaf = dict(
-        IntegratedBgc.objects.filter(id__in=primary_ids).values_list(
-            "id", "gene_cluster_family"
-        )
-    )
-    pri_leaf_paths = [primary_leaf[int(x)] for x in pri_row_ids.tolist()]
-
-    validated_ids = _validated_ibgc_ids()
-    validated_col_set = {pri_id_to_row[v] for v in validated_ids if v in pri_id_to_row}
-
-    # Per-leaf column-sums on the primary domain matrix (for domain_novelty).
-    leaf_to_rows: dict[str, list[int]] = defaultdict(list)
-    for i, p in enumerate(pri_leaf_paths):
-        if p:
-            leaf_to_rows[p].append(i)
-    leaf_col_sums: dict[str, np.ndarray] = {
-        leaf: np.asarray(M_dom_pri[rows].sum(axis=0)).reshape(-1)
-        for leaf, rows in leaf_to_rows.items()
-    }
+    primary = _primary_projection_space(primary_ids, sources, vocab, run_weights)
+    if primary is None:
+        return _result(0, len(partial_ibgc_ids), len(partial_ibgc_ids))
 
     # ── 3. Walk partials in chunks ───────────────────────────────────────
     now = timezone.now()
     update_batch: list[IntegratedBgc] = []
-
     for start in range(0, len(partial_ibgc_ids), chunk_size):
         chunk_ids = partial_ibgc_ids[start : start + chunk_size]
-        M_dom_q, q_row_ids, _ = build_ibgc_domain_matrix(
+        scored_rows = _project_chunk(
+            chunk_ids,
+            primary,
             sources=sources,
-            domain_accs_subset=dom_accs.tolist(),
-            ibgc_ids_subset=chunk_ids,
             vocab=vocab,
-        )
-        if M_dom_q.shape[0] == 0:
-            continue
-
-        M_pair_q, q_pair_ids, _ = build_ibgc_adjacency_pair_matrix(
-            sources=sources,
-            pair_vocab_subset=pair_vocab.tolist(),
-            ibgc_ids_subset=chunk_ids,
-            vocab=vocab,
-        )
-        M_pair_q = _align_rows(M_pair_q, q_pair_ids, q_row_ids)
-        if M_pair_q.shape[1] != M_pair_pri.shape[1]:
-            # No adjacency rows in this chunk: keep the run's column space.
-            M_pair_q = sp.csr_matrix(
-                (M_pair_q.shape[0], M_pair_pri.shape[1]), dtype=M_pair_pri.dtype
-            )
-
-        M_dom_full = sp.vstack([M_dom_pri, M_dom_q], format="csr")
-        M_pair_full = sp.vstack([M_pair_pri, M_pair_q], format="csr")
-        sim_full = compute_composite_similarity(
-            M_dom_full,
-            M_pair_full,
             weights=weights,
-            prune_below=0.0,
             metric=metric,
-            **feature_weights,
+            knn_k=knn_k,
+            min_total_similarity=min_total_similarity,
         )
-        sim_block = sim_full[n_primary:, :n_primary].tocsr()
-        M_dom_q_csr = M_dom_q.tocsr()
-
-        for q_row, q_ibgc_id in enumerate(q_row_ids.tolist()):
-            sp_start = sim_block.indptr[q_row]
-            sp_end = sim_block.indptr[q_row + 1]
-            if sp_start == sp_end:
-                continue
-            cols = sim_block.indices[sp_start:sp_end]
-            vals = sim_block.data[sp_start:sp_end]
-            order = np.argsort(-vals)[:knn_k]
-            top_cols = cols[order]
-            top_vals = vals[order]
-            top_sum = float(top_vals.sum())
-            if top_sum < min_total_similarity:
-                continue
-
-            votes: Counter[str] = Counter()
-            for col, val in zip(top_cols.tolist(), top_vals.tolist()):
-                p = pri_leaf_paths[col]
-                if p:
-                    votes[p] += float(val)
-            if not votes:
-                continue
-            best_leaf, _ = votes.most_common(1)[0]
-
-            if int(q_ibgc_id) in validated_ids:
-                # A validated iBGC matches itself — by definition not novel.
-                novelty = 0.0
-            elif validated_col_set:
-                max_sim_validated = 0.0
-                for col, val in zip(cols.tolist(), vals.tolist()):
-                    if col in validated_col_set and val > max_sim_validated:
-                        max_sim_validated = float(val)
-                novelty = 1.0 - max_sim_validated
-            else:
-                novelty = None
-
-            q_dom_start = M_dom_q_csr.indptr[q_row]
-            q_dom_end = M_dom_q_csr.indptr[q_row + 1]
-            n_dom = int(q_dom_end - q_dom_start)
-            domain_novelty: float | None
-            if n_dom == 0:
-                domain_novelty = None
-            else:
-                col_sums_L = leaf_col_sums.get(best_leaf)
-                if col_sums_L is None:
-                    domain_novelty = None
-                else:
-                    domain_cols = M_dom_q_csr.indices[q_dom_start:q_dom_end]
-                    n_unique = int((col_sums_L[domain_cols] == 0).sum())
-                    domain_novelty = n_unique / n_dom
-
+        if scored_rows is None:
+            continue
+        for q_ibgc_id, best_leaf, novelty, domain_novelty in scored_rows:
             update_batch.append(
                 IntegratedBgc(
-                    id=int(q_ibgc_id),
+                    id=q_ibgc_id,
                     is_partial=True,
                     gene_cluster_family=best_leaf,
                     novelty_score=novelty,
@@ -688,12 +555,235 @@ def project_partial_ibgcs(
         skipped,
         len(partial_ibgc_ids),
     )
-    return {
-        "clustering_run_pk": run.pk,
-        "projected": projected,
-        "skipped": skipped,
-        "scope": len(partial_ibgc_ids),
+    return _result(projected, skipped, len(partial_ibgc_ids))
+
+
+def _primary_projection_space(
+    primary_ids: list[int],
+    sources: tuple[str, ...],
+    vocab: str,
+    run_weights,
+) -> dict | None:
+    """Rebuild the primary matrices and the per-leaf lookups partials project onto.
+
+    Returns ``None`` when no primary has a selected-source domain. A weighted
+    run is rebuilt on its own vocabulary so its persisted weights line up
+    with the columns. Keys: ``M_dom``, ``M_pair``, ``dom_accs``,
+    ``pair_vocab``, ``feature_weights``, ``leaf_paths`` (per primary row),
+    ``validated_ids``, ``validated_cols`` and ``leaf_col_sums`` (domain
+    column sums per leaf, for ``domain_novelty``).
+    """
+    import scipy.sparse as sp
+
+    from discovery.models import IntegratedBgc
+    from discovery.services.clustering.adjacency import (
+        build_ibgc_adjacency_pair_matrix,
+    )
+    from discovery.services.clustering.membership import build_ibgc_domain_matrix
+    from discovery.services.clustering.run_support import _align_rows
+
+    M_dom_pri, pri_row_ids, dom_accs = build_ibgc_domain_matrix(
+        sources=sources,
+        ibgc_ids_subset=primary_ids,
+        vocab=vocab,
+        domain_accs_subset=(
+            run_weights.domain_accs.tolist() if run_weights is not None else None
+        ),
+    )
+    if M_dom_pri.shape[0] == 0:
+        return None
+    M_pair_pri, pri_row_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
+        sources=sources,
+        ibgc_ids_subset=primary_ids,
+        vocab=vocab,
+        pair_vocab_subset=(
+            run_weights.pair_vocab.tolist() if run_weights is not None else None
+        ),
+    )
+    M_pair_pri = _align_rows(M_pair_pri, pri_row_ids_adj, pri_row_ids)
+    n_primary = M_dom_pri.shape[0]
+    if run_weights is not None and M_pair_pri.shape[1] == 0:
+        # No primary has an adjacency pair: keep the run's column space.
+        pair_vocab = run_weights.pair_vocab
+        M_pair_pri = sp.csr_matrix((n_primary, len(pair_vocab)), dtype=np.uint8)
+
+    pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
+    primary_leaf = dict(
+        IntegratedBgc.objects.filter(id__in=primary_ids).values_list(
+            "id", "gene_cluster_family"
+        )
+    )
+    pri_leaf_paths = [primary_leaf[int(x)] for x in pri_row_ids.tolist()]
+
+    validated_ids = _validated_ibgc_ids()
+    validated_col_set = {pri_id_to_row[v] for v in validated_ids if v in pri_id_to_row}
+
+    # Per-leaf column-sums on the primary domain matrix (for domain_novelty).
+    leaf_to_rows: dict[str, list[int]] = defaultdict(list)
+    for i, p in enumerate(pri_leaf_paths):
+        if p:
+            leaf_to_rows[p].append(i)
+    leaf_col_sums: dict[str, np.ndarray] = {
+        leaf: np.asarray(M_dom_pri[rows].sum(axis=0)).reshape(-1)
+        for leaf, rows in leaf_to_rows.items()
     }
+    return {
+        "M_dom": M_dom_pri,
+        "M_pair": M_pair_pri,
+        "dom_accs": dom_accs,
+        "pair_vocab": pair_vocab,
+        "feature_weights": _aligned_feature_weights(run_weights, dom_accs, pair_vocab),
+        "leaf_paths": pri_leaf_paths,
+        "validated_ids": validated_ids,
+        "validated_cols": validated_col_set,
+        "leaf_col_sums": leaf_col_sums,
+    }
+
+
+def _project_chunk(
+    chunk_ids: list[int],
+    primary: dict,
+    *,
+    sources: tuple[str, ...],
+    vocab: str,
+    weights: tuple[float, float],
+    metric: str,
+    knn_k: int,
+    min_total_similarity: float,
+) -> list[tuple[int, str, float | None, float | None]] | None:
+    """Score one chunk of partials against ``primary``.
+
+    Returns ``(ibgc_id, leaf_path, novelty, domain_novelty)`` for every partial
+    that clears ``min_total_similarity`` (the rest are skipped), or ``None``
+    when no partial in the chunk carries a selected-source domain.
+    """
+    import scipy.sparse as sp
+
+    from discovery.services.clustering.adjacency import (
+        build_ibgc_adjacency_pair_matrix,
+    )
+    from discovery.services.clustering.bgc_similarity import (
+        compute_composite_similarity,
+    )
+    from discovery.services.clustering.membership import build_ibgc_domain_matrix
+    from discovery.services.clustering.run_support import _align_rows
+
+    M_dom_pri, M_pair_pri = primary["M_dom"], primary["M_pair"]
+    n_primary = M_dom_pri.shape[0]
+
+    M_dom_q, q_row_ids, _ = build_ibgc_domain_matrix(
+        sources=sources,
+        domain_accs_subset=primary["dom_accs"].tolist(),
+        ibgc_ids_subset=chunk_ids,
+        vocab=vocab,
+    )
+    if M_dom_q.shape[0] == 0:
+        return None
+
+    M_pair_q, q_pair_ids, _ = build_ibgc_adjacency_pair_matrix(
+        sources=sources,
+        pair_vocab_subset=primary["pair_vocab"].tolist(),
+        ibgc_ids_subset=chunk_ids,
+        vocab=vocab,
+    )
+    M_pair_q = _align_rows(M_pair_q, q_pair_ids, q_row_ids)
+    if M_pair_q.shape[1] != M_pair_pri.shape[1]:
+        # No adjacency rows in this chunk: keep the run's column space.
+        M_pair_q = sp.csr_matrix(
+            (M_pair_q.shape[0], M_pair_pri.shape[1]), dtype=M_pair_pri.dtype
+        )
+
+    M_dom_full = sp.vstack([M_dom_pri, M_dom_q], format="csr")
+    M_pair_full = sp.vstack([M_pair_pri, M_pair_q], format="csr")
+    sim_full = compute_composite_similarity(
+        M_dom_full,
+        M_pair_full,
+        weights=weights,
+        prune_below=0.0,
+        metric=metric,
+        **primary["feature_weights"],
+    )
+    sim_block = sim_full[n_primary:, :n_primary].tocsr()
+    M_dom_q_csr = M_dom_q.tocsr()
+
+    out: list[tuple[int, str, float | None, float | None]] = []
+    for q_row, q_ibgc_id in enumerate(q_row_ids.tolist()):
+        scored = _score_partial_row(
+            q_row,
+            sim_block,
+            M_dom_q_csr,
+            primary,
+            is_validated=int(q_ibgc_id) in primary["validated_ids"],
+            knn_k=knn_k,
+            min_total_similarity=min_total_similarity,
+        )
+        if scored is not None:
+            out.append((int(q_ibgc_id), *scored))
+    return out
+
+
+def _score_partial_row(
+    q_row: int,
+    sim_block,
+    M_dom_q_csr,
+    primary: dict,
+    *,
+    is_validated: bool,
+    knn_k: int,
+    min_total_similarity: float,
+) -> tuple[str, float | None, float | None] | None:
+    """``(leaf_path, novelty, domain_novelty)`` for one partial, or ``None`` to skip."""
+    sp_start = sim_block.indptr[q_row]
+    sp_end = sim_block.indptr[q_row + 1]
+    if sp_start == sp_end:
+        return None
+    cols = sim_block.indices[sp_start:sp_end]
+    vals = sim_block.data[sp_start:sp_end]
+    order = np.argsort(-vals)[:knn_k]
+    top_cols = cols[order]
+    top_vals = vals[order]
+    top_sum = float(top_vals.sum())
+    if top_sum < min_total_similarity:
+        return None
+
+    pri_leaf_paths = primary["leaf_paths"]
+    votes: Counter[str] = Counter()
+    for col, val in zip(top_cols.tolist(), top_vals.tolist()):
+        p = pri_leaf_paths[col]
+        if p:
+            votes[p] += float(val)
+    if not votes:
+        return None
+    best_leaf, _ = votes.most_common(1)[0]
+
+    validated_col_set = primary["validated_cols"]
+    if is_validated:
+        # A validated iBGC matches itself — by definition not novel.
+        novelty = 0.0
+    elif validated_col_set:
+        max_sim_validated = 0.0
+        for col, val in zip(cols.tolist(), vals.tolist()):
+            if col in validated_col_set and val > max_sim_validated:
+                max_sim_validated = float(val)
+        novelty = 1.0 - max_sim_validated
+    else:
+        novelty = None
+
+    q_dom_start = M_dom_q_csr.indptr[q_row]
+    q_dom_end = M_dom_q_csr.indptr[q_row + 1]
+    n_dom = int(q_dom_end - q_dom_start)
+    domain_novelty: float | None
+    if n_dom == 0:
+        domain_novelty = None
+    else:
+        col_sums_L = primary["leaf_col_sums"].get(best_leaf)
+        if col_sums_L is None:
+            domain_novelty = None
+        else:
+            domain_cols = M_dom_q_csr.indices[q_dom_start:q_dom_end]
+            n_unique = int((col_sums_L[domain_cols] == 0).sum())
+            domain_novelty = n_unique / n_dom
+    return best_leaf, novelty, domain_novelty
 
 
 def run_similarity_settings(run):
@@ -725,7 +815,7 @@ def _aligned_feature_weights(run_weights, dom_accs, pair_vocab) -> dict:
     """``domain_weights`` / ``pair_weights`` kwargs aligned to the rebuilt columns."""
     if run_weights is None:
         return {"domain_weights": None, "pair_weights": None}
-    from discovery.services.clustering.pipeline import _align_weights
+    from discovery.services.clustering.run_support import _align_weights
 
     return {
         "domain_weights": _align_weights(

@@ -84,7 +84,7 @@ def _write_tsvs(data_dir: Path) -> None:
 @pytest.fixture
 def loaded(tmp_path, db) -> Path:
     _write_tsvs(tmp_path)
-    run_pipeline(tmp_path, truncate=False, skip_stats=True)
+    run_pipeline(tmp_path, truncate=False)
     build_integrated_bgcs()
     return tmp_path
 
@@ -257,7 +257,7 @@ def test_legacy_bundle_without_new_columns_still_loads(tmp_path):
         )
         + "\n"
     )
-    run_pipeline(tmp_path, truncate=False, skip_stats=True)
+    run_pipeline(tmp_path, truncate=False)
     build_integrated_bgcs()
     assert SourceBgcPrediction.objects.count() == 4
     assert SourceBgcPrediction.objects.filter(score__isnull=False).count() == 0

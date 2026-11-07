@@ -24,7 +24,6 @@ import logging
 import os
 
 from csp.decorators import csp_update
-
 from django.conf import settings
 from django.core.exceptions import SuspiciousFileOperation
 from django.http import FileResponse, Http404
@@ -66,7 +65,7 @@ class DocsView(TemplateView):
         try:
             file_path = safe_join(docs_root, path)
         except SuspiciousFileOperation:
-            raise Http404("File not found")
+            raise Http404("File not found") from None
         if os.path.isfile(file_path):
             return FileResponse(open(file_path, "rb"))
         raise Http404("File not found")

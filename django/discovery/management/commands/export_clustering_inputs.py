@@ -17,18 +17,15 @@ from __future__ import annotations
 
 import datetime as _dt
 import logging
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 
+from discovery.services.clustering.membership import DEFAULT_DOMAIN_SOURCES
+
 log = logging.getLogger(__name__)
-
-
-DEFAULT_DOMAIN_SOURCES = ("PFAM", "NCBIFAM", "TIGRFAM")
 
 
 class Command(BaseCommand):
@@ -124,7 +121,7 @@ class Command(BaseCommand):
             raise CommandError(
                 f"--similarity-metric {metric} needs --enrichment-version"
             )
-        from discovery.services.clustering.pipeline import metric_run_defaults
+        from discovery.services.clustering.run_support import metric_run_defaults
 
         weights, idf_exponent = metric_run_defaults(
             metric, options["score_weights"], options["idf_exponent"]
@@ -169,39 +166,28 @@ class Command(BaseCommand):
         idf_exponent: float = 1.0,
     ):
         """Construct ``ClusteringInputs`` from the live database."""
-        import numpy as np
-        import scipy.sparse as sp
         from common_core.clustering.schema import ClusteringInputs, RunParams
 
-        from discovery.models import IntegratedBgc, SourceBgcPrediction
+        from discovery.models import IntegratedBgc
         from discovery.services.clustering.adjacency import (
             build_ibgc_adjacency_pair_matrix,
         )
         from discovery.services.clustering.membership import (
             build_ibgc_domain_matrix,
         )
-        from discovery.services.clustering.pipeline import _align_rows
+        from discovery.services.clustering.run_support import (
+            _align_rows,
+            _safe_version,
+        )
 
         if not IntegratedBgc.objects.exists():
             raise CommandError(
                 "IntegratedBgc table is empty — run build_integrated_bgcs first."
             )
 
-        # Primary set: iBGCs with at least one non-partial-or-validated source BGC.
-        clusterable_ibgc_ids = list(
-            SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
-            .filter(Q(is_partial=False) | Q(is_validated=True))
-            .values_list("integrated_bgc_id", flat=True)
-            .distinct()
-        )
-        if not clusterable_ibgc_ids:
-            raise CommandError(
-                "No clusterable iBGCs (all iBGCs are partial+unvalidated)."
-            )
-
         M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
             sources=sources,
-            ibgc_ids_subset=clusterable_ibgc_ids,
+            ibgc_ids_subset=_clusterable_ibgc_ids(),
             vocab=domain_vocab,
         )
         if M_domains.shape[0] == 0:
@@ -216,13 +202,7 @@ class Command(BaseCommand):
 
         run_weights = None
         if similarity_metric != "dice":
-            # IDF over the primaries only (the clusterable corpus), as in the
-            # benchmark; partials share the columns and so the weights.
-            from discovery.services.clustering.feature_weights import (
-                compute_run_weights,
-            )
-
-            run_weights = compute_run_weights(
+            run_weights = _primary_run_weights(
                 M_domains=M_domains,
                 M_pairs=M_pairs,
                 domain_accs=domain_accs,
@@ -233,57 +213,17 @@ class Command(BaseCommand):
                 idf_exponent=idf_exponent,
             )
 
-        # Partials: iBGCs not in the primary set.
-        partial_ibgc_ids = list(
-            IntegratedBgc.objects.exclude(id__in=list(ibgc_ids.tolist()))
-            .order_by("id")
-            .values_list("id", flat=True)
+        partials_M_domains, partials_M_pairs, partials_ibgc_ids = _partials_matrices(
+            sources=sources,
+            domain_vocab=domain_vocab,
+            primary_ibgc_ids=ibgc_ids,
+            domain_accs=domain_accs,
+            pair_vocab=pair_vocab,
+            M_domains=M_domains,
+            M_pairs=M_pairs,
         )
-        if partial_ibgc_ids:
-            partials_M_domains, partials_row_ids, _ = build_ibgc_domain_matrix(
-                sources=sources,
-                domain_accs_subset=domain_accs.tolist(),
-                ibgc_ids_subset=partial_ibgc_ids,
-                vocab=domain_vocab,
-            )
-            (
-                partials_M_pairs,
-                partials_pair_row_ids,
-                _,
-            ) = build_ibgc_adjacency_pair_matrix(
-                sources=sources,
-                pair_vocab_subset=pair_vocab.tolist(),
-                ibgc_ids_subset=partial_ibgc_ids,
-                vocab=domain_vocab,
-            )
-            partials_M_pairs = _align_rows(
-                partials_M_pairs,
-                partials_pair_row_ids,
-                partials_row_ids,
-            )
-            partials_ibgc_ids = partials_row_ids
-        else:
-            partials_M_domains = sp.csr_matrix(
-                (0, M_domains.shape[1]),
-                dtype=M_domains.dtype,
-            )
-            partials_M_pairs = sp.csr_matrix(
-                (0, M_pairs.shape[1]),
-                dtype=M_pairs.dtype,
-            )
-            partials_ibgc_ids = np.empty(0, dtype=np.int64)
 
-        validated_ibgc_ids = np.asarray(
-            sorted(
-                SourceBgcPrediction.objects.filter(
-                    is_validated=True,
-                    integrated_bgc__isnull=False,
-                )
-                .values_list("integrated_bgc_id", flat=True)
-                .distinct()
-            ),
-            dtype=np.int64,
-        )
+        validated_ibgc_ids = _validated_ibgc_ids()
 
         params = RunParams(
             domain_sources=list(sources),
@@ -335,8 +275,99 @@ class Command(BaseCommand):
         )
 
 
-def _safe_version(pkg: str) -> str:
-    try:
-        return _pkg_version(pkg)
-    except PackageNotFoundError:
-        return ""
+def _clusterable_ibgc_ids() -> list[int]:
+    """Primary set: iBGCs with at least one non-partial-or-validated source BGC."""
+    from discovery.models import SourceBgcPrediction
+
+    ids = list(
+        SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
+        .filter(Q(is_partial=False) | Q(is_validated=True))
+        .values_list("integrated_bgc_id", flat=True)
+        .distinct()
+    )
+    if not ids:
+        raise CommandError("No clusterable iBGCs (all iBGCs are partial+unvalidated).")
+    return ids
+
+
+def _primary_run_weights(**kwargs):
+    """IDF × enrichment weights over the primaries only (the clusterable corpus).
+
+    As in the benchmark; partials share the columns and so the weights.
+    """
+    from discovery.services.clustering.feature_weights import compute_run_weights
+
+    return compute_run_weights(**kwargs)
+
+
+def _validated_ibgc_ids():
+    """Sorted int64 array of iBGC ids with a validated source prediction."""
+    import numpy as np
+
+    from discovery.models import SourceBgcPrediction
+
+    return np.asarray(
+        sorted(
+            SourceBgcPrediction.objects.filter(
+                is_validated=True,
+                integrated_bgc__isnull=False,
+            )
+            .values_list("integrated_bgc_id", flat=True)
+            .distinct()
+        ),
+        dtype=np.int64,
+    )
+
+
+def _partials_matrices(
+    *,
+    sources: tuple[str, ...],
+    domain_vocab: str,
+    primary_ibgc_ids,
+    domain_accs,
+    pair_vocab,
+    M_domains,
+    M_pairs,
+):
+    """``(M_domains, M_pairs, ibgc_ids)`` of the partials, on the primaries' columns.
+
+    Partials are the iBGCs not in the primary set; with none, the matrices
+    are empty with the primaries' column counts.
+    """
+    import numpy as np
+    import scipy.sparse as sp
+
+    from discovery.models import IntegratedBgc
+    from discovery.services.clustering.adjacency import (
+        build_ibgc_adjacency_pair_matrix,
+    )
+    from discovery.services.clustering.membership import build_ibgc_domain_matrix
+    from discovery.services.clustering.run_support import _align_rows
+
+    partial_ibgc_ids = list(
+        IntegratedBgc.objects.exclude(id__in=list(primary_ibgc_ids.tolist()))
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+    if not partial_ibgc_ids:
+        return (
+            sp.csr_matrix((0, M_domains.shape[1]), dtype=M_domains.dtype),
+            sp.csr_matrix((0, M_pairs.shape[1]), dtype=M_pairs.dtype),
+            np.empty(0, dtype=np.int64),
+        )
+    partials_M_domains, partials_row_ids, _ = build_ibgc_domain_matrix(
+        sources=sources,
+        domain_accs_subset=domain_accs.tolist(),
+        ibgc_ids_subset=partial_ibgc_ids,
+        vocab=domain_vocab,
+    )
+    partials_M_pairs, partials_pair_row_ids, _ = build_ibgc_adjacency_pair_matrix(
+        sources=sources,
+        pair_vocab_subset=pair_vocab.tolist(),
+        ibgc_ids_subset=partial_ibgc_ids,
+        vocab=domain_vocab,
+    )
+    partials_M_pairs = _align_rows(
+        partials_M_pairs, partials_pair_row_ids, partials_row_ids
+    )
+    return partials_M_domains, partials_M_pairs, partials_row_ids

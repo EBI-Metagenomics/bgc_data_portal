@@ -29,6 +29,8 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from django.db.models import Max
+
 from discovery.models import (
     AccessionAlias,
     AccessionRegistry,
@@ -36,15 +38,9 @@ from discovery.models import (
     SourceBgcPrediction,
 )
 from discovery.services.accession_registry import lookup_or_mint_cbgc
-from django.db.backends.postgresql.psycopg_any import NumericRange
-from django.db.models import Max
+from discovery.services.ingestion.ranges import int4range
 
 logger = logging.getLogger(__name__)
-
-
-def _range(start: int, end_inclusive: int) -> NumericRange:
-    """Build the half-open ``int4range`` Postgres stores: ``[start, end+1)``."""
-    return NumericRange(lower=int(start), upper=int(end_inclusive) + 1, bounds="[)")
 
 
 @dataclass
@@ -64,8 +60,9 @@ class _Cbgc:
 class CbgcAssigner:
     """Stateful helper that assigns source BGCs to cBGCs during a single load run.
 
-    Maintains a per-contig sorted list of in-memory ``_Cbgc`` shadows so each
-    overlap query is O(log n). Existing cBGCs on a contig are hydrated from
+    Maintains a per-contig sorted list of in-memory ``_Cbgc`` shadows; an
+    overlap query is a linear scan of that (short) list. Existing cBGCs on a
+    contig are hydrated from
     the DB on first touch — required when a later dataset in the same cycle
     (or a re-load) reuses a contig that a prior load already populated. All
     DB writes (create / extend / merge / alias / registry coord-sync) flow
@@ -177,7 +174,7 @@ class CbgcAssigner:
     ) -> _Cbgc:
         cbgc_row = ConsensusBgc.objects.create(
             contig_id=contig_id,
-            bgc_range=_range(start, end),
+            bgc_range=int4range(start, end),
             accession="MGYB-PLACEHOLDR",  # overwritten next
         )
         mint = lookup_or_mint_cbgc(
@@ -212,7 +209,7 @@ class CbgcAssigner:
         if new_start == cbgc.start and new_end == cbgc.end:
             return cbgc
         ConsensusBgc.objects.filter(id=cbgc.db_id).update(
-            bgc_range=_range(new_start, new_end),
+            bgc_range=int4range(new_start, new_end),
         )
         # Keep the registry's identity tuple aligned to the final coords so
         # the next rebuild's lookup finds the same accession.
@@ -287,7 +284,7 @@ class CbgcAssigner:
 
         # Update survivor's range + registry coords.
         ConsensusBgc.objects.filter(id=survivor.db_id).update(
-            bgc_range=_range(new_start, new_end),
+            bgc_range=int4range(new_start, new_end),
         )
         AccessionRegistry.objects.filter(accession=survivor.accession).update(
             start_pos=new_start,

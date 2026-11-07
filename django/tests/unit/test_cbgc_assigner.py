@@ -358,9 +358,7 @@ class TestHydration:
     """
 
     def test_exact_range_reuses_existing_cbgc(self, contig, detector):
-        existing = ConsensusBgcFactory(
-            contig=contig, start_pos=0, end_pos=10_529
-        )
+        existing = ConsensusBgcFactory(contig=contig, start_pos=0, end_pos=10_529)
         fresh = CbgcAssigner()
         got_id, bgc_num, pred_acc = fresh.assign(
             contig_id=contig.id,
@@ -375,9 +373,7 @@ class TestHydration:
         assert pred_acc == f"{existing.accession}.ANT.{bgc_num:02}"
 
     def test_overlapping_range_extends_existing_cbgc(self, contig, detector):
-        existing = ConsensusBgcFactory(
-            contig=contig, start_pos=1_000, end_pos=5_000
-        )
+        existing = ConsensusBgcFactory(contig=contig, start_pos=1_000, end_pos=5_000)
         fresh = CbgcAssigner()
         got_id, *_ = fresh.assign(
             contig_id=contig.id,
@@ -393,9 +389,7 @@ class TestHydration:
         assert cbgc.bgc_range.upper == 10_001
 
     def test_bgc_number_counter_continues_after_hydration(self, contig, detector):
-        existing = ConsensusBgcFactory(
-            contig=contig, start_pos=1_000, end_pos=10_000
-        )
+        existing = ConsensusBgcFactory(contig=contig, start_pos=1_000, end_pos=10_000)
         # Prior load left two antiSMASH source predictions on this cBGC.
         SourceBgcPredictionFactory(
             contig=contig,
@@ -430,9 +424,7 @@ class TestHydration:
     def test_disjoint_range_creates_second_cbgc_without_collision(
         self, contig, detector
     ):
-        existing = ConsensusBgcFactory(
-            contig=contig, start_pos=0, end_pos=5_000
-        )
+        existing = ConsensusBgcFactory(contig=contig, start_pos=0, end_pos=5_000)
         fresh = CbgcAssigner()
         got_id, *_ = fresh.assign(
             contig_id=contig.id,

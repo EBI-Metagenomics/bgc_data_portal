@@ -32,7 +32,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from discovery.models import ClusteringRun
-        from discovery.services.clustering.pipeline import (
+        from discovery.services.clustering.run_support import (
             rebuild_scoring_cache_from_db,
         )
 

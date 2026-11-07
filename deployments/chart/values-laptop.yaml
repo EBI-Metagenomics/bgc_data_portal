@@ -1,5 +1,6 @@
 # =============================================================================
-# laptop / self-host target.
+# laptop target (k3d dev loop; DEBUG on, runserver). Self-hosters use
+# values-selfhost.yaml on top of this file.
 #
 #   helm install bgc ./chart -f ./chart/values-laptop.yaml --namespace bgc-local
 #
@@ -115,7 +116,7 @@ django:
       mountPath: /data/clustering_artifacts
   readinessProbe:
     httpGet:
-      path: /api/docs
+      path: /api/health
       port: 8000
     initialDelaySeconds: 15
     periodSeconds: 5
@@ -139,7 +140,6 @@ worker:
   # `skaffold dev` and its first-boot crash fails the deploy's stabilize check.
   initContainers:
     - name: wait-for-postgres
-      image: bgc-data-portal-django-worker
       command:
         - sh
         - -c

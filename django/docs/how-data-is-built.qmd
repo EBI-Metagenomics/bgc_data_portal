@@ -40,11 +40,11 @@ Three independent detectors scan each assembly for biosynthetic gene clusters:
 
 - **antiSMASH** — rule-based detection with broad, well-established class definitions.
 - **GECCO** — a machine-learning detector.
-- **SanntiS** — a neural detector that works from the InterPro domain annotations.
+- **SanntiS** — a neural detector that works from the InterPro domain annotations. Version 1.0 also attaches a BGC probability and a predicted **natural-product class** (NPClassifier pathway and superclass, with a confidence flag) to each cluster it calls.
 
 Using three tools improves coverage — each finds clusters the others miss — but they frequently overlap or disagree on boundaries. That disagreement is resolved later, during integration (step 6).
 
-For **validated reference sets** (region mode), no detector runs: each entry is already a curated BGC, so the whole region is taken as the cluster and flagged **validated**.
+For **validated reference sets** (region mode), no detector runs: each entry is already a curated BGC, so the whole region is taken as the cluster and flagged **validated**; its curated NPClassifier labels are loaded alongside.
 
 ## 5. Metadata and packaging
 

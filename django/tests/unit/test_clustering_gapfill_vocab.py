@@ -42,7 +42,7 @@ from discovery.services.clustering.membership import (  # noqa: E402
     gapfilled_labels,
     query_sources,
 )
-from discovery.services.clustering.pipeline import (  # noqa: E402
+from discovery.services.clustering.run_support import (  # noqa: E402
     _align_weights,
     _compute_run_sha,
 )
@@ -244,16 +244,16 @@ def test_enrichment_refuses_mibig_and_metagenomes(bad):
 
 # ── Run sha + weight alignment ──────────────────────────────────────────────
 
-_SHA = dict(
-    sources=("NCBIFAM", "PFAM"),
-    weights=(0.5, 0.5),
-    knn_k=12,
-    leiden_resolutions=(0.03, 0.08, 0.15, 0.25),
-    seed=42,
-    ibgc_etag="10:99",
-    domain_etag="500:999",
-    domain_vocab="IPR_PROJECTED",
-)
+_SHA = {
+    "sources": ("NCBIFAM", "PFAM"),
+    "weights": (0.5, 0.5),
+    "knn_k": 12,
+    "leiden_resolutions": (0.03, 0.08, 0.15, 0.25),
+    "seed": 42,
+    "ibgc_etag": "10:99",
+    "domain_etag": "500:999",
+    "domain_vocab": "IPR_PROJECTED",
+}
 
 
 def test_default_dice_run_sha_is_unchanged():
@@ -282,7 +282,7 @@ def test_cosine_run_sha_keys_enrichment_and_weights():
 
 
 def test_metric_run_defaults():
-    from discovery.services.clustering.pipeline import metric_run_defaults
+    from discovery.services.clustering.run_support import metric_run_defaults
 
     assert metric_run_defaults("dice") == ((0.5, 0.5), 1.0)
     # Dice has no feature weights: an exponent is ignored, weights are kept.

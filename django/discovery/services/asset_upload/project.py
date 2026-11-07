@@ -27,7 +27,7 @@ Pipeline:
    three quantities — they still appear in the roster, just dimmed on the
    Variables map.
 
-4. Materialise per-iBGC Redis payloads (manifest, roster rows, IbgcDetail,
+4. Materialise per-iBGC cache payloads (manifest, roster rows, IbgcDetail,
    region, architecture) under the ``asset:{token}:*`` keyspace.
 """
 
@@ -37,11 +37,12 @@ import base64
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from discovery.services.go_slim import go_slim_for_terms
 from django.conf import settings
+
+from discovery.services.go_slim import go_slim_for_terms
 
 from . import cache as asset_cache
 from .matrices import (
@@ -54,7 +55,6 @@ from .schemas import (
     AssetCds,
     AssetData,
     AssetDomain,
-    AssetNaturalProduct,
 )
 
 log = logging.getLogger(__name__)
@@ -84,7 +84,6 @@ class VirtualIbgc:
     is_validated: bool
     cds: list[AssetCds] = field(default_factory=list)
     domains: list[AssetDomain] = field(default_factory=list)
-    natural_products: list[AssetNaturalProduct] = field(default_factory=list)
 
     # Derived during projection
     projected: bool = False
@@ -122,7 +121,6 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
     bgcs_by_contig = data.bgcs_by_contig()
     cds_by_bgc = data.cds_by_bgc()
     domains_by_bgc = data.domains_by_bgc()
-    nps_by_bgc = data.nps_by_bgc()
 
     virtual: list[VirtualIbgc] = []
     next_neg_id = -1
@@ -140,7 +138,7 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
         # Row format mirrors integrated._build_ibgcs_for_contig:
         # (sbgc_id, cbgc_id, start, end, tool, is_partial, is_validated, contig_accession).
         # The helper ignores cbgc_id and contig_accession, so we pass placeholders.
-        id_to_bgc: dict[int, AssetBgc] = {i: b for i, b in enumerate(bgcs)}
+        id_to_bgc: dict[int, AssetBgc] = dict(enumerate(bgcs))
         rows = [
             (
                 i,
@@ -165,16 +163,14 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
         ) in ibgc_tuples:
             # Absorbed antiSMASH predictions share the iBGC FK in the
             # persistent path, so fold them in as members here too — their
-            # CDS / domains / NPs belong to this virtual iBGC.
+            # CDS / domains belong to this virtual iBGC.
             members = [id_to_bgc[i] for i in (*member_ids, *absorbed_ids)]
             cds_rows: list[AssetCds] = []
             dom_rows: list[AssetDomain] = []
-            np_rows: list[AssetNaturalProduct] = []
             for b in members:
                 bcds = cds_by_bgc.get(b.key, [])
                 cds_rows.extend(bcds)
                 dom_rows.extend(domains_by_bgc.get(b.key, []))
-                np_rows.extend(nps_by_bgc.get(b.key, []))
 
             is_partial = all(m.is_partial for m in members) and not any(
                 m.is_validated for m in members
@@ -196,7 +192,6 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
                 is_validated=is_validated,
                 cds=cds_rows,
                 domains=dom_rows,
-                natural_products=np_rows,
             )
             virtual.append(vibgc)
             next_neg_id -= 1
@@ -402,7 +397,7 @@ def _project_against_run(
                 vibgc.domain_novelty = n_unique / n_dom
 
 
-# ── Step 4: materialise Redis payloads ─────────────────────────────────────
+# ── Step 4: materialise cache payloads ─────────────────────────────────────
 
 
 def _ordered_architecture(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> list[dict]:
@@ -505,19 +500,6 @@ def _ibgc_detail(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> dict[str, Any]
         "is_type_strain": vibgc.is_type_strain,
         "url": "",
     }
-    nps: list[dict[str, Any]] = []
-    for np_obj in vibgc.natural_products:
-        nps.append(
-            {
-                "id": 0,
-                "name": np_obj.name,
-                "smiles": np_obj.smiles,
-                "smiles_svg": "",
-                "structure_thumbnail": np_obj.structure_svg_base64,
-                "np_class_path": np_obj.np_class_path,
-            }
-        )
-
     return {
         "id": vibgc.neg_id,
         "label": vibgc.label,
@@ -538,7 +520,6 @@ def _ibgc_detail(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> dict[str, Any]
         "representative_bgc_id": vibgc.neg_id if vibgc.member_bgcs else None,
         "member_bgcs": member_items,
         "domain_architecture": _ordered_architecture(vibgc, sources),
-        "natural_products": nps,
     }
 
 
@@ -661,7 +642,7 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
 
 
 def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str, Any]:
-    """Run the full asset projection and materialise Redis payloads.
+    """Run the full asset projection and materialise cache payloads.
 
     Returns a summary dict (mirrored into the task status payload).
     """
@@ -716,7 +697,7 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
     first = virtual_ibgcs[0]
     summary = {
         "token": token,
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": datetime.now(UTC).isoformat(),
         "n_ibgcs": len(virtual_ibgcs),
         "n_bgcs": sum(len(v.member_bgcs) for v in virtual_ibgcs),
         "assembly_accession": first.assembly_accession,

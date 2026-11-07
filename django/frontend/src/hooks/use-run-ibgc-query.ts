@@ -6,12 +6,12 @@ import {
 import type {
   CombinedQueryCriterion,
   CombinedScoresResponse,
-  CriterionScore,
 } from "@/api/types";
 import { useQueryStore } from "@/stores/query-store";
 import {
   snapshotFiltersToApplied,
   useDiscoveryStore,
+  type ScoresByCriterion,
   type SearchSource,
 } from "@/stores/discovery-store";
 import { ApiError } from "@/api/client";
@@ -33,10 +33,9 @@ const QUERY_RESULT_CAP = 5_000;
  * combined multi-criterion query whose criteria are AND-intersected server-side.
  *
  * The combined query returns one score column per criterion (keyed by the
- * criterion's stable id). Those are stored in ``resultCriteria`` +
- * ``resultScoresByCriterion`` for the per-criterion roster columns / map axes;
- * the legacy single-similarity maps are back-filled from the dominant criterion
- * so the existing roster/Variables-map views keep working during the migration.
+ * criterion's stable id). Those are stored as the discovery store's
+ * ``QueryResult`` (``resultCriteria`` + ``resultScoresByCriterion``) and drive
+ * the per-criterion roster columns / map axes.
  */
 export function useRunIbgcQuery() {
   const [isRunning, setIsRunning] = useState(false);
@@ -54,7 +53,6 @@ export function useRunIbgcQuery() {
   const sequenceMinQcov = useQueryStore((s) => s.sequenceMinQcov);
 
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
-  const setCombinedResult = useDiscoveryStore((s) => s.setCombinedResult);
   const setAppliedFilters = useDiscoveryStore((s) => s.setAppliedFilters);
 
   const run = async () => {
@@ -119,8 +117,7 @@ export function useRunIbgcQuery() {
     if (criteria.length === 0) {
       // Filters-only run: clear any prior scored-query allow-list so the roster
       // reflects the new filter snapshot.
-      setQueryResult(null, null, null, null, null, null);
-      setCombinedResult(null, null);
+      setQueryResult(null);
       toast.success("Filters applied");
       return;
     }
@@ -137,64 +134,30 @@ export function useRunIbgcQuery() {
       const ids = scores.items.map((r) => r.id);
 
       // Per-criterion score maps: criterion id → (iBGC id → score payload).
-      const scoresByCriterion: Record<
-        string,
-        Record<number, CriterionScore>
-      > = {};
+      const scoresByCriterion: ScoresByCriterion = {};
       for (const col of scores.criteria) scoresByCriterion[col.id] = {};
       for (const row of scores.items) {
         for (const [cid, sc] of Object.entries(row.scores)) {
           (scoresByCriterion[cid] ??= {})[row.id] = sc;
         }
       }
-      setCombinedResult(scores.criteria, scoresByCriterion);
 
-      // Legacy back-fill: the existing roster/maps read a single similarity
-      // map + sequence sub-metric maps + a ``searchSource`` label. Derive them
-      // from the dominant criterion (sequence > architecture >
-      // domain) so those views keep working until per-criterion columns land.
-      const source: SearchSource = sequenceActive
+      // Dominant surface label (sequence > architecture > domain) for the
+      // "Clear …" button.
+      const source: Exclude<SearchSource, null> = sequenceActive
         ? "sequence"
         : archActive
           ? "domain_architecture"
-          : booleanActive
-            ? "domain"
-            : null;
-      const sourceType =
-        source === "domain_architecture" ? "architecture" : source;
-      const sourceCol =
-        scores.criteria.find((c) => c.type === sourceType) ??
-        scores.criteria[0];
+          : "domain";
 
-      const similarities: Record<number, number> = {};
-      const bestHitProtein: Record<number, string> = {};
-      const pident: Record<number, number> = {};
-      const qcoverage: Record<number, number> = {};
-      if (sourceCol) {
-        const map = scoresByCriterion[sourceCol.id] ?? {};
-        for (const id of ids) {
-          const sc = map[id];
-          if (sc?.value != null) similarities[id] = sc.value;
-          if (sourceCol.type === "sequence") {
-            if (sc?.pident != null) pident[id] = sc.pident;
-            if (sc?.qcoverage != null) qcoverage[id] = sc.qcoverage;
-            if (sc?.best_hit_protein_id) {
-              bestHitProtein[id] = sc.best_hit_protein_id;
-            }
-          }
-        }
-      }
-
-      setQueryResult(
+      setQueryResult({
         ids,
-        similarities,
+        criteria: scores.criteria,
+        scoresByCriterion,
         source,
-        source === "sequence" ? bestHitProtein : null,
-        source === "sequence" ? pident : null,
-        source === "sequence" ? qcoverage : null,
-        scores.total_matched,
-        scores.capped,
-      );
+        totalMatched: scores.total_matched,
+        capped: scores.capped,
+      });
       toast.success(`Query returned ${ids.length} iBGC(s)`);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {

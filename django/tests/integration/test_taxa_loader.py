@@ -14,12 +14,11 @@ from pathlib import Path
 import pytest
 from discovery.models import DashboardAssembly, DashboardContig, Taxon
 from discovery.services.ingestion.loader import load_contigs, load_taxa, run_pipeline
+from django.test import Client
 from tests.factories.discovery_models import (
     DashboardAssemblyFactory,
     DashboardContigFactory,
 )
-
-from django.test import Client
 
 pytestmark = pytest.mark.django_db
 
@@ -272,7 +271,7 @@ def test_run_pipeline_loads_taxa_before_contigs_and_serves_the_tree(tmp_path):
     write_contigs(
         tmp_path, [_contig("GCA1", 1, CANON, "1236"), _contig("GCA1", 2, CANON, "1236")]
     )
-    run_pipeline(tmp_path, skip_stats=True)
+    run_pipeline(tmp_path)
 
     assert Taxon.objects.count() == 4
     assert DashboardContig.objects.filter(taxon_id=1236).count() == 2
@@ -294,5 +293,5 @@ def test_run_pipeline_truncate_also_clears_taxa(tmp_path):
         ["assembly_accession"],
         [{"assembly_accession": "A"}],
     )
-    run_pipeline(tmp_path, truncate=True, skip_stats=True)
+    run_pipeline(tmp_path, truncate=True)
     assert not Taxon.objects.exists()

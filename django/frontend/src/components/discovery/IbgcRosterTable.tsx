@@ -20,6 +20,7 @@ import {
   isAppliedFiltersEmpty,
   useDiscoveryStore,
   type RosterSortKey,
+  type ScoresByCriterion,
 } from "@/stores/discovery-store";
 import { useIbgcIdsetParam } from "@/hooks/use-ibgc-idset-param";
 import { MAX_SHORTLIST, useShortlistStore } from "@/stores/shortlist-store";
@@ -37,8 +38,8 @@ interface HeaderCol {
   sortKey?: RosterSortKey;
 }
 
-/** A score column contributed by a criterion (combined query) or the legacy
- *  single-similarity path. ``read`` extracts the cell content for an iBGC. */
+/** A score column contributed by a criterion of the active scored query.
+ *  ``read`` extracts the cell content for an iBGC. */
 interface ScoreCol extends HeaderCol {
   read: (ibgc: IbgcRosterItem) => ReactNode;
 }
@@ -88,11 +89,11 @@ function metricValue(
  * non-sortable "Best hit" column. Cells read from ``scoresByCriterion``.
  */
 function buildCriterionScoreCols(
-  criteria: CriterionColumn[],
-  scoresByCriterion: Record<string, Record<number, CriterionScore>> | null,
+  criteria: CriterionColumn[] | null,
+  scoresByCriterion: ScoresByCriterion | null,
 ): ScoreCol[] {
   const cols: ScoreCol[] = [];
-  for (const c of criteria) {
+  for (const c of criteria ?? []) {
     const multi = c.metrics.length > 1;
     for (const m of c.metrics) {
       const fmt = fmtFor(c.type, m.key);
@@ -122,66 +123,6 @@ function buildCriterionScoreCols(
   return cols;
 }
 
-/** Legacy score columns for non-combined sources (similar-iBGC, filter-only).
- *  Reads the single similarity + sequence sub-metric maps overlaid on rows. */
-function buildLegacyScoreCols(
-  searchSource: string | null,
-  similarityById: Record<number, number> | null,
-  pidentById: Record<number, number> | null,
-  qcoverageById: Record<number, number> | null,
-  bestHitById: Record<number, string> | null,
-): ScoreCol[] {
-  const sim = (ibgc: IbgcRosterItem) =>
-    similarityById?.[ibgc.id] ?? ibgc.similarity_score;
-  if (searchSource === "sequence") {
-    return [
-      {
-        key: "l-bitscore",
-        label: "Bitscore",
-        sortKey: "similarity",
-        read: (ibgc) => {
-          const v = sim(ibgc);
-          return v != null ? v.toFixed(1) : "—";
-        },
-      },
-      {
-        key: "l-pident",
-        label: "Identity %",
-        sortKey: "pident",
-        read: (ibgc) => {
-          const v = pidentById?.[ibgc.id] ?? ibgc.best_pident;
-          return v != null ? v.toFixed(1) : "—";
-        },
-      },
-      {
-        key: "l-qcov",
-        label: "Query cov. %",
-        sortKey: "qcov",
-        read: (ibgc) => {
-          const v = qcoverageById?.[ibgc.id] ?? ibgc.best_qcoverage;
-          return v != null ? v.toFixed(1) : "—";
-        },
-      },
-      {
-        key: "l-best-hit",
-        label: "Best hit",
-        read: (ibgc) => bestHitById?.[ibgc.id] ?? ibgc.best_hit_protein_id ?? "—",
-      },
-    ];
-  }
-  return [
-    {
-      key: "l-sim",
-      label: "Sim.",
-      sortKey: "similarity",
-      read: (ibgc) => {
-        const v = sim(ibgc);
-        return v != null ? v.toFixed(3) : "—";
-      },
-    },
-  ];
-}
-
 function fmtScore(v: number | null): string {
   return v == null ? "—" : v.toFixed(3);
 }
@@ -198,59 +139,27 @@ export function IbgcRosterTable() {
   const setCompareIbgcId = useDiscoveryStore((s) => s.setCompareIbgcId);
   const compareIbgcId = useDiscoveryStore((s) => s.compareIbgcId);
   const resultIbgcIds = useDiscoveryStore((s) => s.resultIbgcIds);
-  const searchSource = useDiscoveryStore((s) => s.searchSource);
   const resultCriteria = useDiscoveryStore((s) => s.resultCriteria);
   const resultScoresByCriterion = useDiscoveryStore(
     (s) => s.resultScoresByCriterion,
   );
-
-  const resultSimilarityById = useDiscoveryStore((s) => s.resultSimilarityById);
-  const resultBestHitProteinById = useDiscoveryStore(
-    (s) => s.resultBestHitProteinById,
-  );
-  const resultPidentById = useDiscoveryStore((s) => s.resultPidentById);
-  const resultQcoverageById = useDiscoveryStore((s) => s.resultQcoverageById);
   const resultTotalMatched = useDiscoveryStore((s) => s.resultTotalMatched);
   const resultCapped = useDiscoveryStore((s) => s.resultCapped);
   const applied = useDiscoveryStore((s) => s.appliedFilters);
   const assetToken = useDiscoveryStore((s) => s.assetToken);
 
-  const useCombined = (resultCriteria?.length ?? 0) > 0;
   const primaryCid = resultCriteria?.[0]?.id ?? null;
 
-  // When a scored query lands, default the roster sort to its primary metric
-  // so the table mirrors the result's best-first rank. Combined queries sort
-  // by the primary criterion (``score:<id>``); the legacy similar-iBGC path
-  // sorts by its single similarity column. The user can still click any header.
+  // When a scored query lands, default the roster sort to its primary
+  // criterion (``score:<id>``) so the table mirrors the result's best-first
+  // rank. The user can still click any header.
   useEffect(() => {
-    if (primaryCid) {
-      setRosterSort(`score:${primaryCid}`, "desc");
-    } else if (searchSource === "similar_ibgc") {
-      setRosterSort("similarity", "desc");
-    }
-  }, [primaryCid, searchSource, setRosterSort]);
+    if (primaryCid) setRosterSort(`score:${primaryCid}`, "desc");
+  }, [primaryCid, setRosterSort]);
 
   const scoreCols = useMemo(
-    () =>
-      useCombined
-        ? buildCriterionScoreCols(resultCriteria!, resultScoresByCriterion)
-        : buildLegacyScoreCols(
-            searchSource,
-            resultSimilarityById,
-            resultPidentById,
-            resultQcoverageById,
-            resultBestHitProteinById,
-          ),
-    [
-      useCombined,
-      resultCriteria,
-      resultScoresByCriterion,
-      searchSource,
-      resultSimilarityById,
-      resultPidentById,
-      resultQcoverageById,
-      resultBestHitProteinById,
-    ],
+    () => buildCriterionScoreCols(resultCriteria, resultScoresByCriterion),
+    [resultCriteria, resultScoresByCriterion],
   );
 
   const columns: HeaderCol[] = useMemo(
@@ -258,46 +167,29 @@ export function IbgcRosterTable() {
     [scoreCols],
   );
 
-  // Per-criterion / per-hit scores are not server columns. For these we rank
-  // the result allow-list client-side by the chosen metric and send
-  // sort_by="similarity" — the server orders rows by their position in the
-  // (DESC-ranked) allow-list, and flips it for order="asc". Stored-column sorts
+  // Per-criterion scores are not server columns. For these we rank the result
+  // allow-list client-side by the chosen metric and send sort_by="similarity"
+  // — the server orders rows by their position in the (DESC-ranked)
+  // allow-list, and flips it for order="asc". Stored-column sorts
   // (novelty/size/…) pass straight through.
-  const isMetricSort =
-    sortBy.startsWith("score:") ||
-    sortBy === "similarity" ||
-    sortBy === "pident" ||
-    sortBy === "qcov";
+  const isMetricSort = sortBy.startsWith("score:") || sortBy === "similarity";
   const effectiveSortBy: IbgcRosterParams["sort_by"] = isMetricSort
     ? "similarity"
     : (sortBy as IbgcRosterParams["sort_by"]);
 
-  // Score for the active metric sort — combined per-criterion key
-  // (``score:<cid>[:metric]``) or a legacy single-metric map.
+  // Score for the active ``score:<cid>[:metric]`` sort; ``-Infinity`` for
+  // unscored ids (and for the bare "similarity" key, which keeps the
+  // allow-list's own order).
   const scoreForSort = useMemo(() => {
     return (id: number): number => {
-      if (sortBy.startsWith("score:")) {
-        const parts = sortBy.split(":"); // score:<cid>[:<metric>]
-        const cid = parts[1];
-        const metric = parts[2] ?? "value";
-        if (!cid) return -Infinity;
-        return metricValue(resultScoresByCriterion?.[cid]?.[id], metric) ?? -Infinity;
-      }
-      const map =
-        sortBy === "pident"
-          ? resultPidentById
-          : sortBy === "qcov"
-            ? resultQcoverageById
-            : resultSimilarityById;
-      return map?.[id] ?? -Infinity;
+      if (!sortBy.startsWith("score:")) return -Infinity;
+      const parts = sortBy.split(":"); // score:<cid>[:<metric>]
+      const cid = parts[1];
+      const metric = parts[2] ?? "value";
+      if (!cid) return -Infinity;
+      return metricValue(resultScoresByCriterion?.[cid]?.[id], metric) ?? -Infinity;
     };
-  }, [
-    sortBy,
-    resultScoresByCriterion,
-    resultPidentById,
-    resultQcoverageById,
-    resultSimilarityById,
-  ]);
+  }, [sortBy, resultScoresByCriterion]);
 
   // The allow-list scoping the request: re-ranked by the active metric for
   // metric sorts (so the server's array_position order mirrors the table),
@@ -512,7 +404,7 @@ interface IbgcRosterRowProps {
   ibgc: IbgcRosterItem;
   selected: boolean;
   /** Score columns to render between the iBGC label and the tail columns —
-   *  one (or more) per active criterion, or the legacy single-similarity set. */
+   *  one (or more) per active criterion. */
   scoreCols: ScoreCol[];
   onSelect: () => void;
 }

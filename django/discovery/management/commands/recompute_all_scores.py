@@ -1,6 +1,6 @@
 """Management command to recompute all discovery scores.
 
-By default dispatches to Celery on the ``scores`` queue.
+By default enqueues a worker task on the ``scores`` queue.
 Use ``--sync`` for synchronous execution.
 """
 
@@ -14,7 +14,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--sync",
             action="store_true",
-            help="Run synchronously instead of dispatching to Celery",
+            help="Run synchronously instead of enqueuing a worker task",
         )
 
     def handle(self, *args, **options):

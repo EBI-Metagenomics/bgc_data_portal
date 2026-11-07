@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from django.db import IntegrityError, connection, transaction
+
 from discovery.models import (
     AccessionAlias,
     AccessionEntityType,
@@ -25,7 +27,6 @@ from discovery.models import (
     ConsensusBgc,
     IntegratedBgc,
 )
-from django.db import IntegrityError, connection, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -74,15 +75,17 @@ def _next_cbgc_index() -> int:
         return int(cur.fetchone()[0])
 
 
-def _next_ibgc_suffix_index(cbgc_id: int) -> int:
-    """Return the next per-cBGC iBGC suffix index (0-based).
+def _next_ibgc_suffix_index(cbgc_accession: str) -> int:
+    """Return the next free per-cBGC iBGC suffix index (0-based).
 
-    Counts existing iBGCs in the cBGC. Safe under contention because the
-    exclusion constraint on ``(cbgc, bgc_range)`` rejects overlapping
-    inserts; a colliding insert by another worker will fail before we
-    commit and the caller retries.
+    Counts the registry rows already minted under this cBGC prefix. The
+    registry outlives iBGC rebuilds, so the count only grows and a PK
+    collision (another writer burned the index first) is retried by the caller.
     """
-    return IntegratedBgc.objects.filter(cbgc_id=cbgc_id).count()
+    return AccessionRegistry.objects.filter(
+        entity_type=AccessionEntityType.IBGC,
+        accession__startswith=f"{cbgc_accession}-",
+    ).count()
 
 
 # ── Mint / lookup ───────────────────────────────────────────────────────────
@@ -162,6 +165,45 @@ class IbgcAccession:
     minted: bool
 
 
+def mint_ibgc_accession(
+    *,
+    cbgc_accession: str,
+    contig_accession: str,
+    start_pos: int,
+    end_pos: int,
+    ibgc: IntegratedBgc | None = None,
+) -> AccessionRegistry:
+    """Create the registry row for a new iBGC at these coordinates.
+
+    The accession is ``{cbgc_accession}-{YY}`` with a per-cBGC Crockford
+    base32 suffix; a PK collision moves on to the next free suffix.
+    """
+    for _ in range(64):
+        suffix_idx = _next_ibgc_suffix_index(cbgc_accession)
+        if suffix_idx >= 32**_IBGC_SUFFIX_WIDTH:
+            raise RuntimeError(
+                f"cBGC {cbgc_accession} has exhausted its 1024-iBGC suffix space"
+            )
+        accession = (
+            f"{cbgc_accession}-{encode_crockford(suffix_idx, _IBGC_SUFFIX_WIDTH)}"
+        )
+        try:
+            with transaction.atomic():
+                return AccessionRegistry.objects.create(
+                    accession=accession,
+                    entity_type=AccessionEntityType.IBGC,
+                    contig_accession=contig_accession,
+                    start_pos=start_pos,
+                    end_pos=end_pos,
+                    current_ibgc=ibgc,
+                )
+        except IntegrityError:
+            continue  # suffix burned by a concurrent writer; take the next one
+    raise RuntimeError(
+        f"Failed to mint iBGC accession for cBGC {cbgc_accession} after 64 retries"
+    )
+
+
 def lookup_or_mint_ibgc(
     *,
     cbgc: ConsensusBgc,
@@ -172,8 +214,8 @@ def lookup_or_mint_ibgc(
 ) -> IbgcAccession:
     """Return the stable accession for an iBGC at these coordinates.
 
-    The accession is ``{cbgc.accession}-{YY}`` where ``YY`` is a per-cBGC
-    Crockford base32 suffix. Stable across rebuilds via registry lookup.
+    Reuses the registry row for ``(contig_accession, start_pos, end_pos)`` when
+    one exists (pointing ``current_ibgc`` at ``ibgc``), otherwise mints one.
     """
     existing = AccessionRegistry.objects.filter(
         entity_type=AccessionEntityType.IBGC,
@@ -186,44 +228,14 @@ def lookup_or_mint_ibgc(
             existing.current_ibgc = ibgc
             existing.save(update_fields=["current_ibgc", "last_seen_at"])
         return IbgcAccession(existing.accession, existing, minted=False)
-
-    for _ in range(64):
-        suffix_idx = _next_ibgc_suffix_index(cbgc.id)
-        if suffix_idx >= 32**_IBGC_SUFFIX_WIDTH:
-            raise RuntimeError(
-                f"cBGC {cbgc.accession} has exhausted its 1024-iBGC suffix space"
-            )
-        accession = (
-            f"{cbgc.accession}-{encode_crockford(suffix_idx, _IBGC_SUFFIX_WIDTH)}"
-        )
-        try:
-            with transaction.atomic():
-                row = AccessionRegistry.objects.create(
-                    accession=accession,
-                    entity_type=AccessionEntityType.IBGC,
-                    contig_accession=contig_accession,
-                    start_pos=start_pos,
-                    end_pos=end_pos,
-                    current_ibgc=ibgc,
-                )
-            return IbgcAccession(accession, row, minted=True)
-        except IntegrityError:
-            existing = AccessionRegistry.objects.filter(
-                entity_type=AccessionEntityType.IBGC,
-                contig_accession=contig_accession,
-                start_pos=start_pos,
-                end_pos=end_pos,
-            ).first()
-            if existing is not None:
-                if ibgc is not None and existing.current_ibgc_id != ibgc.id:
-                    existing.current_ibgc = ibgc
-                    existing.save(update_fields=["current_ibgc", "last_seen_at"])
-                return IbgcAccession(existing.accession, existing, minted=False)
-            # PK collision (this suffix index was burned by another iBGC
-            # for the same cBGC). Try the next index.
-    raise RuntimeError(
-        f"Failed to mint iBGC accession for cBGC {cbgc.accession} after 64 retries"
+    row = mint_ibgc_accession(
+        cbgc_accession=cbgc.accession,
+        contig_accession=contig_accession,
+        start_pos=start_pos,
+        end_pos=end_pos,
+        ibgc=ibgc,
     )
+    return IbgcAccession(row.accession, row, minted=True)
 
 
 # ── Tombstoning ─────────────────────────────────────────────────────────────

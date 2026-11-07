@@ -278,7 +278,7 @@ def test_phmmer_search_chunked_matches_unchunked(built_index):
     paths, _ = built_index
     block = _load_block(paths)
 
-    common = dict(min_bitscore=0.0, min_pident=0.0, min_qcov=0.0, block=block)
+    common = {"min_bitscore": 0.0, "min_pident": 0.0, "min_qcov": 0.0, "block": block}
     serial = phmmer_search(_PROTEIN_A, cpus=1, **common)
     parallel = phmmer_search(_PROTEIN_A, cpus=4, **common)
 

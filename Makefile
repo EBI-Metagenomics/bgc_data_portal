@@ -1,12 +1,8 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
-        dev dev-full dev-clean dev-preflight deploy-local delete-local selfhost \
-        test-unit test-integration test-e2e logs shell db-shell validate-secrets \
-        clear-cache-django clear-cache \
-        seed-real-data reset-db e2e-seed \
-        build-protein-index update-protein-index \
-        clean-images tidy nuke lock \
-        workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
-        workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
+        dev dev-clean dev-preflight deploy-local delete-local selfhost \
+        test-unit test-integration test-e2e logs-django logs-worker shell db-shell \
+        validate-secrets clear-cache seed-real-data reset-db e2e-seed \
+        build-protein-index update-protein-index clean-images tidy nuke lock lock-check
 
 ENV_FILE := deployments/.env.local
 STAGED_FILES_DIR := ../../.SCRATCH/STAGED_FILES_SAMPLES
@@ -95,9 +91,6 @@ dev-preflight:
 dev: dev-preflight create-local-secrets
 	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local --kube-context $(KCTX) --cleanup=false
 
-dev-full: dev-preflight create-local-secrets
-	PATH="$(HELM3_DIR):$$PATH" skaffold dev -p local-full --kube-context $(KCTX) --cleanup=false
-
 dev-clean:
 	PATH="$(HELM3_DIR):$$PATH" skaffold delete -p local --kube-context $(KCTX)
 
@@ -163,14 +156,13 @@ reset-db:
 	kubectl rollout restart -n bgc-local deploy/bgc-data-portal-django
 	kubectl rollout status -n bgc-local deploy/bgc-data-portal-django --timeout=300s
 
-# Post-load steps that materialise the iBGC table and a clustering run so the
-# dashboard (and the e2e suite) have something to render. Run AFTER loading raw
-# data with `make seed-real-data`. Executes in the worker pod, which has the
-# clustering libs (igraph/leidenalg); --sync runs in-process.
+# Post-load step that materialises the iBGC table so the dashboard (and the
+# e2e suite) have something to render. Run AFTER `make seed-real-data`. A GCF
+# hierarchy additionally needs an HPC clustering run imported with
+# `manage.py import_clustering_results` (see docs/runbooks clustering-compute).
 e2e-seed:
 	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
-	  env DJANGO_SETTINGS_MODULE=bgc_data_portal.settings \
-	  python manage.py run_bgc_clustering --rebuild-ibgc --apply --sync
+	  python manage.py build_integrated_bgcs
 
 # ── Observability ─────────────────────────────────────────────────────────────
 logs-django:
@@ -186,29 +178,19 @@ db-shell:
 	kubectl exec -it -n bgc-local statefulset/postgres -- psql -U bgc_dp_pg_user mgnify_bgcs
 
 # ── Cache management ───────────────────────────────────────────────────────────
-clear-cache-redis:
-	@echo "Flushing Redis..."
-	kubectl exec -n bgc-local deploy/redis -- redis-cli FLUSHALL
-
-clear-cache-celery:
-	@echo "Purging Celery task queues..."
-	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- celery -A bgc_data_portal purge -f
-
-clear-cache-django:
-	@echo "Clearing Django cache..."
+clear-cache:
+	@echo "Clearing the Django cache (Postgres DatabaseCache)..."
 	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
-clear-cache: clear-cache-redis clear-cache-celery clear-cache-django
-
 # ── Protein search index ──────────────────────────────────────────────────────
-# Runs inside the Celery pod — that's where the mount lives. Use --rebuild on
-# first bootstrap or after a TRUNCATE; the default is incremental append.
+# Runs inside the worker pod (it has pyhmmer and the index mount). Use --rebuild
+# on first bootstrap or after a TRUNCATE; --append is incremental.
 build-protein-index:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
 	  python manage.py build_protein_search_index --rebuild
 
 update-protein-index:
-	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- \
+	kubectl exec -n bgc-local deploy/bgc-data-portal-worker -- \
 	  python manage.py build_protein_search_index --append
 
 # ── Real-data seeding ─────────────────────────────────────────────────────────
@@ -218,34 +200,6 @@ update-protein-index:
 # Per-archive stderr captured to a temp log dir; pod re-resolved per iteration.
 seed-real-data:
 	STAGED_FILES_DIR=$(STAGED_FILES_DIR) ./scripts/seed-real-data.sh
-
-# ── Workspace (Claude Code in isolated pod) ──────────────────────────────────
-workspace-enter:
-	./scripts/workspace.sh enter
-
-workspace-login:
-	./scripts/workspace.sh login
-
-workspace-claude:
-	./scripts/workspace.sh claude
-
-workspace-sync-in:
-	./scripts/workspace.sh sync-in
-
-workspace-sync-out:
-	./scripts/workspace.sh sync-out
-
-workspace-patch:
-	./scripts/workspace.sh patch
-
-workspace-apply-patch:
-	./scripts/workspace.sh apply-patch
-
-workspace-set-api-key:
-	./scripts/workspace.sh set-api-key
-
-workspace-restart:
-	./scripts/workspace.sh restart
 
 # ── Disk reclaim ──────────────────────────────────────────────────────────────
 # Routine cleanup: prune dangling images on host Docker AND inside the Kind node.
@@ -290,10 +244,15 @@ lock:
 	docker run --rm -v "$(CURDIR)/django:/w" -w /w python:$(PY_VERSION)-slim sh -c '\
 	  apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1 && \
 	  pip install -q uv && \
-	  for f in web ml worker dev; do \
+	  for f in web worker; do \
 	    echo "  - requirements-$$f.lock" && \
 	    uv pip compile requirements-$$f.txt -o requirements-$$f.lock \
 	      --python-platform $(PY_PLATFORM) --python-version $(PY_VERSION) \
 	      --emit-index-url --no-header --quiet; \
 	  done'
 	@echo "Done. Review the diff and commit the updated lockfiles."
+
+# Every exact pin in requirements-*.txt must appear unchanged in its lock;
+# catches a txt edit committed without `make lock` (CI runs this).
+lock-check:
+	python3 scripts/lock_check.py

@@ -8,6 +8,19 @@ import { toast } from "sonner";
 import { Pin, Search, Plus, RefreshCw, Clipboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fetchIbgcArchitecture, postSimilarIbgcQuery } from "@/api/ibgcs";
+import type { CriterionColumn, CriterionScore } from "@/api/types";
+
+/** Criterion id under which Find Similar publishes its composite-similarity
+ *  scores — the same column shape the combined query emits, so the roster
+ *  and the Variables map read one result representation. */
+export const SIMILAR_IBGC_CRITERION_ID = "similar_ibgc";
+
+const SIMILAR_IBGC_CRITERION: CriterionColumn = {
+  id: SIMILAR_IBGC_CRITERION_ID,
+  type: "similar",
+  label: "Sim.",
+  metrics: [{ key: "value", label: "Similarity", sortable: true }],
+};
 
 export interface IbgcActionItem {
   key:
@@ -86,13 +99,23 @@ export function useIbgcActions(
         100,
       );
       const ids = resp.items.map((r) => r.id);
-      const similarity: Record<number, number> = {};
+      const scores: Record<number, CriterionScore> = {};
       for (const item of resp.items) {
-        if (item.similarity_score != null) {
-          similarity[item.id] = item.similarity_score;
-        }
+        scores[item.id] = {
+          value: item.similarity_score,
+          pident: null,
+          qcoverage: null,
+          best_hit_protein_id: null,
+        };
       }
-      setQueryResult(ids, similarity, "similar_ibgc", null, null, null);
+      setQueryResult({
+        ids,
+        criteria: [SIMILAR_IBGC_CRITERION],
+        scoresByCriterion: { [SIMILAR_IBGC_CRITERION_ID]: scores },
+        source: "similar_ibgc",
+        totalMatched: null,
+        capped: false,
+      });
       // Detect filter chips still active in the Top Filters strip — the
       // roster intersects ``ibgc_ids`` with those chips, which can silently
       // drop the visible row count below ``ids.length``. Surface that in

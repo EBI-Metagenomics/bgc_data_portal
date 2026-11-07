@@ -120,4 +120,4 @@ format:
     toc: true
     toc-depth: 3
     code-copy: true
-    embed-resources: true
+    embed-resources: false

@@ -85,7 +85,7 @@ def build_ltree_paths(
 
     # Process level 0 first (parent_path = "").
     level0 = sorted(
-        {lbl for lbl in levels[0]},
+        set(levels[0]),
         key=lambda lbl: (
             -len(label_to_vertices[(0, lbl)]),
             min(label_to_vertices[(0, lbl)]),

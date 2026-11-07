@@ -10,7 +10,7 @@ When you select an iBGC, its detail card appears on the right of the discovery p
 
 Together they let you hold one cluster fixed and read others against it.
 
-![A Compare detail card: attribute chips (assembly, class, status, completeness, GCF, novelty scores, compounds), the location line, and the gene-level region plot.](images/ibgc-detail.png)
+![A Compare detail card: attribute chips (assembly, class, status, completeness, GCF, novelty scores, NP class), the location line, and the gene-level region plot.](images/ibgc-detail.png)
 
 ## What the card shows
 
@@ -31,7 +31,7 @@ A row of chips summarises the cluster:
 | **GCF** | The gene cluster family path (e.g. `42.7.3`). **Click it** to filter the whole discovery platform to that family and its descendants. |
 | **Novelty** | Distance from the nearest validated cluster. |
 | **Domain Novelty** | Fraction of domains unique within the GCF. |
-| **compound features** | Count of curated compounds (validated iBGCs). Hover for the list; click to open the structure in MolView when a SMILES is available. |
+| **NP class** | The confident NPClassifier pathway(s) of the predicted or curated product; `—` when there is no label, `?` when only tentative ones exist. Hover for every label; click a label to filter the discovery platform by that term. |
 
 ### Location and sources
 
@@ -41,9 +41,15 @@ A line gives the **contig**, the cluster's **start–end** coordinates and size,
 
 A gene-level diagram of the cluster: each arrow is a protein-coding gene (CDS). **Click any gene** to load its protein — sequence and domain annotations — into the [Protein Information panel](protein-panel.qmd) at the bottom of the discovery platform.
 
-## Compound features in detail
+### NPClassifier labels
 
-The "compound features" chip lists, in its hover tooltip, the **curated compounds** of validated iBGCs: the named product(s), their structure, and their natural-product class path (from sources such as MIBiG).
+The **NP class** chip summarises what the cluster is predicted to make, in the vocabulary of the [NPClassifier](key-concepts.qmd#predicted-product-class-npclassifier) ontology. Its hover tooltip lists every label the iBGC carries, one per line:
+
+- the **level** (pathway, superclass, or class) and the term name;
+- the **score** (0–1, two decimals) the detector assigned, and `(low)` when the label is tentative rather than confident;
+- `curated` when the label comes from a reference annotation (MIBiG) rather than a prediction.
+
+Predicted labels come from **SanntiS 1.0**, which classifies each cluster it calls; validated iBGCs carry the curated labels of their MIBiG entry. Where several source predictions label the same iBGC, the labels are pooled. Clicking any label in the tooltip applies it as a [Natural product class filter](filtering.qmd).
 
 ## Using the two panels together
 
@@ -51,7 +57,7 @@ A typical comparison:
 
 1. Find a promising cluster and **right-click → Set as reference iBGC**. It pins to the top.
 2. **Left-click** through similar candidates (or use [Find similar iBGCs](similar-ibgc.qmd)); each loads into the Compare card.
-3. Read class, GCF, novelty, size, and known compounds against the reference.
+3. Read class, GCF, novelty, size, and predicted product class against the reference.
 4. Click into individual genes to confirm the domain architecture in the [protein panel](protein-panel.qmd).
 5. Add the keepers to your [shortlist](shortlists.qmd).
 

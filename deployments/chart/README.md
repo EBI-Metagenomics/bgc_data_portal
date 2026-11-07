@@ -6,113 +6,43 @@ minimal skeleton and is **not** a usable target on its own):
 
 | Target | Values | Where |
 |--------|--------|-------|
-| self-host / laptop | `values-laptop.yaml` (+ `values-selfhost.yaml` for public images) | here (public) |
+| self-host / laptop | `values-laptop.yaml` (+ `values-selfhost.yaml` for the published quay images) | here (public) |
 | cloud-dev | `envs/cloud-dev/values.yaml` | `mgnify-bgcs-deployer` (private) |
 | cloud-prod | `envs/cloud-prod/values.yaml` | `mgnify-bgcs-deployer` (private) |
 
-## Self-hosting
+What the chart renders: `postgres` (StatefulSet, also the cache and the
+django-tasks queue), `bgc-data-portal-django` (gunicorn / `runserver`, migrate
+init-container), `bgc-data-portal-worker` (`manage.py db_worker`, mounts the
+`/data` artifacts volume), the static NGINX + ingress on cloud targets, and
+optional `tests.jobs` hooks. No Redis, RabbitMQ or Celery.
 
-Two ways in, depending on whether you can reach the image registry:
+## Install paths
 
-### A. Build from source — no registry needed (recommended)
+| Path | Command | Notes |
+|------|---------|-------|
+| Build from source (recommended) | `make selfhost` (app repo) or `scripts/selfhost-build.sh -h` | Builds the `web` + `worker` targets of `django/Dockerfile`, imports them into k3d, creates the Secret, installs with `values-laptop.yaml`. |
+| Published OCI chart | `helm pull oci://quay.io/microbiome-informatics/bgc-data-portal-chart --untar` then `helm install bgc ./bgc-data-portal -f …/values-laptop.yaml -f …/values-selfhost.yaml -n bgc-local --create-namespace` | Needs the quay images/chart to be reachable. Pin with `--set django.image=…:vX --set worker.image=…-worker:vX`. |
+| Dev loop | `make dev` (Skaffold on k3d) | Same chart; Skaffold's post-renderer swaps in the freshly built dev images. |
+| Cloud dev / prod | `make -C deployments/cloud render-prod`, `verify-prod`, `secret-prod`, `deploy-prod KUBE_CONTEXT=<ctx> CHART_VERSION=<chart version>` | Targets live in the **monorepo** at `deployments/cloud/Makefile`; the per-env values and golden renders live in the `mgnify-bgcs-deployer` submodule. `deploy-prod` requires a published `CHART_VERSION`. |
 
-The app images build entirely from public base images (`python:3.12-slim`,
-`postgres:18-trixie`, …), so you never touch a private registry. From a checkout
-of the app repo:
+The walkthrough (cluster, secret, access, snapshot load, teardown) is in the app
+[`README.md`](../../README.md); the post-install `NOTES` print the access URL
+and snapshot-load commands.
 
-```bash
-make selfhost                 # build prod images → import into k3d → helm install
-#  or:  scripts/selfhost-build.sh -h     (cluster/namespace/tag/secret options)
-```
+## Secret
 
-It builds `django/Dockerfile` + `Dockerfile.worker`, imports them into a local
-k3d cluster, and installs this chart with `values-laptop.yaml` + the built-image
-names (init-container images follow `django.image`, so one override covers all).
-No second deployment definition — same chart as the cloud.
-
-### B. From the published OCI chart — needs the registry to be public
-
-Only if `quay.io/microbiome-informatics` (images + `charts/`) is public:
-
-```bash
-helm pull oci://quay.io/microbiome-informatics/bgc-data-portal-chart --untar
-helm install bgc ./bgc-data-portal \
-  -f ./bgc-data-portal/values-laptop.yaml \
-  -f ./bgc-data-portal/values-selfhost.yaml \
-  --namespace bgc-local --create-namespace
-```
-
-`values-selfhost.yaml` selects the published quay images; override the tag with
-`--set django.image=…:vX --set worker.image=…_worker:vX` to pin a version.
-
-### Secret (path B / manual)
-
-`make selfhost` (path A) creates the Secret for you from the env file. For path B
-(or any manual install) a Secret named `bgc-data-portal-secret` must exist first
-(DB creds, tokens). The chart's `values-laptop.yaml` header lists the keys; the
-defaults work for a private instance:
+The chart references a Secret named `bgc-data-portal-secret` but never
+templates it. `make selfhost` and `make -C deployments/cloud secret-<env>`
+create it; otherwise:
 
 ```bash
-kubectl create namespace bgc-local
-kubectl create secret generic bgc-data-portal-secret \
-  --from-env-file=my-secrets.env -n bgc-local      # see the key list below
+kubectl create secret generic bgc-data-portal-secret --from-env-file=my-secrets.env -n <ns>
 ```
 
-Keys: `DJANGO_SECRET_KEY ADMIN_API_TOKEN PROJECT_USER_TOKEN POSTGRES_USER
-POSTGRES_PASSWORD POSTGRES_DB DATABASE_URL` (with `DATABASE_URL` pointing at the
-in-cluster `postgres` service — it also backs the cache and the django-tasks-db
-queue; no Redis/RabbitMQ).
-
-The post-install `NOTES` print the access URL and snapshot-load commands.
-
-### Access
-
-```bash
-kubectl -n bgc-local rollout status deploy/bgc-data-portal-django
-kubectl -n bgc-local port-forward svc/bgc-data-portal-django 8080:80
-# → http://localhost:8080/dashboard/
-```
-
-### Load data (a fresh instance is empty)
-
-Snapshots are published at
-`https://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_bgcs/snapshots/`
-(`latest.txt` names the newest compatible bundle). To load one offline:
-
-```bash
-NS=bgc-local
-curl -fSL "https://ftp.ebi.ac.uk/.../bgc-portal-snapshot-<ver>.tgz" -o snapshot.tgz
-mkdir -p snap && tar -xzf snapshot.tgz -C snap
-
-# DB (POSTGRES_USER/DB are the values you put in the Secret)
-kubectl -n "$NS" exec -i postgres-0 -- \
-  pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner < snap/db.dump
-
-# clustering artifacts + protein-search index
-DJ=$(kubectl -n "$NS" get pod -l app=bgc-data-portal-django -o name | head -1)
-kubectl -n "$NS" exec -i "$DJ" -- tar -C /data -xzf - < snap/artifacts.tgz
-kubectl -n "$NS" exec "$DJ" -- python manage.py update_discovery_stats
-```
-
-No further network access is needed afterwards — suitable for an air-gapped HPC
-or laptop. (Producing/publishing a snapshot is an operator task; see the internal
-`data-snapshot.md` runbook.)
-
-### Substrate
-
-Any single-node Kubernetes works. [k3d](https://k3d.io) is the lightest:
-`k3d cluster create bgc-local -p "8080:30080@server:0"` exposes the NodePort on
-host `:8080` directly (no port-forward needed).
-
-## Cloud (operators)
-
-```bash
-# from the private mgnify-bgcs-deployer repo
-make render-prod && make verify-prod && make deploy-prod KUBE_CONTEXT=<ctx>
-```
-
-Design notes, the dev (k3d) loop, OCI publishing, and troubleshooting live in
-`docs/runbooks/services/bgc_data_portal/deployment-helm.md` (internal).
+Keys: `DJANGO_SECRET_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
+`DATABASE_URL` (pointing at the in-cluster `postgres` service). Non-secret
+settings such as `NINJA_NUM_PROXIES` (defaults to `1`, required outside `DEBUG`)
+go in `config.data`.
 
 ## Conventions
 
@@ -122,5 +52,16 @@ Design notes, the dev (k3d) loop, OCI publishing, and troubleshooting live in
 - Helm deep-merges maps but replaces lists — keep map-shaped, target-specific
   settings empty in `values.yaml` and declare them per target.
 - Init-container images follow `django.image`, so one image override covers main
-  + init containers.
-- `scripts/verify_parity.py` (deployer repo) proves a render matches its golden.
+  + init containers; the worker is `worker.image`.
+- Bump `version:` in `Chart.yaml` whenever the chart changes — that string is the
+  published OCI tag (`publish-chart.yml`).
+- `deployments/cloud/scripts/verify_parity.py` (monorepo) proves a cloud render
+  matches its committed golden (`make -C deployments/cloud verify-<env>`).
+
+## Links
+
+- App developer guide: [`README.md`](../../README.md)
+- Helm design notes, dev loop, OCI publishing, troubleshooting:
+  `docs/runbooks/services/bgc_data_portal/deployment-helm.md` (monorepo)
+- Prod SOP: `docs/runbooks/services/bgc_data_portal/production-deployment-cycle.md` (monorepo)
+- Snapshots: `docs/runbooks/services/bgc_data_portal/data-snapshot.md` (monorepo)

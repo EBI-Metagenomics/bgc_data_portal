@@ -83,7 +83,7 @@ def test_fixtures_are_pre_removal_artifacts():
     with tarfile.open(LEGACY_STAGED) as tf:
         names = {Path(n).name for n in tf.getnames()}
         bgcs_header = tf.extractfile("bgcs.tsv").readline().decode()
-    assert LEGACY_FILES <= names
+    assert names >= LEGACY_FILES
     assert "umap_x" in bgcs_header and "umap_y" in bgcs_header
     with tarfile.open(V2_CLUSTERING) as tf:
         assert "coords.parquet" in tf.getnames()
@@ -96,12 +96,12 @@ def test_pre_removal_staged_tarball_loads_like_a_stripped_one(tmp_path):
     legacy = _extract(LEGACY_STAGED, tmp_path / "legacy")
     stripped = _strip_legacy(legacy, tmp_path / "stripped")
 
-    run_pipeline(legacy, truncate=False, skip_stats=True)
+    run_pipeline(legacy, truncate=False)
     legacy_counts = _counts()
     assert legacy_counts["assemblies"] == 1
     assert legacy_counts["source_bgcs"] >= 1 and legacy_counts["cds"] >= 1
 
-    run_pipeline(stripped, truncate=True, skip_stats=True)
+    run_pipeline(stripped, truncate=True)
     assert _counts() == legacy_counts
 
 

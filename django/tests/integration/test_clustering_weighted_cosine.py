@@ -430,45 +430,6 @@ def test_import_rejects_cosine_tarball_without_weights(dets, tmp_path):
         _run_weights_from_payload(payload, COSINE)
 
 
-@pytest.mark.django_db
-def test_in_portal_pipeline_cosine_run(dets, tmp_path):
-    from discovery.services.clustering.pipeline import run_clustering_pipeline
-
-    fx = _corpus(dets)
-    with override_settings(CLUSTERING_ARTIFACTS_DIR=tmp_path):
-        with pytest.raises(ValueError, match="needs an enrichment_version"):
-            run_clustering_pipeline(similarity_metric=COSINE)
-        # t1 was learned on IPR_GAPFILLED: a run on another vocab must refuse it.
-        with pytest.raises(ValueError, match="learned on vocab"):
-            run_clustering_pipeline(
-                similarity_metric=COSINE,
-                domain_vocab=VOCAB_IPR_PROJECTED,
-                enrichment_version="t1",
-            )
-
-        dice = run_clustering_pipeline(apply=False, seed=42)
-        res = run_clustering_pipeline(
-            similarity_metric=COSINE,
-            domain_vocab=VOCAB_IPR_GAPFILLED,
-            enrichment_version="t1",
-            apply=True,
-            seed=42,
-        )
-        assert "error" not in res, res
-        assert res["sha256"] != dice["sha256"]
-        run = ClusteringRun.objects.get(pk=res["run_pk"])
-        assert (run.similarity_metric, run.enrichment_version) == (COSINE, "t1")
-
-        art = Path(res["artifacts_dir"])
-        rw = load_run_weights(art)
-        assert rw is not None and len(rw.domain_weights) == res["n_domains"]
-        cache = load_scoring_cache(art)
-        np.testing.assert_array_equal(cache["domain_weights"], rw.domain_weights)
-
-        fx["validated"].refresh_from_db()
-        assert fx["validated"].novelty_score == pytest.approx(0.0, abs=1e-6)
-
-
 # ── Phase 3: every consumer scores a cosine run with the run's weights ──────
 
 LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}

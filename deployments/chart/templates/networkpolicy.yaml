@@ -1,0 +1,24 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $ns := include "bgc.namespace" . }}
+# Postgres accepts connections only from the django and worker pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-from-app-only
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: bgc-data-portal-django
+        - podSelector:
+            matchLabels:
+              app: bgc-data-portal-worker
+      ports:
+        - port: 5432
+{{- end }}

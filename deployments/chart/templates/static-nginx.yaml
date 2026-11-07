@@ -23,7 +23,15 @@ spec:
       {{- end }}
       containers:
         - name: nginx
+          {{- with .Values.staticNginx.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: {{ .Values.staticNginx.image }}
+          {{- with .Values.staticNginx.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - containerPort: 80
           volumeMounts:

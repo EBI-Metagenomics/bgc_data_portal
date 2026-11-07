@@ -31,7 +31,7 @@ Switch to the **Variables map** tab to plot two metrics against each other (e.g.
 
 ## 4. Inspect and compare
 
-- **Left-click** an interesting row (or a point on the Variables map). It loads into the **Compare** panel on the right, showing its location, source predictions, GCF, known compounds, and scores, with a gene-level region plot.
+- **Left-click** an interesting row (or a point on the Variables map). It loads into the **Compare** panel on the right, showing its location, source predictions, GCF, predicted product class, and scores, with a gene-level region plot.
 - **Right-click** a row for more actions: **Set as reference iBGC** pins it to the top panel so you can compare others against it; **Find similar iBGCs** expands your search around it; **Add to shortlist** collects it.
 - **Click any gene** in a detail panel to load its protein — sequence and domain annotations — into the **Protein Information** panel at the bottom.
 

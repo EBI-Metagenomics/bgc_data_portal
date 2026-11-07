@@ -7,73 +7,7 @@ export interface PaginationMeta {
   total_pages: number;
 }
 
-// ── Assembly schemas ────────────────────────────────────────────────────────
-
-export interface AssemblyRosterItem {
-  id: number;
-  accession: string;
-  organism_name: string | null;
-  source_name: string | null;
-  assembly_type: string;
-  is_type_strain: boolean;
-  type_strain_catalog_url: string | null;
-  bgc_count: number;
-  l1_class_count: number;
-  bgc_diversity_score: number;
-  bgc_novelty_score: number;
-  bgc_density: number;
-  taxonomic_novelty: number;
-}
-
-export interface PaginatedAssemblyResponse {
-  items: AssemblyRosterItem[];
-  pagination: PaginationMeta;
-}
-
-export interface AssemblyDetail {
-  id: number;
-  accession: string;
-  organism_name: string | null;
-  source_name: string | null;
-  assembly_type: string;
-  is_type_strain: boolean;
-  type_strain_catalog_url: string | null;
-  assembly_size_mb: number | null;
-  biome_path: string;
-  url: string;
-  bgc_count: number;
-  l1_class_count: number;
-  bgc_diversity_score: number;
-  bgc_novelty_score: number;
-  bgc_density: number;
-  taxonomic_novelty: number;
-}
-
-export interface AssemblyScatterPoint {
-  id: number;
-  x: number;
-  y: number;
-  organism_name: string | null;
-  is_type_strain: boolean;
-}
-
 // ── BGC schemas ───────────────────────────────────────────────────────────
-
-export interface BgcRosterItem {
-  id: number;
-  accession: string;
-  classification_path: string;
-  size_kb: number;
-  novelty_score: number;
-  domain_novelty: number;
-  is_partial: boolean;
-  assembly_accession: string | null;
-}
-
-export interface PaginatedBgcRosterResponse {
-  items: BgcRosterItem[];
-  pagination: PaginationMeta;
-}
 
 export interface DomainArchitectureItem {
   domain_acc: string;
@@ -92,42 +26,6 @@ export interface ParentAssemblySummary {
   source_name: string | null;
   is_type_strain: boolean;
   url: string;
-}
-
-// Curated per-BGC compound (SMILES, structure).
-export interface NaturalProductSummary {
-  id: number;
-  name: string;
-  smiles: string;
-  smiles_svg: string;
-  structure_thumbnail: string;
-  np_class_path: string;
-}
-
-export interface BgcDetail {
-  id: number;
-  accession: string;
-  classification_path: string;
-  size_kb: number;
-  novelty_score: number;
-  domain_novelty: number;
-  is_partial: boolean;
-  is_validated: boolean;
-  domain_architecture: DomainArchitectureItem[];
-  parent_assembly: ParentAssemblySummary | null;
-  natural_products: NaturalProductSummary[];
-}
-
-export interface BgcScatterPoint {
-  id: number;
-  x: number;
-  y: number;
-  bgc_class: string;
-  is_validated: boolean;
-  compound_name: string | null;
-  novelty_score: number;
-  domain_novelty: number;
-  similarity_score: number | null;
 }
 
 // ── Filter schemas ────────────────────────────────────────────────────────
@@ -170,18 +68,6 @@ export interface NpcLabel {
   detector_tools: string[];
 }
 
-export interface DomainOption {
-  acc: string;
-  name: string;
-  description: string | null;
-  count: number;
-}
-
-export interface PaginatedDomainResponse {
-  items: DomainOption[];
-  pagination: PaginationMeta;
-}
-
 export interface GcfOption {
   family_path: string;
   level: number;
@@ -212,58 +98,6 @@ export interface DetectorOption {
 
 export interface PaginatedDetectorResponse {
   items: DetectorOption[];
-  pagination: PaginationMeta;
-}
-
-// ── Query mode schemas ────────────────────────────────────────────────────
-
-export interface DomainQueryRequest {
-  /** Comma/whitespace-separated accessions (InterPro entries or signature
-   *  accs). A token prefixed with ``-``/``!`` is excluded. */
-  domains_text: string;
-  logic: "and" | "or";
-  /** AND-only containment threshold (0–1): min fraction of include tokens
-   *  that must be present. Default 1.0 (all). */
-  threshold?: number;
-}
-
-export interface QueryResultBgc {
-  id: number;
-  accession: string;
-  classification_path: string;
-  size_kb: number;
-  novelty_score: number;
-  domain_novelty: number;
-  is_partial: boolean;
-  similarity_score: number;
-  // Populated only by the sequence (phmmer) query mode.
-  best_bitscore?: number | null;
-  best_pident?: number | null;
-  best_qcoverage?: number | null;
-  assembly_id: number | null;
-  assembly_accession: string | null;
-  organism_name: string | null;
-  is_type_strain: boolean;
-  source_name: string | null;
-}
-
-export interface PaginatedQueryResultResponse {
-  items: QueryResultBgc[];
-  pagination: PaginationMeta;
-}
-
-export interface QueryResultAssemblyAggregation {
-  assembly_id: number;
-  accession: string;
-  organism_name: string | null;
-  is_type_strain: boolean;
-  source_name: string | null;
-  hit_count: number;
-  complete_fraction: number;
-}
-
-export interface PaginatedAssemblyAggregationResponse {
-  items: QueryResultAssemblyAggregation[];
   pagination: PaginationMeta;
 }
 
@@ -365,50 +199,6 @@ export interface SunburstNode {
   count: number;
 }
 
-export interface ScoreDistribution {
-  label: string;
-  values: number[];
-}
-
-export interface CoreDomain {
-  acc: string;
-  name: string;
-  bgc_count: number;
-  fraction: number;
-}
-
-export interface BgcClassCount {
-  name: string;
-  count: number;
-}
-
-export interface AssemblyStatsResponse {
-  taxonomy_sunburst: SunburstNode[];
-  score_distributions: ScoreDistribution[];
-  type_strain_count: number;
-  non_type_strain_count: number;
-  mean_bgc_per_assembly: number;
-  mean_l1_class_per_assembly: number;
-  total_assemblies: number;
-  biome_sunburst: SunburstNode[];
-}
-
-export interface BgcStatsResponse {
-  core_domains: CoreDomain[];
-  score_distributions: ScoreDistribution[];
-  complete_count: number;
-  partial_count: number;
-  npc_sunburst: SunburstNode[];
-  bgc_class_distribution: BgcClassCount[];
-  total_bgcs: number;
-}
-
-// ── Export schemas ─────────────────────────────────────────────────────────
-
-export interface ShortlistExportRequest {
-  ids: number[];
-}
-
 // ── iBGC (Integrated BGC) schemas ──────────────────────────────────────
 
 export interface IbgcRosterItem {
@@ -446,27 +236,6 @@ export interface IbgcRosterItem {
 export interface PaginatedIbgcRosterResponse {
   items: IbgcRosterItem[];
   pagination: PaginationMeta;
-}
-
-/** One scored hit in a compact query-result payload (see QueryScoresResponse).
- *  similarity_score is the query's native score (bitscore for sequence, the
- *  run's composite similarity for domain/architecture); best_* are
- *  sequence-only. */
-export interface QueryScoreRow {
-  id: number;
-  similarity_score: number | null;
-  best_pident: number | null;
-  best_qcoverage: number | null;
-  best_hit_protein_id: string | null;
-}
-
-/** Compact, ranked query result capped at `cap`. `total_matched` is the full
- *  pre-clip count; `capped` is `total_matched > cap`. */
-export interface QueryScoresResponse {
-  items: QueryScoreRow[];
-  total_matched: number;
-  capped: boolean;
-  cap: number;
 }
 
 // ── Combined multi-criterion query ──────────────────────────────────────
@@ -551,17 +320,6 @@ export interface CriterionScore {
   best_hit_protein_id: string | null;
 }
 
-/** Roster row carrying one score payload per criterion, keyed by criterion id. */
-export interface CombinedRosterItem extends IbgcRosterItem {
-  scores: Record<string, CriterionScore>;
-}
-
-export interface CombinedRosterResponse {
-  items: CombinedRosterItem[];
-  pagination: PaginationMeta;
-  criteria: CriterionColumn[];
-}
-
 export interface CombinedScoreRow {
   id: number;
   scores: Record<string, CriterionScore>;
@@ -621,7 +379,6 @@ export interface IbgcDetail {
   region_endpoint_url: string | null;
   member_bgcs: IbgcMemberBgc[];
   domain_architecture: DomainArchitectureItem[];
-  natural_products: NaturalProductSummary[];
   npc_labels: NpcLabel[];
 }
 

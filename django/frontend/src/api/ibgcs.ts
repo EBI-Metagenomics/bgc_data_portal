@@ -62,21 +62,24 @@ export interface IbgcRosterParams extends IbgcFilterParams {
 }
 
 export function fetchIbgcRoster(params: IbgcRosterParams = {}) {
-  return apiGet<PaginatedIbgcRosterResponse>(
+  return apiGet<PaginatedIbgcRosterResponse, IbgcRosterParams>(
     "/ibgcs/roster/",
-    params as Record<string, string | number | boolean | undefined>,
+    params,
   );
 }
 
 /** Cheap COUNT over the iBGC filter surface. Fired before the heavier
  *  roster/scatter calls to drive the empty-state guard and the
  *  "Showing X of Y, sampled" banner. */
-export function fetchIbgcCount(
-  params: IbgcFilterParams & { ibgc_ids?: string; ibgc_ids_token?: string } = {},
-) {
-  return apiGet<IbgcCountResponse>(
+export type IbgcCountParams = IbgcFilterParams & {
+  ibgc_ids?: string;
+  ibgc_ids_token?: string;
+};
+
+export function fetchIbgcCount(params: IbgcCountParams = {}) {
+  return apiGet<IbgcCountResponse, IbgcCountParams>(
     "/ibgcs/count/",
-    params as Record<string, string | number | boolean | undefined>,
+    params,
   );
 }
 
@@ -101,9 +104,9 @@ export interface IbgcIdsParams extends IbgcFilterParams {
  *  server-side. Powers the roster's "Add all to shortlist" button so we
  *  don't have to walk roster pages just to gather ids. */
 export function fetchIbgcIds(params: IbgcIdsParams = {}) {
-  return apiGet<IbgcIdsResponse>(
+  return apiGet<IbgcIdsResponse, IbgcIdsParams>(
     "/ibgcs/ids/",
-    params as Record<string, string | number | boolean | undefined>,
+    params,
   );
 }
 
@@ -176,9 +179,9 @@ export interface IbgcScatterParams extends IbgcFilterParams {
 }
 
 export function fetchIbgcScatter(params: IbgcScatterParams = {}) {
-  return apiGet<IbgcScatterPoint[]>(
+  return apiGet<IbgcScatterPoint[], IbgcScatterParams>(
     "/ibgcs/scatter/",
-    params as Record<string, string | number | boolean | undefined>,
+    params,
   );
 }
 

@@ -23,6 +23,7 @@ There are two kinds of chip:
 | **Biome** | The environment the assembly came from, using the [GOLD biome ontology](biome-ontology.qmd). |
 | **BGC class** | The kind of biosynthetic machinery — [Polyketide, NRPS, RiPP, …](bgc-classes.qmd) |
 | **GCF** | A [gene cluster family](gcf-explained.qmd) path and its descendants. |
+| **Natural product class** | The predicted or curated product class, from the [NPClassifier](key-concepts.qmd#predicted-product-class-npclassifier) ontology (pathway → superclass → class). Checking a term also matches everything below it. A **Confident labels only** toggle (on by default) ignores tentative predictions. |
 | **Accessions** | A single smart field that accepts an assembly, contig, BGC, iBGC, or protein accession. See [Accessions Field](accessions.qmd). |
 | **Length** | A minimum/maximum cluster size. |
 
@@ -30,7 +31,7 @@ Each active chip shows a count of selected values; clear it from the chip or use
 
 ## How filters combine
 
-All chips are combined with **AND**: an iBGC must satisfy every active chip to appear. Within a single hierarchical chip (taxonomy, biome, GCF), selecting a node includes that node and everything below it.
+All chips are combined with **AND**: an iBGC must satisfy every active chip to appear. Within a single hierarchical chip (taxonomy, biome, GCF, natural product class), selecting a node includes that node and everything below it.
 
 Advanced search chips are combined with the metadata filters too — for example, you can run a [sequence search](sequence-search.qmd) *restricted* to marine Actinomycetota by adding those metadata chips alongside the sequence chip.
 

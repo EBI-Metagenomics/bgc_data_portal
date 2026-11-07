@@ -11,10 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_tasks import TaskResultStatus, default_task_backend
-
 from django.conf import settings
 from django.core.cache import cache
+from django_tasks import TaskResultStatus, default_task_backend
 
 
 def set_job_cache(
@@ -33,7 +32,7 @@ def set_job_cache(
 
 
 class JobResult:
-    """Thin adapter over a django-tasks ``TaskResult`` exposing the Celery-ish
+    """Thin adapter over a django-tasks ``TaskResult`` exposing the
     ``.ready()`` / ``.failed()`` / ``.result`` surface used by the API poll
     endpoints. ``None`` means the backend has no record of the id (treated as
     still-pending by callers)."""
@@ -66,29 +65,3 @@ def fetch_job(task_id: str | None) -> JobResult:
         return JobResult(default_task_backend.get_result(task_id))
     except Exception:
         return JobResult(None)
-
-
-def get_job_status(
-    search_key: str | None = None, task_id: str | None = None
-) -> dict[str, Any]:
-    """Return a dict with task_id, search_key, status, result (if available)."""
-    if task_id:
-        search_key = cache.get(task_id)
-
-    if search_key:
-        result = cache.get(search_key, {})
-        task_id = result.pop("task_id", None)
-        if result:
-            return {"search_key": search_key, "status": "SUCCESS", "result": result}
-
-    job = fetch_job(task_id)
-    if job.failed():
-        return {"task_id": task_id, "search_key": search_key, "status": "FAILURE"}
-    if job.ready():
-        return {
-            "task_id": task_id,
-            "search_key": search_key,
-            "status": "SUCCESS",
-            "result": job.result,
-        }
-    return {"task_id": task_id, "search_key": search_key, "status": "PENDING"}

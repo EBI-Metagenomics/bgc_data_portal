@@ -5,7 +5,8 @@ the panels the Report Page needs (iBGC rows, domain composition, GCF
 distribution, score distributions, completeness pie, BGC class pie, length
 histogram, predictor distribution, assembly roster, assembly stats).
 
-The endpoint layer caches the payload in Redis keyed by ``sha256(sorted ids)``
+The endpoint layer caches the payload in the default cache (Postgres
+DatabaseCache) keyed by ``sha256(sorted ids)``
 so reloading the report page is cheap. Nothing is persisted to the DB.
 
 Per the v2 schema, the operational unit is ``IntegratedBgc`` and per-iBGC
@@ -20,6 +21,9 @@ import logging
 from collections import defaultdict
 from datetime import timedelta
 
+from django.db import connection
+from django.utils import timezone
+
 from discovery.models import (
     DashboardAssembly,
     DashboardContig,
@@ -27,12 +31,11 @@ from discovery.models import (
     SourceBgcPrediction,
 )
 from discovery.services.architecture import _interpro_url, _signature_url
-from django.db import connection
-from django.utils import timezone
+from discovery.services.sql import IBGC_DOMAIN_HIT_JOIN
 
 log = logging.getLogger(__name__)
 
-REPORT_TTL_SECONDS = 86_400  # 24h Redis TTL
+REPORT_TTL_SECONDS = 86_400  # 24h cache TTL
 MAX_SHORTLIST = 1000
 
 # Tier thresholds for the Domain Composition stacked-bar.
@@ -75,25 +78,50 @@ def _fetch_domain_rows_for_ibgcs(ibgc_ids: list[int]) -> list[tuple]:
     """
     if not ibgc_ids:
         return []
-    sql = """
+    sql = f"""
         SELECT i.id              AS ibgc_id,
-               cd.domain_acc     AS domain_acc,
-               cd.domain_name    AS domain_name,
-               cd.domain_description AS domain_description,
-               cd.go_slim        AS go_slim,
-               cd.interpro_entry_acc AS interpro_entry_acc,
-               cd.interpro_entry_description AS interpro_entry_description,
-               cd.ref_db         AS ref_db
-        FROM discovery_domain_hit cd
-        JOIN discovery_cds cc ON cc.id = cd.cds_id
-        JOIN discovery_ibgc i
-          ON i.contig_id = cc.contig_id
-         AND i.bgc_range && cc.cds_range
+               d.domain_acc      AS domain_acc,
+               d.domain_name     AS domain_name,
+               d.domain_description AS domain_description,
+               d.go_slim         AS go_slim,
+               d.interpro_entry_acc AS interpro_entry_acc,
+               d.interpro_entry_description AS interpro_entry_description,
+               d.ref_db          AS ref_db
+        {IBGC_DOMAIN_HIT_JOIN}
         WHERE i.id = ANY(%s::bigint[])
     """
     with connection.cursor() as cur:
         cur.execute(sql, [list(ibgc_ids)])
         return cur.fetchall()
+
+
+def _slim_terms(value) -> list[str]:
+    """Normalise a ``ContigDomain.go_slim`` cell to a clean list of term names.
+
+    The column is a JSONField list (already sorted/deduped by
+    ``go_slim_for_terms``), but depending on the read path it can arrive as
+    a real list, as a JSON-encoded string (a double-encoded jsonb cell decoded
+    to ``'["…"]'`` / ``'[]'``) or as a plain string.
+    """
+    if isinstance(value, list):
+        return [str(t) for t in value if t]
+    if isinstance(value, str):
+        s = value.strip()
+        if s.startswith("["):
+            try:
+                parsed = json.loads(s)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                return [str(t) for t in parsed if t]
+        return [s] if s else []
+    return []
+
+
+def _slim_str(value) -> str:
+    """First GO-slim term of a cell (the heatmap keys each column by one string)."""
+    terms = _slim_terms(value)
+    return terms[0] if terms else ""
 
 
 def build_report_payload(
@@ -105,8 +133,8 @@ def build_report_payload(
     """Assemble the complete report payload for a shortlist of iBGC ids.
 
     ``extra_ibgc_rows`` are already-shaped asset roster rows (from
-    ``asset:{token}:ibgcs`` in Redis); ``extra_domain_rows`` is the asset's
-    flat per-iBGC-deduped domain-hit list (from
+    ``asset:{token}:ibgcs`` in the default cache); ``extra_domain_rows`` is
+    the asset's flat per-iBGC-deduped domain-hit list (from
     ``asset:{token}:domain_hits``).
 
     Returns a JSON-serialisable dict matching the ``ReportPayload`` schema
@@ -132,7 +160,7 @@ def build_report_payload(
     if n_ibgcs == 0:
         return _empty_payload(now, expires_at)
 
-    # ── Source predictions grouped by iBGC (single sweep) ──────────────────
+    # Source predictions grouped by iBGC (single sweep).
     members = list(
         SourceBgcPrediction.objects.filter(
             integrated_bgc_id__in=db_ibgc_ids
@@ -142,7 +170,58 @@ def build_report_payload(
     for m in members:
         members_by_ibgc[m.integrated_bgc_id].append(m)
 
-    # ── iBGC rows + parent-assembly collection ─────────────────────────────
+    ibgc_rows, assembly_ids = _ibgc_rows(ibgcs, members_by_ibgc, tax_lookup)
+    domain_to_ibgcs, domain_meta = _domain_lookups(db_ibgc_ids, extra_domain_rows)
+    domain_composition, domain_goslim_matrix, domains_long = _domain_composition(
+        domain_to_ibgcs, domain_meta, n_ibgcs
+    )
+    gcf_distribution, gcf_sunburst = _gcf_block(ibgcs, extra_ibgc_rows, n_ibgcs)
+    score_distributions, completeness_bar = _scores_block(
+        ibgcs, extra_ibgc_rows, db_ibgc_ids, n_ibgcs
+    )
+    panels = _category_panels(ibgcs, extra_ibgc_rows, members_by_ibgc)
+    assembly_rows, assembly_stats = _assembly_block(assembly_ids, ibgc_rows, tax_lookup)
+    taxonomy_sunburst, biome_sunburst = _taxonomy_block(
+        ibgcs, ibgc_rows, extra_ibgc_rows
+    )
+
+    if extra_ibgc_rows:
+        # Asset roster rows may predate the start/end/class columns; backfill
+        # the keys so every iBGC row (DB + asset) has a uniform shape for the
+        # table, TSV, and analyst JSON.
+        for r in extra_ibgc_rows:
+            r.setdefault("bgc_class", "")
+            r.setdefault("start", None)
+            r.setdefault("end", None)
+        ibgc_rows = list(extra_ibgc_rows) + ibgc_rows
+
+    return {
+        "generated_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "n_ibgcs": n_ibgcs,
+        "n_assemblies": len(assembly_rows),
+        "ibgc_rows": ibgc_rows,
+        "domain_composition": domain_composition,
+        "gcf_distribution": gcf_distribution,
+        "gcf_sunburst": gcf_sunburst,
+        "score_distributions": score_distributions,
+        "completeness_bar": completeness_bar,
+        **panels,
+        "assembly_rows": assembly_rows,
+        "assembly_stats": assembly_stats,
+        "taxonomy_sunburst": taxonomy_sunburst,
+        "biome_sunburst": biome_sunburst,
+        "domain_goslim_matrix": domain_goslim_matrix,
+        "_domains_long": domains_long,
+    }
+
+
+def _ibgc_rows(
+    ibgcs: list[IntegratedBgc],
+    members_by_ibgc: dict[int, list[SourceBgcPrediction]],
+    tax_lookup: dict,
+) -> tuple[list[dict], set[int]]:
+    """Per-iBGC report rows plus the set of parent-assembly ids they reference."""
     assembly_ids: set[int] = set()
     ibgc_rows: list[dict] = []
     for ibgc in ibgcs:
@@ -179,9 +258,7 @@ def build_report_payload(
                 "parent_assembly_id": first_asm.id if first_asm else None,
                 "organism_name": first_asm.organism_name if first_asm else None,
                 "collection": (
-                    first_asm.source.name
-                    if first_asm and first_asm.source_id
-                    else None
+                    first_asm.source.name if first_asm and first_asm.source_id else None
                 ),
                 "biome_path": first_asm.biome_path if first_asm else "",
                 "taxonomy_phylum": _taxonomy_phylum(
@@ -193,41 +270,20 @@ def build_report_payload(
                 "contig_accession": contig.accession if contig else None,
             }
         )
+    return ibgc_rows, assembly_ids
 
-    # ── Domain composition (core / variable / rare per acc) ───────────────
+
+def _domain_lookups(
+    db_ibgc_ids: list[int], extra_domain_rows: list[dict]
+) -> tuple[dict[str, set[int]], dict[str, dict[str, str]]]:
+    """``{acc: iBGC ids}`` plus, per acc, the first non-empty name / desc / slim / IPR / ref_db seen."""
     domain_to_ibgcs: dict[str, set[int]] = defaultdict(set)
-    domain_name_lookup: dict[str, str] = {}
-    domain_desc_lookup: dict[str, str] = {}
-    domain_goslim_lookup: dict[str, str] = {}
-    domain_ipr_acc_lookup: dict[str, str] = {}
-    domain_ipr_desc_lookup: dict[str, str] = {}
-    domain_refdb_lookup: dict[str, str] = {}
+    meta: dict[str, dict[str, str]] = defaultdict(dict)
 
-    # ContigDomain.go_slim is a JSONField list of slim term names (already
-    # sorted/deduped by go_slim_for_terms). The heatmap keys each column by a
-    # single string, so we collapse to the first term. Be defensive about the
-    # raw value: depending on the read path it can arrive as a real list, as a
-    # JSON-encoded string (e.g. a double-encoded jsonb cell decoded by psycopg
-    # to ``'["…"]'`` / ``'[]'``), or as a plain string. Normalise all of them
-    # to a clean list so the column label is a term, never list syntax.
-    def _slim_terms(value) -> list[str]:
-        if isinstance(value, list):
-            return [str(t) for t in value if t]
-        if isinstance(value, str):
-            s = value.strip()
-            if s.startswith("["):
-                try:
-                    parsed = json.loads(s)
-                except json.JSONDecodeError:
-                    parsed = None
-                if isinstance(parsed, list):
-                    return [str(t) for t in parsed if t]
-            return [s] if s else []
-        return []
-
-    def _slim_str(value) -> str:
-        terms = _slim_terms(value)
-        return terms[0] if terms else ""
+    def _note(acc: str, **fields: str) -> None:
+        for key, value in fields.items():
+            if value and key not in meta[acc]:
+                meta[acc][key] = value
 
     for (
         nid,
@@ -242,46 +298,40 @@ def build_report_payload(
         if not acc:
             continue
         domain_to_ibgcs[acc].add(int(nid))
-        if name and acc not in domain_name_lookup:
-            domain_name_lookup[acc] = name
-        if desc and acc not in domain_desc_lookup:
-            domain_desc_lookup[acc] = desc
-        slim_str = _slim_str(slim)
-        if slim_str and acc not in domain_goslim_lookup:
-            domain_goslim_lookup[acc] = slim_str
-        if ipr_acc and acc not in domain_ipr_acc_lookup:
-            domain_ipr_acc_lookup[acc] = ipr_acc
-        if ipr_desc and acc not in domain_ipr_desc_lookup:
-            domain_ipr_desc_lookup[acc] = ipr_desc
-        if ref_db and acc not in domain_refdb_lookup:
-            domain_refdb_lookup[acc] = ref_db
+        _note(
+            acc,
+            name=name,
+            desc=desc,
+            slim=_slim_str(slim),
+            ipr_acc=ipr_acc,
+            ipr_desc=ipr_desc,
+            ref_db=ref_db,
+        )
 
     # Fold in asset domain hits (negative iBGC ids).
     for r in extra_domain_rows:
         acc = r.get("domain_acc")
         if not acc:
             continue
-        nid = int(r["ibgc_id"])
-        domain_to_ibgcs[acc].add(nid)
-        name = r.get("domain_name") or ""
-        if name and acc not in domain_name_lookup:
-            domain_name_lookup[acc] = name
-        desc = r.get("domain_description") or ""
-        if desc and acc not in domain_desc_lookup:
-            domain_desc_lookup[acc] = desc
-        slim = _slim_str(r.get("go_slim"))
-        if slim and acc not in domain_goslim_lookup:
-            domain_goslim_lookup[acc] = slim
-        ipr_acc = r.get("interpro_entry_acc") or ""
-        if ipr_acc and acc not in domain_ipr_acc_lookup:
-            domain_ipr_acc_lookup[acc] = ipr_acc
-        ipr_desc = r.get("interpro_entry_description") or ""
-        if ipr_desc and acc not in domain_ipr_desc_lookup:
-            domain_ipr_desc_lookup[acc] = ipr_desc
-        ref_db = r.get("ref_db") or ""
-        if ref_db and acc not in domain_refdb_lookup:
-            domain_refdb_lookup[acc] = ref_db
+        domain_to_ibgcs[acc].add(int(r["ibgc_id"]))
+        _note(
+            acc,
+            name=r.get("domain_name") or "",
+            desc=r.get("domain_description") or "",
+            slim=_slim_str(r.get("go_slim")),
+            ipr_acc=r.get("interpro_entry_acc") or "",
+            ipr_desc=r.get("interpro_entry_description") or "",
+            ref_db=r.get("ref_db") or "",
+        )
+    return domain_to_ibgcs, meta
 
+
+def _domain_composition(
+    domain_to_ibgcs: dict[str, set[int]],
+    meta: dict[str, dict[str, str]],
+    n_ibgcs: int,
+) -> tuple[dict, dict, list[dict]]:
+    """Core / variable / rare tiers per acc, the GO-slim × tier matrix and the long table."""
     composition_rows: list[dict] = []
     core_count = variable_count = rare_count = 0
     matrix_buckets: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -301,18 +351,19 @@ def build_report_payload(
         else:
             tier = "rare"
             rare_count += 1
-        name = domain_name_lookup.get(acc, "")
-        desc = domain_desc_lookup.get(acc, "")
-        slim = domain_goslim_lookup.get(acc, "") or NO_GOSLIM
-        ipr_acc = domain_ipr_acc_lookup.get(acc, "")
-        ipr_desc = domain_ipr_desc_lookup.get(acc, "")
+        m = meta.get(acc, {})
+        name = m.get("name", "")
+        desc = m.get("desc", "")
+        slim = m.get("slim", "") or NO_GOSLIM
+        ipr_acc = m.get("ipr_acc", "")
+        ipr_desc = m.get("ipr_desc", "")
         # InterPro entry page when integrated, else the signature's member-DB
         # page (via ref_db). Empty when neither resolves — caller renders the
         # accession unlinked.
         domain_url = (
             _interpro_url(ipr_acc)
             if ipr_acc
-            else _signature_url(domain_refdb_lookup.get(acc, ""), acc)
+            else _signature_url(m.get("ref_db", ""), acc)
         )
         composition_rows.append(
             {
@@ -360,7 +411,7 @@ def build_report_payload(
         "rows": composition_rows,
     }
 
-    # ── GO slim × tier matrix (for the Domain composition heatmap) ────────
+    # GO slim × tier matrix (for the Domain composition heatmap).
     category_totals: dict[str, int] = defaultdict(int)
     for (slim, _tier), domains in matrix_buckets.items():
         category_totals[slim] += len(domains)
@@ -387,17 +438,22 @@ def build_report_payload(
         "tiers": tiers,
         "cells": cells,
     }
+    return domain_composition, domain_goslim_matrix, domains_long
 
-    # ── GCF distribution ──────────────────────────────────────────────────
+
+def _gcf_block(
+    ibgcs: list[IntegratedBgc], extra_ibgc_rows: list[dict], n_ibgcs: int
+) -> tuple[list[dict], list]:
+    """GCF distribution rows and the iBGC-derived GCF sunburst."""
+    from discovery.services.stats import build_sunburst_from_paths
+
     gcf_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
         gcf_counts[ibgc.gene_cluster_family or "(unclassified)"] += 1
     for r in extra_ibgc_rows:
         gcf_counts[r.get("classification_path") or "(unclassified)"] += 1
-    # iBGC-derived GCF sunburst over the full classification path (e.g.
-    # 42 → 42.7 → 42.7.3). Unclassified iBGCs (empty path) are omitted.
-    from discovery.services.stats import build_sunburst_from_paths
-
+    # Sunburst over the full classification path (e.g. 42 → 42.7 → 42.7.3).
+    # Unclassified iBGCs (empty path) are omitted.
     gcf_paths = [ibgc.gene_cluster_family for ibgc in ibgcs if ibgc.gene_cluster_family]
     gcf_paths += [
         r.get("classification_path")
@@ -416,8 +472,16 @@ def build_report_payload(
         ],
         key=lambda r: (-r["ibgc_count"], r["classification_path"]),
     )
+    return gcf_distribution, gcf_sunburst
 
-    # ── Score distributions (capped sample for histogram rendering) ───────
+
+def _scores_block(
+    ibgcs: list[IntegratedBgc],
+    extra_ibgc_rows: list[dict],
+    db_ibgc_ids: list[int],
+    n_ibgcs: int,
+) -> tuple[list[dict], list[dict]]:
+    """Capped score samples for the histograms and the complete-vs-partial bar."""
     novelty_vals = [
         float(n.novelty_score) for n in ibgcs if n.novelty_score is not None
     ]
@@ -435,7 +499,6 @@ def build_report_payload(
         {"label": "Domain Novelty", "values": dn_vals},
     ]
 
-    # ── Completeness bar (complete vs partial) ────────────────────────────
     # An iBGC is "complete" iff none of its source predictions are partial
     # (contig-edge truncation) — the same definition compute_bgc_stats uses.
     if db_ibgc_ids:
@@ -457,8 +520,15 @@ def build_report_payload(
         {"name": "Complete", "count": complete_n},
         {"name": "Partial", "count": partial_n},
     ]
+    return score_distributions, completeness_bar
 
-    # ── BGC class distribution ────────────────────────────────────────────
+
+def _category_panels(
+    ibgcs: list[IntegratedBgc],
+    extra_ibgc_rows: list[dict],
+    members_by_ibgc: dict[int, list[SourceBgcPrediction]],
+) -> dict:
+    """BGC-class pie, length histogram, predictor and source distributions."""
     # The iBGC class is the normalised product class on ``IntegratedBgc``
     # (Polyketide / NRP / RiPP / … / Hybrid), not the GCF lineage segment.
     class_counts: dict[str, int] = defaultdict(int)
@@ -473,7 +543,6 @@ def build_report_payload(
         key=lambda r: (-r["count"], r["name"]),
     )
 
-    # ── Length histogram ──────────────────────────────────────────────────
     bucket_counts = [0] * len(LENGTH_BUCKETS)
     for ibgc in ibgcs:
         kb = ibgc.size_kb
@@ -492,7 +561,6 @@ def build_report_payload(
         for (_, _, lbl), c in zip(LENGTH_BUCKETS, bucket_counts)
     ]
 
-    # ── Predictor distribution ────────────────────────────────────────────
     predictor_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
         for tool in ibgc.source_tools or []:
@@ -505,7 +573,7 @@ def build_report_payload(
         key=lambda r: (-r["count"], r["name"]),
     )
 
-    # ── Source distribution (iBGCs per source collection) ──────────────────
+    # iBGCs per source collection.
     source_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
         names: set[str] = set()
@@ -521,8 +589,21 @@ def build_report_payload(
         [{"name": k, "count": v} for k, v in source_counts.items()],
         key=lambda r: (-r["count"], r["name"]),
     )
+    return {
+        "bgc_class_pie": bgc_class_pie,
+        "length_histogram": length_histogram,
+        "predictor_distribution": predictor_distribution,
+        "source_distribution": source_distribution,
+    }
 
-    # ── Assembly roster + stats ───────────────────────────────────────────
+
+def _assembly_block(
+    assembly_ids: set[int], ibgc_rows: list[dict], tax_lookup: dict
+) -> tuple[list[dict], dict]:
+    """Assembly roster rows and ``compute_assembly_stats`` for the shortlist."""
+    from discovery.services.stats import compute_assembly_stats
+    from discovery.services.taxonomy import ranked_labels_by_taxon
+
     assemblies = list(
         DashboardAssembly.objects.filter(id__in=assembly_ids).select_related("source")
     )
@@ -565,8 +646,6 @@ def build_report_payload(
             }
         )
 
-    from discovery.services.stats import compute_assembly_stats
-
     try:
         assembly_stats = compute_assembly_stats(
             DashboardAssembly.objects.filter(id__in=assembly_ids)
@@ -577,53 +656,27 @@ def build_report_payload(
             "returning empty assembly_stats"
         )
         assembly_stats = {}
+    return assembly_rows, assembly_stats
 
-    # ── iBGC-derived taxonomy sunburst ─────────────────────────────────────
-    from discovery.services.stats import build_taxonomy_sunburst
+
+def _taxonomy_block(
+    ibgcs: list[IntegratedBgc], ibgc_rows: list[dict], extra_ibgc_rows: list[dict]
+) -> tuple[list, list]:
+    """iBGC-derived taxonomy and biome sunbursts (one count per iBGC)."""
+    from discovery.services.stats import (
+        build_sunburst_from_paths,
+        build_taxonomy_sunburst,
+    )
 
     taxonomy_sunburst = build_taxonomy_sunburst(
         (n.contig.taxonomy_path, n.contig.taxon_id, 1)
         for n in ibgcs
         if n.contig and n.contig.taxonomy_path
     )
-
-    # ── iBGC-derived biome sunburst (one count per iBGC) ───────────────────
     biome_paths = [r.get("biome_path") for r in ibgc_rows if r.get("biome_path")]
     biome_paths += [r.get("biome_path") for r in extra_ibgc_rows if r.get("biome_path")]
     biome_sunburst = build_sunburst_from_paths(biome_paths)
-
-    if extra_ibgc_rows:
-        # Asset roster rows may predate the start/end/class columns; backfill
-        # the keys so every iBGC row (DB + asset) has a uniform shape for the
-        # table, TSV, and analyst JSON.
-        for r in extra_ibgc_rows:
-            r.setdefault("bgc_class", "")
-            r.setdefault("start", None)
-            r.setdefault("end", None)
-        ibgc_rows = list(extra_ibgc_rows) + ibgc_rows
-
-    return {
-        "generated_at": now.isoformat(),
-        "expires_at": expires_at.isoformat(),
-        "n_ibgcs": n_ibgcs,
-        "n_assemblies": len(assembly_rows),
-        "ibgc_rows": ibgc_rows,
-        "domain_composition": domain_composition,
-        "gcf_distribution": gcf_distribution,
-        "gcf_sunburst": gcf_sunburst,
-        "score_distributions": score_distributions,
-        "completeness_bar": completeness_bar,
-        "bgc_class_pie": bgc_class_pie,
-        "length_histogram": length_histogram,
-        "predictor_distribution": predictor_distribution,
-        "source_distribution": source_distribution,
-        "assembly_rows": assembly_rows,
-        "assembly_stats": assembly_stats,
-        "taxonomy_sunburst": taxonomy_sunburst,
-        "biome_sunburst": biome_sunburst,
-        "domain_goslim_matrix": domain_goslim_matrix,
-        "_domains_long": domains_long,
-    }
+    return taxonomy_sunburst, biome_sunburst
 
 
 # v2: added domain_composition tiers, domain_goslim_matrix, gcf/biome

@@ -1,11 +1,6 @@
-# Heavy science packages shared by the worker image.
-# ESM / torch / transformers were removed when protein-sequence search moved
-# from cosine-on-embeddings to phmmer against an on-disk reference DB
-# (see discovery.services.protein_search).
+# Science packages that only the db_worker image needs (clustering imports,
+# protein search index builds). Included by requirements-worker.txt.
 pyhmmer==0.11.1
-scikit-learn>=1.6
-hdbscan>=0.8.38
-matplotlib>=3.8
 igraph>=0.9
 leidenalg>=0.10
 pandas>=2.0
