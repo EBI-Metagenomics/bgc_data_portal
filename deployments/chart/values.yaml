@@ -24,7 +24,9 @@ secretName: bgc-data-portal-secret
 config:
   enabled: true
   name: app-config
-  data: {}
+  data:
+    # One reverse proxy (the ingress) in front of Django; see settings.py.
+    NINJA_NUM_PROXIES: "1"
 
 postgres:
   enabled: true

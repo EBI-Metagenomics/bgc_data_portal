@@ -58,8 +58,8 @@ kubectl create secret generic bgc-data-portal-secret \
   --from-env-file=my-secrets.env -n bgc-local      # see the key list below
 ```
 
-Keys: `DJANGO_SECRET_KEY ADMIN_API_TOKEN PROJECT_USER_TOKEN POSTGRES_USER
-POSTGRES_PASSWORD POSTGRES_DB DATABASE_URL` (with `DATABASE_URL` pointing at the
+Keys: `DJANGO_SECRET_KEY POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
+DATABASE_URL` (with `DATABASE_URL` pointing at the
 in-cluster `postgres` service — it also backs the cache and the django-tasks-db
 queue; no Redis/RabbitMQ).
 

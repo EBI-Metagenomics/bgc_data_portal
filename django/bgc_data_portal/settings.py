@@ -19,8 +19,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Core settings
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN")
-PROJECT_USER_TOKEN = os.getenv("PROJECT_USER_TOKEN")
 DEBUG = os.getenv("DJANGO_DEBUG", default="False").lower() == "true"
 
 IS_COLLECTSTATIC = "collectstatic" in sys.argv
@@ -52,36 +50,46 @@ API_FIRST_PARTY_GATE_ENABLED = (
 
 # Per-client-IP rate limiting (see discovery/throttling.py). Rates are
 # "<count>/<period>" with period one of s|m|h|d; tune per deployment via env
-# without code changes. Counters live in the Redis cache (shared across
-# workers/pods). Disabled automatically in the test suite.
+# without code changes. Counters live in the default cache (Postgres
+# DatabaseCache, shared across workers/pods). Disabled in the test suite.
 API_THROTTLE_ENABLED = os.getenv("API_THROTTLE_ENABLED", "true").lower() == "true"
 API_THROTTLE_RATES = {
     "default": os.getenv("API_THROTTLE_DEFAULT", "300/m"),
     "search": os.getenv("API_THROTTLE_SEARCH", "30/m"),
     "upload": os.getenv("API_THROTTLE_UPLOAD", "20/h"),
 }
-# Number of trusted reverse proxies in front of Django (e.g. k8s ingress, LB).
-# Lets the throttle read the real client IP from X-Forwarded-For instead of a
-# spoofable left-most value. Leave unset in local dev (no proxy); set to the
-# proxy count in prod. Consumed by Django-Ninja's throttle ident resolver.
+# Number of trusted reverse proxies in front of Django (k8s ingress, LB).
+# Django-Ninja's throttle keys on the client IP it derives from
+# X-Forwarded-For; without this count it uses the whole header, which a client
+# can spoof to get a fresh throttle bucket per request. The chart sets it to 1
+# (the ingress); leave it unset only in local dev (no proxy).
 _ninja_num_proxies = os.getenv("NINJA_NUM_PROXIES")
 if _ninja_num_proxies:
     NINJA_NUM_PROXIES = int(_ninja_num_proxies)
+elif not DEBUG and not IS_COLLECTSTATIC and "pytest" not in sys.modules:
+    raise ImproperlyConfigured(
+        "Set NINJA_NUM_PROXIES to the number of reverse proxies in front of "
+        "Django (1 behind the k8s ingress); the per-IP throttle depends on it"
+    )
 
 # Allow overriding the externally mounted base path (used for URL reversing, static paths, etc.)
 # Default remains the production prefix to keep existing behaviour, but can be overridden in dev.
 FORCE_SCRIPT_NAME = os.getenv("DJANGO_FORCE_SCRIPT_NAME", "")
 
+# Django always sits behind the k8s ingress (or runserver in dev), so trust the
+# proxy's Host and X-Forwarded-Proto. Do not expose gunicorn directly.
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+if not DEBUG:
+    # Only the Django admin uses session/CSRF cookies; mark them Secure.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 STATIC_URL = f"{FORCE_SCRIPT_NAME}/static/"
 
 # Internal IPs
-INTERNAL_IPS = [
-    "127.0.0.1",
-    "0.0.0.0",
-]
+INTERNAL_IPS = ["127.0.0.1"]
 
 
 def _show_debug_toolbar(request):

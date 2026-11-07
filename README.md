@@ -80,7 +80,7 @@ kubectl create secret generic bgc-data-portal-secret \
 ```
 
 ```
-DJANGO_SECRET_KEY      ADMIN_API_TOKEN        PROJECT_USER_TOKEN
+DJANGO_SECRET_KEY
 POSTGRES_USER          POSTGRES_PASSWORD      POSTGRES_DB
 DATABASE_URL
 ```
@@ -216,11 +216,12 @@ The REST API is served under `/api/`, with interactive docs at **`/api/docs`**.
 Discovery endpoints live under `/api/discovery/` (iBGC search, clustering,
 reports, downloads).
 
-- **Async search** — search endpoints return `202` with a `task_id`; poll the
-  job-status endpoint for results (Celery-backed).
-- **Auth** — admin DB-operation endpoints require
-  `Authorization: Bearer <ADMIN_API_TOKEN>`; ingestion requires
-  `Authorization: Bearer <PROJECT_USER_TOKEN>`.
+- **Async search** — `POST /api/discovery/query/combined/` returns a
+  `task_id`; poll `/query/combined/status/{task_id}/scores/` for results
+  (django-tasks, run by `manage.py db_worker`).
+- **Auth** — there are no write endpoints. UI-only endpoints accept same-origin
+  browser traffic only (see `discovery/security.py`); the documented endpoints
+  at `/api/docs` are open and rate-limited per client IP.
 
 ---
 
