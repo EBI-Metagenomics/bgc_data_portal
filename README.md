@@ -219,10 +219,10 @@ npm run lint
 npm run build
 ```
 
-`VITE_BASE_PATH` is baked into the bundle as the asset prefix. Local builds and
-Skaffold use the default `/static/dashboard/`; it only matters for release
-images, where the Dockerfile sets the production ingress prefix
-(`/finn-srv/mgnify-bgcs/static/dashboard/`).
+Asset URLs in the bundle are relative (Vite `base: "./"`), so one build serves
+every deployment whether or not an ingress prefix (`DJANGO_FORCE_SCRIPT_NAME`)
+is in front of it; the SPA reads the prefix at runtime from the page's
+`<meta name="base-path">` for API and router paths.
 
 ### Seed a dev database
 

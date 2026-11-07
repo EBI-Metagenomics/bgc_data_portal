@@ -101,9 +101,7 @@ def _show_debug_toolbar(request):
     """
     if not DEBUG or "pytest" in sys.modules:
         return False
-    if request.headers.get("X-No-Debug-Toolbar"):
-        return False
-    return True
+    return not request.headers.get("X-No-Debug-Toolbar")
 
 
 DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": _show_debug_toolbar}
