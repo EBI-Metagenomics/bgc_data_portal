@@ -43,6 +43,8 @@ postgres:
   volumeMounts: []
   readinessProbe: {}
   livenessProbe: {}
+  containerSecurityContext: {}
+  resources: {}
 
 django:
   enabled: true
@@ -51,6 +53,7 @@ django:
   replicas: 1
   podSecurityContext: {}
   containerSecurityContext: {}
+  resources: {}
   includeSecret: true
   includeConfig: true
   workingDir: ""
@@ -60,12 +63,13 @@ django:
   volumes: []
   volumeMounts: []
   readinessProbe: {}
+  livenessProbe: {}
   service:
     type: ClusterIP
     port: 80
     targetPort: 8000
 
-# Background-task worker (django-tasks db_worker). Was the Celery worker.
+# Background-task worker (django-tasks db_worker).
 worker:
   enabled: true
   image: ""
@@ -73,6 +77,7 @@ worker:
   replicas: 1
   podSecurityContext: {}
   containerSecurityContext: {}
+  resources: {}
   includeSecret: true
   includeConfig: true
   workingDir: ""
@@ -87,6 +92,13 @@ staticNginx:
   image: nginx:alpine
   replicas: 1
   staticClaimName: ""
+  containerSecurityContext: {}
+  resources: {}
+
+# Restricts Postgres ingress to the django/worker pods. Needs a CNI that
+# enforces NetworkPolicy (k3d's default does not).
+networkPolicy:
+  enabled: false
 
 ingress:
   enabled: false

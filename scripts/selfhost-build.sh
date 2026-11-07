@@ -64,7 +64,7 @@ echo ">> [5/5] helm upgrade --install (canonical chart, locally-built images)"
 # does not apply here). Override with HELM=/path/to/helm if needed.
 HELM="${HELM:-helm}"
 "$HELM" --kube-context "$KCTX" upgrade --install bgc "$CHART" \
-  -f "$CHART/values-laptop.yaml" \
+  -f "$CHART/values-laptop.yaml" -f "$CHART/values-selfhost.yaml" \
   --set django.image="$DJANGO_IMG" --set django.imagePullPolicy=IfNotPresent \
   --set worker.image="$WORKER_IMG" --set worker.imagePullPolicy=IfNotPresent \
   --namespace "$NS"

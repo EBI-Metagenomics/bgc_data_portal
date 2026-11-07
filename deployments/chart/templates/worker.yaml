@@ -31,7 +31,20 @@ spec:
       {{- end }}
       {{- with .Values.worker.initContainers }}
       initContainers:
-        {{- toYaml . | nindent 8 }}
+        {{- /* init containers run the worker image (follows worker.image). */}}
+        {{- range . }}
+        - name: {{ .name }}
+          image: {{ $.Values.worker.image }}
+          {{- with .workingDir }}
+          workingDir: {{ . }}
+          {{- end }}
+          command:
+            {{- toYaml .command | nindent 12 }}
+          {{- with .envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
       {{- end }}
       containers:
         - name: worker
@@ -50,6 +63,10 @@ spec:
             {{- toYaml .Values.worker.command | nindent 12 }}
           {{- with .Values.worker.env }}
           env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.worker.resources }}
+          resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           envFrom:

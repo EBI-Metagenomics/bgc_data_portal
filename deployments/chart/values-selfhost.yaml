@@ -1,21 +1,74 @@
 # =============================================================================
-# Self-host overlay — use the PUBLISHED public images instead of locally-built
-# ones. Layer it on top of values-laptop.yaml so no git checkout is needed:
+# Self-host overlay: published release images, production settings.
+# Layer it on top of values-laptop.yaml (volumes, PVCs, NodePort, init
+# containers) so no git checkout is needed:
 #
 #   helm pull oci://quay.io/microbiome-informatics/bgc-data-portal-chart --untar
-#   helm install bgc ./bgc-data-portal \
-#     -f ./bgc-data-portal/values-laptop.yaml \
-#     -f ./bgc-data-portal/values-selfhost.yaml \
+#   helm install bgc ./bgc-data-portal-chart \
+#     -f ./bgc-data-portal-chart/values-laptop.yaml \
+#     -f ./bgc-data-portal-chart/values-selfhost.yaml \
 #     --namespace bgc-local --create-namespace
 #
-# Only the images change; init-container images follow django.image automatically
-# (see the chart template), so this is all that's needed.
+# Images are pinned to a release tag (never :latest). Init containers follow
+# django.image automatically. DEBUG is off, so set ALLOWED_HOSTS to the host
+# names you serve; NINJA_NUM_PROXIES=0 because NodePort exposes gunicorn
+# directly (set 1 if you put an ingress or reverse proxy in front).
 # =============================================================================
 
+config:
+  data:
+    DJANGO_DEBUG: "False"
+    ALLOWED_HOSTS: "localhost,127.0.0.1"
+    NINJA_NUM_PROXIES: "0"
+    LOG_LEVEL: "INFO"
+    MATOMO_URL: ""
+    MATOMO_SITE_ID: ""
+
 django:
-  image: quay.io/microbiome-informatics/bgc-data-portal-website:latest
+  image: quay.io/microbiome-informatics/bgc-data-portal-website:3.11.1
   imagePullPolicy: IfNotPresent
+  command:
+    - sh
+    - -c
+    - |
+      python manage.py collectstatic --noinput && \
+      gunicorn bgc_data_portal.wsgi:application -b 0.0.0.0:8000 --workers 2
+  podSecurityContext:
+    runAsUser: 7123
+    runAsGroup: 1347
+    fsGroup: 1347
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 2Gi }
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: 8000
+    initialDelaySeconds: 60
+    periodSeconds: 30
 
 worker:
-  image: quay.io/microbiome-informatics/bgc-data-portal-website-worker:latest
+  image: quay.io/microbiome-informatics/bgc-data-portal-website-worker:3.11.1
   imagePullPolicy: IfNotPresent
+  podSecurityContext:
+    runAsUser: 7123
+    runAsGroup: 1347
+    fsGroup: 1347
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "4", memory: 8Gi }
+
+postgres:
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 4Gi }

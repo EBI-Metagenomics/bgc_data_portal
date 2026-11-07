@@ -20,6 +20,12 @@ ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 # vite.config.ts writes to ../static/dashboard, i.e. /src/static/dashboard
 RUN npm run build
 
+# ── User docs (Quarto website served at /docs/) ──────────────────────────────
+FROM ghcr.io/quarto-dev/quarto:1.8.25 AS docs
+WORKDIR /src/docs
+COPY docs/ ./
+RUN quarto render
+
 # ── Python base ──────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -37,6 +43,7 @@ COPY requirements-web.lock .
 RUN pip install -r requirements-web.lock
 COPY . .
 COPY --from=frontend /src/static/dashboard ./static/dashboard
+COPY --from=docs /src/docs/_site ./docs/_site
 # Pre-collect static files so the image serves them without a writable volume;
 # the chart may re-run collectstatic at start, which is idempotent.
 RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput
@@ -57,6 +64,7 @@ COPY requirements-web.lock requirements-dev.txt ./
 RUN pip install -r requirements-web.lock -r requirements-dev.txt
 COPY . .
 COPY --from=frontend /src/static/dashboard ./static/dashboard
+COPY --from=docs /src/docs/_site ./docs/_site
 EXPOSE 8000
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
