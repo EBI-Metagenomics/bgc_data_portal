@@ -25,7 +25,7 @@ make selfhost                 # build prod images → import into k3d → helm i
 #  or:  scripts/selfhost-build.sh -h     (cluster/namespace/tag/secret options)
 ```
 
-It builds `django/Dockerfile` + `Dockerfile.worker`, imports them into a local
+It builds the `web` and `worker` targets of `django/Dockerfile`, imports them into a local
 k3d cluster, and installs this chart with `values-laptop.yaml` + the built-image
 names (init-container images follow `django.image`, so one override covers all).
 No second deployment definition — same chart as the cloud.

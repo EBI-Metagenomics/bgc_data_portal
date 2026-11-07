@@ -1,0 +1,93 @@
+name: CI
+
+# Lint, type-check, test and audit on every push/PR; release.yml also calls
+# this workflow so no image is pushed from a red tree.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python lint + tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-trixie
+        env:
+          POSTGRES_USER: portal
+          POSTGRES_PASSWORD: portal
+          POSTGRES_DB: portal_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U portal" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://portal:portal@localhost:5432/portal_test
+      DJANGO_SECRET_KEY: ci-only
+      ALLOWED_HOSTS: localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: django/requirements-*.lock
+      - name: Install (worker lock = web + science stack, plus dev tools)
+        run: pip install -r django/requirements-worker.lock -r django/requirements-dev.txt
+      - name: Lock files match the pinned requirements
+        run: make lock-check
+      - name: ruff
+        run: |
+          ruff check django
+          ruff format --check django
+      - name: pytest
+        run: pytest -q django/tests/unit django/tests/integration
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit --no-deps -r django/requirements-web.lock
+          pip-audit --no-deps -r django/requirements-worker.lock
+
+  frontend:
+    name: Frontend type-check + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: django/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: django/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  chart:
+    name: Helm lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint deployments/chart -f deployments/chart/values-laptop.yaml
+      - run: helm lint deployments/chart -f deployments/chart/values-selfhost.yaml
+
+  images:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build web and worker targets (no push)
+        run: |
+          docker build --target web    -t ci-web    django
+          docker build --target worker -t ci-worker django

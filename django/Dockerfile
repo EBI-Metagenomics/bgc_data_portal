@@ -1,48 +1,67 @@
-FROM python:3.12-slim
+# syntax=docker/dockerfile:1
+# One multi-stage build for every portal image. Targets:
+#   web         production web pod (gunicorn; the chart supplies the command)
+#   worker      production django-tasks worker (science stack from the worker lock)
+#   web-dev     web + dev/test tools, runserver with autoreload (Skaffold)
+#   worker-dev  worker + dev/test tools, db_worker --reload (Skaffold)
+# Build:  docker build --target web -t bgc-data-portal-website django
 
-RUN apt-get update && apt-get install -y \
-    gcc \
-    build-essential \
-    python3-dev \
-    libffi-dev \
-    libssl-dev \
-    make \
-    git \
-    libxrender1 \
-    libxext6 \
-    libsm6 \
-    curl \
-    unzip \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js 20 LTS for frontend build
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-WORKDIR /app
-COPY requirements-web.lock .
-RUN pip install --upgrade pip && pip install -r requirements-web.lock
-
-COPY . .
-
-# Build the React frontend (outputs to /app/static/dashboard/)
-# Vite needs the externally-mounted base path baked into the bundle so chunk
-# imports resolve through the production ingress prefix.
+# ── Frontend bundle (React + Vite) ───────────────────────────────────────────
+FROM node:20-slim AS frontend
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+# The base path is baked into the bundle so chunk imports resolve through the
+# ingress prefix. Release images keep the production prefix; local builds pass
+# --build-arg VITE_BASE_PATH=/static/dashboard/ (see skaffold.yaml).
 ARG VITE_BASE_PATH=/finn-srv/mgnify-bgcs/static/dashboard/
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
-WORKDIR /app/frontend
-RUN npm install && npm run build
+# vite.config.ts writes to ../static/dashboard, i.e. /src/static/dashboard
+RUN npm run build
+
+# ── Python base ──────────────────────────────────────────────────────────────
+FROM python:3.12-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc build-essential python3-dev libffi-dev libssl-dev git curl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
+# ── Production web ───────────────────────────────────────────────────────────
+FROM base AS web
+COPY requirements-web.lock .
+RUN pip install -r requirements-web.lock
+COPY . .
+COPY --from=frontend /src/static/dashboard ./static/dashboard
+# Pre-collect static files so the image serves them without a writable volume;
+# the chart may re-run collectstatic at start, which is idempotent.
+RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput
 EXPOSE 8000
-ENV PYTHONUNBUFFERED=0
-
-RUN python manage.py collectstatic --noinput || true
-
+# The pod runs as uid 7123 / gid 1347 (chart podSecurityContext); staticfiles
+# and data dirs must be writable by that group.
 RUN chgrp -R 1347 /app && chmod -R g+w /app
+
+# ── Production worker ────────────────────────────────────────────────────────
+FROM base AS worker
+COPY requirements-worker.lock .
+RUN pip install -r requirements-worker.lock
+COPY . .
+
+# ── Dev variants (Skaffold syncs source into /app) ───────────────────────────
+FROM base AS web-dev
+COPY requirements-web.lock requirements-dev.txt ./
+RUN pip install -r requirements-web.lock -r requirements-dev.txt
+COPY . .
+COPY --from=frontend /src/static/dashboard ./static/dashboard
+EXPOSE 8000
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+FROM base AS worker-dev
+COPY requirements-worker.lock requirements-dev.txt ./
+RUN pip install -r requirements-worker.lock -r requirements-dev.txt
+COPY . .
+CMD ["sh", "-c", "python manage.py createcachetable && python manage.py db_worker --queue-name default,scores"]

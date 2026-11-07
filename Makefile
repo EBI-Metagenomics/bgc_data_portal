@@ -2,7 +2,7 @@
         dev dev-clean dev-preflight deploy-local delete-local selfhost \
         test-unit test-integration test-e2e logs-django logs-worker shell db-shell \
         validate-secrets clear-cache seed-real-data reset-db e2e-seed \
-        build-protein-index update-protein-index clean-images tidy nuke lock
+        build-protein-index update-protein-index clean-images tidy nuke lock lock-check
 
 ENV_FILE := deployments/.env.local
 STAGED_FILES_DIR := ../../.SCRATCH/STAGED_FILES_SAMPLES
@@ -244,10 +244,15 @@ lock:
 	docker run --rm -v "$(CURDIR)/django:/w" -w /w python:$(PY_VERSION)-slim sh -c '\
 	  apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1 && \
 	  pip install -q uv && \
-	  for f in web worker dev; do \
+	  for f in web worker; do \
 	    echo "  - requirements-$$f.lock" && \
 	    uv pip compile requirements-$$f.txt -o requirements-$$f.lock \
 	      --python-platform $(PY_PLATFORM) --python-version $(PY_VERSION) \
 	      --emit-index-url --no-header --quiet; \
 	  done'
 	@echo "Done. Review the diff and commit the updated lockfiles."
+
+# Every exact pin in requirements-*.txt must appear unchanged in its lock;
+# catches a txt edit committed without `make lock` (CI runs this).
+lock-check:
+	python3 scripts/lock_check.py

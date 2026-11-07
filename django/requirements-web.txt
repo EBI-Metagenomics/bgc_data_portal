@@ -6,7 +6,7 @@ Django==5.2.17
 # Background tasks: django-tasks API + the Postgres-backed db backend, run by
 # `manage.py db_worker`. django-tasks-db is GitHub-only (not on PyPI).
 django-tasks==0.12.0
-django-tasks-db @ git+https://github.com/RealOrangeOne/django-tasks-db@0.12.0
+django-tasks-db @ git+https://github.com/RealOrangeOne/django-tasks-db@29f923a58aadf8222a77d3e7d67cafd28b3a3f84
 gunicorn==23.0.0
 psycopg[binary]==3.1.18
 dj-database-url==2.1.0

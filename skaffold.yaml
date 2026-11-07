@@ -9,7 +9,10 @@ build:
     - image: bgc-data-portal-django
       context: django
       docker:
-        dockerfile: Dockerfile.dev
+        dockerfile: Dockerfile
+        target: web-dev
+        buildArgs:
+          VITE_BASE_PATH: /static/dashboard/
       platforms:
         - linux/arm64   # M3 Pro / Apple Silicon; change to linux/amd64 for Intel/CI
       sync:
@@ -25,7 +28,8 @@ build:
     - image: bgc-data-portal-django-worker
       context: django
       docker:
-        dockerfile: Dockerfile.worker.dev
+        dockerfile: Dockerfile
+        target: worker-dev
       platforms:
         - linux/arm64   # M3 Pro / Apple Silicon; change to linux/amd64 for Intel/CI
       sync:
