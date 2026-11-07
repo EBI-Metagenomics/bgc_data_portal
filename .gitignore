@@ -63,5 +63,5 @@ node_modules/
 django/static/dashboard/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
-CLAUDE.md
+workspace.patch
 bgc_data_portal.egg-info
