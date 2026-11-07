@@ -16,10 +16,11 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
+from discovery.services.clustering.membership import DEFAULT_DOMAIN_SOURCES
+
 log = logging.getLogger(__name__)
 
 
-DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM", "TIGRFAM")
 DEFAULT_SCORE_WEIGHTS: tuple[float, float] = (0.5, 0.5)
 DEFAULT_RESOLUTIONS: tuple[float, ...] = (0.03, 0.08, 0.15, 0.25)
 KNN_K_FLOOR = 5
@@ -66,6 +67,7 @@ def auto_knn_k(n: int) -> int:
 
 
 def _safe_version(pkg: str) -> str:
+    """Installed version of ``pkg``, or ``""`` when it is not installed."""
     try:
         return _pkg_version(pkg)
     except PackageNotFoundError:
@@ -244,9 +246,8 @@ def _cache_weights(run_weights) -> dict:
 def rebuild_scoring_cache_from_db(run) -> Path | None:
     """Rebuild and persist the on-demand scoring cache for ``run`` from DB state.
 
-    ``run_clustering_pipeline(apply=True)`` writes ``scoring_cache/`` as a side
-    effect. When clustering runs on HPC and is folded back via
-    ``import_clustering_results`` that side effect never happens, so
+    The HPC clustering tarball folded back by ``import_clustering_results``
+    does not ship ``scoring_cache/``, so without this step
     ``get_active_scoring_cache`` raises ``FileNotFoundError`` (surfaced as a 503
     by ``/query/similar-ibgc/`` and ``/query/ibgc-architecture/``).
 
@@ -257,8 +258,8 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
     directory, or ``None`` when there is nothing clusterable to score.
 
     A weighted-metric run (``similarity_metric != "dice"``) is rebuilt on the
-    run's own vocabulary (``<sha[:12]>/weights/``, written by the pipeline or
-    by ``import_clustering_results``) and the cache gets those exact weights.
+    run's own vocabulary (``<sha[:12]>/weights/``, written by
+    ``import_clustering_results``) and the cache gets those exact weights.
     IDF is never recomputed here: the corpus may have changed since the run.
     """
     from django.conf import settings

@@ -1,7 +1,7 @@
 """Tests for the composite-Dice architecture search.
 
-The search runs against the cached scoring matrices produced by
-``run_clustering_pipeline``. These tests build the matrices in memory by
+The search runs against the cached scoring matrices of the active
+``ClusteringRun``. These tests build the matrices in memory by
 hand so we don't depend on a fully materialised ClusteringRun on disk.
 """
 

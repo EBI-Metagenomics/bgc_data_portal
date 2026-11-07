@@ -129,7 +129,7 @@ class Command(BaseCommand):
         # Reconstruct it from the just-committed DB state so the Find-similar
         # and architecture-search endpoints don't 503 on the imported run.
         try:
-            from discovery.services.clustering.pipeline import (
+            from discovery.services.clustering.run_support import (
                 rebuild_scoring_cache_from_db,
             )
 

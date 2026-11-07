@@ -19,13 +19,7 @@ import json
 import pytest
 from discovery.services import query as q
 from discovery.services.query import combined as combined_mod
-from django.test import Client
 from tests.factories.discovery_models import IntegratedBgcFactory
-
-
-@pytest.fixture
-def client():
-    return Client()
 
 
 def _result(scores, ctype="domain", metrics=None):

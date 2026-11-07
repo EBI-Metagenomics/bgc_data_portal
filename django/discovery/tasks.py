@@ -4,14 +4,15 @@ Each task dispatches to a service, mirrors its result/progress into the default
 cache under ``set_job_cache``, and returns its result (persisted by the
 django-tasks-db backend as the source of truth for terminal status).
 
-Celery's ``link=`` chaining has no django-tasks equivalent, so chains are
+There is no task-chaining canvas in django-tasks, so chains are
 expressed by enqueuing the successor at the end of the predecessor (guarded by
 a ``then_*`` flag where the task is also runnable on its own).
 
 Tasks are plain ``@task`` callables (no ``takes_context``) so they run
 identically under ``.enqueue()`` (worker) and ``.call()`` (synchronous, used by
 ``--sync`` management commands and tests). The diagnostic progress/result cache
-is keyed on a generated id; final status is owned by the django-tasks-db result.
+is keyed on a generated id (a plain task cannot see its own django-tasks result
+id); final status is owned by the django-tasks-db result.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def recompute_scores_task() -> bool:
     from discovery.services.scores import recompute_all_scores
 
     recompute_all_scores()
-    log.info("Score recomputation complete (task %s)", uuid4().hex)
+    log.info("Score recomputation complete")
     return True
 
 
@@ -92,7 +93,7 @@ def build_integrated_bgcs_task(
     )
     if then_update_stats:
         update_discovery_stats_task.using(queue_name=stats_queue).enqueue()
-    log.info("build_integrated_bgcs complete (task %s): %s", task_id, result)
+    log.info("build_integrated_bgcs complete: %s", result)
     return result
 
 
@@ -114,7 +115,7 @@ def reclassify_bgcs_task(
     Re-runnable independently of a clustering import. Updates only
     classification fields on ``IntegratedBgc``; never touches the hierarchy.
     When ``then_project`` is set, chains the partial-iBGC projection on
-    success (replaces the old Celery ``link=`` on the clustering chain).
+    success.
     """
     task_id = uuid4().hex
     search_key = f"bgc_reclassify:{clustering_run_pk}"
@@ -149,7 +150,7 @@ def reclassify_bgcs_task(
             knn_k=project_knn_k,
             min_total_similarity=min_total_similarity,
         )
-    log.info("reclassify_bgcs complete (task %s): %s", task_id, result)
+    log.info("reclassify_bgcs complete: %s", result)
     return result
 
 
@@ -196,7 +197,7 @@ def project_partial_ibgcs_task(
         task_id=task_id,
         timeout=CLUSTERING_TTL,
     )
-    log.info("project_partial_ibgcs complete (task %s): %s", task_id, result)
+    log.info("project_partial_ibgcs complete: %s", result)
     return result
 
 

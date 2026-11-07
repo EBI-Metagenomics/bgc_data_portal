@@ -76,47 +76,6 @@ def reclassify_bgcs(
     }
 
 
-def _align_rows(M, source_ids, target_ids, *, ncols_keep=False):
-    """Re-key a sparse matrix's row labels to a target ordering.
-
-    ``ncols_keep`` is retained for backwards-compatible callers (it had no
-    effect on output in either schema — column count is fixed by ``M``).
-    """
-    import numpy as np
-    import scipy.sparse as sp
-
-    del ncols_keep  # unused; kept for signature compatibility
-
-    n_target = len(target_ids)
-    n_cols = M.shape[1]
-    if M.shape[0] == n_target and (
-        n_target == 0 or np.array_equal(source_ids, target_ids)
-    ):
-        return M
-
-    target_index = {int(x): i for i, x in enumerate(target_ids.tolist())}
-    row_map = {
-        i: target_index[int(x)]
-        for i, x in enumerate(source_ids.tolist())
-        if int(x) in target_index
-    }
-    if not row_map:
-        return sp.csr_matrix((n_target, n_cols), dtype=M.dtype)
-
-    coo = M.tocoo(copy=False)
-    keep = np.fromiter((r in row_map for r in coo.row), dtype=bool, count=coo.nnz)
-    new_rows = np.fromiter(
-        (row_map[r] for r in coo.row[keep]),
-        dtype=np.int64,
-        count=int(keep.sum()),
-    )
-    return sp.csr_matrix(
-        (coo.data[keep], (new_rows, coo.col[keep])),
-        shape=(n_target, n_cols),
-        dtype=M.dtype,
-    )
-
-
 def _refresh_gcf_aggregates(clustering_run_pk: int) -> None:
     """Recount ``member_count`` / ``validated_count`` / ``mean_novelty`` for the run.
 

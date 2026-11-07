@@ -31,14 +31,8 @@ from discovery.services.accession_registry import (
     lookup_or_mint_cbgc,
     lookup_or_mint_ibgc,
 )
-from django.db.backends.postgresql.psycopg_any import NumericRange
+from discovery.services.ingestion.ranges import int4range
 from factory.django import DjangoModelFactory
-
-
-def _range(start: int, end_inclusive: int) -> NumericRange:
-    """Build the half-open ``int4range`` Postgres stores: ``[start, end+1)``."""
-    return NumericRange(lower=int(start), upper=int(end_inclusive) + 1, bounds="[)")
-
 
 # ── Lookup tables ─────────────────────────────────────────────────────────────
 
@@ -100,7 +94,7 @@ class ConsensusBgcFactory(DjangoModelFactory):
 
     contig = factory.SubFactory(DashboardContigFactory)
     accession = "MGYB-PENDING"  # overwritten post-build
-    bgc_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
+    bgc_range = factory.LazyAttribute(lambda obj: int4range(obj.start_pos, obj.end_pos))
 
     class Params:
         # Tests override these; defaults give a 10 kb window starting at 1000.
@@ -134,7 +128,7 @@ class IntegratedBgcFactory(DjangoModelFactory):
     cbgc = factory.SubFactory(ConsensusBgcFactory)
     contig = factory.LazyAttribute(lambda obj: obj.cbgc.contig)
     accession = "MGYB-PENDING-PENDING"
-    bgc_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
+    bgc_range = factory.LazyAttribute(lambda obj: int4range(obj.start_pos, obj.end_pos))
     source_tools = factory.LazyFunction(lambda: ["antiSMASH"])
 
     class Params:
@@ -170,7 +164,7 @@ class SourceBgcPredictionFactory(DjangoModelFactory):
     assembly = factory.LazyAttribute(lambda obj: obj.contig.assembly)
     contig = factory.SubFactory(DashboardContigFactory)
     prediction_accession = factory.Sequence(lambda n: f"MGYB-AAAAAA.ANT.{n:02}")
-    bgc_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
+    bgc_range = factory.LazyAttribute(lambda obj: int4range(obj.start_pos, obj.end_pos))
     is_partial = False
     is_validated = False
     detector = factory.SubFactory(DashboardDetectorFactory)
@@ -188,7 +182,7 @@ class ContigCdsFactory(DjangoModelFactory):
         model = ContigCds
 
     contig = factory.SubFactory(DashboardContigFactory)
-    cds_range = factory.LazyAttribute(lambda obj: _range(obj.start_pos, obj.end_pos))
+    cds_range = factory.LazyAttribute(lambda obj: int4range(obj.start_pos, obj.end_pos))
     strand = 1
     protein_id_str = factory.Sequence(lambda n: f"protein_{n}")
     protein_length = 300

@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
-from django.db import connection
+from django.db import connection, transaction
 from pyhmmer.easel import TextSequence
 
 log = logging.getLogger(__name__)
@@ -118,7 +118,13 @@ def iter_unique_proteins(
         ORDER BY cds.protein_sha256, cds.id
     """
 
-    with connection.cursor() as cursor:
+    # Named (server-side) cursor, as in clustering.enrichment: the result set
+    # is streamed instead of materialised client-side. Needs a transaction.
+    with (
+        transaction.atomic(),
+        connection.connection.cursor(name="unique_proteins") as cursor,
+    ):
+        cursor.itersize = _DB_FETCH_CHUNK
         cursor.execute(sql)
         while True:
             rows = cursor.fetchmany(_DB_FETCH_CHUNK)

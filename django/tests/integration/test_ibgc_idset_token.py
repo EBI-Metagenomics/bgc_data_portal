@@ -16,13 +16,7 @@ from __future__ import annotations
 
 import pytest
 from django.core.cache import cache
-from django.test import Client
 from tests.factories.discovery_models import IntegratedBgcFactory
-
-
-@pytest.fixture
-def client():
-    return Client()
 
 
 @pytest.fixture

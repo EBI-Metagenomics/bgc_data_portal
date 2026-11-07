@@ -96,12 +96,12 @@ def test_pre_removal_staged_tarball_loads_like_a_stripped_one(tmp_path):
     legacy = _extract(LEGACY_STAGED, tmp_path / "legacy")
     stripped = _strip_legacy(legacy, tmp_path / "stripped")
 
-    run_pipeline(legacy, truncate=False, skip_stats=True)
+    run_pipeline(legacy, truncate=False)
     legacy_counts = _counts()
     assert legacy_counts["assemblies"] == 1
     assert legacy_counts["source_bgcs"] >= 1 and legacy_counts["cds"] >= 1
 
-    run_pipeline(stripped, truncate=True, skip_stats=True)
+    run_pipeline(stripped, truncate=True)
     assert _counts() == legacy_counts
 
 

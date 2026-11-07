@@ -42,7 +42,7 @@ from discovery.services.clustering.membership import (  # noqa: E402
     gapfilled_labels,
     query_sources,
 )
-from discovery.services.clustering.pipeline import (  # noqa: E402
+from discovery.services.clustering.run_support import (  # noqa: E402
     _align_weights,
     _compute_run_sha,
 )
@@ -282,7 +282,7 @@ def test_cosine_run_sha_keys_enrichment_and_weights():
 
 
 def test_metric_run_defaults():
-    from discovery.services.clustering.pipeline import metric_run_defaults
+    from discovery.services.clustering.run_support import metric_run_defaults
 
     assert metric_run_defaults("dice") == ((0.5, 0.5), 1.0)
     # Dice has no feature weights: an exponent is ignored, weights are kept.

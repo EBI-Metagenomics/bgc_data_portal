@@ -129,32 +129,55 @@ def build_ibgc_genbank_record(ibgc: IntegratedBgc) -> SeqRecord:
     )
 
     features: list[SeqFeature] = []
-
-    # ── iBGC feature ─────────────────────────────────────────────────────
-    ibgc_rel_start = _crop(ibgc.start_position, window_start, window_end) - window_start
-    ibgc_rel_end = _crop(ibgc.end_position, window_start, window_end) - window_start
-    if ibgc_rel_end > ibgc_rel_start:
-        ibgc_qualifiers = {
-            "ID": [ibgc.accession],
-            "start": [str(ibgc.start_position + 1)],
-            "end": [str(ibgc.end_position)],
-            "source_tools": [",".join(ibgc.source_tools or [])],
-        }
-        if ibgc.gene_cluster_family:
-            ibgc_qualifiers["gene_cluster_family"] = [ibgc.gene_cluster_family]
-        if ibgc.novelty_score is not None:
-            ibgc_qualifiers["novelty_score"] = [f"{ibgc.novelty_score:.4f}"]
-        if ibgc.domain_novelty is not None:
-            ibgc_qualifiers["domain_novelty"] = [f"{ibgc.domain_novelty:.4f}"]
-        features.append(
-            SeqFeature(
-                FeatureLocation(ibgc_rel_start, ibgc_rel_end),
-                type="iBGC",
-                qualifiers=ibgc_qualifiers,
-            )
+    ibgc_feature = _ibgc_feature(ibgc, window_start, window_end)
+    if ibgc_feature is not None:
+        features.append(ibgc_feature)
+    features += _bgc_features(predictions, window_start, window_end)
+    for cds in cds_list:
+        features += _cds_features(
+            cds,
+            domains_by_cds.get(cds.id, []),
+            predictions,
+            window_start,
+            window_end,
         )
 
-    # ── BGC feature per overlapping SourceBgcPrediction ─────────────────
+    record.features = features
+    return record
+
+
+def _ibgc_feature(
+    ibgc: IntegratedBgc, window_start: int, window_end: int
+) -> SeqFeature | None:
+    """The ``iBGC`` feature for the consolidated range (``None`` if empty)."""
+    ibgc_rel_start = _crop(ibgc.start_position, window_start, window_end) - window_start
+    ibgc_rel_end = _crop(ibgc.end_position, window_start, window_end) - window_start
+    if ibgc_rel_end <= ibgc_rel_start:
+        return None
+    ibgc_qualifiers = {
+        "ID": [ibgc.accession],
+        "start": [str(ibgc.start_position + 1)],
+        "end": [str(ibgc.end_position)],
+        "source_tools": [",".join(ibgc.source_tools or [])],
+    }
+    if ibgc.gene_cluster_family:
+        ibgc_qualifiers["gene_cluster_family"] = [ibgc.gene_cluster_family]
+    if ibgc.novelty_score is not None:
+        ibgc_qualifiers["novelty_score"] = [f"{ibgc.novelty_score:.4f}"]
+    if ibgc.domain_novelty is not None:
+        ibgc_qualifiers["domain_novelty"] = [f"{ibgc.domain_novelty:.4f}"]
+    return SeqFeature(
+        FeatureLocation(ibgc_rel_start, ibgc_rel_end),
+        type="iBGC",
+        qualifiers=ibgc_qualifiers,
+    )
+
+
+def _bgc_features(
+    predictions: list[SourceBgcPrediction], window_start: int, window_end: int
+) -> list[SeqFeature]:
+    """One ``BGC`` feature per overlapping ``SourceBgcPrediction`` (per-tool)."""
+    features: list[SeqFeature] = []
     for pred in predictions:
         if pred.bgc_range is None:
             continue
@@ -176,80 +199,86 @@ def build_ibgc_genbank_record(ibgc: IntegratedBgc) -> SeqRecord:
                 },
             )
         )
+    return features
 
-    # ── CDS features (with per-domain misc_feature children) ─────────────
-    for cds in cds_list:
-        cds_start = _crop(cds.start_position, window_start, window_end)
-        cds_end = _crop(cds.end_position, window_start, window_end)
-        rel_start = cds_start - window_start
-        rel_end = cds_end - window_start
 
-        seq_obj = getattr(cds, "seq", None)
-        aa_seq = seq_obj.get_sequence() if seq_obj else ""
+def _cds_features(
+    cds: ContigCds,
+    domains: list[ContigDomain],
+    predictions: list[SourceBgcPrediction],
+    window_start: int,
+    window_end: int,
+) -> list[SeqFeature]:
+    """The ``CDS`` feature for ``cds`` followed by a ``misc_feature`` per domain hit."""
+    cds_start = _crop(cds.start_position, window_start, window_end)
+    cds_end = _crop(cds.end_position, window_start, window_end)
+    rel_start = cds_start - window_start
+    rel_end = cds_end - window_start
 
-        claimed_by = _claimed_by_tools_for_cds(cds, predictions)
+    seq_obj = getattr(cds, "seq", None)
+    aa_seq = seq_obj.get_sequence() if seq_obj else ""
 
-        qualifiers: dict[str, list[str]] = {
-            "ID": [cds.protein_id_str],
-            "gene_caller": [cds.gene_caller or ""],
+    claimed_by = _claimed_by_tools_for_cds(cds, predictions)
+
+    qualifiers: dict[str, list[str]] = {
+        "ID": [cds.protein_id_str],
+        "gene_caller": [cds.gene_caller or ""],
+    }
+    if claimed_by:
+        qualifiers["claimed_by"] = [";".join(claimed_by)]
+    if aa_seq:
+        qualifiers["translation"] = [aa_seq]
+        qualifiers["protein_id"] = [cds.protein_id_str]
+    if cds.cluster_representative:
+        qualifiers["cluster_representative"] = [cds.cluster_representative]
+
+    features = [
+        SeqFeature(
+            FeatureLocation(rel_start, rel_end, strand=cds.strand),
+            type="CDS",
+            qualifiers=qualifiers,
+        )
+    ]
+
+    for dom in domains:
+        dom_rel_start, dom_rel_end = _domain_dna_window(
+            dom,
+            cds,
+            window_start,
+            window_end,
+        )
+        if dom_rel_end <= dom_rel_start:
+            continue
+        dom_qualifiers: dict[str, list[str]] = {
+            "signature_acc": [dom.domain_acc or ""],
+            "ref_db": [dom.ref_db or ""],
+            "name": [dom.domain_name or ""],
+            "aa_start": [str(dom.start_position or 0)],
+            "aa_end": [str(dom.end_position or 0)],
+            "cds": [cds.protein_id_str],
         }
-        if claimed_by:
-            qualifiers["claimed_by"] = [";".join(claimed_by)]
-        if aa_seq:
-            qualifiers["translation"] = [aa_seq]
-            qualifiers["protein_id"] = [cds.protein_id_str]
-        if cds.cluster_representative:
-            qualifiers["cluster_representative"] = [cds.cluster_representative]
-
+        if dom.interpro_entry_acc:
+            dom_qualifiers["interpro_entry_acc"] = [dom.interpro_entry_acc]
+            if dom.interpro_entry_description:
+                dom_qualifiers["interpro_entry_description"] = [
+                    dom.interpro_entry_description
+                ]
+        if dom.domain_description:
+            dom_qualifiers["description"] = [dom.domain_description]
+        if dom.score is not None:
+            dom_qualifiers["score"] = [str(dom.score)]
         features.append(
             SeqFeature(
-                FeatureLocation(rel_start, rel_end, strand=cds.strand),
-                type="CDS",
-                qualifiers=qualifiers,
+                FeatureLocation(
+                    dom_rel_start,
+                    dom_rel_end,
+                    strand=cds.strand,
+                ),
+                type="misc_feature",
+                qualifiers=dom_qualifiers,
             )
         )
-
-        for dom in domains_by_cds.get(cds.id, []):
-            dom_rel_start, dom_rel_end = _domain_dna_window(
-                dom,
-                cds,
-                window_start,
-                window_end,
-            )
-            if dom_rel_end <= dom_rel_start:
-                continue
-            dom_qualifiers: dict[str, list[str]] = {
-                "signature_acc": [dom.domain_acc or ""],
-                "ref_db": [dom.ref_db or ""],
-                "name": [dom.domain_name or ""],
-                "aa_start": [str(dom.start_position or 0)],
-                "aa_end": [str(dom.end_position or 0)],
-                "cds": [cds.protein_id_str],
-            }
-            if dom.interpro_entry_acc:
-                dom_qualifiers["interpro_entry_acc"] = [dom.interpro_entry_acc]
-                if dom.interpro_entry_description:
-                    dom_qualifiers["interpro_entry_description"] = [
-                        dom.interpro_entry_description
-                    ]
-            if dom.domain_description:
-                dom_qualifiers["description"] = [dom.domain_description]
-            if dom.score is not None:
-                dom_qualifiers["score"] = [str(dom.score)]
-            features.append(
-                SeqFeature(
-                    FeatureLocation(
-                        dom_rel_start,
-                        dom_rel_end,
-                        strand=cds.strand,
-                    ),
-                    type="misc_feature",
-                    qualifiers=dom_qualifiers,
-                )
-            )
-
-    record.features = features
-    return record
+    return features
 
 
 def _domain_dna_window(

@@ -39,7 +39,6 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from django.db import transaction
-from django.db.backends.postgresql.psycopg_any import NumericRange
 
 from discovery.models import (
     AccessionEntityType,
@@ -52,6 +51,7 @@ from discovery.services.accession_registry import (
     lookup_or_mint_ibgc,
     tombstone_unused,
 )
+from discovery.services.ingestion.ranges import int4range
 
 log = logging.getLogger(__name__)
 
@@ -61,11 +61,6 @@ TOOL_SANNTIS = "SanntiS"
 TOOL_ANTISMASH = "antiSMASH"
 
 MERGE_TOOLS = (TOOL_GECCO, TOOL_SANNTIS)
-
-
-def _range(start: int, end_inclusive: int) -> NumericRange:
-    """Half-open ``[start, end+1)`` int4range value for Postgres."""
-    return NumericRange(lower=int(start), upper=int(end_inclusive) + 1, bounds="[)")
 
 
 def build_integrated_bgcs(
@@ -182,7 +177,7 @@ def build_integrated_bgcs(
                     accession="MGYB-PLACEHOLD-XX",  # overwritten below
                     cbgc=cbgc,
                     contig_id=contig_id,
-                    bgc_range=_range(interval_start, interval_end),
+                    bgc_range=int4range(interval_start, interval_end),
                     source_tools=sorted(source_tools),
                 )
                 mint = lookup_or_mint_ibgc(

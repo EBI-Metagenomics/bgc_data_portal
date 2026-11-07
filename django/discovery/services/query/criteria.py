@@ -24,6 +24,8 @@ import math
 import re
 from dataclasses import dataclass, field
 
+from discovery.services.sql import IBGC_CDS_JOIN, IBGC_DOMAIN_HIT_JOIN
+
 log = logging.getLogger(__name__)
 
 # Mirrors ``api.DASHBOARD_RESULT_CAP`` — the in-memory sort/intersection of a
@@ -212,16 +214,11 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
     # Per-iBGC count of distinct include tokens present within the iBGC's
     # bgc_range. A token counts once even if matched by both columns or by
     # multiple domain hits.
-    include_sql = """
+    include_sql = f"""
         WITH tokens(tok) AS (SELECT unnest(%s::text[])),
              matches AS (
                  SELECT DISTINCT i.id AS ibgc_id, t.tok
-                 FROM discovery_ibgc i
-                 JOIN discovery_cds c
-                   ON c.contig_id = i.contig_id
-                  AND c.cds_range && i.bgc_range
-                 JOIN discovery_domain_hit d
-                   ON d.cds_id = c.id
+                 {IBGC_DOMAIN_HIT_JOIN}
                  JOIN tokens t
                    ON t.tok = d.domain_acc
                    OR t.tok = d.interpro_entry_acc
@@ -242,16 +239,11 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
     matched = {nid: c for nid, c in hit_counts.items() if c >= need}
 
     if exclude and matched:
-        exclude_sql = """
+        exclude_sql = f"""
             SELECT DISTINCT i.id
-            FROM discovery_ibgc i
-            JOIN discovery_cds c
-              ON c.contig_id = i.contig_id
-             AND c.cds_range && i.bgc_range
-            JOIN discovery_domain_hit d
-              ON d.cds_id = c.id
-             AND (d.domain_acc = ANY(%s) OR d.interpro_entry_acc = ANY(%s))
-            WHERE i.id = ANY(%s)
+            {IBGC_DOMAIN_HIT_JOIN}
+            WHERE (d.domain_acc = ANY(%s) OR d.interpro_entry_acc = ANY(%s))
+              AND i.id = ANY(%s)
         """
         with connection.cursor() as cur:
             cur.execute(exclude_sql, [exclude, exclude, list(matched)])
@@ -469,12 +461,10 @@ def run_sequence_search(
     sha_list = list(sha256_metrics.keys())
     with connection.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT i.id, c.protein_sha256, c.protein_id_str
             FROM discovery_cds c
-            JOIN discovery_ibgc i
-              ON i.contig_id = c.contig_id
-             AND i.bgc_range && c.cds_range
+            {IBGC_CDS_JOIN}
             WHERE c.protein_sha256 = ANY(%s::text[])
             """,
             [sha_list],

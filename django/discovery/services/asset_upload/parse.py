@@ -75,12 +75,49 @@ def _to_optional_float(value: str | None) -> float | None:
         raise AssetValidationError(f"Expected number, got {value!r}") from exc
 
 
+def _bgc_key(row: dict) -> tuple[str, int, int, str]:
+    """``(contig_sha256, bgc_start, bgc_end, detector_name)`` of a per-BGC TSV row."""
+    return (
+        row["contig_sha256"],
+        _to_int(row["bgc_start"]),
+        _to_int(row["bgc_end"]),
+        row["detector_name"],
+    )
+
+
 def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
     """Materialise an ``AssetData`` from a previously-validated tarball."""
     members = validated.members
     data = AssetData()
 
-    # ── detectors ────────────────────────────────────────────────────────
+    _parse_detectors(members, data)
+    _parse_assemblies(members, data)
+    _parse_contigs(members, data)
+    if "contig_sequences.tsv" in members:
+        for row in _reader(members["contig_sequences.tsv"]):
+            data.contig_sequences[row["contig_sha256"]] = row.get("sequence_base64", "")
+    _parse_bgcs(members, data)
+    bgc_keys = {b.key for b in data.bgcs}
+    if "cds.tsv" in members:
+        _parse_cds(members, data, bgc_keys)
+    if "cds_sequences.tsv" in members and data.cds:
+        _parse_cds_sequences(members, data)
+    if "domains.tsv" in members:
+        _parse_domains(members, data, bgc_keys)
+
+    log.info(
+        "parse_asset_tar: %d assemblies, %d contigs, %d bgcs, %d cds, %d domains",
+        len(data.assemblies),
+        len(data.contigs),
+        len(data.bgcs),
+        len(data.cds),
+        len(data.domains),
+    )
+    return data
+
+
+def _parse_detectors(members: dict, data: AssetData) -> None:
+    """``detectors.tsv`` → ``data.detectors``."""
     for row in _reader(members["detectors.tsv"]):
         data.detectors.append(
             AssetDetector(
@@ -90,7 +127,9 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
             )
         )
 
-    # ── assemblies ───────────────────────────────────────────────────────
+
+def _parse_assemblies(members: dict, data: AssetData) -> None:
+    """``assemblies.tsv`` → ``data.assemblies`` (at least one row required)."""
     for row in _reader(members["assemblies.tsv"]):
         data.assemblies.append(
             AssetAssembly(
@@ -108,7 +147,9 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
     if not data.assemblies:
         raise AssetValidationError("assemblies.tsv has no data rows")
 
-    # ── contigs ──────────────────────────────────────────────────────────
+
+def _parse_contigs(members: dict, data: AssetData) -> None:
+    """``contigs.tsv`` → ``data.contigs``; every contig must name a known assembly."""
     asm_accessions = {a.assembly_accession for a in data.assemblies}
     for row in _reader(members["contigs.tsv"]):
         assembly_acc = row["assembly_accession"]
@@ -130,12 +171,9 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
     if not data.contigs:
         raise AssetValidationError("contigs.tsv has no data rows")
 
-    # ── contig_sequences (optional) ──────────────────────────────────────
-    if "contig_sequences.tsv" in members:
-        for row in _reader(members["contig_sequences.tsv"]):
-            data.contig_sequences[row["contig_sha256"]] = row.get("sequence_base64", "")
 
-    # ── bgcs ─────────────────────────────────────────────────────────────
+def _parse_bgcs(members: dict, data: AssetData) -> None:
+    """``bgcs.tsv`` → ``data.bgcs``: validated against contigs / detectors, deduped."""
     contig_shas = {c.sequence_sha256 for c in data.contigs}
     detector_names = {d.name for d in data.detectors}
     seen_bgc_keys: set[tuple[str, int, int, str]] = set()
@@ -183,96 +221,68 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
     if not data.bgcs:
         raise AssetValidationError("bgcs.tsv has no data rows")
 
-    bgc_keys = {b.key for b in data.bgcs}
 
-    # ── cds (optional) ───────────────────────────────────────────────────
-    if "cds.tsv" in members:
-        for row in _reader(members["cds.tsv"]):
-            key = (
-                row["contig_sha256"],
-                _to_int(row["bgc_start"]),
-                _to_int(row["bgc_end"]),
-                row["detector_name"],
+def _parse_cds(members: dict, data: AssetData, bgc_keys: set[tuple]) -> None:
+    """``cds.tsv`` → ``data.cds`` (rows of unknown BGCs are dropped)."""
+    for row in _reader(members["cds.tsv"]):
+        key = _bgc_key(row)
+        if key not in bgc_keys:
+            continue
+        data.cds.append(
+            AssetCds(
+                bgc_key=key,
+                protein_id_str=row["protein_id_str"],
+                start_position=_to_int(row["start_position"]),
+                end_position=_to_int(row["end_position"]),
+                strand=_to_int(row.get("strand"), default=1),
+                protein_length=_to_int(row.get("protein_length")),
+                gene_caller=row.get("gene_caller", ""),
+                cluster_representative=row.get("cluster_representative", ""),
+                protein_sha256=row.get("protein_sha256", ""),
             )
-            if key not in bgc_keys:
-                continue
-            data.cds.append(
-                AssetCds(
-                    bgc_key=key,
-                    protein_id_str=row["protein_id_str"],
-                    start_position=_to_int(row["start_position"]),
-                    end_position=_to_int(row["end_position"]),
-                    strand=_to_int(row.get("strand"), default=1),
-                    protein_length=_to_int(row.get("protein_length")),
-                    gene_caller=row.get("gene_caller", ""),
-                    cluster_representative=row.get("cluster_representative", ""),
-                    protein_sha256=row.get("protein_sha256", ""),
-                )
-            )
-            if len(data.cds) > MAX_CDS_ROWS:
-                raise AssetValidationError(f"cds.tsv has more than {MAX_CDS_ROWS} rows")
+        )
+        if len(data.cds) > MAX_CDS_ROWS:
+            raise AssetValidationError(f"cds.tsv has more than {MAX_CDS_ROWS} rows")
 
-    # ── cds_sequences (optional) — merged into matching AssetCds rows ───
-    if "cds_sequences.tsv" in members and data.cds:
-        cds_lookup: dict[tuple[tuple[str, int, int, str], str], AssetCds] = {
-            (c.bgc_key, c.protein_id_str): c for c in data.cds
-        }
-        for row in _reader(members["cds_sequences.tsv"]):
-            key = (
-                row["contig_sha256"],
-                _to_int(row["bgc_start"]),
-                _to_int(row["bgc_end"]),
-                row["detector_name"],
-            )
-            protein_id = row["protein_id_str"]
-            cds = cds_lookup.get((key, protein_id))
-            if cds is None:
-                continue
-            cds.sequence_zlib_b64 = row.get("sequence_base64", "")
 
-    # ── domains (optional) ───────────────────────────────────────────────
-    if "domains.tsv" in members:
-        for row in _reader(members["domains.tsv"]):
-            key = (
-                row["contig_sha256"],
-                _to_int(row["bgc_start"]),
-                _to_int(row["bgc_end"]),
-                row["detector_name"],
-            )
-            if key not in bgc_keys:
-                continue
-            go_terms_raw = (row.get("go_terms") or "").strip()
-            go_terms = [t for t in go_terms_raw.split("|") if t] if go_terms_raw else []
-            data.domains.append(
-                AssetDomain(
-                    bgc_key=key,
-                    cds_protein_id=row["protein_id_str"],
-                    domain_acc=row.get("domain_acc", ""),
-                    domain_name=row.get("domain_name", ""),
-                    domain_description=row.get("domain_description", ""),
-                    ref_db=row.get("ref_db", ""),
-                    start_position=_to_int(row.get("start_position")),
-                    end_position=_to_int(row.get("end_position")),
-                    score=_to_optional_float(row.get("score")),
-                    url=row.get("url", ""),
-                    interpro_entry_acc=row.get("interpro_entry_acc", ""),
-                    interpro_entry_description=row.get(
-                        "interpro_entry_description", ""
-                    ),
-                    go_terms=go_terms,
-                )
-            )
-            if len(data.domains) > MAX_DOMAIN_ROWS:
-                raise AssetValidationError(
-                    f"domains.tsv has more than {MAX_DOMAIN_ROWS} rows"
-                )
+def _parse_cds_sequences(members: dict, data: AssetData) -> None:
+    """``cds_sequences.tsv`` — merged into the matching ``AssetCds`` rows."""
+    cds_lookup: dict[tuple[tuple[str, int, int, str], str], AssetCds] = {
+        (c.bgc_key, c.protein_id_str): c for c in data.cds
+    }
+    for row in _reader(members["cds_sequences.tsv"]):
+        cds = cds_lookup.get((_bgc_key(row), row["protein_id_str"]))
+        if cds is None:
+            continue
+        cds.sequence_zlib_b64 = row.get("sequence_base64", "")
 
-    log.info(
-        "parse_asset_tar: %d assemblies, %d contigs, %d bgcs, %d cds, %d domains",
-        len(data.assemblies),
-        len(data.contigs),
-        len(data.bgcs),
-        len(data.cds),
-        len(data.domains),
-    )
-    return data
+
+def _parse_domains(members: dict, data: AssetData, bgc_keys: set[tuple]) -> None:
+    """``domains.tsv`` → ``data.domains`` (rows of unknown BGCs are dropped)."""
+    for row in _reader(members["domains.tsv"]):
+        key = _bgc_key(row)
+        if key not in bgc_keys:
+            continue
+        go_terms_raw = (row.get("go_terms") or "").strip()
+        go_terms = [t for t in go_terms_raw.split("|") if t] if go_terms_raw else []
+        data.domains.append(
+            AssetDomain(
+                bgc_key=key,
+                cds_protein_id=row["protein_id_str"],
+                domain_acc=row.get("domain_acc", ""),
+                domain_name=row.get("domain_name", ""),
+                domain_description=row.get("domain_description", ""),
+                ref_db=row.get("ref_db", ""),
+                start_position=_to_int(row.get("start_position")),
+                end_position=_to_int(row.get("end_position")),
+                score=_to_optional_float(row.get("score")),
+                url=row.get("url", ""),
+                interpro_entry_acc=row.get("interpro_entry_acc", ""),
+                interpro_entry_description=row.get("interpro_entry_description", ""),
+                go_terms=go_terms,
+            )
+        )
+        if len(data.domains) > MAX_DOMAIN_ROWS:
+            raise AssetValidationError(
+                f"domains.tsv has more than {MAX_DOMAIN_ROWS} rows"
+            )

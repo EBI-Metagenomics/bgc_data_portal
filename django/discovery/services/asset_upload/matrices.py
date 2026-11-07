@@ -18,7 +18,8 @@ exact same column space; asset rows lose vocabulary not seen by the
 primary run, which is fine — that's what the projection math expects.
 
 The asset row order is determined by ``virtual_ibgcs`` — the same dict the
-projection step uses to walk results back into Redis. Row N in the
+projection step uses to walk results back into the default cache (Postgres
+DatabaseCache). Row N in the
 returned matrix corresponds to the Nth ``VirtualIbgc``.
 """
 
@@ -29,8 +30,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from discovery.services.clustering.membership import (
+    DEFAULT_DOMAIN_SOURCES,
     VOCAB_IPR_GAPFILLED,
     VOCAB_IPR_PROJECTED,
+    _normalize_sources,
     check_vocab,
     gapfilled_labels,
     project_to_ipr,
@@ -42,12 +45,6 @@ if TYPE_CHECKING:
     from .project import VirtualIbgc
 
 log = logging.getLogger(__name__)
-
-DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM", "TIGRFAM")
-
-
-def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
-    return tuple(sorted({s.upper() for s in sources}))
 
 
 def _kept_domain_labels(
@@ -177,7 +174,7 @@ def build_asset_adjacency_pair_matrix(
        a sorted tuple.
 
     Pairs outside the supplied ``pair_vocab`` are dropped (matches the
-    column projection used by ``reclassify._align_rows``).
+    column projection used by ``run_support._align_rows``).
     """
     import numpy as np
     import scipy.sparse as sp

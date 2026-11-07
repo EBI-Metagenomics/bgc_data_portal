@@ -87,7 +87,7 @@ def _write_tsvs(data_dir: Path) -> None:
 def ingested(tmp_path) -> Path:
     """Run the loader over the TSV package and return the data dir."""
     _write_tsvs(tmp_path)
-    run_pipeline(tmp_path, truncate=False, skip_stats=True)
+    run_pipeline(tmp_path, truncate=False)
     return tmp_path
 
 

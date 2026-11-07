@@ -33,11 +33,6 @@ CBGC_RE = re.compile(rf"^MGYB-{_C}{{6}}$")
 
 
 @pytest.fixture
-def client():
-    return Client()
-
-
-@pytest.fixture
 def seeded_ibgc(db):
     """A clustered iBGC: validated antiSMASH source prediction, an overlapping
     CDS with a PFAM domain — enough to drive every endpoint

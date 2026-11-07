@@ -10,18 +10,12 @@ leak unrelated iBGCs.
 from __future__ import annotations
 
 import pytest
-from django.test import Client
 from tests.factories.discovery_models import (
     ContigCdsFactory,
     DashboardDetectorFactory,
     IntegratedBgcFactory,
     SourceBgcPredictionFactory,
 )
-
-
-@pytest.fixture
-def client():
-    return Client()
 
 
 @pytest.fixture
