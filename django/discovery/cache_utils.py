@@ -11,10 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_tasks import TaskResultStatus, default_task_backend
-
 from django.conf import settings
 from django.core.cache import cache
+from django_tasks import TaskResultStatus, default_task_backend
 
 
 def set_job_cache(
@@ -66,5 +65,3 @@ def fetch_job(task_id: str | None) -> JobResult:
         return JobResult(default_task_backend.get_result(task_id))
     except Exception:
         return JobResult(None)
-
-

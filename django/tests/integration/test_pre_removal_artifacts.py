@@ -83,7 +83,7 @@ def test_fixtures_are_pre_removal_artifacts():
     with tarfile.open(LEGACY_STAGED) as tf:
         names = {Path(n).name for n in tf.getnames()}
         bgcs_header = tf.extractfile("bgcs.tsv").readline().decode()
-    assert LEGACY_FILES <= names
+    assert names >= LEGACY_FILES
     assert "umap_x" in bgcs_header and "umap_y" in bgcs_header
     with tarfile.open(V2_CLUSTERING) as tf:
         assert "coords.parquet" in tf.getnames()

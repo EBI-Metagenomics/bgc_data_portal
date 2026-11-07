@@ -16,8 +16,9 @@ skips the in-process assembly-score / catalog computation inside the pipeline.)
 import logging
 import time
 
-from discovery.services.ingestion.loader import run_pipeline
 from django.core.management.base import BaseCommand
+
+from discovery.services.ingestion.loader import run_pipeline
 
 logger = logging.getLogger(__name__)
 

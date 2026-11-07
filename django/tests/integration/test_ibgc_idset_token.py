@@ -15,10 +15,9 @@ stashes the list server-side and returns a short token the GETs accept via
 from __future__ import annotations
 
 import pytest
-from tests.factories.discovery_models import IntegratedBgcFactory
-
 from django.core.cache import cache
 from django.test import Client
+from tests.factories.discovery_models import IntegratedBgcFactory
 
 
 @pytest.fixture

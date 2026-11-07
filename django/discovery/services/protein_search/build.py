@@ -21,10 +21,9 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from pyhmmer.easel import TextSequence
-
 from django.conf import settings
 from django.db import connection
+from pyhmmer.easel import TextSequence
 
 log = logging.getLogger(__name__)
 

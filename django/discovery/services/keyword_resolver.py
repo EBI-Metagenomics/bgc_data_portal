@@ -136,8 +136,7 @@ def _try_bgc_accession(keyword: str) -> dict | None:
 
 def _try_assembly_accession(keyword: str) -> dict | None:
     if not (
-        _ASSEMBLY_ACCESSION_RE.match(keyword)
-        or _MIBIG_ACCESSION_RE.match(keyword)
+        _ASSEMBLY_ACCESSION_RE.match(keyword) or _MIBIG_ACCESSION_RE.match(keyword)
     ):
         return None
     from discovery.models import DashboardAssembly

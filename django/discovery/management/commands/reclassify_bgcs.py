@@ -4,10 +4,11 @@ Independent of the clustering import: re-run whenever new partial BGCs
 land or stale assignments need refreshing. Does not reshape the hierarchy.
 """
 
+from django.core.management.base import BaseCommand, CommandError
+
 from discovery.models import ClusteringRun
 from discovery.services.clustering import ALLOWED_SCOPES
 from discovery.tasks import reclassify_bgcs_task
-from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):

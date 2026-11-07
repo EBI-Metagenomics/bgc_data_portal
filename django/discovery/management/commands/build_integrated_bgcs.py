@@ -7,8 +7,9 @@ antiSMASH calls (absorbed when they overlap an existing iBGC, standalone
 otherwise).
 """
 
-from discovery.tasks import build_integrated_bgcs_task, update_discovery_stats_task
 from django.core.management.base import BaseCommand
+
+from discovery.tasks import build_integrated_bgcs_task, update_discovery_stats_task
 
 
 class Command(BaseCommand):

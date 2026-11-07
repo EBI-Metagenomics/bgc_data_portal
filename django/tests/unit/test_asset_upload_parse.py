@@ -34,9 +34,7 @@ def _full_tarball() -> bytes:
             b"A1\taa\taa_acc\t1000\n"
         ),
         "detectors.tsv": (
-            b"name\ttool\tversion\n"
-            b"antiSMASH:1\tantiSMASH\t1.0\n"
-            b"GECCO v1\tGECCO\t1.0\n"
+            b"name\ttool\tversion\nantiSMASH:1\tantiSMASH\t1.0\nGECCO v1\tGECCO\t1.0\n"
         ),
         "bgcs.tsv": (
             b"contig_sha256\tdetector_name\tstart_position\tend_position\t"

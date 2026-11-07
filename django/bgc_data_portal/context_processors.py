@@ -22,5 +22,3 @@ def use_matomo(request):
         return {"use_matomo": settings.MATOMO_URL and settings.MATOMO_SITE_ID}
     except AttributeError:
         return {"use_matomo": False}
-
-

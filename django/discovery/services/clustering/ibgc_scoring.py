@@ -445,6 +445,7 @@ def project_partial_ibgcs(
     ``min_projection_similarity``; the threshold is metric-specific.
     """
     import scipy.sparse as sp
+    from django.utils import timezone
 
     from discovery.models import ClusteringRun, IntegratedBgc
     from discovery.services.clustering.adjacency import (
@@ -455,7 +456,6 @@ def project_partial_ibgcs(
     )
     from discovery.services.clustering.membership import build_ibgc_domain_matrix
     from discovery.services.clustering.reclassify import _align_rows
-    from django.utils import timezone
 
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
     sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM", "TIGRFAM")

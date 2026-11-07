@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from django.db import IntegrityError, connection, transaction
+
 from discovery.models import (
     AccessionAlias,
     AccessionEntityType,
@@ -25,7 +27,6 @@ from discovery.models import (
     ConsensusBgc,
     IntegratedBgc,
 )
-from django.db import IntegrityError, connection, transaction
 
 logger = logging.getLogger(__name__)
 

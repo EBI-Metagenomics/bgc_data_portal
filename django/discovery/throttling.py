@@ -27,9 +27,8 @@ False`` (the test suite does this; see ``tests/conftest.py``).
 
 from __future__ import annotations
 
-from ninja.throttling import SimpleRateThrottle
-
 from django.conf import settings
+from ninja.throttling import SimpleRateThrottle
 
 
 class _IPRateThrottle(SimpleRateThrottle):

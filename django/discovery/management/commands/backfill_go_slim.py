@@ -7,9 +7,10 @@ command after refreshing ``services/data/go_slim_map.json`` (via
 wiring was in place.
 """
 
+from django.core.management.base import BaseCommand
+
 from discovery.models import ContigDomain
 from discovery.services.go_slim import go_slim_for_terms
-from django.core.management.base import BaseCommand
 
 BATCH_SIZE = 5000
 

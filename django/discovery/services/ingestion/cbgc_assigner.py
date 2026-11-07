@@ -29,6 +29,9 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from django.db.backends.postgresql.psycopg_any import NumericRange
+from django.db.models import Max
+
 from discovery.models import (
     AccessionAlias,
     AccessionRegistry,
@@ -36,8 +39,6 @@ from discovery.models import (
     SourceBgcPrediction,
 )
 from discovery.services.accession_registry import lookup_or_mint_cbgc
-from django.db.backends.postgresql.psycopg_any import NumericRange
-from django.db.models import Max
 
 logger = logging.getLogger(__name__)
 

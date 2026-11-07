@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 from discovery import throttling
-
 from django.core.cache.backends.locmem import LocMemCache
 from django.test import Client
 

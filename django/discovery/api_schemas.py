@@ -597,9 +597,9 @@ class BgcStatsResponse(Schema):
     score_distributions: list[ScoreDistribution] = []
     complete_count: int = 0
     partial_count: int = 0
-    npc_sunburst: list[SunburstNode] = (
-        []
-    )  # NPClassifier pathway/superclass/class (confident labels)
+    npc_sunburst: list[
+        SunburstNode
+    ] = []  # NPClassifier pathway/superclass/class (confident labels)
     bgc_class_distribution: list[BgcClassCount] = []
     total_bgcs: int = 0
 

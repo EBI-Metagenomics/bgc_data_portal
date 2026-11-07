@@ -14,12 +14,11 @@ from pathlib import Path
 import pytest
 from discovery.models import DashboardAssembly, DashboardContig, Taxon
 from discovery.services.ingestion.loader import load_contigs, load_taxa, run_pipeline
+from django.test import Client
 from tests.factories.discovery_models import (
     DashboardAssemblyFactory,
     DashboardContigFactory,
 )
-
-from django.test import Client
 
 pytestmark = pytest.mark.django_db
 

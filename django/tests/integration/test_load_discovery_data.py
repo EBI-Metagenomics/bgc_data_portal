@@ -49,9 +49,7 @@ def _write_tsvs(data_dir: Path) -> None:
       * a lone antiSMASH 10000–14000 → a second, disjoint cBGC + iBGC.
     """
     (data_dir / "detectors.tsv").write_text(
-        "name\ttool\tversion\n"
-        "antiSMASH v1\tantiSMASH\t1.0\n"
-        "GECCO v1\tGECCO\t1.0\n"
+        "name\ttool\tversion\nantiSMASH v1\tantiSMASH\t1.0\nGECCO v1\tGECCO\t1.0\n"
     )
     (data_dir / "assemblies.tsv").write_text(
         "assembly_accession\torganism_name\tsource\tassembly_type\t"

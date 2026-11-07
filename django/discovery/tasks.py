@@ -26,7 +26,6 @@ from discovery.cache_utils import set_job_cache
 log = logging.getLogger(__name__)
 
 
-
 @task(queue_name="scores")
 def recompute_scores_task() -> bool:
     """Recompute all discovery scores (assembly, GCF, catalogs, iBGC classes)."""
@@ -95,8 +94,6 @@ def build_integrated_bgcs_task(
         update_discovery_stats_task.using(queue_name=stats_queue).enqueue()
     log.info("build_integrated_bgcs complete (task %s): %s", task_id, result)
     return result
-
-
 
 
 # ── Reclassification of partial / late BGCs ───────────────────────────────────
@@ -239,9 +236,10 @@ def update_protein_search_index_task(
 @task()
 def update_discovery_stats_task() -> bool:
     """Recompute platform-overview counts and append a new DiscoveryStats row."""
+    from django.db import transaction
+
     from discovery.models import DiscoveryStats
     from discovery.services.stats import generate_discovery_stats
-    from django.db import transaction
 
     stats = generate_discovery_stats()
     with transaction.atomic():
@@ -287,9 +285,7 @@ def process_asset_upload_task(token: str) -> dict:
         except AssetValidationError as exc:
             asset_cache.mark_failed(token, task_id=task_id, error=str(exc))
             return {"token": token, "state": "FAILED", "error": str(exc)}
-        except (
-            Exception
-        ) as exc:  # noqa: BLE001 — never let the UI hang on a 5-min poll timeout
+        except Exception as exc:  # noqa: BLE001 — never let the UI hang on a 5-min poll timeout
             log.exception(
                 "process_asset_upload: unexpected error during validate/parse"
             )

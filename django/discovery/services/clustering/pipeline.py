@@ -125,8 +125,9 @@ def _build_sig_to_ipr_lookup(
     Only includes signatures whose IPR entry actually appears in the active
     domain-acc vocabulary (``vocab_set``).
     """
-    from discovery.models import ContigDomain
     from django.db.models.functions import Upper
+
+    from discovery.models import ContigDomain
 
     pairs = (
         ContigDomain.objects.annotate(ref_db_upper=Upper("ref_db"))
@@ -260,6 +261,9 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
     by ``import_clustering_results``) and the cache gets those exact weights.
     IDF is never recomputed here: the corpus may have changed since the run.
     """
+    from django.conf import settings
+    from django.db.models import Q
+
     from discovery.models import IntegratedBgc, SourceBgcPrediction
     from discovery.services.clustering.adjacency import (
         build_ibgc_adjacency_pair_matrix,
@@ -270,8 +274,6 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
         build_ibgc_domain_matrix,
         query_sources,
     )
-    from django.conf import settings
-    from django.db.models import Q
 
     upper_sources = tuple(
         sorted({s.upper() for s in (run.domain_sources or DEFAULT_DOMAIN_SOURCES)})

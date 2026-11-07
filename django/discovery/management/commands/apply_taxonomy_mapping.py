@@ -27,10 +27,11 @@ import csv
 import re
 from pathlib import Path
 
-from discovery.models import Taxon
-from discovery.services.taxonomy import RANKS
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
+
+from discovery.models import Taxon
+from discovery.services.taxonomy import RANKS
 
 # Resolver column prefix per rank.
 RANK_COLS = dict(zip(RANKS, ("d", "k", "p", "c", "o", "f", "g", "s")))

@@ -20,6 +20,9 @@ import logging
 from collections import defaultdict
 from datetime import timedelta
 
+from django.db import connection
+from django.utils import timezone
+
 from discovery.models import (
     DashboardAssembly,
     DashboardContig,
@@ -27,8 +30,6 @@ from discovery.models import (
     SourceBgcPrediction,
 )
 from discovery.services.architecture import _interpro_url, _signature_url
-from django.db import connection
-from django.utils import timezone
 
 log = logging.getLogger(__name__)
 
@@ -179,9 +180,7 @@ def build_report_payload(
                 "parent_assembly_id": first_asm.id if first_asm else None,
                 "organism_name": first_asm.organism_name if first_asm else None,
                 "collection": (
-                    first_asm.source.name
-                    if first_asm and first_asm.source_id
-                    else None
+                    first_asm.source.name if first_asm and first_asm.source_id else None
                 ),
                 "biome_path": first_asm.biome_path if first_asm else "",
                 "taxonomy_phylum": _taxonomy_phylum(

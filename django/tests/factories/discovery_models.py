@@ -31,9 +31,8 @@ from discovery.services.accession_registry import (
     lookup_or_mint_cbgc,
     lookup_or_mint_ibgc,
 )
-from factory.django import DjangoModelFactory
-
 from django.db.backends.postgresql.psycopg_any import NumericRange
+from factory.django import DjangoModelFactory
 
 
 def _range(start: int, end_inclusive: int) -> NumericRange:

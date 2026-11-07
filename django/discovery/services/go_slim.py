@@ -83,5 +83,3 @@ def go_slim_for_terms(go_terms: Iterable[str] | None) -> list[str]:
             if slim:
                 seen.add(slim)
     return sorted(seen)
-
-

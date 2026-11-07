@@ -26,19 +26,19 @@ from discovery.services.architecture import (
 
 def _dom(**kw):
     """Minimal stand-in for a ContigDomain row."""
-    base = dict(
-        interpro_entry_acc="",
-        interpro_entry_description="",
-        domain_acc="",
-        domain_name="",
-        domain_description="",
-        ref_db="",
-        start_position=1,
-        end_position=100,
-        score=1e-10,
-        url="",
-        go_slim=[],
-    )
+    base = {
+        "interpro_entry_acc": "",
+        "interpro_entry_description": "",
+        "domain_acc": "",
+        "domain_name": "",
+        "domain_description": "",
+        "ref_db": "",
+        "start_position": 1,
+        "end_position": 100,
+        "score": 1e-10,
+        "url": "",
+        "go_slim": [],
+    }
     base.update(kw)
     return SimpleNamespace(**base)
 

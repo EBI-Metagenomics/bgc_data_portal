@@ -17,12 +17,10 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from discovery.services import query as q
 from discovery.services.query import combined as combined_mod
-from tests.factories.discovery_models import IntegratedBgcFactory
-
 from django.test import Client
+from tests.factories.discovery_models import IntegratedBgcFactory
 
 
 @pytest.fixture
@@ -41,7 +39,9 @@ def _result(scores, ctype="domain", metrics=None):
 def _stub_resolvers(monkeypatch, results):
     """Patch ``resolve_criterion`` to return ``results`` in criteria order."""
     it = iter(results)
-    monkeypatch.setattr(combined_mod, "resolve_criterion", lambda ctype, params: next(it))
+    monkeypatch.setattr(
+        combined_mod, "resolve_criterion", lambda ctype, params: next(it)
+    )
 
 
 # ── run_combined_query (orchestration) ───────────────────────────────────────
@@ -133,13 +133,9 @@ def test_sequence_criterion_carries_submetric_columns(monkeypatch):
 
 
 def test_filters_narrow_the_intersection(monkeypatch):
-    _stub_resolvers(
-        monkeypatch, [_result({1: {"value": 1.0}, 2: {"value": 1.0}})]
-    )
+    _stub_resolvers(monkeypatch, [_result({1: {"value": 1.0}, 2: {"value": 1.0}})])
     # Drop id 2 at the filter stage.
-    monkeypatch.setattr(
-        combined_mod, "_filter_candidate_ids", lambda ids, filters: {1}
-    )
+    monkeypatch.setattr(combined_mod, "_filter_candidate_ids", lambda ids, filters: {1})
     out = q.run_combined_query(
         [{"id": "d1", "type": "domain", "params": {"domains_text": "PF1"}}],
         {"validated_only": True},
@@ -171,9 +167,7 @@ class _FakeTask:
 
 
 def _post(client, body):
-    return client.post(
-        POST_URL, data=json.dumps(body), content_type="application/json"
-    )
+    return client.post(POST_URL, data=json.dumps(body), content_type="application/json")
 
 
 @pytest.mark.django_db

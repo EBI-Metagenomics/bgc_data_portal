@@ -64,7 +64,7 @@ def inspect_tarball(raw: bytes) -> ValidatedTarball:
 
     try:
         gz = gzip.GzipFile(fileobj=io.BytesIO(raw))
-        tf = tarfile.open(fileobj=gz, mode="r:")
+        tf = tarfile.open(fileobj=gz, mode="r:")  # noqa: SIM115 - closed below
     except (OSError, EOFError, tarfile.TarError) as exc:
         raise AssetValidationError(f"Could not open tarball: {exc}") from exc
 

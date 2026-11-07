@@ -258,12 +258,8 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
             excluded_ids = {int(r[0]) for r in cur.fetchall()}
         matched = {nid: c for nid, c in matched.items() if nid not in excluded_ids}
 
-    scores = {
-        nid: {"value": round(c / n_include, 4)} for nid, c in matched.items()
-    }
-    return CriterionResult(
-        scores=scores, metrics=metrics, total_matched=len(scores)
-    )
+    scores = {nid: {"value": round(c / n_include, 4)} for nid, c in matched.items()}
+    return CriterionResult(scores=scores, metrics=metrics, total_matched=len(scores))
 
 
 # ── Domain architecture (composite similarity) ────────────────────────────────
@@ -297,7 +293,7 @@ def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]
     except FileNotFoundError:
         # Log the path-bearing detail server-side; never leak it to the client.
         log.exception("Scoring cache unavailable for architecture query")
-        raise CriterionError(503, "Similarity index is not available yet")
+        raise CriterionError(503, "Similarity index is not available yet") from None
 
     k = max(1, min(int(params.k), RESULT_CAP))
 
@@ -334,9 +330,7 @@ def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]
 def resolve_architecture(params: ArchitectureParams) -> CriterionResult:
     """Resolve a domain-architecture criterion to per-iBGC composite scores."""
     top_ids, top_scores = architecture_top(params)
-    scores = {
-        nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)
-    }
+    scores = {nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)}
     return CriterionResult(
         scores=scores,
         metrics=CRITERION_METRICS["architecture"],
@@ -369,7 +363,7 @@ def similar_top(params: SimilarParams) -> tuple[list[int], list[float]]:
         scoring = get_active_scoring_cache()
     except FileNotFoundError:
         log.exception("Scoring cache unavailable for similar-iBGC query")
-        raise CriterionError(503, "Similarity index is not available yet")
+        raise CriterionError(503, "Similarity index is not available yet") from None
 
     row_ix = scoring.row_index_for(params.ibgc_id)
     if row_ix is None:
@@ -402,9 +396,7 @@ def similar_top(params: SimilarParams) -> tuple[list[int], list[float]]:
 def resolve_similar(params: SimilarParams) -> CriterionResult:
     """Resolve a similar-iBGC criterion to per-iBGC composite scores."""
     top_ids, top_scores = similar_top(params)
-    scores = {
-        nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)
-    }
+    scores = {nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)}
     return CriterionResult(
         scores=scores,
         metrics=CRITERION_METRICS["similar"],
@@ -431,10 +423,11 @@ def run_sequence_search(
     Raises ``IndexNotBuiltError`` if the phmmer index is missing, so the failure
     is visible to the operator rather than silently returning an empty roster.
     """
-    from discovery.services.protein_search import phmmer_search
-    from discovery.services.protein_search.index import IndexNotBuiltError
     from django.conf import settings
     from django.db import connection
+
+    from discovery.services.protein_search import phmmer_search
+    from discovery.services.protein_search.index import IndexNotBuiltError
 
     seq = sequence.strip().upper()
     if not seq:
@@ -561,5 +554,9 @@ def resolve_criterion(ctype: str, params: dict | object) -> CriterionResult:
     resolver = _RESOLVERS.get(ctype)
     if resolver is None:
         raise CriterionError(400, f"Unknown criterion type: {ctype!r}")
-    typed = params if isinstance(params, _PARAM_TYPES[ctype]) else build_params(ctype, params)
+    typed = (
+        params
+        if isinstance(params, _PARAM_TYPES[ctype])
+        else build_params(ctype, params)
+    )
     return resolver(typed)

@@ -120,10 +120,7 @@ def _version_sort_key(version_str: str) -> int:
 
 
 def _generate_tool_name_code(tool: str, existing_codes: set[str]) -> str:
-    if not tool or not tool.strip():
-        base = "UNK"
-    else:
-        base = tool.strip().upper()[:3]
+    base = tool.strip().upper()[:3] if tool and tool.strip() else "UNK"
     if len(base) < 3:
         base = base.ljust(3, "X")
 

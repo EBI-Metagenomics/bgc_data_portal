@@ -15,6 +15,10 @@ from __future__ import annotations
 
 import logging
 
+from django.db import connection
+from django.db.models import Count, Min
+from django.db.models.expressions import RawSQL
+
 from discovery.models import (
     ContigDomain,
     DashboardAssembly,
@@ -24,9 +28,6 @@ from discovery.models import (
     IntegratedBgc,
     SourceBgcPrediction,
 )
-from django.db import connection
-from django.db.models import Count, Min
-from django.db.models.expressions import RawSQL
 
 logger = logging.getLogger(__name__)
 

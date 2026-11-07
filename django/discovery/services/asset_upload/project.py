@@ -37,11 +37,12 @@ import base64
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from discovery.services.go_slim import go_slim_for_terms
 from django.conf import settings
+
+from discovery.services.go_slim import go_slim_for_terms
 
 from . import cache as asset_cache
 from .matrices import (
@@ -137,7 +138,7 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
         # Row format mirrors integrated._build_ibgcs_for_contig:
         # (sbgc_id, cbgc_id, start, end, tool, is_partial, is_validated, contig_accession).
         # The helper ignores cbgc_id and contig_accession, so we pass placeholders.
-        id_to_bgc: dict[int, AssetBgc] = {i: b for i, b in enumerate(bgcs)}
+        id_to_bgc: dict[int, AssetBgc] = dict(enumerate(bgcs))
         rows = [
             (
                 i,
@@ -696,7 +697,7 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
     first = virtual_ibgcs[0]
     summary = {
         "token": token,
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": datetime.now(UTC).isoformat(),
         "n_ibgcs": len(virtual_ibgcs),
         "n_bgcs": sum(len(v.member_bgcs) for v in virtual_ibgcs),
         "assembly_accession": first.assembly_accession,

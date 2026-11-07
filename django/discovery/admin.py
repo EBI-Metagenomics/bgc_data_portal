@@ -105,5 +105,3 @@ class DashboardBgcClassAdmin(admin.ModelAdmin):
 class DashboardDomainAdmin(admin.ModelAdmin):
     list_display = ("acc", "name", "bgc_count")
     search_fields = ("acc", "name")
-
-

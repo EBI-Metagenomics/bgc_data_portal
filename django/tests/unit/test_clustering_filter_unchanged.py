@@ -43,5 +43,3 @@ def test_architecture_module_default_sources_unchanged():
 # Rollback to an older run (and any caller that doesn't opt in) must keep
 # scoring exactly as before: Dice on the IPR-projected vocabulary, prune 0.05,
 # projection floor 0.1.
-
-

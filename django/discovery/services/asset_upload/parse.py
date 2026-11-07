@@ -12,12 +12,6 @@ import io
 import logging
 import sys
 
-# ``contig_sequences.tsv`` carries base64-encoded contig sequences that
-# routinely exceed Python's default 128 KB csv field cap. Lift the limit to
-# the platform max — the upload byte cap and ``MAX_FILE_BYTES`` already
-# bound the actual size we'll see.
-csv.field_size_limit(sys.maxsize)
-
 from .schemas import (
     MAX_BGC_ROWS,
     MAX_CDS_ROWS,
@@ -33,6 +27,12 @@ from .schemas import (
 from .validate import AssetValidationError, ValidatedTarball
 
 log = logging.getLogger(__name__)
+
+# ``contig_sequences.tsv`` carries base64-encoded contig sequences that
+# routinely exceed Python's default 128 KB csv field cap. Lift the limit to
+# the platform max — the upload byte cap and ``MAX_FILE_BYTES`` already
+# bound the actual size we'll see.
+csv.field_size_limit(sys.maxsize)
 
 
 def _reader(buf: bytes):

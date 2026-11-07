@@ -1493,7 +1493,7 @@ def ibgc_detail(request, ibgc_id: int):
     try:
         ibgc = IntegratedBgc.objects.select_related("contig", "cbgc").get(id=ibgc_id)
     except IntegratedBgc.DoesNotExist:
-        raise HttpError(404, "iBGC not found")
+        raise HttpError(404, "iBGC not found") from None
 
     member_qs = (
         SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc_id)
@@ -1619,7 +1619,7 @@ def ibgc_architecture_endpoint(request, ibgc_id: int):
     try:
         ibgc = IntegratedBgc.objects.get(id=ibgc_id)
     except IntegratedBgc.DoesNotExist:
-        raise HttpError(404, "iBGC not found")
+        raise HttpError(404, "iBGC not found") from None
 
     # ``ibgc_architecture`` takes the single iBGC id and pools the architecture
     # across the CDS overlapping its range (same rule the detail view uses) —
@@ -1666,7 +1666,7 @@ def similar_ibgc_query(
     try:
         top_ids, top_sims = similar_top(build_params("similar", body))
     except CriterionError as exc:
-        raise HttpError(exc.status, exc.message)
+        raise HttpError(exc.status, exc.message) from exc
     sim_lookup = dict(zip(top_ids, top_sims))
 
     if not top_ids:
@@ -1929,7 +1929,7 @@ _MAX_COMBINED_CRITERIA = 12
 def _clean_protein_sequence(sequence: str) -> str:
     """Strip FASTA headers/whitespace from a pasted protein sequence."""
     lines = (sequence or "").strip().splitlines()
-    return "".join(l.strip() for l in lines if not l.startswith(">"))
+    return "".join(line.strip() for line in lines if not line.startswith(">"))
 
 
 def _validate_criterion_params(ctype: str, params) -> dict:
@@ -1967,9 +1967,8 @@ def _validate_criterion_params(ctype: str, params) -> dict:
             "min_pident": params.min_pident,
             "min_qcov": params.min_qcov,
         }
-    elif ctype == "similar":
-        if not params.ibgc_id:
-            raise HttpError(400, "similar criterion requires an ibgc_id")
+    elif ctype == "similar" and not params.ibgc_id:
+        raise HttpError(400, "similar criterion requires an ibgc_id")
     return None
 
 
@@ -2000,7 +1999,7 @@ def _normalise_combined_criteria(criteria) -> list[dict]:
         try:
             params = build_params(c.type, raw_params)
         except CriterionError as exc:
-            raise HttpError(exc.status, exc.message)
+            raise HttpError(exc.status, exc.message) from exc
         normalised = _validate_criterion_params(c.type, params)
         out.append({"id": cid, "type": c.type, "params": normalised or raw_params})
     return out
@@ -2119,7 +2118,7 @@ def combined_query_endpoint(request, body: CombinedQueryRequest):
         result = combined_query.enqueue(criteria, filters)
     except Exception as e:
         logger.error("Failed to dispatch combined query task: %s", e)
-        raise HttpError(503, "Search service temporarily unavailable")
+        raise HttpError(503, "Search service temporarily unavailable") from e
 
     return 202, CombinedQueryAccepted(task_id=result.id)
 
@@ -2616,7 +2615,7 @@ def ibgc_region(request, ibgc_id: int):
     try:
         ibgc = IntegratedBgc.objects.select_related("contig", "cbgc").get(id=ibgc_id)
     except IntegratedBgc.DoesNotExist:
-        raise HttpError(404, f"iBGC {ibgc_id} not found")
+        raise HttpError(404, f"iBGC {ibgc_id} not found") from None
 
     bgc_range = ibgc.bgc_range
     window_start = bgc_range.lower
@@ -2753,5 +2752,3 @@ def ibgc_region(request, ibgc_id: int):
 
 
 # ── Accession resolve ─────────────────────────────────────────────────────────
-
-

@@ -244,16 +244,16 @@ def test_enrichment_refuses_mibig_and_metagenomes(bad):
 
 # ── Run sha + weight alignment ──────────────────────────────────────────────
 
-_SHA = dict(
-    sources=("NCBIFAM", "PFAM"),
-    weights=(0.5, 0.5),
-    knn_k=12,
-    leiden_resolutions=(0.03, 0.08, 0.15, 0.25),
-    seed=42,
-    ibgc_etag="10:99",
-    domain_etag="500:999",
-    domain_vocab="IPR_PROJECTED",
-)
+_SHA = {
+    "sources": ("NCBIFAM", "PFAM"),
+    "weights": (0.5, 0.5),
+    "knn_k": 12,
+    "leiden_resolutions": (0.03, 0.08, 0.15, 0.25),
+    "seed": 42,
+    "ibgc_etag": "10:99",
+    "domain_etag": "500:999",
+    "domain_vocab": "IPR_PROJECTED",
+}
 
 
 def test_default_dice_run_sha_is_unchanged():

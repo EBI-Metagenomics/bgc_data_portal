@@ -8,7 +8,6 @@ from pathlib import Path
 
 import dj_database_url
 from csp.constants import NONE, SELF
-
 from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables from .env file

@@ -26,14 +26,15 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
+from django.db.backends.postgresql.psycopg_any import NumericRange
+from django.db.models import F
+from django.db.models.functions import Upper
+
 from discovery.models import ContigDomain, IntegratedBgc, SourceBgcPrediction
 from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES,
     _normalize_sources,
 )
-from django.db.backends.postgresql.psycopg_any import NumericRange
-from django.db.models import F
-from django.db.models.functions import Upper
 
 
 def _interpro_url(entry_acc: str) -> str:
