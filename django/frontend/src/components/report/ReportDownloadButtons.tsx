@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { downloadReportHtml } from "@/lib/report-html-export";
 import type { ReportPayload } from "@/api/types";
 
@@ -37,9 +38,8 @@ export function ReportDownloadButtons({ payload }: Props) {
     try {
       await downloadReportHtml(payload);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error("HTML export failed", err);
-      alert("Could not generate the HTML report. Please try again.");
+      toast.error("Could not generate the HTML report. Please try again.");
     } finally {
       setHtmlBusy(false);
     }

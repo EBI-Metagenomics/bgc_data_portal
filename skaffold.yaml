@@ -11,8 +11,6 @@ build:
       docker:
         dockerfile: Dockerfile
         target: web-dev
-        buildArgs:
-          VITE_BASE_PATH: /static/dashboard/
       platforms:
         - linux/arm64   # M3 Pro / Apple Silicon; change to linux/amd64 for Intel/CI
       sync:

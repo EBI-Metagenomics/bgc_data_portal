@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import Plot from "react-plotly.js";
+import { Plot } from "@/lib/plotly";
 import { useDiscoveryStore } from "@/stores/discovery-store";
 import { IbgcContextMenu } from "./IbgcContextMenu";
 

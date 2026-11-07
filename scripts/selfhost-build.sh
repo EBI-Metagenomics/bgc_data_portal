@@ -41,7 +41,7 @@ WORKER_IMG="bgc-data-portal-django-worker:${TAG}"
 KCTX="k3d-${CLUSTER}"
 
 echo ">> [1/5] Build images from source (public base images only)"
-docker build -t "$DJANGO_IMG" --target web --build-arg VITE_BASE_PATH=/static/dashboard/ django
+docker build -t "$DJANGO_IMG" --target web django
 docker build -t "$WORKER_IMG" --target worker django
 
 echo ">> [2/5] Ensure k3d cluster '${CLUSTER}' (NodePort 30080 -> host :8080)"

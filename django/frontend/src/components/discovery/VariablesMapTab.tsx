@@ -3,8 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchIbgcDetail, fetchIbgcScatter, toMapSortBy } from "@/api/ibgcs";
 import {
   appliedFiltersToApiParams,
+  dominantCriterion,
   isAppliedFiltersEmpty,
   useDiscoveryStore,
+  type ScoresByCriterion,
 } from "@/stores/discovery-store";
 import { useIbgcIdsetParam } from "@/hooks/use-ibgc-idset-param";
 import type {
@@ -32,20 +34,10 @@ const STABLE_AXES: { value: IbgcScatterAxis; label: string }[] = [
   { value: "n_cds", label: "# CDS" },
 ];
 
-/** Legacy query axes whose values come from the single-similarity store maps
- *  (similar-iBGC / filter-only paths, which don't go through the combined
- *  query). Combined-query axes use ``score:<cid>[:metric]`` instead. */
-const LEGACY_QUERY_AXES = new Set<IbgcScatterAxis>([
-  "similarity_score",
-  "best_pident",
-  "best_qcoverage",
-]);
-
-/** A "query axis" is resolved client-side from the store score maps rather than
- *  the ``/ibgcs/scatter/`` endpoint: a per-criterion ``score:*`` axis or a
- *  legacy single-similarity axis. */
+/** A "query axis" (``score:<cid>[:metric]``) is resolved client-side from the
+ *  per-criterion score maps rather than the ``/ibgcs/scatter/`` endpoint. */
 function isQueryAxis(axis: IbgcScatterAxis): boolean {
-  return axis.startsWith("score:") || LEGACY_QUERY_AXES.has(axis);
+  return axis.startsWith("score:");
 }
 
 function metricValue(sc: CriterionScore | undefined, key: string): number | null {
@@ -62,12 +54,12 @@ function metricValue(sc: CriterionScore | undefined, key: string): number | null
   }
 }
 
-/** Resolve a ``score:<cid>[:metric]`` axis for one iBGC from the combined-query
- *  per-criterion score maps. */
+/** Resolve a ``score:<cid>[:metric]`` axis for one iBGC from the per-criterion
+ *  score maps. */
 function criterionAxisValue(
   axis: string,
   id: number,
-  scoresByCriterion: Record<string, Record<number, CriterionScore>> | null,
+  scoresByCriterion: ScoresByCriterion | null,
 ): number | null {
   const parts = axis.split(":"); // score:<cid>[:<metric>]
   const cid = parts[1];
@@ -76,40 +68,21 @@ function criterionAxisValue(
   return metricValue(scoresByCriterion?.[cid]?.[id], metric);
 }
 
-/** Build the X/Y axis options. With a combined query active, each criterion
- *  contributes one plottable axis per metric (keyed ``score:<cid>[:metric]``);
- *  otherwise the legacy single-similarity axes back the similar-iBGC path. */
+/** Build the X/Y axis options: the stable iBGC columns plus, for each active
+ *  criterion, one plottable axis per sortable metric (``score:<cid>[:metric]``). */
 function buildAxisOptions(
-  useCombined: boolean,
   criteria: CriterionColumn[] | null,
-  searchSource: string | null,
 ): { value: IbgcScatterAxis; label: string }[] {
   const opts = [...STABLE_AXES];
-  if (useCombined && criteria) {
-    for (const c of criteria) {
-      const multi = c.metrics.length > 1;
-      for (const m of c.metrics) {
-        if (!m.sortable) continue;
-        const value = (
-          m.key === "value" ? `score:${c.id}` : `score:${c.id}:${m.key}`
-        ) as IbgcScatterAxis;
-        opts.push({ value, label: multi ? `${c.label} · ${m.label}` : c.label });
-      }
+  for (const c of criteria ?? []) {
+    const multi = c.metrics.length > 1;
+    for (const m of c.metrics) {
+      if (!m.sortable) continue;
+      const value = (
+        m.key === "value" ? `score:${c.id}` : `score:${c.id}:${m.key}`
+      ) as IbgcScatterAxis;
+      opts.push({ value, label: multi ? `${c.label} · ${m.label}` : c.label });
     }
-    return opts;
-  }
-  opts.push({
-    value: "similarity_score",
-    label:
-      searchSource === "sequence"
-        ? "Bitscore"
-        : searchSource === "domain"
-          ? "Domain match"
-          : "Query similarity",
-  });
-  if (searchSource === "sequence") {
-    opts.push({ value: "best_pident", label: "Identity %" });
-    opts.push({ value: "best_qcoverage", label: "Query coverage %" });
   }
   return opts;
 }
@@ -119,53 +92,47 @@ export function VariablesMapTab() {
   const yAxis = useDiscoveryStore((s) => s.variablesAxisY);
   const setAxes = useDiscoveryStore((s) => s.setVariablesAxes);
   const resultIbgcIds = useDiscoveryStore((s) => s.resultIbgcIds);
-  const resultSimilarityById = useDiscoveryStore(
-    (s) => s.resultSimilarityById,
-  );
-  const resultPidentById = useDiscoveryStore((s) => s.resultPidentById);
-  const resultQcoverageById = useDiscoveryStore(
-    (s) => s.resultQcoverageById,
-  );
   const resultCriteria = useDiscoveryStore((s) => s.resultCriteria);
   const resultScoresByCriterion = useDiscoveryStore(
     (s) => s.resultScoresByCriterion,
   );
-  const searchSource = useDiscoveryStore((s) => s.searchSource);
   const applied = useDiscoveryStore((s) => s.appliedFilters);
   const referenceIbgcId = useDiscoveryStore((s) => s.referenceIbgcId);
 
-  const useCombined = (resultCriteria?.length ?? 0) > 0;
-  const axisOptions = buildAxisOptions(useCombined, resultCriteria, searchSource);
+  const axisOptions = useMemo(
+    () => buildAxisOptions(resultCriteria),
+    [resultCriteria],
+  );
   const axisLabel = (axis: IbgcScatterAxis): string =>
     axisOptions.find((o) => o.value === axis)?.label ?? axis;
 
   // When the active criteria change, a previously-selected ``score:*`` axis can
   // reference a criterion that no longer exists — reset it to a stable axis so
-  // the map doesn't get stuck plotting nothing. Keyed on the criteria id set so
-  // this only fires when the result's columns actually change.
-  const criteriaKey = (resultCriteria ?? []).map((c) => c.id).join(",");
+  // the map doesn't get stuck plotting nothing.
   useEffect(() => {
     const valid = new Set(axisOptions.map((o) => o.value));
-    const stale = (a: IbgcScatterAxis) => a.startsWith("score:") && !valid.has(a);
+    const stale = (a: IbgcScatterAxis) => isQueryAxis(a) && !valid.has(a);
     if (stale(xAxis) || stale(yAxis)) {
       setAxes(
         stale(xAxis) ? "novelty_score" : xAxis,
         stale(yAxis) ? "domain_novelty" : yAxis,
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [criteriaKey]);
+  }, [axisOptions, xAxis, yAxis, setAxes]);
 
   const xIsQuery = isQueryAxis(xAxis);
   const yIsQuery = isQueryAxis(yAxis);
   const anyStableAxis = !xIsQuery || !yIsQuery;
   const anyQueryAxis = xIsQuery || yIsQuery;
-  // Need scored results to plot a query axis: per-criterion scores for combined
-  // queries, or the single-similarity map for the legacy similar-iBGC path.
-  const haveQueryScores = useCombined
-    ? resultScoresByCriterion != null
-    : resultSimilarityById != null;
-  const queryAxesUnplottable = anyQueryAxis && !haveQueryScores;
+  // Need scored results to plot a query axis.
+  const queryAxesUnplottable = anyQueryAxis && resultScoresByCriterion == null;
+
+  // The single "similarity" surfaced in the hover text: the dominant
+  // criterion's primary value (sequence > architecture > domain > similar).
+  const hoverScores = useMemo(() => {
+    const col = dominantCriterion(resultCriteria);
+    return col ? (resultScoresByCriterion?.[col.id] ?? null) : null;
+  }, [resultCriteria, resultScoresByCriterion]);
 
   const assetToken = useDiscoveryStore((s) => s.assetToken);
   // Sample the same top-5k the roster shows (server caps both at 5k). The sort
@@ -237,17 +204,8 @@ export function VariablesMapTab() {
     }
 
     function resolveAxis(axis: IbgcScatterAxis, id: number): number | null {
-      if (axis.startsWith("score:")) {
+      if (isQueryAxis(axis)) {
         return criterionAxisValue(axis, id, resultScoresByCriterion);
-      }
-      if (axis === "similarity_score") {
-        return resultSimilarityById?.[id] ?? null;
-      }
-      if (axis === "best_pident") {
-        return resultPidentById?.[id] ?? null;
-      }
-      if (axis === "best_qcoverage") {
-        return resultQcoverageById?.[id] ?? null;
       }
       const sp = stableById.get(id);
       if (!sp) return null;
@@ -291,7 +249,7 @@ export function VariablesMapTab() {
         classification_path: sp?.classification_path,
         novelty_score: sp?.novelty_score,
         domain_novelty: sp?.domain_novelty,
-        similarity_score: resultSimilarityById?.[id] ?? null,
+        similarity_score: hoverScores?.[id]?.value ?? null,
       });
     }
 
@@ -303,22 +261,8 @@ export function VariablesMapTab() {
       refDetail.id === referenceIbgcId &&
       !base.some((p) => p.id === referenceIbgcId)
     ) {
-      const x = axisValueFromDetail(
-        refDetail,
-        xAxis,
-        resultSimilarityById,
-        resultPidentById,
-        resultQcoverageById,
-        resultScoresByCriterion,
-      );
-      const y = axisValueFromDetail(
-        refDetail,
-        yAxis,
-        resultSimilarityById,
-        resultPidentById,
-        resultQcoverageById,
-        resultScoresByCriterion,
-      );
+      const x = axisValueFromDetail(refDetail, xAxis, resultScoresByCriterion);
+      const y = axisValueFromDetail(refDetail, yAxis, resultScoresByCriterion);
       if (x != null && y != null) {
         base.push({
           id: refDetail.id,
@@ -331,7 +275,7 @@ export function VariablesMapTab() {
           classification_path: refDetail.classification_path,
           novelty_score: refDetail.novelty_score,
           domain_novelty: refDetail.domain_novelty,
-          similarity_score: resultSimilarityById?.[refDetail.id] ?? null,
+          similarity_score: hoverScores?.[refDetail.id]?.value ?? null,
         });
       }
     }
@@ -340,10 +284,8 @@ export function VariablesMapTab() {
   }, [
     scatterData,
     resultIbgcIds,
-    resultSimilarityById,
-    resultPidentById,
-    resultQcoverageById,
     resultScoresByCriterion,
+    hoverScores,
     xAxis,
     yAxis,
     scatterX,
@@ -430,14 +372,11 @@ export function VariablesMapTab() {
 function axisValueFromDetail(
   d: IbgcDetail,
   axis: IbgcScatterAxis,
-  resultSimilarityById: Record<number, number> | null,
-  resultPidentById: Record<number, number> | null,
-  resultQcoverageById: Record<number, number> | null,
-  resultScoresByCriterion: Record<string, Record<number, CriterionScore>> | null,
+  resultScoresByCriterion: ScoresByCriterion | null,
 ): number | null {
-  // Per-criterion axes resolve from the combined-query score maps (keyed by id),
+  // Per-criterion axes resolve from the score maps (keyed by id),
   // independent of IbgcDetail.
-  if (axis.startsWith("score:")) {
+  if (isQueryAxis(axis)) {
     return criterionAxisValue(axis, d.id, resultScoresByCriterion);
   }
   // IbgcDetail does not carry `n_cds`; if that axis is selected and the
@@ -450,14 +389,6 @@ function axisValueFromDetail(
       return d.domain_novelty ?? null;
     case "size_kb":
       return d.size_kb ?? null;
-    case "similarity_score":
-      return resultSimilarityById?.[d.id] ?? null;
-    case "best_pident":
-      return resultPidentById?.[d.id] ?? null;
-    case "best_qcoverage":
-      return resultQcoverageById?.[d.id] ?? null;
-    case "n_cds":
-      return null;
     default:
       return null;
   }

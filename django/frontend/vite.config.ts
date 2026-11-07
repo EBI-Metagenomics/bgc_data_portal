@@ -4,7 +4,12 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
-  base: process.env.VITE_BASE_PATH ?? "/static/dashboard/",
+  // Relative base: chunk / asset URLs resolve against the entry's own URL
+  // (``import.meta.url``), so the same bundle works at ``/static/dashboard/``
+  // and behind an ingress prefix (``/finn-srv/mgnify-bgcs/static/dashboard/``)
+  // without a build-time VITE_BASE_PATH. API / router paths are unaffected —
+  // they read ``<meta name="base-path">`` at runtime.
+  base: "./",
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -20,7 +25,10 @@ export default defineConfig({
         chunkFileNames: "assets/[name].js",
         assetFileNames: "assets/[name].[ext]",
         manualChunks: {
-          plotly: ["plotly.js-basic-dist-min", "react-plotly.js"],
+          // The one Plotly build (see src/lib/plotly.ts). Only the factory
+          // entry of react-plotly.js is listed: its default entry would pull
+          // the full ``plotly.js`` source package in as a second copy.
+          plotly: ["plotly.js-dist-min", "react-plotly.js/factory"],
           vendor: ["react", "react-dom", "react-router-dom"],
         },
       },

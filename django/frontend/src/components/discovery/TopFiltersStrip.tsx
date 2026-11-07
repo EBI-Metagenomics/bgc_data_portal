@@ -46,7 +46,7 @@ export function TopFiltersStrip() {
               variant="ghost"
               size="sm"
               className="h-7 gap-1 text-xs"
-              onClick={() => setQueryResult(null, null, null, null, null, null)}
+              onClick={() => setQueryResult(null)}
             >
               <X className="h-3 w-3" />
               {clearLabel} ({resultIbgcIds.length})

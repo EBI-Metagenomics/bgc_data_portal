@@ -12,12 +12,8 @@ WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-# The base path is baked into the bundle so chunk imports resolve through the
-# ingress prefix. Release images keep the production prefix; local builds pass
-# --build-arg VITE_BASE_PATH=/static/dashboard/ (see skaffold.yaml).
-ARG VITE_BASE_PATH=/finn-srv/mgnify-bgcs/static/dashboard/
-ENV VITE_BASE_PATH=${VITE_BASE_PATH}
-# vite.config.ts writes to ../static/dashboard, i.e. /src/static/dashboard
+# Asset URLs are relative (vite base "./"), so one bundle serves every ingress
+# prefix. vite.config.ts writes to ../static/dashboard, i.e. /src/static/dashboard
 RUN npm run build
 
 # ── User docs (Quarto website served at /docs/) ──────────────────────────────

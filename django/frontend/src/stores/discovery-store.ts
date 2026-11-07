@@ -6,7 +6,14 @@ import type {
   IbgcScatterAxis,
   RegionCds,
 } from "@/api/types";
-import { useFilterStore } from "@/stores/filter-store";
+import { pick } from "@/lib/utils";
+import {
+  FILTER_VALUE_KEYS,
+  INITIAL_FILTER_VALUES,
+  useFilterStore,
+  type FilterActions,
+  type FilterState,
+} from "@/stores/filter-store";
 
 /**
  * Session state for the v2 Discovery dashboard.
@@ -26,27 +33,60 @@ export type RosterSortKey =
   | "domain_novelty"
   | "size_kb"
   | "id"
+  // Server-side "keep the allow-list order" sort (array_position). The roster
+  // ranks the result allow-list client-side by the active criterion metric and
+  // sends this so the server preserves that order.
   | "similarity"
-  // Sequence-search per-hit metrics. These are NOT backend sort columns —
-  // the roster ranks the result allow-list client-side by the corresponding
-  // metric map and sends sort_by="similarity" (array_position) so the server
-  // preserves that order. Selectable only while a sequence result is active.
-  | "pident"
-  | "qcov"
-  // Combined-query per-criterion sort keys: ``score:<criterionId>`` (primary
-  // value) or ``score:<criterionId>:<metricKey>`` (e.g. a sequence pident).
-  // Resolved by the combined status endpoint against its cached score maps.
+  // Per-criterion sort keys: ``score:<criterionId>`` (primary value) or
+  // ``score:<criterionId>:<metricKey>`` (e.g. a sequence pident). Resolved
+  // client-side against ``resultScoresByCriterion``.
   | `score:${string}`;
 
 /** Which advanced-query path produced the current ``resultIbgcIds`` set.
- *  Lets the roster swap the "Sim." column for sequence-search-specific
- *  columns. ``null`` = no advanced query (filter-only run or fresh load). */
+ *  Drives the "Clear …" button label. ``null`` = no advanced query (filter-only
+ *  run or fresh load). */
 export type SearchSource =
   | "sequence"
   | "domain"
   | "domain_architecture"
   | "similar_ibgc"
   | null;
+
+/** Criterion id → (iBGC id → score payload). */
+export type ScoresByCriterion = Record<string, Record<number, CriterionScore>>;
+
+/**
+ * A scored query result. Every producer (combined query, find-similar) emits
+ * this one shape: an ordered iBGC allow-list plus one score column per
+ * criterion. The roster columns and the Variables-map axes are derived from
+ * ``criteria`` + ``scoresByCriterion`` alone.
+ */
+export interface QueryResult {
+  /** Best-first ordered allow-list (capped server-side). */
+  ids: number[];
+  /** Ordered criterion-column descriptors; ``criteria[0]`` is the primary. */
+  criteria: CriterionColumn[];
+  scoresByCriterion: ScoresByCriterion;
+  source: Exclude<SearchSource, null>;
+  /** Full match count before the cap (``null`` when unknown) and whether the
+   *  allow-list was capped. Drives the "showing top N of M" banner. */
+  totalMatched: number | null;
+  capped: boolean;
+}
+
+/** The criterion whose primary value is surfaced as the single "similarity"
+ *  (map hover text): sequence > architecture > domain > similar, else the
+ *  first column. */
+export function dominantCriterion(
+  criteria: CriterionColumn[] | null,
+): CriterionColumn | null {
+  if (!criteria || criteria.length === 0) return null;
+  for (const type of ["sequence", "architecture", "domain", "similar"]) {
+    const col = criteria.find((c) => c.type === type);
+    if (col) return col;
+  }
+  return criteria[0] ?? null;
+}
 
 interface DiscoveryState {
   // Reference iBGC (top-right detail card, pinned across left-clicks).
@@ -78,54 +118,19 @@ interface DiscoveryState {
   rosterOrder: "asc" | "desc";
   setRosterSort: (sortBy: RosterSortKey, order: "asc" | "desc") => void;
 
-  // Run Query result set — iBGC id allow-list applied by the roster + maps
-  // when populated. Null = no active query, show everything.
+  // Scored query result (see ``QueryResult``), spread into individual fields
+  // so consumers subscribe to just what they render. All null/empty when no
+  // scored query is active (filter-only run or fresh load): the roster + maps
+  // then show everything matching ``appliedFilters``.
   resultIbgcIds: number[] | null;
-  /** Optional iBGC → similarity-score lookup populated by sequence/domain
-   *  queries; used to colour scatter points by score. */
-  resultSimilarityById: Record<number, number> | null;
-  /** Optional iBGC → best-hit protein_id lookup populated by sequence
-   *  protein search; overlaid onto roster rows since the standard
-   *  ``/ibgcs/roster/`` endpoint does not carry per-query data. */
-  resultBestHitProteinById: Record<number, string> | null;
-  /** Percent identity (0–100) of the winning CDS per iBGC; feeds the
-   *  Variables Map "Identity" axis. */
-  resultPidentById: Record<number, number> | null;
-  /** Query coverage (0–100) of the winning CDS per iBGC; feeds the
-   *  Variables Map "Query coverage" axis. */
-  resultQcoverageById: Record<number, number> | null;
-  /** Which advanced-query path produced ``resultIbgcIds``; toggles the
-   *  bitscore + best-hit-protein columns in the roster. */
+  resultCriteria: CriterionColumn[] | null;
+  resultScoresByCriterion: ScoresByCriterion | null;
   searchSource: SearchSource;
-  /** Full match count before the 5k cap, and whether the result was capped.
-   *  Drives the "showing top N of M" banner above the roster. ``null`` when
-   *  no scored query is active. */
   resultTotalMatched: number | null;
   resultCapped: boolean;
-  setQueryResult: (
-    ids: number[] | null,
-    similarity?: Record<number, number> | null,
-    source?: SearchSource,
-    bestHitProtein?: Record<number, string> | null,
-    pident?: Record<number, number> | null,
-    qcoverage?: Record<number, number> | null,
-    totalMatched?: number | null,
-    capped?: boolean,
-  ) => void;
-
-  // Combined multi-criterion query result. ``resultCriteria`` is the ordered
-  // list of criterion-column descriptors (drives the roster's per-criterion
-  // columns + the Variables-map axes); ``resultScoresByCriterion`` maps a
-  // criterion id → (iBGC id → its score payload). Both null when no combined
-  // query is active. The legacy ``result*ById`` maps above are back-filled
-  // from the primary criterion so existing views keep working during the
-  // migration to per-criterion columns.
-  resultCriteria: CriterionColumn[] | null;
-  resultScoresByCriterion: Record<string, Record<number, CriterionScore>> | null;
-  setCombinedResult: (
-    criteria: CriterionColumn[] | null,
-    scoresByCriterion: Record<string, Record<number, CriterionScore>> | null,
-  ) => void;
+  /** Replace the scored result (``null`` clears it). A fresh result also
+   *  resets the compare / protein selections. */
+  setQueryResult: (result: QueryResult | null) => void;
 
   // Snapshot of filter-store values taken when the user last pressed Run
   // Query. The roster/maps key off this — toggling a chip without pressing
@@ -144,68 +149,25 @@ interface DiscoveryState {
   clearSelections: () => void;
 }
 
-export interface AppliedIbgcFilters {
-  sourceNames: string[];
-  detectorTools: string[];
-  assemblyType: string;
-  taxonomyPath: string;
-  bgcClass: string;
-  gcfPath: string;
-  // Selected NPClassifier term ids (descendants matched server-side) and
-  // whether only confident labels count.
-  npcTerms: string[];
-  npcConfidentOnly: boolean;
-  biomeLineage: string;
-  // Single smart accession field (assembly / contig / BGC / iBGC / protein).
-  accession: string;
-  assemblyIds: string;
-  organism: string;
-  // Free-text term matched against the iBGC's domain annotations. Drives
-  // the landing-page keyword-search fallback (e.g. "Polyketide").
-  domainText: string;
-  // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
-  minLengthKb: number | null;
-  maxLengthKb: number | null;
-}
+/** The filter-chip values as applied by Run Query — the filter store minus its
+ *  actions, so every chip is represented automatically. */
+export type AppliedIbgcFilters = Omit<FilterState, keyof FilterActions>;
 
-export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
-  sourceNames: [],
-  detectorTools: [],
-  assemblyType: "",
-  taxonomyPath: "",
-  bgcClass: "",
-  gcfPath: "",
-  npcTerms: [],
-  npcConfidentOnly: true,
-  biomeLineage: "",
-  accession: "",
-  assemblyIds: "",
-  organism: "",
-  domainText: "",
-  minLengthKb: null,
-  maxLengthKb: null,
-};
+export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = INITIAL_FILTER_VALUES;
 
 /** True when no filter chip is set in the applied snapshot.
  *  Combined with ``resultIbgcIds == null`` it gates the dashboard's
  *  empty-state CTA so we never fire an unbounded fetch on landing. */
 export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
-  return (
-    applied.sourceNames.length === 0 &&
-    applied.detectorTools.length === 0 &&
-    applied.npcTerms.length === 0 &&
-    applied.assemblyType === "" &&
-    applied.taxonomyPath === "" &&
-    applied.bgcClass === "" &&
-    applied.gcfPath === "" &&
-    applied.biomeLineage === "" &&
-    applied.accession === "" &&
-    applied.assemblyIds === "" &&
-    applied.organism === "" &&
-    applied.domainText === "" &&
-    applied.minLengthKb == null &&
-    applied.maxLengthKb == null
-  );
+  return FILTER_VALUE_KEYS.every((key) => {
+    // The confident-only toggle only qualifies ``npcTerms``; on its own it
+    // does not narrow anything (see ``appliedFiltersToApiParams``).
+    if (key === "npcConfidentOnly") return true;
+    const value = applied[key];
+    return Array.isArray(value)
+      ? value.length === 0
+      : value === EMPTY_APPLIED_FILTERS[key];
+  });
 }
 
 /**
@@ -243,7 +205,7 @@ export function appliedFiltersToApiParams(
   if (applied.biomeLineage) params.biome_lineage = applied.biomeLineage;
   if (applied.accession) params.accession = applied.accession;
   if (applied.assemblyIds) params.assembly_ids = applied.assemblyIds;
-  if (applied.organism) params.organism = applied.organism;
+  if (applied.search) params.organism = applied.search;
   if (applied.domainText) params.domain_text = applied.domainText;
   if (applied.minLengthKb != null) {
     params.min_length_kb = String(applied.minLengthKb);
@@ -261,31 +223,22 @@ export function appliedFiltersToApiParams(
  * Snapshot the live filter-chip store into an ``AppliedIbgcFilters`` object.
  *
  * Single source of truth for the filterStore → appliedFilters mapping so the
- * Run Query button (``use-run-ibgc-query``) and the landing-page keyword
- * redirect (``use-url-sync`` auto-run) stay in lockstep. Every chip in
- * ``FilterPanel`` must be represented here, otherwise its value is silently
- * discarded when a query runs.
+ * Run Query button (``use-run-ibgc-query``), Find Similar and the landing-page
+ * keyword redirect (``use-url-sync`` auto-run) stay in lockstep. Picks every
+ * value key of the filter store, so a new chip is carried automatically.
  */
 export function snapshotFiltersToApplied(): AppliedIbgcFilters {
-  const f = useFilterStore.getState();
-  return {
-    sourceNames: f.sourceNames,
-    detectorTools: f.detectorTools,
-    assemblyType: f.assemblyType,
-    taxonomyPath: f.taxonomyPath,
-    bgcClass: f.bgcClass,
-    gcfPath: f.gcfPath,
-    npcTerms: f.npcTerms,
-    npcConfidentOnly: f.npcConfidentOnly,
-    biomeLineage: f.biomeLineage,
-    accession: f.accession,
-    assemblyIds: f.assemblyIds,
-    organism: f.search,
-    domainText: f.domainText,
-    minLengthKb: f.minLengthKb,
-    maxLengthKb: f.maxLengthKb,
-  };
+  return pick(useFilterStore.getState(), FILTER_VALUE_KEYS);
 }
+
+const NO_RESULT = {
+  resultIbgcIds: null,
+  resultCriteria: null,
+  resultScoresByCriterion: null,
+  searchSource: null,
+  resultTotalMatched: null,
+  resultCapped: false,
+} as const;
 
 export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   referenceIbgcId: null,
@@ -309,44 +262,22 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   setRosterSort: (rosterSortBy, rosterOrder) =>
     set({ rosterSortBy, rosterOrder }),
 
-  resultIbgcIds: null,
-  resultSimilarityById: null,
-  resultBestHitProteinById: null,
-  resultPidentById: null,
-  resultQcoverageById: null,
-  searchSource: null,
-  resultTotalMatched: null,
-  resultCapped: false,
-  setQueryResult: (
-    ids,
-    similarity = null,
-    source = null,
-    bestHitProtein = null,
-    pident = null,
-    qcoverage = null,
-    totalMatched = null,
-    capped = false,
-  ) =>
+  ...NO_RESULT,
+  setQueryResult: (result) =>
     set({
-      resultIbgcIds: ids,
-      resultSimilarityById: similarity,
-      resultBestHitProteinById: bestHitProtein,
-      resultPidentById: pident,
-      resultQcoverageById: qcoverage,
-      searchSource: source,
-      resultTotalMatched: totalMatched,
-      resultCapped: capped,
+      ...(result
+        ? {
+            resultIbgcIds: result.ids,
+            resultCriteria: result.criteria,
+            resultScoresByCriterion: result.scoresByCriterion,
+            searchSource: result.source,
+            resultTotalMatched: result.totalMatched,
+            resultCapped: result.capped,
+          }
+        : NO_RESULT),
       // A fresh query resets compare/protein selections.
       compareIbgcId: null,
       selectedCds: null,
-    }),
-
-  resultCriteria: null,
-  resultScoresByCriterion: null,
-  setCombinedResult: (criteria, scoresByCriterion) =>
-    set({
-      resultCriteria: criteria,
-      resultScoresByCriterion: scoresByCriterion,
     }),
 
   appliedFilters: EMPTY_APPLIED_FILTERS,
@@ -362,16 +293,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       referenceIbgcId: null,
       compareIbgcId: null,
       selectedCds: null,
-      resultIbgcIds: null,
-      resultSimilarityById: null,
-      resultBestHitProteinById: null,
-      resultPidentById: null,
-      resultQcoverageById: null,
-      resultCriteria: null,
-      resultScoresByCriterion: null,
-      searchSource: null,
-      resultTotalMatched: null,
-      resultCapped: false,
+      ...NO_RESULT,
       appliedFilters: EMPTY_APPLIED_FILTERS,
       // Note: ``assetToken`` is intentionally preserved across Run Query
       // resets — the asset chip stays pinned until the user evicts it.
