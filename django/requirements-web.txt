@@ -42,4 +42,4 @@ biopython==1.85
 # Pinned to the common-core commit that vendors the NPClassifier ontology
 # (common_core.npc) on top of the CHAMOIS / ESM-C / ChemOnt / UMAP removal
 # (clustering output schema v3; v1/v2 tarballs still import).
-mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@cb1d719aa02a46fd97e4a2819d0cdc9c17601471
+mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@c4fefd4b5c039e1cd574df5540414c1d3d2f4158
