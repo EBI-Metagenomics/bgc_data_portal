@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
     auth=first_party_gate,
 )
 def report_snapshot(request, body: ReportSnapshotRequest):
-    """Materialise a shortlist Report payload and cache it in Redis by token.
+    """Materialise a shortlist Report payload and cache it by token.
 
     The token is ``sha256(sorted comma-joined ids)[:32]`` so the same shortlist
     always resolves to the same token (cheap re-render across browsers/sessions).
@@ -51,7 +51,7 @@ def report_snapshot(request, body: ReportSnapshotRequest):
         raise HttpError(400, f"shortlist limit is {MAX_SHORTLIST} iBGCs")
 
     # Split positive (DB) from negative (asset) ids and hydrate the asset
-    # rows from Redis if a token was supplied.
+    # rows from the cache if a token was supplied.
     asset_ids = [i for i in ids if i < 0]
     extra_rows: list[dict] = []
     extra_domain_rows: list[dict] = []

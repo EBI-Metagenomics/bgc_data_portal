@@ -32,7 +32,7 @@ def set_job_cache(
 
 
 class JobResult:
-    """Thin adapter over a django-tasks ``TaskResult`` exposing the Celery-ish
+    """Thin adapter over a django-tasks ``TaskResult`` exposing the
     ``.ready()`` / ``.failed()`` / ``.result`` surface used by the API poll
     endpoints. ``None`` means the backend has no record of the id (treated as
     still-pending by callers)."""

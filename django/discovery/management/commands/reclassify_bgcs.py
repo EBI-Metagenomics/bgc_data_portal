@@ -44,7 +44,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--sync",
             action="store_true",
-            help="Run synchronously in the current process instead of dispatching to Celery",
+            help="Run synchronously in the current process instead of enqueuing a worker task",
         )
         parser.add_argument(
             "--queue",

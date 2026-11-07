@@ -13,11 +13,11 @@ the gated endpoints. These classes key on client IP unconditionally.
 
 Tiers (rates from ``settings.API_THROTTLE_RATES``, env-tunable):
   * default — every Discovery endpoint (generous; never bothers a real UI user)
-  * search  — the compute-heavy query endpoints (sequence/chemical dispatch,
-              similar-iBGC, architecture, domain)
-  * upload  — ephemeral asset upload (strictest; writes + Celery + Redis)
+  * search  — the compute-heavy query endpoints (combined query dispatch,
+              similar-iBGC)
+  * upload  — ephemeral asset upload (strictest; writes + a worker task)
 
-Throttle state lives in the default Django cache (Redis), so counters are shared
+Throttle state lives in the default Django cache (Postgres), so counters are shared
 across gunicorn workers and pods. Client IP resolution honours
 ``NINJA_NUM_PROXIES`` — set it to the number of trusted reverse proxies in front
 of Django so the real client IP is read from ``X-Forwarded-For`` rather than a

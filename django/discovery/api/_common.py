@@ -267,6 +267,6 @@ def ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
 
 def asset_token_header(request) -> str | None:
     """Frontend passes the active asset token via ``X-Asset-Token`` so the
-    negative-id dispatcher can resolve asset iBGCs out of Redis without
+    negative-id dispatcher can resolve asset iBGCs out of the cache without
     polluting the URL with a query param."""
     return request.headers.get("X-Asset-Token") or request.GET.get("asset_token")

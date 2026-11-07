@@ -34,7 +34,7 @@ def asset_upload(request):
     """Upload an ephemeral tarball of BGC TSVs (``Ga…_assembly_upload.tar.gz``).
 
     Returns ``202`` with ``{token, task_id}``; the projection runs in a
-    Celery worker and the result is cached in Redis under ``asset:{token}:*``
+    worker and the result is cached under ``asset:{token}:*``
     for 6 hours. Poll ``GET /assets/{token}/status/`` for progress.
 
     The request body is ``multipart/form-data`` with a single ``file`` field.
@@ -104,7 +104,7 @@ def asset_status(request, token: str):
     auth=first_party_gate,
 )
 def asset_evict(request, token: str):
-    """Drop every Redis key tied to this asset token (user X-click on chip)."""
+    """Drop every cache key tied to this asset token (user X-click on chip)."""
     from discovery.services.asset_upload import cache as asset_cache
 
     asset_cache.evict_asset(token)

@@ -174,10 +174,9 @@ DATABASES = {
 # Background tasks — django-tasks with the Postgres-backed django-tasks-db
 # backend (no broker, no Redis result store). The DB-poll worker claims rows
 # with SELECT … FOR UPDATE SKIP LOCKED, so multiple worker pods are safe.
-# Two queues mirror the old Celery routing: "default" and the dedicated
-# "scores" queue. Run a worker with:
+# Two queues: "default" (searches, uploads, stats) and "scores" (long
+# recomputes). Run a worker with:
 #   python manage.py db_worker --queue-name default,scores
-# Tests override TASKS to the in-process ImmediateBackend (see test settings).
 TASKS = {
     "default": {
         "BACKEND": "django_tasks_db.DatabaseBackend",
@@ -213,8 +212,8 @@ PROTEIN_SEARCH_INDEX_DIR: Path = Path(
 # Intra-query parallelism for the phmmer scan. A single sequence query is split
 # across this many threads, each scanning a slice of the resident protein block
 # (pyhmmer releases the GIL during the C search), giving near-linear speedup.
-# This is orthogonal to Celery prefork --concurrency=1: one task at a time, but
-# that task uses all the worker pod's cores. NB: pyhmmer's own `cpus=` param
+# One worker handles one task at a time, but that task uses all the pod's
+# cores. NB: pyhmmer's own `cpus=` param
 # parallelises across *queries*, so it does nothing for a single query — the
 # split is done by us. Defaults to the pod's core count, capped at 8.
 PROTEIN_SEARCH_CPUS: int = int(

@@ -155,7 +155,7 @@ def phmmer_search(
         Number of threads to split the scan across. The target DB is divided
         into ``cpus`` slices, each scanned on its own thread; results are
         merged. Default 1 (no split). One phmmer search at a time is assumed
-        (Celery ``--concurrency=1``), so these threads have the pod to
+        (one task at a time per worker), so these threads have the pod to
         themselves.
     block
         Override the target block (used by tests). When omitted, loads the

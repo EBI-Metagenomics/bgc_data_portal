@@ -62,7 +62,7 @@ def index_paths(base_dir: str | os.PathLike | None = None) -> IndexPaths:
 
 @dataclass
 class IndexStats:
-    """Summary returned by build/update operations (logged & enqueued in Celery results)."""
+    """Summary returned by build/update operations (logged and stored in the task result)."""
 
     total_in_db: int
     already_indexed: int

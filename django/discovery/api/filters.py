@@ -47,6 +47,23 @@ logger = logging.getLogger(__name__)
     auth=first_party_gate,
 )
 def taxonomy_tree(request):
+    """Contig counts per taxon as a rank-labelled tree for the Taxonomy chip.
+
+    Scans every contig, so the tree is cached for five minutes (it changes
+    only when data is loaded), like the NPClassifier tree below.
+    """
+    from django.core.cache import cache
+
+    key = "discovery:taxonomy-tree:v1"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    tree = _build_taxonomy_tree()
+    cache.set(key, tree, 300)
+    return tree
+
+
+def _build_taxonomy_tree() -> list[TaxonomyNode]:
     from discovery.models import DashboardContig
     from discovery.services.taxonomy import ranked_labels, ranked_labels_by_taxon
 
@@ -96,6 +113,7 @@ def taxonomy_tree(request):
     auth=first_party_gate,
 )
 def bgc_classes(request):
+    """Normalised BGC classes with iBGC counts, for the BGC class chip."""
     return [
         BgcClassOption(name=row.name, count=row.bgc_count)
         for row in DashboardBgcClass.objects.filter(bgc_count__gt=0).order_by(
@@ -140,6 +158,7 @@ def gcf_list(
     page: int = 1,
     page_size: int = 50,
 ):
+    """Gene-cluster families (optionally by level / search) for the GCF chip."""
     # Scope to the latest ClusteringRun — IntegratedBgc.gene_cluster_family is
     # rewritten on every successful run, so this is the only set whose paths
     # match the live iBGC rows that ``leaf_path_prefix`` filters against.
@@ -200,6 +219,7 @@ def source_list(
     page: int = 1,
     page_size: int = 50,
 ):
+    """Assembly sources (collections) with counts, for the Source chip."""
     qs = AssemblySource.objects.filter(assemblies__isnull=False).annotate(
         assembly_count=Count("assemblies", distinct=True)
     )
@@ -231,6 +251,7 @@ def detector_list(
     page: int = 1,
     page_size: int = 50,
 ):
+    """Detection tools with counts, for the Detector chip."""
     qs = (
         DashboardDetector.objects.values("tool")
         .annotate(count=Count("source_bgcs"))

@@ -360,6 +360,10 @@ def ibgc_scatter(
 
 @router.get("/ibgcs/{ibgc_id}/", response=IbgcDetail)
 def ibgc_detail(request, ibgc_id: int):
+    """Full iBGC card: members, architecture, NPClassifier labels, parent assembly.
+
+    Negative ids are asset iBGCs and resolve through the ``X-Asset-Token`` header.
+    """
     if ibgc_id < 0:
         token = asset_token_header(request)
         if not token:

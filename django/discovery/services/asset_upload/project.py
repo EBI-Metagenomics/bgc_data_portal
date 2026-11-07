@@ -27,7 +27,7 @@ Pipeline:
    three quantities — they still appear in the roster, just dimmed on the
    Variables map.
 
-4. Materialise per-iBGC Redis payloads (manifest, roster rows, IbgcDetail,
+4. Materialise per-iBGC cache payloads (manifest, roster rows, IbgcDetail,
    region, architecture) under the ``asset:{token}:*`` keyspace.
 """
 
@@ -397,7 +397,7 @@ def _project_against_run(
                 vibgc.domain_novelty = n_unique / n_dom
 
 
-# ── Step 4: materialise Redis payloads ─────────────────────────────────────
+# ── Step 4: materialise cache payloads ─────────────────────────────────────
 
 
 def _ordered_architecture(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> list[dict]:
@@ -642,7 +642,7 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
 
 
 def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str, Any]:
-    """Run the full asset projection and materialise Redis payloads.
+    """Run the full asset projection and materialise cache payloads.
 
     Returns a summary dict (mirrored into the task status payload).
     """

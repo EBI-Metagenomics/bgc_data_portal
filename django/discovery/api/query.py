@@ -58,7 +58,7 @@ def similar_ibgc_query(
     The composite (the run's similarity metric: IDF × enrichment weighted
     cosine, or Dice on older runs) is computed on demand against the per-iBGC
     signature matrices of the active ClusteringRun. The full N×N similarity matrix
-    is no longer materialised; the result is cached in Redis for 24h keyed
+    is no longer materialised; the result is cached for 24h keyed
     on the run's sha256 so a new clustering run invalidates the cache by
     orphaning the previous keys.
 
