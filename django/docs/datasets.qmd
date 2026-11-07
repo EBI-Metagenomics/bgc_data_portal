@@ -35,7 +35,7 @@ These are not marine-specific, but they anchor the scoring and taxonomy you see 
 
 ### MIBiG — validated BGCs
 
-[MIBiG](mibig-validated.qmd) is the curated repository of **experimentally validated** BGCs with known products. Its entries are loaded as **validated** iBGCs and serve as the reference set that **novelty** is measured against: an iBGC's novelty is its distance from the nearest validated cluster. Validated iBGCs also carry curated compound names and structures. Without MIBiG there would be no yardstick for "new".
+[MIBiG](mibig-validated.qmd) is the curated repository of **experimentally validated** BGCs with known products. Its entries are loaded as **validated** iBGCs and serve as the reference set that **novelty** is measured against: an iBGC's novelty is its distance from the nearest validated cluster. Validated iBGCs also carry the curated natural-product class of their compound. Without MIBiG there would be no yardstick for "new".
 
 ### GTDB representative genomes
 

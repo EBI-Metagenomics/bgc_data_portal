@@ -59,6 +59,10 @@ The curated database of experimentally validated BGCs. Loaded as **validated** i
 
 `1 − similarity to the nearest validated cluster`. Higher = less like anything known. "—" when no validated reference exists. See [Scores & Metrics](scores-metrics.qmd).
 
+### NPClassifier (natural product class)
+
+A hierarchy of natural-product chemistry (pathway → superclass → class) used to label what a cluster is predicted to make. Predicted by SanntiS 1.0 (with a score and a confident/tentative flag) or curated from MIBiG. Shown as the "NP class" chip and filterable with the **Natural product class** chip. See [Key Concepts](key-concepts.qmd#predicted-product-class-npclassifier).
+
 ### Partial
 
 An iBGC that runs off the edge of its contig and may be incomplete. Assigned to a family and scored by its nearest complete neighbours. See [Scores & Metrics](scores-metrics.qmd).
