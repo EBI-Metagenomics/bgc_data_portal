@@ -47,10 +47,18 @@ def combined_query(criteria: list[dict], filters: dict | None = None) -> dict:
     ``/query/combined/status`` + ``/scores`` endpoints render. Runs on the
     default (worker) queue so it has access to phmmer, rdkit and the scoring
     cache the individual criteria need.
-    """
-    from discovery.services.query import run_combined_query
 
-    return run_combined_query(criteria, filters or {})
+    A :class:`CriterionError` (bad input, e.g. a partial iBGC as the similarity
+    seed, or an unavailable index) is a user-facing outcome, not a task failure:
+    it is returned as ``{"error": {"status", "message"}}`` so the status
+    endpoints can answer with that status and message.
+    """
+    from discovery.services.query import CriterionError, run_combined_query
+
+    try:
+        return run_combined_query(criteria, filters or {})
+    except CriterionError as exc:
+        return {"error": {"status": exc.status, "message": exc.message}}
 
 
 CLUSTERING_TTL = 86_400  # 24 hours

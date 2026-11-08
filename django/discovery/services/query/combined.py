@@ -87,7 +87,8 @@ def run_combined_query(
         }
 
     Raises :class:`CriterionError` for an unknown/invalid criterion or an
-    unavailable backing index (the task fails; the API status endpoint maps it).
+    unavailable backing index (the task returns it as ``{"error": ...}`` and the
+    API status endpoints answer with its status).
     """
     filters = filters or {}
     cap = max(1, min(int(cap), RESULT_CAP))

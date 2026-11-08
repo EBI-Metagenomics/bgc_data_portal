@@ -338,3 +338,30 @@ def test_scores_endpoint_returns_token_and_scores(client, monkeypatch):
     assert isinstance(body["ibgc_ids_token"], str) and body["ibgc_ids_token"]
     assert {row["id"] for row in body["items"]} == {a.id, b.id}
     assert [c["id"] for c in body["criteria"]] == ["d1", "s1"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("criterion_status", "http_status"), [(400, 400), (503, 500)])
+def test_status_and_scores_surface_criterion_errors(
+    client, monkeypatch, criterion_status, http_status
+):
+    error = {"error": {"status": criterion_status, "message": "Seed iBGC is partial"}}
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", _ready(error))
+    for url in (
+        "/api/discovery/query/combined/status/t/",
+        "/api/discovery/query/combined/status/t/scores/",
+    ):
+        resp = client.get(url)
+        assert resp.status_code == http_status
+        assert resp.json()["detail"] == "Seed iBGC is partial"
+
+
+def test_task_returns_criterion_errors_instead_of_failing(monkeypatch):
+    from discovery import tasks
+
+    def boom(criteria, filters):
+        raise q.CriterionError(400, "Seed iBGC is partial")
+
+    monkeypatch.setattr("discovery.services.query.run_combined_query", boom)
+    out = tasks.combined_query.func([{"id": "s", "type": "similar", "params": {}}])
+    assert out == {"error": {"status": 400, "message": "Seed iBGC is partial"}}

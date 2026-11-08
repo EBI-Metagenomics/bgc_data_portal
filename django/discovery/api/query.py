@@ -203,7 +203,12 @@ def _normalise_combined_criteria(criteria) -> list[dict]:
 
 
 def _load_combined_result(task_id: str) -> dict:
-    """Poll the combined-query task; raise 503 (pending) / 500 (failed)."""
+    """Poll the combined-query task; raise 503 (pending) / 500 (failed).
+
+    A criterion error the task returned (see ``tasks.combined_query``) is raised
+    with its own status and message, e.g. 400 for a partial similarity seed. A
+    criterion 503 (index not available) becomes 500: 503 here means "poll again".
+    """
     from discovery.cache_utils import fetch_job
 
     res = fetch_job(task_id)
@@ -212,7 +217,11 @@ def _load_combined_result(task_id: str) -> dict:
         raise HttpError(500, "Combined query failed")
     if not res.ready():
         raise HttpError(503, "Combined query still running")
-    return res.result or {}
+    result = res.result or {}
+    if error := result.get("error"):
+        status = error["status"]
+        raise HttpError(500 if status == 503 else status, error["message"])
+    return result
 
 
 def _criterion_columns(result: dict) -> list[CriterionColumn]:
