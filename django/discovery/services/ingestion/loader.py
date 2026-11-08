@@ -733,6 +733,12 @@ def load_cds(
     ``(contig, cds_range, strand)`` — the same gene called by two BGC tools
     is stored once.
 
+    Alternative transcripts of one eukaryotic gene (``.t1`` / ``.t2``) with the
+    same outer span also collapse: the first row in the file (``.t1``) is kept,
+    and the other isoform's sequence and domains are not loaded. In the
+    2026-11-08 marine-eukaryote E2E the 9 such pairs had identical Pfam /
+    NCBIfam domain sets. The number dropped is logged.
+
     Returns ``{(contig_id, protein_id_str): cds_id}``.
     """
     path = data_dir / "cds.tsv"
@@ -740,7 +746,9 @@ def load_cds(
         logger.info("cds.tsv not found, skipping")
         return {}
 
-    seen: set[tuple[int, int, int, int]] = set()  # (contig_id, lower, upper, strand)
+    # (contig_id, lower, upper, strand) → protein_id_str of the kept row
+    seen: dict[tuple[int, int, int, int], str] = {}
+    collapsed: list[str] = []  # distinct proteins dropped onto a kept span
 
     def rows() -> Iterator[ContigCds]:
         for row in _tsv_rows(path):
@@ -750,9 +758,12 @@ def load_cds(
             strand = int(row["strand"])
             cds_range = int4range(int(row["start_position"]), int(row["end_position"]))
             dedup_key = (contig_id, cds_range.lower, cds_range.upper, strand)
-            if dedup_key in seen:
+            kept = seen.get(dedup_key)
+            if kept is not None:
+                if kept != row["protein_id_str"]:
+                    collapsed.append(row["protein_id_str"])
                 continue
-            seen.add(dedup_key)
+            seen[dedup_key] = row["protein_id_str"]
             yield ContigCds(
                 contig_id=contig_id,
                 cds_range=cds_range,
@@ -766,6 +777,13 @@ def load_cds(
 
     total = _bulk_upsert(ContigCds, rows())
     logger.info("Loaded %d CDS rows", total)
+    if collapsed:
+        logger.warning(
+            "%d CDS shared a (contig, span, strand) with an earlier, different "
+            "protein (e.g. alternative transcripts) and were not loaded; first: %s",
+            len(collapsed),
+            collapsed[:5],
+        )
 
     # Lookup keyed by (contig_id, protein_id_str) — the natural per-gene key.
     cds_lookup: dict[tuple[int, str], int] = {}
