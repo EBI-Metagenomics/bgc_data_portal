@@ -41,7 +41,7 @@ django-tasks-db @ git+https://github.com/RealOrangeOne/django-tasks-db@29f923a58
     # via -r requirements-web.txt
 gunicorn==23.0.0
     # via -r requirements-web.txt
-mgnify-bgcs-common-core @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git@c4fefd4b5c039e1cd574df5540414c1d3d2f4158
+mgnify-bgcs-common-core @ git+https://github.com/EBI-Metagenomics/mgnify-bgcs-common-core.git@mgnify-bgcs-common-core-v2.0.0
     # via -r requirements-web.txt
 numpy==2.0.1
     # via
