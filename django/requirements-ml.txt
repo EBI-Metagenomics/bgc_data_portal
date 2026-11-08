@@ -4,4 +4,7 @@ pyhmmer==0.11.1
 igraph>=0.9
 leidenalg>=0.10
 pandas>=2.0
+# common_core.clustering.io writes/reads the clustering Parquet tables
+# (export_clustering_inputs, import of HPC results).
+pyarrow>=23.0,<24
 plotly>=5.20

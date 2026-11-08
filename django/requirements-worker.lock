@@ -72,6 +72,8 @@ psycopg==3.1.18
     # via -r requirements-web.txt
 psycopg-binary==3.1.18
     # via psycopg
+pyarrow==23.0.1
+    # via -r requirements-ml.txt
 pydantic==2.14.3
     # via
     #   -r requirements-web.txt
