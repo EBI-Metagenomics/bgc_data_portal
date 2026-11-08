@@ -860,7 +860,7 @@ function PredictorPanel({ rows }: { rows: ReportIbgcRow[] }) {
         <>
           <Plot
             data={built.figure.data as Plotly.Data[]}
-            layout={built.figure.layout}
+            layout={built.figure.layout as Partial<Plotly.Layout>}
             useResizeHandler
             style={{ width: "100%" }}
             config={{ displayModeBar: false }}
