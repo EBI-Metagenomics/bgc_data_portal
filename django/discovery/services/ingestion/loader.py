@@ -187,6 +187,24 @@ def _tsv_rows(path: Path) -> Iterator[dict[str, str]]:
         yield from csv.DictReader(f, delimiter="\t")
 
 
+def _require_columns(path: Path, required: set[str]) -> None:
+    """Raise ValueError when the TSV header lacks any of *required*."""
+    with open(path, newline="") as f:
+        header = next(csv.reader(f, delimiter="\t"), [])
+    missing = required - set(header)
+    if missing:
+        raise ValueError(f"{path.name} lacks columns {sorted(missing)}")
+
+
+# Without these a contig would load with length 0 or an empty accession.
+CONTIGS_REQUIRED_COLUMNS = {
+    "assembly_accession",
+    "sequence_sha256",
+    "accession",
+    "length",
+}
+
+
 # ── Pipeline steps ───────────────────────────────────────────────────────────
 
 
@@ -385,6 +403,7 @@ def load_contigs(
     if not path.exists():
         logger.warning("contigs.tsv not found, skipping")
         return {}
+    _require_columns(path, CONTIGS_REQUIRED_COLUMNS)
 
     by_sha: dict[str, DashboardContig] = {}
     for row in _tsv_rows(path):
