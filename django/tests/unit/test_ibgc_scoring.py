@@ -1,4 +1,4 @@
-"""Pure-array tests for ``compute_novelty_array`` and ``compute_domain_novelty_array``.
+"""Pure-array tests for ``compute_novelty_against_validated`` and ``compute_domain_novelty_array``.
 
 Exercises the math on small synthetic matrices without touching the DB.
 The DB-writing path (``score_primary_ibgcs``) is covered by an integration
@@ -15,7 +15,6 @@ scipy_sparse = pytest.importorskip("scipy.sparse")
 from discovery.services.clustering.ibgc_scoring import (  # noqa: E402
     compute_domain_novelty_array,
     compute_novelty_against_validated,
-    compute_novelty_array,
 )
 
 
@@ -37,54 +36,6 @@ def _coo(rows: list[list[int]], n_cols: int) -> scipy_sparse.csr_matrix:
         shape=(len(rows), n_cols),
         dtype=np.uint8,
     )
-
-
-def _sym_sim(values: dict[tuple[int, int], float], n: int) -> scipy_sparse.csr_matrix:
-    """Build a symmetric float similarity from upper-triangle entries."""
-    rows: list[int] = []
-    cols: list[int] = []
-    data: list[float] = []
-    for (i, j), v in values.items():
-        rows += [i, j]
-        cols += [j, i]
-        data += [v, v]
-    return scipy_sparse.csr_matrix((data, (rows, cols)), shape=(n, n), dtype=np.float32)
-
-
-# ── novelty (deprecated compute_novelty_array — reuses the clustering sim) ─
-# These lock the *old* math of the retained-for-compat helper; the corrected
-# behaviour lives in the compute_novelty_against_validated tests below.
-
-
-def test_novelty_no_validated_columns_returns_nans():
-    sim = _sym_sim({(0, 1): 0.4, (0, 2): 0.2, (1, 2): 0.9}, n=3)
-    out = compute_novelty_array(sim, validated_cols=[])
-    assert out.shape == (3,)
-    assert np.all(np.isnan(out))
-
-
-def test_novelty_uses_max_sim_to_validated_column():
-    # rows 0,1 are queries; column 2 is the only validated iBGC.
-    sim = _sym_sim({(0, 2): 0.7, (1, 2): 0.2, (0, 1): 0.95}, n=3)
-    out = compute_novelty_array(sim, validated_cols=[2])
-    # novelty(0) = 1 - 0.7 = 0.3   (sim(0,1) is irrelevant; col 1 not validated)
-    # novelty(1) = 1 - 0.2 = 0.8
-    # novelty(2) = 1 - 0   = 1.0   (diagonal zero, no other validated)
-    assert out[0] == pytest.approx(0.3, abs=1e-6)
-    assert out[1] == pytest.approx(0.8, abs=1e-6)
-    assert out[2] == pytest.approx(1.0, abs=1e-6)
-
-
-def test_novelty_validated_vs_other_validated_uses_diagonal_zero():
-    sim = _sym_sim({(0, 1): 0.6, (0, 2): 0.1, (1, 2): 0.4}, n=3)
-    # rows 0 and 1 are both validated; row 0's novelty must come from sim(0,1).
-    out = compute_novelty_array(sim, validated_cols=[0, 1])
-    assert out[0] == pytest.approx(1.0 - 0.6, abs=1e-6)
-    assert out[1] == pytest.approx(1.0 - 0.6, abs=1e-6)
-    assert out[2] == pytest.approx(1.0 - 0.4, abs=1e-6)
-
-
-# ── novelty against validated (decoupled, diagonal-intact) ────────────────
 
 
 def test_validated_against_validated_block_no_validated_returns_nan():

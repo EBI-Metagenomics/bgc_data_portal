@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+from common_core.clustering.scoring import compute_domain_novelty_array
 
 if TYPE_CHECKING:
     import scipy.sparse as sp
@@ -239,64 +240,6 @@ def compute_novelty_against_validated(
     novelty = (1.0 - max_sim).astype(np.float32)
     novelty[val] = 0.0
     return novelty
-
-
-def compute_novelty_array(
-    sim: sp.csr_matrix,
-    validated_cols: list[int],
-) -> np.ndarray:
-    """Return novelty per row: ``1 − max(sim_to_validated)``.
-
-    .. deprecated::
-        Reuses the clustering similarity matrix (diagonal zeroed + pruned),
-        which mis-scores validated rows (self-match dropped → spurious
-        ``> 0``) and near-threshold non-validated rows. Use
-        :func:`compute_novelty_against_validated`. Retained for tests only.
-    """
-    n_rows = sim.shape[0]
-    if not validated_cols:
-        return np.full(n_rows, np.nan, dtype=np.float32)
-
-    sim_to_validated = sim[:, validated_cols]
-    max_sim = np.asarray(sim_to_validated.max(axis=1).todense()).reshape(-1)
-    return (1.0 - max_sim).astype(np.float32)
-
-
-def compute_domain_novelty_array(
-    M_domains: sp.csr_matrix,
-    leaf_paths: list[str],
-) -> np.ndarray:
-    """Return per-row fraction of domains unique within the row's leaf GCF.
-
-    NaN for singleton leaf GCFs (`< 2` members), for empty leaf paths, and
-    for rows with zero source-domain hits — surfaced as NULL in the UI.
-    """
-    n_rows = M_domains.shape[0]
-    if len(leaf_paths) != n_rows:
-        raise ValueError(
-            f"leaf_paths length {len(leaf_paths)} ≠ M_domains row count {n_rows}"
-        )
-
-    path_to_rows: dict[str, list[int]] = defaultdict(list)
-    for i, p in enumerate(leaf_paths):
-        path_to_rows[p].append(i)
-
-    out = np.full(n_rows, np.nan, dtype=np.float32)
-    for path, rows in path_to_rows.items():
-        if not path or len(rows) < 2:
-            continue
-        sub = M_domains[rows].tocsr()
-        col_sums = np.asarray(sub.sum(axis=0)).reshape(-1)
-        for local_i, abs_row in enumerate(rows):
-            start = sub.indptr[local_i]
-            end = sub.indptr[local_i + 1]
-            if start == end:
-                continue
-            domain_cols = sub.indices[start:end]
-            n_domains = int(end - start)
-            n_unique = int((col_sums[domain_cols] == 1).sum())
-            out[abs_row] = n_unique / n_domains
-    return out
 
 
 def _validated_ibgc_ids() -> set[int]:
