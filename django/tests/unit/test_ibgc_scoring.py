@@ -38,6 +38,9 @@ def _coo(rows: list[list[int]], n_cols: int) -> scipy_sparse.csr_matrix:
     )
 
 
+# ── novelty against validated (decoupled, diagonal-intact) ────────────────
+
+
 def test_validated_against_validated_block_no_validated_returns_nan():
     M = _coo([[0, 1], [1, 2]], n_cols=3)
     out = compute_novelty_against_validated(M, _zeros(2), [], weights=(1.0, 0.0))
