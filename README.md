@@ -328,7 +328,7 @@ feeds a KNN → hierarchical Leiden clustering that assigns iBGCs to
 gene-cluster families and computes novelty scores. The clustering runs as an
 HPC handoff (above). NPClassifier labels (SanntiS 1.0 predictions, MIBiG
 curation) and the InterProScan 6 domain vocabulary follow
-[ADR 0004](https://github.com/EBI-Metagenomics/mgnify_bgcs_v2/blob/main/docs/architecture/adr/0004-sanntis-v1-ips6-npclassifier.md).
+[ADR 0005](https://github.com/EBI-Metagenomics/mgnify_bgcs_v2/blob/main/docs/architecture/adr/0005-sanntis-v1-ips6-npclassifier.md).
 
 ```
 django/
