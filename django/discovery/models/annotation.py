@@ -109,15 +109,14 @@ class ContigDomain(models.Model):
     )
 
     domain_acc = models.CharField(max_length=50, db_index=True)
-    domain_name = models.CharField(max_length=255)
+    # Text, not varchar: IPS6 reports CDD signature names up to ~300 chars.
+    domain_name = models.TextField()
     domain_description = models.TextField(blank=True, default="")
     ref_db = models.CharField(max_length=50, blank=True, default="")
 
     go_slim = models.JSONField(default=list, blank=True)
     interpro_entry_acc = models.CharField(max_length=20, blank=True, default="")
-    interpro_entry_description = models.CharField(
-        max_length=255, blank=True, default=""
-    )
+    interpro_entry_description = models.TextField(blank=True, default="")
     go_terms = models.JSONField(default=list, blank=True)
 
     # Protein-relative (amino-acid) coordinates of the hit
