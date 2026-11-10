@@ -25,7 +25,8 @@ class DashboardDomain(models.Model):
 
     id = models.AutoField(primary_key=True)
     acc = models.CharField(max_length=50, unique=True, db_index=True)
-    name = models.CharField(max_length=255)
+    # Text like ContigDomain.domain_name: IPS6 CDD names reach ~300 chars.
+    name = models.TextField()
     ref_db = models.CharField(max_length=50, blank=True, default="")
     description = models.TextField(blank=True, default="")
     bgc_count = models.IntegerField(
