@@ -21,7 +21,6 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Q
 
 from discovery.services.clustering.membership import DEFAULT_DOMAIN_SOURCES
 
@@ -276,15 +275,10 @@ class Command(BaseCommand):
 
 
 def _clusterable_ibgc_ids() -> list[int]:
-    """Primary set: iBGCs with at least one non-partial-or-validated source BGC."""
-    from discovery.models import SourceBgcPrediction
+    """Primary set (see ``services/clustering/primary_set.py``)."""
+    from discovery.services.clustering.primary_set import clusterable_ibgc_ids
 
-    ids = list(
-        SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
-        .filter(Q(is_partial=False) | Q(is_validated=True))
-        .values_list("integrated_bgc_id", flat=True)
-        .distinct()
-    )
+    ids = clusterable_ibgc_ids()
     if not ids:
         raise CommandError("No clusterable iBGCs (all iBGCs are partial+unvalidated).")
     return ids

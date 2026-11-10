@@ -83,6 +83,11 @@ def build_integrated_bgcs_task(
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
     from discovery.services.clustering.integrated import build_integrated_bgcs
+    from discovery.services.ingestion.edge_partial import mark_edge_partials
+
+    # Contig-edge flags first: the ETL's exact-edge test depends on the gene
+    # caller; the gene-margin rule makes them comparable across datasets.
+    mark_edge_partials()
 
     def _progress(phase: str, processed: int, total: int) -> None:
         set_job_cache(

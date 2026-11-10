@@ -263,9 +263,8 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
     IDF is never recomputed here: the corpus may have changed since the run.
     """
     from django.conf import settings
-    from django.db.models import Q
 
-    from discovery.models import IntegratedBgc, SourceBgcPrediction
+    from discovery.models import IntegratedBgc
     from discovery.services.clustering.adjacency import (
         build_ibgc_adjacency_pair_matrix,
     )
@@ -291,14 +290,12 @@ def rebuild_scoring_cache_from_db(run) -> Path | None:
                 f"{artifacts_dir}; re-import its output tarball"
             )
 
-    # Same clusterable subset the pipeline scores: iBGCs with at least one
-    # non-partial-or-validated source prediction.
-    clusterable_ibgc_ids = list(
-        SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
-        .filter(Q(is_partial=False) | Q(is_validated=True))
-        .values_list("integrated_bgc_id", flat=True)
-        .distinct()
+    # Same clusterable subset the export ships (primary_set.py).
+    from discovery.services.clustering.primary_set import (
+        clusterable_ibgc_ids as _primary_ids,
     )
+
+    clusterable_ibgc_ids = _primary_ids()
     if not clusterable_ibgc_ids:
         return None
 
