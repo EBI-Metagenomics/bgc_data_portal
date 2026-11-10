@@ -68,6 +68,7 @@ MERGE_TOOLS = (TOOL_GECCO, TOOL_SANNTIS)
 # iBGC rows (and their registry / member updates) are flushed in batches of
 # this size; each flush is three statements regardless of the batch's size.
 _FLUSH_BATCH = 2_000
+_PROGRESS_EVERY = 1000
 
 
 def build_integrated_bgcs(
@@ -169,7 +170,13 @@ def build_integrated_bgcs(
             if len(pending) >= _FLUSH_BATCH:
                 _flush(pending)
                 pending = []
-            if progress_cb is not None:
+            # Throttled: each report is a DatabaseCache write (SELECT COUNT(*)
+            # cull check + UPDATE) inside this one long transaction, whose dead
+            # row versions cannot be pruned until commit; per-contig reports
+            # made the build quadratic (2026-11 exp rebuild, 346k contigs).
+            if progress_cb is not None and (
+                processed % _PROGRESS_EVERY == 0 or processed == total_contigs
+            ):
                 progress_cb("contigs", processed, total_contigs)
         _flush(pending)
 
