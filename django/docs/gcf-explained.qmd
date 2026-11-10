@@ -21,7 +21,7 @@ The platform clusters all iBGCs from their **protein domains and domain arrangem
 
 Because similarity is domain-based, the clustering groups iBGCs with the same biosynthetic logic even when their DNA or protein sequences have diverged beyond what alignment would detect — clusters with different gene order or gene count can still land in the same family.
 
-**Partial** iBGCs (truncated at a contig edge) are not clustered directly; they are assigned to the family of their nearest complete neighbours.
+**Partial** iBGCs (truncated at a contig edge) and iBGCs spanning 200 kb or more are not clustered directly; they are assigned to the family of their nearest complete neighbours. A prediction counts as partial when the stretch between its outermost gene and the contig end could hold at most one more gene (judged by the prediction's own median gene length), the same for every detector, for the reference data and for uploaded assets. MIBiG entries are never partial.
 
 ## Key family properties
 

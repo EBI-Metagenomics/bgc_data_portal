@@ -136,3 +136,35 @@ def test_command_dry_run_reports(det, capsys):
     call_command("mark_edge_partials", "--dry-run")
     out = capsys.readouterr().out
     assert "dry_run=True" in out and "SanntiS" in out
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("margin", [0, 1, 2])
+def test_python_rule_matches_sql(det, margin):
+    """``is_edge_partial`` (asset upload) and ``mark_edge_partials`` (DB) agree."""
+    from discovery.services.ingestion.edge_partial import is_edge_partial
+
+    cases = [
+        (300, 5_000, (0, 1_000, 2_000, 3_000, 4_000)),
+        (120, 4_000, (120, 1_000, 2_000, 3_000)),
+        (2_500, 9_000, (2_500, 4_000, 6_000, 8_000)),
+        (50_000, 54_000, (50_000, 51_000, 52_000, 53_000)),
+        (94_000, 98_650, (94_000, 95_000, 96_000, 97_000)),
+        (96_000, L, (96_000, 97_000, 98_000)),
+        (1_500, 9_000, ()),
+    ]
+    made = []
+    for start, end, genes in cases:
+        c = DashboardContigFactory(length=L)
+        made.append((_call(c, det, start, end, genes=genes), start, end, genes))
+    mark_edge_partials(gene_margin=margin)
+    f = _flags()
+    for call, start, end, genes in made:
+        py = is_edge_partial(
+            start=start,
+            end=end,
+            contig_length=L,
+            gene_spans=[(g, g + GENE - 1) for g in genes],
+            gene_margin=margin,
+        )
+        assert f[call.id] is py, (start, end, margin)

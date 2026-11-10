@@ -29,6 +29,9 @@ from scratch, so it is idempotent and a different margin can be applied later.
 Only genes inside BGC calls are stored, so the gap is measured in bp and scaled
 by the call's own gene size rather than by counting genes beyond the call.
 
+The asset-upload projection applies the same rule in memory
+(:func:`is_edge_partial`); ``test_python_rule_matches_sql`` keeps the two in step.
+
 Range convention: the loader stores ``[start, end_position + 1)``; an element
 ending on the contig's last base therefore has ``upper = length + 1``.
 """
@@ -36,6 +39,8 @@ ending on the contig's last base therefore has ``upper = length + 1``.
 from __future__ import annotations
 
 import logging
+import statistics
+from collections.abc import Iterable
 
 from django.db import connection, transaction
 
@@ -78,6 +83,36 @@ WITH geom AS (
       FROM geom
 )
 """
+
+
+def is_edge_partial(
+    *,
+    start: int,
+    end: int,
+    contig_length: int,
+    gene_spans: Iterable[tuple[int, int]],
+    gene_margin: int = DEFAULT_GENE_MARGIN,
+    validated: bool = False,
+) -> bool:
+    """The same rule for one call held in memory (the asset-upload path).
+
+    Coordinates are the staged TSV values (``start_position`` /
+    ``end_position``, as in ``bgcs.tsv`` and ``cds.tsv``); the loader stores
+    them as ``[start, end + 1)``, so the gaps below equal the SQL ones.
+    ``gene_spans`` are the CDS on the contig; those overlapping the call are
+    used. ``contig_length <= 0`` (unknown) disables the right-hand test.
+    """
+    if validated:
+        return False
+    genes = [(s, e) for s, e in gene_spans if s <= end and start <= e]
+    gene_bp = (
+        statistics.median(e - s + 1 for s, e in genes) if genes else FALLBACK_GENE_BP
+    )
+    left = min([start, *(s for s, _ in genes)])
+    gaps = [left]
+    if contig_length > 0:
+        gaps.append(max(0, contig_length - max([end, *(e for _, e in genes)])))
+    return min(gaps) < (gene_margin + 1) * gene_bp
 
 
 def mark_edge_partials(

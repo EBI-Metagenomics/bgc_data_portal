@@ -43,6 +43,7 @@ from typing import Any
 from django.conf import settings
 
 from discovery.services.go_slim import go_slim_for_terms
+from discovery.services.ingestion.edge_partial import is_edge_partial
 
 from . import cache as asset_cache
 from .matrices import (
@@ -139,6 +140,22 @@ def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
         # (sbgc_id, cbgc_id, start, end, tool, is_partial, is_validated, contig_accession).
         # The helper ignores cbgc_id and contig_accession, so we pass placeholders.
         id_to_bgc: dict[int, AssetBgc] = dict(enumerate(bgcs))
+        # Contig-edge flags: the uploaded ``is_partial`` is replaced by the
+        # gene-margin rule the persistent path applies (mark_edge_partials),
+        # over every uploaded CDS on this contig.
+        gene_spans = {
+            (c.start_position, c.end_position)
+            for b in bgcs
+            for c in cds_by_bgc.get(b.key, [])
+        }
+        for b in bgcs:
+            b.is_partial = is_edge_partial(
+                start=b.start_position,
+                end=b.end_position,
+                contig_length=contig.length,
+                gene_spans=gene_spans,
+                validated=b.is_validated,
+            )
         rows = [
             (
                 i,

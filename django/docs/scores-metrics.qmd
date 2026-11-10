@@ -95,6 +95,8 @@ When you run a search, results gain a per-query score (shown in the roster's sim
 
 **Partial** iBGCs (truncated at a contig edge) are not clustered directly. They are placed into a family — and given novelty and domain-novelty scores — by their nearest complete neighbours. Their scores are therefore approximate; the partial flag tells you when to apply that caution.
 
+A prediction counts as partial when the stretch between its outermost gene and the contig end could hold at most one more gene (judged by the prediction's own median gene length), the same for every detector, for the reference data and for uploaded assets. MIBiG entries are never partial. iBGCs spanning 200 kb or more (other than MIBiG entries) are also placed by their neighbours rather than clustered directly, so that very long predictions — often several neighbouring clusters called as one — do not pull unrelated families together.
+
 ## Related pages
 
 - [Gene Cluster Families](gcf-explained.qmd) — the clustering behind domain novelty
