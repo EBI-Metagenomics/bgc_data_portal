@@ -346,7 +346,11 @@ else:
 # Logging
 
 DJANGO_MANAGED_LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
+# LOG_LEVEL overrides the DEBUG-derived default for the app and Django loggers.
 LOG_LEVEL = os.getenv("LOG_LEVEL", DJANGO_MANAGED_LOG_LEVEL).upper()
+# Django logs every SQL statement at DEBUG when DEBUG=True; with bulk loads
+# that is tens of GB per run. Opt in with DJANGO_SQL_LOG_LEVEL=DEBUG.
+SQL_LOG_LEVEL = os.getenv("DJANGO_SQL_LOG_LEVEL", "INFO").upper()
 
 
 LOGGING = {
@@ -364,7 +368,8 @@ LOGGING = {
     },
     "handlers": {
         "console": {
-            "level": DJANGO_MANAGED_LOG_LEVEL,
+            # Pass-through; the logger levels below decide what is emitted.
+            "level": "DEBUG",
             "class": "logging.StreamHandler",
             "stream": sys.stdout,
             "formatter": "simple",
@@ -372,14 +377,20 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console"],
-        "level": DJANGO_MANAGED_LOG_LEVEL,
+        "level": LOG_LEVEL,
     },
     "loggers": {
         "django": {
             "handlers": ["console"],
-            "level": DJANGO_MANAGED_LOG_LEVEL,
+            "level": LOG_LEVEL,
             "propagate": False,
         },
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": SQL_LOG_LEVEL,
+            "propagate": False,
+        },
+        "psycopg": {"level": "INFO"},
         # django-debug-toolbar 5.0.1's history_sidebar view renders
         # panel_content.html without `toolbar` in context, producing noisy
         # VariableDoesNotExist DEBUG traces on every page reload. Harmless —
