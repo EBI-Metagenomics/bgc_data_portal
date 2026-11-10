@@ -81,9 +81,15 @@ def _next_ibgc_suffix_index(cbgc_accession: str) -> int:
     Counts the registry rows already minted under this cBGC prefix. The
     registry outlives iBGC rebuilds, so the count only grows and a PK
     collision (another writer burned the index first) is retried by the caller.
+
+    Filter on the accession prefix alone: only iBGC accessions carry the
+    ``{cbgc}-`` prefix, and adding ``entity_type`` let the planner pick the
+    entity_type index and filter every iBGC row per mint (quadratic inside
+    ``build_integrated_bgcs``' single transaction, where the new rows are
+    invisible to the statistics). The prefix alone uses the accession
+    ``varchar_pattern_ops`` index.
     """
     return AccessionRegistry.objects.filter(
-        entity_type=AccessionEntityType.IBGC,
         accession__startswith=f"{cbgc_accession}-",
     ).count()
 
