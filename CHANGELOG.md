@@ -1,5 +1,49 @@
 # Changelog
 
+## [4.0.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.11.1...bgc_data_portal-v4.0.0) (2026-11-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **portal:** the public endpoints listed above and the natural_products field of the iBGC detail payload are gone.
+* **portal:** NPClassifier search and SanntiS 1.0 prediction fields
+* **portal:** /ibgcs/umap/ and /filters/chemont-classes/ are gone; iBGC payloads no longer carry umap_x / umap_y / umap_projected / chemont_tree, region CDS rows no longer carry chemont_*, stats no longer carry chemont_sunburst, the export has no umap object, and the chemical criterion type is rejected. Migrations 0009/0010 drop the vector extension and ChemOnt/UMAP data (back up first). The DB image changes from pgvector to plain postgres; apply 0009 before switching images on an existing DB.
+
+### Features
+
+* **asset-upload:** apply the gene-margin contig-edge rule to uploaded assets ([436f69b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/436f69b778cd673ae7b676504bc9fbc060db0c78))
+* **discovery:** gene-margin contig-edge rule and a 200 kb cap on primary iBGCs ([2639550](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/263955084d9dafc206564a00430a30526e30229a))
+* **ingestion:** add backfill_organism_names ([7602210](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/760221035131ffadc94ca4e6ba745810b16ac45c))
+* **portal:** harden the chart, add a production self-host profile, build user docs in the image ([dc9306c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/dc9306ce2ad8e87591ea7fa6dfdeda16ccc221c8))
+* **portal:** NPClassifier search and SanntiS 1.0 prediction fields ([3bdd091](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/3bdd0917309784dcedad7de32767b96286f48034))
+* **portal:** remove UMAP, the ChemOnt stack, chemical search and pgvector ([9071997](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/9071997764a4b696f3c31db19721dc86f2a87f9f))
+
+
+### Bug Fixes
+
+* **api:** return criterion errors from combined queries as 4xx ([061b6c7](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/061b6c7a4e68d5d994dc7cdaec4166e25b62c057))
+* **deps:** lock common-core c4fefd4 to match requirements-web.txt ([cb54a47](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/cb54a47f8614ef68ded5dc9a80abf76a61d80d9e))
+* **deps:** pin common-core c4fefd4 (contig-length filter eukaryote ids) ([08dad87](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/08dad8753221189b4f99dc0968e123273f67061a))
+* **deps:** restore pyarrow in the worker image ([43a1ce6](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/43a1ce692d7f3b8c97421fdaa22125c7ba5a4271))
+* **discovery:** mint iBGC suffixes via the accession prefix index ([44812ae](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/44812aead98abf6fe50d9fbaf077d2d9ae7c9111))
+* **discovery:** store domain catalog names as text ([b7cda57](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/b7cda57a3115f58fa2bb64f7e97ed50fde7e91ad))
+* **discovery:** store domain names as text so long IPS6 CDD names load ([a4a1591](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/a4a1591507b8819412b89d55d915d578eff32212))
+* **discovery:** throttle iBGC build progress reports to every 1000 contigs ([2b1c9d0](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/2b1c9d007d30d2ceb5ff8a6d1f500674cb0e2c8e))
+* **frontend:** clear the high and critical npm audit findings ([3f3de29](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/3f3de29917913da792e5827621d3c8e6f7a15cb3))
+* **ingestion:** log CDS isoforms that collapse onto one span ([0bda7b9](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/0bda7b939447899f693ae727df5d6cdea0440432))
+* **portal:** cache the taxonomy tree, validate ltree input, escape TSV formulas; docstring sweep ([3d025d3](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/3d025d3578cb84e16a12d3f713d8640ccbe20d29))
+* **portal:** harden settings and drop unused auth tokens ([f0a6f7f](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/f0a6f7fff1a98790d002eebebb172e675ca7c6e1))
+* **portal:** make the test suite green and consolidate pytest config ([910abfb](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/910abfb72e1fe9624eeefcf9ab1b12cdb19aa10a))
+* **portal:** pin common-core cb1d719 (SanntiS "Other &lt;pathway&gt;" superclasses) ([75236d1](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/75236d187e46df04c27eaeb35ee351e63223c645))
+* **portal:** rebuild iBGCs in one batched transaction; snapshots survive rebuilds ([5539fb6](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/5539fb61760b3e8f2b3035770b987c1f6b20ff64))
+* **portal:** regenerate lock files against common-core cb1d719 and prune unused dependencies ([2765f40](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/2765f4054aaafc40dc4d8f42ff8a0e2acddc864a))
+* **settings:** honour LOG_LEVEL and make SQL statement logging opt-in ([d85becb](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/d85becbf3ef77ba565f1cbbd5b55ca9aad4ca4ad))
+
+
+### Code Refactoring
+
+* **portal:** remove API surface, models and code with no user-reachable consumer ([76af81c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/76af81cbd5734ce97197b93d766caeba16b066c3))
+
 ## [3.11.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.11.0...bgc_data_portal-v3.11.1) (2026-11-02)
 
 
