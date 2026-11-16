@@ -1,141 +1,58 @@
-"""Worker-local cache of the on-disk protein DB.
+"""Streaming reader for the on-disk protein DB.
 
-The DB lives at ``settings.PROTEIN_SEARCH_INDEX_DIR/proteins.faa``. Each worker
-worker process loads it lazily on first use into a ``DigitalSequenceBlock`` and
-keeps it resident. A ``VERSION`` file next to the FASTA is consulted at every
-search call; when the stamp changes, the worker reloads.
-
-Workers should run ``--concurrency=1`` so one block lives per pod; scaling is
-done via replicas.
+The DB lives at ``settings.PROTEIN_SEARCH_INDEX_DIR/proteins.faa``. Each search
+reads it in fixed-size blocks instead of keeping it resident: a resident block of
+the full index (5.04 M proteins, 2 GB FASTA in 2026-11) holds ~5.3 GiB per worker
+process, while streaming peaks at a few blocks. Every search sees the FASTA as it
+is on disk, so an index rebuild or append needs no reload step.
 """
 
 from __future__ import annotations
 
-import logging
-import threading
-import time
+from collections.abc import Iterator
+from os import PathLike
 
 from pyhmmer.easel import Alphabet, DigitalSequenceBlock, SequenceFile
 
-from .build import IndexPaths, index_paths, read_version
+from .build import index_paths
 
-log = logging.getLogger(__name__)
+# Sequences per streamed block. ~100 MB of digitised sequences at the 2026-11
+# index's mean length; small enough that a few blocks in flight stay well under
+# 1 GiB, large enough that per-block phmmer setup is negligible.
+DEFAULT_BLOCK_SIZE = 100_000
 
 
 class IndexNotBuiltError(RuntimeError):
     """Raised when callers try to search before the FASTA has been built."""
 
 
-class ProteinSearchIndex:
-    """Singleton-style holder for the worker-local DigitalSequenceBlock.
+def iter_index_blocks(
+    block_size: int = DEFAULT_BLOCK_SIZE,
+    base_dir: str | PathLike | None = None,
+) -> Iterator[DigitalSequenceBlock]:
+    """Yield the protein DB as consecutive ``DigitalSequenceBlock``s of at most
+    ``block_size`` sequences, in file order.
 
-    Threadsafe — load and version-check are guarded by an RLock. The block
-    itself is not mutated after load.
+    Raises :class:`IndexNotBuiltError` (on the first ``next()``) if no FASTA
+    exists yet.
     """
-
-    def __init__(self) -> None:
-        self._lock = threading.RLock()
-        self._paths: IndexPaths | None = None
-        self._block: DigitalSequenceBlock | None = None
-        self._loaded_version: int = -1
-        # Cached chunk-split of the resident block for parallel scanning,
-        # keyed by chunk count; invalidated whenever the block reloads.
-        self._chunks: list[DigitalSequenceBlock] | None = None
-        self._chunks_n: int = 0
-        self._chunks_version: int = -1
-
-    def _resolve_paths(self) -> IndexPaths:
-        if self._paths is None:
-            self._paths = index_paths()
-        return self._paths
-
-    def reset(self) -> None:
-        """Force the next get_block() to reload from disk. For tests + admin tools."""
-        with self._lock:
-            self._block = None
-            self._loaded_version = -1
-            self._paths = None
-            self._chunks = None
-            self._chunks_n = 0
-            self._chunks_version = -1
-
-    def current_version(self) -> int:
-        """Return the on-disk VERSION stamp (does not load the block)."""
-        return read_version(self._resolve_paths())
-
-    def loaded_version(self) -> int:
-        return self._loaded_version
-
-    def get_block(self) -> DigitalSequenceBlock:
-        """Return a loaded ``DigitalSequenceBlock``, reloading if VERSION changed.
-
-        Raises :class:`IndexNotBuiltError` if no FASTA exists yet.
-        """
-        paths = self._resolve_paths()
-        disk_version = read_version(paths)
-
-        # Fast path — already loaded and version unchanged.
-        if self._block is not None and disk_version == self._loaded_version:
-            return self._block
-
-        with self._lock:
-            # Re-check inside the lock.
-            disk_version = read_version(paths)
-            if self._block is not None and disk_version == self._loaded_version:
-                return self._block
-
-            if not paths.fasta.exists():
-                raise IndexNotBuiltError(
-                    f"Protein search index not built at {paths.fasta}. "
-                    "Run `python manage.py build_protein_search_index --rebuild`."
-                )
-
-            t0 = time.perf_counter()
-            alphabet = Alphabet.amino()
-            with SequenceFile(
-                str(paths.fasta),
-                format="fasta",
-                digital=True,
-                alphabet=alphabet,
-            ) as sf:
-                block = sf.read_block()
-            elapsed = time.perf_counter() - t0
-
-            log.info(
-                "protein_search loaded %d proteins from %s in %.1fs (version=%d)",
-                len(block),
-                paths.fasta,
-                elapsed,
-                disk_version,
-            )
-            self._block = block
-            self._loaded_version = disk_version
-            return block
-
-    def get_blocks(self, n_chunks: int) -> list[DigitalSequenceBlock]:
-        """Return the resident DB split into up to ``n_chunks`` sub-blocks for
-        parallel scanning.
-
-        The split is computed once and cached; it is recomputed only when the
-        underlying block reloads (VERSION bump) or a different chunk count is
-        requested. Splitting just re-references the already-loaded sequences,
-        so the memory cost is the chunk wrappers, not a second copy of the DB.
-        """
-        block = self.get_block()  # ensures loaded + version-fresh
-        if n_chunks <= 1:
-            return [block]
-        with self._lock:
-            if (
-                self._chunks is not None
-                and self._chunks_n == n_chunks
-                and self._chunks_version == self._loaded_version
-            ):
-                return self._chunks
-            chunks = _split_block(block, n_chunks)
-            self._chunks = chunks
-            self._chunks_n = n_chunks
-            self._chunks_version = self._loaded_version
-            return chunks
+    paths = index_paths(base_dir)
+    if not paths.fasta.exists():
+        raise IndexNotBuiltError(
+            f"Protein search index not built at {paths.fasta}. "
+            "Run `python manage.py build_protein_search_index --rebuild`."
+        )
+    with SequenceFile(
+        str(paths.fasta),
+        format="fasta",
+        digital=True,
+        alphabet=Alphabet.amino(),
+    ) as sf:
+        while True:
+            block = sf.read_block(sequences=block_size)
+            if not block:
+                return
+            yield block
 
 
 def _split_block(
@@ -145,6 +62,7 @@ def _split_block(
 
     Returns ``[block]`` unchanged when splitting would be pointless (≤1 chunk
     or ≤1 sequence). Sub-blocks share the parent's sequences by reference.
+    Used when a caller passes an in-memory block (tests) instead of the index.
     """
     n = len(block)
     if n_chunks <= 1 or n <= 1:
@@ -155,7 +73,3 @@ def _split_block(
         DigitalSequenceBlock(block.alphabet, seqs[i : i + size])
         for i in range(0, n, size)
     ]
-
-
-# Process-wide singleton used by the search task.
-protein_search_index = ProteinSearchIndex()

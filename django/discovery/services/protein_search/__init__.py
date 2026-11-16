@@ -2,8 +2,8 @@
 
 The reference DB is a FASTA file (sha256-keyed) plus an Easel SSI index, stored
 on the ``PROTEIN_SEARCH_INDEX_DIR`` volume so all worker pods share it.
-A ``VERSION`` stamp next to the FASTA lets each worker detect updates and
-swap in a fresh ``DigitalSequenceBlock`` on the next query.
+Searches stream the FASTA in fixed-size blocks, so memory stays bounded and an
+updated index is picked up by the next query. ``VERSION`` counts index builds.
 
 Public entry points:
 
@@ -14,19 +14,19 @@ Public entry points:
 * :func:`discovery.services.protein_search.search.phmmer_search` —
   run phmmer with a query AA sequence; returns
   ``{sha256: ProteinHitMetrics}`` (bitscore, pident, qcoverage).
-* :data:`discovery.services.protein_search.index.protein_search_index` —
-  module-level singleton handed the loaded ``DigitalSequenceBlock``.
+* :func:`discovery.services.protein_search.index.iter_index_blocks` —
+  stream the index as ``DigitalSequenceBlock``s.
 """
 
 from .build import index_paths, rebuild_index, update_index
-from .index import protein_search_index
+from .index import iter_index_blocks
 from .search import ProteinHitMetrics, phmmer_search
 
 __all__ = [
     "rebuild_index",
     "update_index",
     "index_paths",
-    "protein_search_index",
+    "iter_index_blocks",
     "phmmer_search",
     "ProteinHitMetrics",
 ]
