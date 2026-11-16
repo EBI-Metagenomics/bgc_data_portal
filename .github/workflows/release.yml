@@ -83,7 +83,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # workflow_call/workflow_dispatch build the requested ref; a dev push
           # builds the pushed ref.
