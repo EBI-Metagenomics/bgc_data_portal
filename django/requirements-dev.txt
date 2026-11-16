@@ -2,7 +2,7 @@
 # (web dev image) or requirements-worker.txt (worker dev image).
 pytest>=7
 pytest-django>=4.5
-playwright>=1.40
+playwright>=1.65.1
 pytest-playwright>=0.4
 requests
 factory-boy>=3.3
