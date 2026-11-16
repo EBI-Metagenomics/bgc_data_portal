@@ -14,10 +14,9 @@
 from csp.decorators import csp_update
 from debug_toolbar.toolbar import debug_toolbar_urls
 from discovery.api import discovery_router
-from ninja.openapi.docs import Redoc
-
 from django.contrib import admin
 from django.urls import path, re_path
+from ninja.openapi.docs import Redoc
 
 from . import views
 from .api import api as ninja_api

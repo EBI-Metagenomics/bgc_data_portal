@@ -4,6 +4,8 @@ from datetime import datetime
 
 from ninja import Schema
 
+from discovery.services.ibgc_filters import IbgcFilterParams
+
 # ── Pagination ────────────────────────────────────────────────────────────────
 
 
@@ -17,71 +19,7 @@ class PaginationMeta(Schema):
 # ── Assembly schemas ─────────────────────────────────────────────────────────
 
 
-class AssemblyRosterItem(Schema):
-    id: int
-    accession: str
-    organism_name: str = ""
-    source_name: str | None = None
-    assembly_type: str = "genome"
-    is_type_strain: bool = False
-    type_strain_catalog_url: str = ""
-    # Scores
-    bgc_count: int = 0
-    l1_class_count: int = 0
-    bgc_diversity_score: float = 0.0
-    bgc_novelty_score: float = 0.0
-    bgc_density: float = 0.0
-    taxonomic_novelty: float = 0.0
-
-
-class PaginatedAssemblyResponse(Schema):
-    items: list[AssemblyRosterItem]
-    pagination: PaginationMeta
-
-
-class AssemblyDetail(Schema):
-    id: int
-    accession: str
-    organism_name: str = ""
-    source_name: str | None = None
-    assembly_type: str = "genome"
-    is_type_strain: bool = False
-    type_strain_catalog_url: str = ""
-    assembly_size_mb: float | None = None
-    biome_path: str = ""
-    url: str = ""
-    # Scores
-    bgc_count: int = 0
-    l1_class_count: int = 0
-    bgc_diversity_score: float = 0.0
-    bgc_novelty_score: float = 0.0
-    bgc_density: float = 0.0
-    taxonomic_novelty: float = 0.0
-
-
-class AssemblyScatterPoint(Schema):
-    id: int
-    x: float
-    y: float
-    organism_name: str | None = None
-    is_type_strain: bool = False
-
-
 # ── Detector / Region schemas ─────────────────────────────────────────────────
-
-
-class DetectorOut(Schema):
-    id: int
-    tool: str
-    version: str
-    tool_name_code: str
-
-
-class CbgcOut(Schema):
-    id: int
-    accession: str  # MGYB-XXXXXX
-    start_position: int
-    end_position: int
 
 
 # ── Source BGC prediction (per-tool drill-down) ────────────────────────────
@@ -105,42 +43,6 @@ class ParentAssemblySummary(Schema):
     source_name: str | None = None
     is_type_strain: bool = False
     url: str = ""
-
-
-class ChemOntAnnotationNode(Schema):
-    """A node in an aggregated ChemOnt classification tree.
-
-    Built from per-CDS CHAMOIS predictions: each CDS contributes its deepest
-    ChemOnt class; identical classes are unified across CDSs (max probability,
-    sum of CDS counts). Intermediate ancestors get a row whenever they sit on
-    the lineage between annotated leaves; ``probability`` is ``None`` for those
-    and ``n_cds`` is the sum of annotated descendants.
-    """
-
-    chemont_id: str
-    name: str
-    depth: int = 0
-    probability: float | None = None
-    n_cds: int = 0
-    children: list["ChemOntAnnotationNode"] = []
-
-
-class NaturalProductSummary(Schema):
-    """Curated per-iBGC natural product (SMILES, structure)."""
-
-    id: int
-    name: str
-    smiles: str
-    smiles_svg: str = ""
-    structure_thumbnail: str = ""
-    np_class_path: str = ""
-
-
-class ValidatedReferencePoint(Schema):
-    accession: str
-    classification_path: str = ""
-    umap_x: float
-    umap_y: float
 
 
 # ── iBGC (Integrated BGC) schemas ──────────────────────────────────────────
@@ -168,7 +70,6 @@ class IbgcRosterItem(Schema):
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False  # any source BGC sits on a type-strain assembly
-    umap_projected: bool = False
     parent_assembly_id: int | None = None
     parent_assembly_accession: str | None = None
     parent_assembly_collection: str | None = None  # assembly source name
@@ -203,38 +104,6 @@ class IbgcIdsResponse(Schema):
     truncated: bool
 
 
-class QueryScoreRow(Schema):
-    """One scored iBGC hit in a compact query-result payload.
-
-    Carries only the per-hit metrics the dashboard needs to build its
-    result allow-list and metric maps — the full roster rows are fetched
-    separately via ``/ibgcs/roster/?ibgc_ids=…``. ``similarity_score`` is
-    the query's native score (phmmer bitscore for sequence search, Dice for
-    domain/architecture, ChemOnt BMA for chemical). The ``best_*`` fields are
-    populated for sequence search only.
-    """
-
-    id: int
-    similarity_score: float | None = None
-    best_pident: float | None = None
-    best_qcoverage: float | None = None
-    best_hit_protein_id: str | None = None
-
-
-class QueryScoresResponse(Schema):
-    """Compact, ranked query result capped at ``cap`` rows.
-
-    ``items`` is ranked best-first and clipped to ``cap``; ``total_matched``
-    is the full pre-clip count so the UI can warn when results were capped
-    (``capped`` is ``total_matched > cap``).
-    """
-
-    items: list[QueryScoreRow]
-    total_matched: int
-    capped: bool
-    cap: int
-
-
 # ── Combined multi-criterion query ─────────────────────────────────────────
 
 
@@ -249,51 +118,17 @@ class CombinedQueryCriterion(Schema):
     * ``domain`` — ``domains_text``, ``logic`` (``and``/``or``), ``threshold``
     * ``architecture`` — ``architecture`` (list), ``weight``, ``k``, ``threshold``
     * ``sequence`` — ``sequence``, ``min_bitscore``, ``min_pident``, ``min_qcov``
-    * ``chemical`` — ``smiles``, ``similarity_threshold``
     * ``similar`` — ``ibgc_id``, ``k``
     """
 
     id: str
-    type: str  # domain | architecture | sequence | chemical | similar
+    type: str  # domain | architecture | sequence | similar
     params: dict = {}
-
-
-class CombinedQueryFilters(Schema):
-    """Non-scoring narrowing filters applied to the criteria intersection.
-
-    Mirrors the ``_apply_ibgc_filters`` kwargs the single-criterion endpoints
-    accept as query params; every field is optional and defaults to "no narrowing".
-    """
-
-    include_partials: bool = True
-    validated_only: bool = False
-    min_length_kb: float | None = None
-    max_length_kb: float | None = None
-    min_novelty: float | None = None
-    max_novelty: float | None = None
-    min_domain_novelty: float | None = None
-    max_domain_novelty: float | None = None
-    detector_tools: str | None = None
-    source_tools: str | None = None  # deprecated alias for detector_tools
-    source_names: str | None = None
-    assembly_type: str | None = None
-    leaf_path_prefix: str | None = None
-    bgc_class: str | None = None
-    chemont_ids: str | None = None
-    np_classes: str | None = None
-    accession: str | None = None
-    bgc_accession: str | None = None
-    assembly_accession: str | None = None
-    assembly_ids: str | None = None
-    organism: str | None = None
-    biome_lineage: str | None = None
-    taxonomy_path: str | None = None
-    domain_text: str | None = None
 
 
 class CombinedQueryRequest(Schema):
     criteria: list[CombinedQueryCriterion] = []
-    filters: CombinedQueryFilters | None = None
+    filters: IbgcFilterParams | None = None
 
 
 class CombinedQueryAccepted(Schema):
@@ -373,9 +208,29 @@ class IbgcMemberBgc(Schema):
     id: int
     accession: str  # prediction_accession
     detector_name: str | None = None
+    detector_version: str | None = None
     is_partial: bool = False
     is_validated: bool = False
     size_kb: float = 0.0
+    score: float | None = (
+        None  # detector-native region score (SanntiS 1.0 mean ORF score, GECCO p)
+    )
+    probability: float | None = (
+        None  # detector BGC probability (SanntiS 1.0: 1 - p_non_bgc)
+    )
+    classification_path: str = ""  # raw per-tool class string
+
+
+class NpcLabelOut(Schema):
+    """NPClassifier label of an iBGC (union of its source predictions)."""
+
+    term_id: str
+    level: str  # pathway | superclass | class
+    name: str
+    score: float | None = None
+    confident: bool = False
+    sources: list[str] = []  # predicted | curated
+    detector_tools: list[str] = []
 
 
 class IbgcDetail(Schema):
@@ -395,15 +250,11 @@ class IbgcDetail(Schema):
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
-    umap_projected: bool = False
-    umap_x: float | None = None
-    umap_y: float | None = None
     parent_assembly: ParentAssemblySummary | None = None
     region_endpoint_url: str | None = None  # /api/discovery/ibgcs/{id}/region/
     member_bgcs: list[IbgcMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
-    natural_products: list[NaturalProductSummary] = []
-    chemont_tree: list[ChemOntAnnotationNode] = []
+    npc_labels: list[NpcLabelOut] = []
 
 
 class IbgcScatterPoint(Schema):
@@ -419,24 +270,7 @@ class IbgcScatterPoint(Schema):
     is_partial: bool = False
     is_validated: bool = False
     is_type_strain: bool = False
-    umap_projected: bool = False
     similarity_score: float | None = None
-    is_asset: bool = False
-
-
-class IbgcUmapPoint(Schema):
-    """Point for the UMAP tab; ``umap_projected`` flags partial-iBGC inferred coords."""
-
-    id: int
-    label: str
-    umap_x: float
-    umap_y: float
-    classification_path: str = ""
-    novelty_score: float | None = None
-    is_partial: bool = False
-    is_validated: bool = False
-    is_type_strain: bool = False
-    umap_projected: bool = False
     is_asset: bool = False
 
 
@@ -445,7 +279,7 @@ class IbgcCountResponse(Schema):
 
     Used by the v2 Discovery dashboard to drive the empty-state guard and
     the "showing X of Y, sampled" banner *before* firing the expensive
-    roster / UMAP / Variables-map requests. Same filter surface as
+    roster / Variables-map requests. Same filter surface as
     ``/ibgcs/roster/``.
     """
 
@@ -490,22 +324,6 @@ class IbgcArchitectureResponse(Schema):
     id: int
     label: str
     ordered_accs: list[str]
-
-
-class IbgcArchitectureQueryRequest(Schema):
-    """Composite-Dice query over a user-supplied domain architecture.
-
-    ``architecture`` is the ordered list of domain accessions; ``weight`` is
-    the Sørensen-Dice share (``1.0`` = pure Dice, ``0.0`` = pure adjacency).
-    ``threshold`` is the minimum composite-Dice score (0–1) an iBGC must reach
-    to be returned. Unknown accessions (not in the latest ClusteringRun's
-    scoring cache) are silently dropped.
-    """
-
-    architecture: list[str]
-    weight: float = 0.5
-    k: int = 100
-    threshold: float = 0.25
 
 
 # ── Shortlist Report schemas ─────────────────────────────────────────────────
@@ -669,29 +487,15 @@ class BgcClassOption(Schema):
     count: int
 
 
-class NpClassLevel(Schema):
+class NpcTreeNode(Schema):
+    """NPClassifier ontology node (pathway → superclass → class) with iBGC counts."""
+
+    term_id: str  # e.g. NPC:pathway:polyketides — the npc_terms filter value
+    level: str
     name: str
-    count: int
-    children: list["NpClassLevel"] = []
-
-
-class ChemOntClassNode(Schema):
-    chemont_id: str
-    name: str
-    count: int
-    children: list["ChemOntClassNode"] = []
-
-
-class DomainOption(Schema):
-    acc: str
-    name: str
-    description: str | None = None
-    count: int
-
-
-class PaginatedDomainResponse(Schema):
-    items: list[DomainOption]
-    pagination: PaginationMeta
+    count: int  # iBGCs labelled with exactly this term (any confidence)
+    confident_count: int
+    children: list["NpcTreeNode"] = []
 
 
 class GcfOption(Schema):
@@ -730,95 +534,6 @@ class PaginatedDetectorResponse(Schema):
 # ── Query mode schemas ────────────────────────────────────────────────────────
 
 
-class ChemicalQueryRequest(Schema):
-    smiles: str
-    similarity_threshold: float = 0.5
-
-
-class SequenceQueryRequest(Schema):
-    sequence: str
-    # phmmer hit must pass all three thresholds. Defaults are tuned for
-    # "clearly a close homolog" (bitscore ≥ 30, ≥70% identity, ≥70% query coverage).
-    min_bitscore: float = 30.0
-    min_pident: float = 70.0  # percent, 0..100
-    min_qcov: float = 70.0  # percent, 0..100
-
-
-class DomainQueryRequest(Schema):
-    """Free-text domain containment query.
-
-    ``domains_text`` is comma / whitespace-separated accessions — either
-    InterPro entries (``IPR000873``) or raw signature accessions (``PF00501``,
-    ``G3DSA:3.30.559.30``, ``TIGR01733``, …); the backend matches either form.
-    A token prefixed with ``-`` or ``!`` is *excluded*.
-
-    ``logic``:
-
-    * ``"or"`` — an iBGC matches if it carries **any** include token.
-    * ``"and"`` — *containment*: an iBGC matches if it carries at least
-      ``ceil(threshold × N_include)`` distinct include tokens. ``threshold``
-      is a 0–1 fraction (default ``1.0`` = all include tokens must be present).
-
-    Excluded tokens drop an iBGC if any source BGC carries them, regardless of
-    logic.
-    """
-
-    domains_text: str = ""
-    logic: str = "and"  # "and" | "or"
-    threshold: float = 1.0  # AND-only: min fraction of include tokens present
-
-
-class QueryResultBgc(Schema):
-    id: int
-    accession: str
-    classification_path: str = ""
-    size_kb: float = 0.0
-    novelty_score: float = 0.0
-    domain_novelty: float = 0.0
-    is_partial: bool = False
-    # For sequence queries `similarity_score` carries the best bitscore; for
-    # other modes it keeps the mode-specific score (Dice, Tanimoto, etc.).
-    similarity_score: float = 0.0
-    # Sequence-query-specific metrics (populated only by the protein search).
-    best_bitscore: float | None = None
-    best_pident: float | None = None  # percent, 0..100
-    best_qcoverage: float | None = None  # percent, 0..100
-    # Parent assembly summary
-    assembly_id: int | None = None
-    assembly_accession: str | None = None
-    organism_name: str | None = None
-    is_type_strain: bool = False
-    source_name: str | None = None
-
-
-class PaginatedQueryResultResponse(Schema):
-    items: list[QueryResultBgc]
-    pagination: PaginationMeta
-
-
-class SequenceQueryAccepted(Schema):
-    task_id: str
-
-
-class ChemicalQueryAccepted(Schema):
-    task_id: str
-
-
-class QueryResultAssemblyAggregation(Schema):
-    assembly_id: int
-    accession: str
-    organism_name: str | None = None
-    is_type_strain: bool = False
-    source_name: str | None = None
-    hit_count: int = 0
-    complete_fraction: float = 0.0
-
-
-class PaginatedAssemblyAggregationResponse(Schema):
-    items: list[QueryResultAssemblyAggregation]
-    pagination: PaginationMeta
-
-
 # ── Stats schemas ────────────────────────────────────────────────────────────
 
 
@@ -846,35 +561,19 @@ class BgcClassCount(Schema):
     count: int = 0
 
 
-class AssemblyStatsResponse(Schema):
-    taxonomy_sunburst: list[SunburstNode] = []
-    score_distributions: list[ScoreDistribution] = []
-    type_strain_count: int = 0
-    non_type_strain_count: int = 0
-    mean_bgc_per_assembly: float = 0.0
-    mean_l1_class_per_assembly: float = 0.0
-    total_assemblies: int = 0
-    biome_distribution: list[CategoryCount] = []
-    biome_sunburst: list[SunburstNode] = []
-    source_distribution: list[CategoryCount] = []
-
-
 class BgcStatsResponse(Schema):
     core_domains: list[CoreDomain] = []
     score_distributions: list[ScoreDistribution] = []
     complete_count: int = 0
     partial_count: int = 0
-    np_class_sunburst: list[SunburstNode] = []
-    chemont_sunburst: list[SunburstNode] = []
+    npc_sunburst: list[
+        SunburstNode
+    ] = []  # NPClassifier pathway/superclass/class (confident labels)
     bgc_class_distribution: list[BgcClassCount] = []
     total_bgcs: int = 0
 
 
 # ── Export schemas ────────────────────────────────────────────────────────────
-
-
-class ShortlistExportRequest(Schema):
-    ids: list[int]
 
 
 # ── BGC Region schemas ───────────────────────────────────────────────────────
@@ -928,11 +627,6 @@ class RegionCdsOut(Schema):
     pfam: list[PfamAnnotationOut] = []
     # Non-redundant InterPro-entry annotations for the protein info card.
     interpro: list[InterproAnnotationOut] = []
-    # Deepest ChemOnt class predicted by CHAMOIS for this CDS.
-    chemont_id: str | None = None
-    chemont_name: str | None = None
-    chemont_probability: float | None = None
-    chemont_weight: float | None = None
     # Tools whose source-BGC prediction range covers this CDS, within the
     # owning iBGC. Range-overlap derived at request time; not stored.
     # Empty for the per-prediction BGC region endpoint.
@@ -993,22 +687,6 @@ class IbgcRegionOut(Schema):
 
 
 # ── Accession resolve ─────────────────────────────────────────────────────────
-
-
-class AccessionResolveOut(Schema):
-    """Content-negotiated resolution for an MGYB-* accession.
-
-    The default response is HTTP 301 to ``current_url``. Clients sending
-    ``Accept: application/json`` get this struct instead — useful for
-    programmatic lookups without following the redirect.
-    """
-
-    accession: str
-    kind: str  # "cbgc" | "ibgc"
-    current_id: int | None = None
-    current_url: str | None = None
-    tombstoned: bool = False
-    alias_of: str | None = None  # set when the request was for an alias accession
 
 
 # Assessment schemas removed in v2 — the Evaluate Asset feature was

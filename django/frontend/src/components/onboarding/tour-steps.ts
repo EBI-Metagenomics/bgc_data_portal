@@ -1,31 +1,31 @@
-import type Shepherd from "shepherd.js";
+import type { StepOptions, Tour } from "shepherd.js";
 import { buildDocsUrl } from "@/lib/router-base";
 
-type StepDef = Shepherd.Step.StepOptions;
+type StepDef = StepOptions;
 
 const skipBtn = {
   text: "Skip tour",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.cancel();
   },
   secondary: true,
 };
 const backBtn = {
   text: "Back",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.back();
   },
   secondary: true,
 };
 const nextBtn = {
   text: "Next",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.next();
   },
 };
 const finishBtn = {
   text: "Finish",
-  action: function (this: Shepherd.Tour) {
+  action: function (this: Tour) {
     this.complete();
   },
 };
@@ -40,7 +40,7 @@ export function getTourSteps(): StepDef[] {
     {
       id: "filters",
       text: `<strong>1. Build your query</strong>
-<p>Start here. Add <b>filter chips</b> to narrow the catalogue by taxonomy, biome, BGC class, chemical class, or <b>GCF</b> — a gene cluster family, i.e. a group of related clusters. The advanced chips search by <b>protein domain</b>, <b>sequence similarity</b>, or <b>chemical structure</b>. Combine as many as you need.</p>`,
+<p>Start here. Add <b>filter chips</b> to narrow the catalogue by taxonomy, biome, BGC class, natural-product class, or <b>GCF</b> — a gene cluster family, i.e. a group of related clusters. The advanced chips search by <b>protein domain</b> or <b>sequence similarity</b>. Combine as many as you need.</p>`,
       attachTo: { element: '[data-tour="filters"]', on: "bottom" },
       buttons: [skipBtn, nextBtn],
     },
@@ -61,7 +61,7 @@ export function getTourSteps(): StepDef[] {
     {
       id: "results-tabs",
       text: `<strong>4. Browse the results</strong>
-<p>Matches appear three ways: the <b>BGC roster</b> (a sortable table — sort by <b>Novelty</b> to surface candidates least like known validated clusters), the <b>Variables map</b> (plot any two metrics against each other), and <b>UMAP</b> (similar iBGCs cluster together). Points are coloured by GCF.</p>`,
+<p>Matches appear two ways: the <b>BGC roster</b> (a sortable table — sort by <b>Novelty</b> to surface candidates least like known validated clusters) and the <b>Variables map</b> (plot any two metrics against each other; points are coloured by GCF).</p>`,
       attachTo: { element: '[data-tour="results-tabs"]', on: "bottom" },
       buttons: [backBtn, nextBtn],
     },

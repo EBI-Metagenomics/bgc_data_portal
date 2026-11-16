@@ -5,18 +5,19 @@ Computes all derived scores and materialised tables from raw loaded data:
   - Assembly percentile ranks
   - GCF table aggregate refresh from the latest ClusteringRun
   - Catalog table rebuild (DashboardBgcClass, DashboardDomain)
-  - ChemOnt Information Content precomputation
-  - UMAP coordinate recomputation (no-op stub; layout is written inline by
-    the clustering pipeline)
 
 iBGC-level novelty and ``domain_novelty`` are written by
-``discovery.services.clustering.ibgc_scoring`` over the composite-Dice
-matrix — not here.
+``discovery.services.clustering.ibgc_scoring`` with the clustering run's
+composite similarity — not here.
 """
 
 from __future__ import annotations
 
 import logging
+
+from django.db import connection
+from django.db.models import Count, Min
+from django.db.models.expressions import RawSQL
 
 from discovery.models import (
     ContigDomain,
@@ -25,12 +26,8 @@ from discovery.models import (
     DashboardDomain,
     DashboardGCF,
     IntegratedBgc,
-    PrecomputedStats,
     SourceBgcPrediction,
 )
-from django.db import connection
-from django.db.models import Count, Min
-from django.db.models.expressions import RawSQL
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +38,9 @@ def recompute_all_scores() -> None:
     """Master function — orchestrates all score recomputation."""
     logger.info("Starting full score recomputation ...")
     _compute_assembly_aggregates()
-    _compute_percentile_ranks()
     _rebuild_gcf_table()
     recompute_ibgc_classes()
     _rebuild_catalog_tables()
-    _compute_chemont_ic()
-    _recompute_umap()
     logger.info("Score recomputation complete.")
 
 
@@ -117,8 +111,7 @@ def _compute_assembly_aggregates() -> None:
     # iBGC count + l1 distinct count + mean novelty per assembly, via
     # contigs → ibgcs traversal.
     with connection.cursor() as cur:
-        cur.execute(
-            """
+        cur.execute("""
             SELECT a.id,
                    COUNT(DISTINCT i.id) AS ibgc_count,
                    COUNT(DISTINCT SPLIT_PART(i.gene_cluster_family, '.', 1))
@@ -128,8 +121,7 @@ def _compute_assembly_aggregates() -> None:
             LEFT JOIN discovery_contig c ON c.assembly_id = a.id
             LEFT JOIN discovery_ibgc i ON i.contig_id = c.id
             GROUP BY a.id
-            """
-        )
+            """)
         agg_by_id = {row[0]: (row[1], row[2], row[3]) for row in cur.fetchall()}
 
     batch = []
@@ -172,33 +164,6 @@ def _compute_assembly_aggregates() -> None:
         )
 
     logger.info("Assembly aggregates computed")
-
-
-def _compute_percentile_ranks() -> None:
-    """Compute percentile ranks for assembly scores using SQL window functions."""
-    logger.info("Computing percentile ranks ...")
-
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            UPDATE discovery_assembly AS a
-            SET
-                pctl_novelty  = sub.pctl_novelty,
-                pctl_diversity = sub.pctl_diversity,
-                pctl_density  = sub.pctl_density
-            FROM (
-                SELECT
-                    id,
-                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_novelty_score))::numeric, 2) AS pctl_novelty,
-                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_diversity_score))::numeric, 2) AS pctl_diversity,
-                    ROUND((100.0 * PERCENT_RANK() OVER (ORDER BY bgc_density))::numeric, 2) AS pctl_density
-                FROM discovery_assembly
-            ) AS sub
-            WHERE a.id = sub.id
-            """
-        )
-
-    logger.info("Percentile ranks computed")
 
 
 # ── GCF rebuild ──────────────────────────────────────────────────────────────
@@ -278,91 +243,3 @@ def _rebuild_catalog_tables() -> None:
     )
 
     logger.info("Catalog tables rebuilt")
-
-
-# ── UMAP recomputation ───────────────────────────────────────────────────────
-
-
-def _recompute_umap() -> None:
-    """No-op stub kept for API compatibility.
-
-    UMAP coordinates are written directly by ``run_bgc_clustering_task``
-    on the iBGC graph (see ``services/clustering/layout.py``). There is no
-    standalone UMAP model to retrain — the layout step happens inline as
-    part of community detection.
-    """
-    logger.debug(
-        "_recompute_umap: no-op; umap_x/y are written by run_bgc_clustering_task"
-    )
-
-
-def _compute_chemont_ic() -> None:
-    """Precompute Information Content values for all ChemOnt terms.
-
-    Stores the result in ``PrecomputedStats(key="chemont_ic")`` so the
-    chemical similarity search task can use it without recomputing.
-
-    Counts are taken over distinct iBGCs (the unit on which the dashboard
-    aggregates) — a CDS is attributed to the iBGC whose ``bgc_range``
-    overlaps its ``cds_range`` on the same contig. IC therefore reflects
-    how broadly each ChemOnt term is observed across the iBGC corpus.
-    """
-    from collections import Counter, defaultdict
-
-    from common_core.chemont.ontology import get_ontology
-    from common_core.chemont.similarity import compute_ic_values
-
-    # Pool ChemOnt terms per iBGC from both sources the chemical search uses:
-    # CHAMOIS gene-based predictions (CdsChemOnt, via range overlap) and
-    # structure-derived classes (IbgcChemOnt). IC must reflect their union so
-    # term specificity is calibrated against the same corpus the search scores.
-    ibgc_terms: dict[int, set[str]] = defaultdict(set)
-    with connection.cursor() as cur:
-        cur.execute(
-            """
-            SELECT i.id AS ibgc_id, ch.chemont_id
-            FROM discovery_cds_chemont ch
-            JOIN discovery_cds c ON c.id = ch.cds_id
-            JOIN discovery_ibgc i
-              ON i.contig_id = c.contig_id
-             AND i.bgc_range && c.cds_range
-            """
-        )
-        for ibgc_id, cid in cur.fetchall():
-            ibgc_terms[ibgc_id].add(cid)
-
-        cur.execute("SELECT ibgc_id, chemont_id FROM discovery_ibgc_chemont")
-        for ibgc_id, cid in cur.fetchall():
-            ibgc_terms[ibgc_id].add(cid)
-
-    total_ibgcs = len(ibgc_terms)
-    if total_ibgcs == 0:
-        logger.info("No iBGC ChemOnt annotations — skipping IC computation")
-        return
-
-    term_counts: dict[str, int] = Counter(
-        cid for terms in ibgc_terms.values() for cid in terms
-    )
-
-    if not term_counts:
-        logger.info("No ChemOnt annotations — skipping IC computation")
-        return
-
-    try:
-        ont = get_ontology()
-    except FileNotFoundError:
-        logger.warning(
-            "ChemOnt OBO file not found — skipping IC computation. "
-            "Set CHEMONT_OBO_PATH to enable."
-        )
-        return
-
-    ic_values = compute_ic_values(term_counts, total_ibgcs, ont)
-
-    PrecomputedStats.objects.update_or_create(
-        key="chemont_ic",
-        defaults={"data": ic_values},
-    )
-    logger.info(
-        "ChemOnt IC computed for %d terms (%d iBGCs)", len(ic_values), total_ibgcs
-    )

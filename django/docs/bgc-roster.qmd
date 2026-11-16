@@ -53,6 +53,6 @@ The footer shows the total match count and pages through results 50 at a time. *
 ## Related pages
 
 - [iBGC Detail](ibgc-detail.qmd) — the panel a left-click opens
-- [Variables Map](variables-map.qmd) · [UMAP](umap.qmd) — the other two result views
+- [Variables Map](variables-map.qmd) — the other result view
 - [Scores & Metrics](scores-metrics.qmd) — what the score columns mean
 - [Shortlists](shortlists.qmd)

@@ -1,3 +1,5 @@
+# Developer and test-only packages, installed on top of requirements-web.txt
+# (web dev image) or requirements-worker.txt (worker dev image).
 pytest>=7
 pytest-django>=4.5
 playwright>=1.40
@@ -6,3 +8,4 @@ requests
 factory-boy>=3.3
 faker>=25
 pytest-factoryboy>=2.7
+ruff

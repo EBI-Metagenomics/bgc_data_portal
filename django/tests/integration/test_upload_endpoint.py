@@ -14,7 +14,6 @@ import gzip
 from unittest.mock import patch
 
 import pytest
-
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 

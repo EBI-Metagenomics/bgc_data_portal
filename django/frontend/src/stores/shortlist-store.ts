@@ -23,33 +23,12 @@ interface ShortlistState {
   removeBgc: (id: number) => void;
   clearBgcs: () => void;
   replaceBgcs: (item: ShortlistItem) => void;
-
-  // ── Assembly shortlist (deprecated; kept for legacy components until P4
-  //    cleanup removes the sidebar). New surfaces should ignore this. ─────
-  assemblies: ShortlistItem[];
-  addAssembly: (item: ShortlistItem) => boolean;
-  removeAssembly: (id: number) => void;
-  clearAssemblies: () => void;
-  replaceAssemblies: (item: ShortlistItem) => void;
 }
 
 export const useShortlistStore = create<ShortlistState>()(
   persist(
     (set, get) => ({
-      assemblies: [],
       bgcs: [],
-
-      addAssembly: (item) => {
-        const current = get().assemblies;
-        if (current.length >= MAX_SHORTLIST) return false;
-        if (current.some((g) => g.id === item.id)) return true;
-        set({ assemblies: [...current, item] });
-        return true;
-      },
-      removeAssembly: (id) =>
-        set((s) => ({ assemblies: s.assemblies.filter((g) => g.id !== id) })),
-      clearAssemblies: () => set({ assemblies: [] }),
-      replaceAssemblies: (item) => set({ assemblies: [item] }),
 
       addBgc: (item) => {
         const current = get().bgcs;
@@ -83,6 +62,20 @@ export const useShortlistStore = create<ShortlistState>()(
       clearBgcs: () => set({ bgcs: [] }),
       replaceBgcs: (item) => set({ bgcs: [item] }),
     }),
-    { name: "discovery-shortlists" }
+    {
+      name: "discovery-shortlists",
+      // v1: dropped the retired assembly shortlist (``assemblies``) that the
+      // old sidebar trays persisted. ``migrate`` strips it from any v0 blob
+      // still in localStorage so it is not re-hydrated as unknown state.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as Record<string, unknown>;
+        if (version < 1) {
+          const { assemblies: _dropped, ...rest } = state;
+          return rest as unknown as ShortlistState;
+        }
+        return state as unknown as ShortlistState;
+      },
+    }
   )
 );

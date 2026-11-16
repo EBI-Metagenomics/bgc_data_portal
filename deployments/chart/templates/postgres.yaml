@@ -28,7 +28,15 @@ spec:
       {{- end }}
       containers:
         - name: postgres
+          {{- with .Values.postgres.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: {{ .Values.postgres.image }}
+          {{- with .Values.postgres.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.postgres.imagePullPolicy }}
           imagePullPolicy: {{ . }}
           {{- end }}

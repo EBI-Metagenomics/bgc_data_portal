@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import logging
 
-from discovery.services.protein_search.build import rebuild_index, update_index
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+
+from discovery.services.protein_search.build import rebuild_index, update_index
 
 log = logging.getLogger(__name__)
 

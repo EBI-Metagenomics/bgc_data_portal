@@ -22,7 +22,7 @@ interface Props {
 
 /**
  * Shared right-click menu for the Results card across all three tabs
- * (roster row, variables-map point, UMAP point). The action set is owned by
+ * (roster row, variables-map point). The action set is owned by
  * the ``useIbgcActions`` hook; this component is just the right-click shell.
  */
 export function IbgcContextMenu({

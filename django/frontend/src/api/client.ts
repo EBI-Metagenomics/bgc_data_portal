@@ -19,69 +19,93 @@ export class ApiError extends Error {
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const text = await response.text().catch(() => "Unknown error");
-    throw new ApiError(response.status, text);
-  }
-  return response.json() as Promise<T>;
+/** A query-string value; ``undefined`` / ``null`` / ``""`` entries are dropped. */
+export type QueryParamValue = string | number | boolean | null | undefined;
+
+/**
+ * Constraint for a typed query-params object. Written as a mapped type over
+ * ``keyof P`` (rather than a string index signature) so plain interfaces such
+ * as ``IbgcRosterParams`` satisfy it without a cast.
+ */
+export type QueryParams<P> = { [K in keyof P]?: QueryParamValue };
+
+interface RequestOptions<P> {
+  method?: "GET" | "POST" | "DELETE";
+  params?: P;
+  headers?: Record<string, string>;
+  body?: BodyInit;
 }
 
-export async function apiGet<T>(
+/**
+ * Single transport core shared by every helper below: builds the URL under
+ * ``API_BASE``, appends non-empty query params, attaches the Django CSRF
+ * header on mutating methods and turns any non-2xx response into ``ApiError``.
+ */
+async function request<P extends QueryParams<P>>(
   path: string,
-  params?: Record<string, string | number | boolean | undefined>
-): Promise<T> {
+  { method = "GET", params, headers = {}, body }: RequestOptions<P> = {},
+): Promise<Response> {
   const url = new URL(`${API_BASE}${path}`, window.location.origin);
   if (params) {
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== "") {
+    for (const [key, value] of Object.entries(params) as [
+      string,
+      QueryParamValue,
+    ][]) {
+      if (value !== undefined && value !== null && value !== "") {
         url.searchParams.set(key, String(value));
       }
     }
   }
-  const response = await fetch(url.toString());
-  return handleResponse<T>(response);
-}
-
-export async function apiPost<T>(
-  path: string,
-  body: unknown
-): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  const csrf = getCsrfToken();
-  if (csrf) {
-    headers["X-CSRFToken"] = csrf;
+  const finalHeaders = { ...headers };
+  if (method !== "GET") {
+    const csrf = getCsrfToken();
+    if (csrf) finalHeaders["X-CSRFToken"] = csrf;
   }
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-  return handleResponse<T>(response);
-}
-
-export async function apiPostBlob(
-  path: string,
-  body: unknown
-): Promise<Blob> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  const csrf = getCsrfToken();
-  if (csrf) {
-    headers["X-CSRFToken"] = csrf;
-  }
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
+  const response = await fetch(url.toString(), {
+    method,
+    headers: finalHeaders,
+    body,
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "Unknown error");
     throw new ApiError(response.status, text);
   }
+  return response;
+}
+
+const jsonBody = (body: unknown) => ({
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+export async function apiGet<T, P extends QueryParams<P> = Record<string, never>>(
+  path: string,
+  params?: P,
+): Promise<T> {
+  const response = await request(path, { params });
+  return response.json() as Promise<T>;
+}
+
+/** GET with custom headers — used to thread X-Asset-Token through ``/ibgcs/{id}/``. */
+export async function apiGetWithHeaders<
+  T,
+  P extends QueryParams<P> = Record<string, never>,
+>(
+  path: string,
+  extraHeaders: Record<string, string>,
+  params?: P,
+): Promise<T> {
+  const response = await request(path, { params, headers: extraHeaders });
+  return response.json() as Promise<T>;
+}
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const response = await request(path, { method: "POST", ...jsonBody(body) });
+  return response.json() as Promise<T>;
+}
+
+export async function apiPostBlob(path: string, body: unknown): Promise<Blob> {
+  const response = await request(path, { method: "POST", ...jsonBody(body) });
   return response.blob();
 }
 
@@ -91,55 +115,16 @@ export async function apiPostBlob(
  */
 export async function apiPostMultipart<T>(
   path: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<T> {
-  const headers: Record<string, string> = {};
-  const csrf = getCsrfToken();
-  if (csrf) {
-    headers["X-CSRFToken"] = csrf;
-  }
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers,
-    body: formData,
-  });
-  return handleResponse<T>(response);
+  const response = await request(path, { method: "POST", body: formData });
+  return response.json() as Promise<T>;
 }
 
-/** Fire-and-forget DELETE; returns true on 2xx. */
+/** Fire-and-forget DELETE; returns true on 2xx (204 included). */
 export async function apiDelete(path: string): Promise<boolean> {
-  const headers: Record<string, string> = {};
-  const csrf = getCsrfToken();
-  if (csrf) {
-    headers["X-CSRFToken"] = csrf;
-  }
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "DELETE",
-    headers,
-  });
-  if (!response.ok && response.status !== 204) {
-    const text = await response.text().catch(() => "Unknown error");
-    throw new ApiError(response.status, text);
-  }
+  await request(path, { method: "DELETE" });
   return true;
-}
-
-/** GET with custom headers — used to thread X-Asset-Token through ``/ibgcs/{id}/``. */
-export async function apiGetWithHeaders<T>(
-  path: string,
-  extraHeaders: Record<string, string>,
-  params?: Record<string, string | number | boolean | undefined>
-): Promise<T> {
-  const url = new URL(`${API_BASE}${path}`, window.location.origin);
-  if (params) {
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== "") {
-        url.searchParams.set(key, String(value));
-      }
-    }
-  }
-  const response = await fetch(url.toString(), { headers: extraHeaders });
-  return handleResponse<T>(response);
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

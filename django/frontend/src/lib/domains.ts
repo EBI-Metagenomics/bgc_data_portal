@@ -13,11 +13,6 @@ export interface DomainLike {
   interpro_entry_acc?: string;
 }
 
-/** External InterPro entry page for an ``IPRxxxxxx`` accession. */
-export function interproEntryUrl(acc: string): string {
-  return `https://www.ebi.ac.uk/interpro/entry/InterPro/${acc}/`;
-}
-
 /** InterPro entry accession if present, else the raw signature accession. */
 export function preferredDomainToken(d: DomainLike): string {
   const ipr = (d.interpro_entry_acc ?? "").trim();

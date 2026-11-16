@@ -1,7 +1,7 @@
 """Uniform criterion resolvers for the Discovery query engine.
 
 Every scoring criterion (domain containment, domain architecture, sequence
-search, chemical similarity, similar-iBGC) is resolved by a function returning a
+search, similar-iBGC) is resolved by a function returning a
 :class:`CriterionResult` — a mapping of ``iBGC id → score payload`` plus a column
 descriptor (:class:`CriterionMetric` list) and pre-cap counters. This is the
 single source of truth: the legacy single-criterion endpoints/tasks delegate
@@ -9,7 +9,7 @@ here, and the combined multi-criterion query intersects several
 ``CriterionResult`` score maps under AND semantics.
 
 A score payload is a dict ``{"value": float, ...}``. ``value`` is the criterion's
-primary, sortable metric (bitscore, composite-Dice, ChemOnt similarity, or — for
+primary, sortable metric (bitscore, composite similarity, or — for
 domain containment — the *fraction of include tokens matched*). Sequence search
 additionally carries ``pident`` / ``qcoverage`` / ``best_hit_protein_id``.
 
@@ -23,6 +23,8 @@ import logging
 import math
 import re
 from dataclasses import dataclass, field
+
+from discovery.services.sql import IBGC_CDS_JOIN, IBGC_DOMAIN_HIT_JOIN
 
 log = logging.getLogger(__name__)
 
@@ -81,14 +83,13 @@ class CriterionError(Exception):
 # columns (the user's "pident, etc."); the rest contribute a single score.
 CRITERION_METRICS: dict[str, list[CriterionMetric]] = {
     "domain": [CriterionMetric("value", "Match frac.")],
-    "architecture": [CriterionMetric("value", "Arch. Dice")],
+    "architecture": [CriterionMetric("value", "Arch. similarity")],
     "similar": [CriterionMetric("value", "Similarity")],
     "sequence": [
         CriterionMetric("value", "Bitscore"),
         CriterionMetric("pident", "Identity %"),
         CriterionMetric("qcoverage", "Query cov. %"),
     ],
-    "chemical": [CriterionMetric("value", "ChemOnt sim.")],
 }
 
 
@@ -119,12 +120,6 @@ class SequenceParams:
 
 
 @dataclass
-class ChemicalParams:
-    smiles: str = ""
-    similarity_threshold: float = 0.5
-
-
-@dataclass
 class SimilarParams:
     ibgc_id: int = 0
     k: int = 25
@@ -134,7 +129,6 @@ _PARAM_TYPES = {
     "domain": DomainParams,
     "architecture": ArchitectureParams,
     "sequence": SequenceParams,
-    "chemical": ChemicalParams,
     "similar": SimilarParams,
 }
 
@@ -220,16 +214,11 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
     # Per-iBGC count of distinct include tokens present within the iBGC's
     # bgc_range. A token counts once even if matched by both columns or by
     # multiple domain hits.
-    include_sql = """
+    include_sql = f"""
         WITH tokens(tok) AS (SELECT unnest(%s::text[])),
              matches AS (
                  SELECT DISTINCT i.id AS ibgc_id, t.tok
-                 FROM discovery_ibgc i
-                 JOIN discovery_cds c
-                   ON c.contig_id = i.contig_id
-                  AND c.cds_range && i.bgc_range
-                 JOIN discovery_domain_hit d
-                   ON d.cds_id = c.id
+                 {IBGC_DOMAIN_HIT_JOIN}
                  JOIN tokens t
                    ON t.tok = d.domain_acc
                    OR t.tok = d.interpro_entry_acc
@@ -250,38 +239,30 @@ def resolve_domain(params: DomainParams) -> CriterionResult:
     matched = {nid: c for nid, c in hit_counts.items() if c >= need}
 
     if exclude and matched:
-        exclude_sql = """
+        exclude_sql = f"""
             SELECT DISTINCT i.id
-            FROM discovery_ibgc i
-            JOIN discovery_cds c
-              ON c.contig_id = i.contig_id
-             AND c.cds_range && i.bgc_range
-            JOIN discovery_domain_hit d
-              ON d.cds_id = c.id
-             AND (d.domain_acc = ANY(%s) OR d.interpro_entry_acc = ANY(%s))
-            WHERE i.id = ANY(%s)
+            {IBGC_DOMAIN_HIT_JOIN}
+            WHERE (d.domain_acc = ANY(%s) OR d.interpro_entry_acc = ANY(%s))
+              AND i.id = ANY(%s)
         """
         with connection.cursor() as cur:
             cur.execute(exclude_sql, [exclude, exclude, list(matched)])
             excluded_ids = {int(r[0]) for r in cur.fetchall()}
         matched = {nid: c for nid, c in matched.items() if nid not in excluded_ids}
 
-    scores = {
-        nid: {"value": round(c / n_include, 4)} for nid, c in matched.items()
-    }
-    return CriterionResult(
-        scores=scores, metrics=metrics, total_matched=len(scores)
-    )
+    scores = {nid: {"value": round(c / n_include, 4)} for nid, c in matched.items()}
+    return CriterionResult(scores=scores, metrics=metrics, total_matched=len(scores))
 
 
-# ── Domain architecture (composite-Dice) ──────────────────────────────────────
+# ── Domain architecture (composite similarity) ────────────────────────────────
 
 
 def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]]:
     """Resolve an architecture query to ``(top_ids, top_scores)`` (best-first).
 
-    Scores ``weight·Dice(domain set) + (1-weight)·Dice(adjacency pairs)`` against
-    the cached primary-iBGC matrices of the latest ClusteringRun. ``k`` is bounded
+    Scores ``weight·S(domain set) + (1-weight)·S(adjacency pairs)`` against the
+    cached primary-iBGC matrices of the latest ClusteringRun, ``S`` being the
+    run's similarity metric (weighted cosine, or Dice on older runs). ``k`` is bounded
     by :data:`RESULT_CAP`. Raises :class:`CriterionError` when the input is empty,
     the scoring cache is unavailable, or no accession matched the vocabulary.
     """
@@ -304,7 +285,7 @@ def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]
     except FileNotFoundError:
         # Log the path-bearing detail server-side; never leak it to the client.
         log.exception("Scoring cache unavailable for architecture query")
-        raise CriterionError(503, "Similarity index is not available yet")
+        raise CriterionError(503, "Similarity index is not available yet") from None
 
     k = max(1, min(int(params.k), RESULT_CAP))
 
@@ -327,7 +308,7 @@ def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]
             "No supplied accession matched the scoring cache vocabulary — "
             "check the input or rerun clustering against a broader source set.",
         )
-    # Post-filter by the minimum composite-Dice score. Applied after the cache
+    # Post-filter by the minimum composite score. Applied after the cache
     # (keyed on accs/weight/k only) so the threshold stays a cheap, cache-friendly
     # cut. May legitimately return nothing — not an error.
     threshold = float(params.threshold or 0.0)
@@ -339,11 +320,9 @@ def architecture_top(params: ArchitectureParams) -> tuple[list[int], list[float]
 
 
 def resolve_architecture(params: ArchitectureParams) -> CriterionResult:
-    """Resolve a domain-architecture criterion to per-iBGC composite-Dice scores."""
+    """Resolve a domain-architecture criterion to per-iBGC composite scores."""
     top_ids, top_scores = architecture_top(params)
-    scores = {
-        nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)
-    }
+    scores = {nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)}
     return CriterionResult(
         scores=scores,
         metrics=CRITERION_METRICS["architecture"],
@@ -351,13 +330,13 @@ def resolve_architecture(params: ArchitectureParams) -> CriterionResult:
     )
 
 
-# ── Similar-iBGC (composite-Dice to a seed) ───────────────────────────────────
+# ── Similar-iBGC (composite similarity to a seed) ─────────────────────────────
 
 
 def similar_top(params: SimilarParams) -> tuple[list[int], list[float]]:
     """Resolve a similar-iBGC query to ``(top_ids, top_scores)`` (best-first).
 
-    Composite-Dice of the seed iBGC against all other primaries of the active
+    Composite similarity of the seed iBGC against all other primaries of the active
     ClusteringRun, computed on demand and cached for 24h keyed on the run sha256.
     Raises :class:`CriterionError` if the cache is missing or the seed is not a
     primary in the latest run.
@@ -376,7 +355,7 @@ def similar_top(params: SimilarParams) -> tuple[list[int], list[float]]:
         scoring = get_active_scoring_cache()
     except FileNotFoundError:
         log.exception("Scoring cache unavailable for similar-iBGC query")
-        raise CriterionError(503, "Similarity index is not available yet")
+        raise CriterionError(503, "Similarity index is not available yet") from None
 
     row_ix = scoring.row_index_for(params.ibgc_id)
     if row_ix is None:
@@ -407,11 +386,9 @@ def similar_top(params: SimilarParams) -> tuple[list[int], list[float]]:
 
 
 def resolve_similar(params: SimilarParams) -> CriterionResult:
-    """Resolve a similar-iBGC criterion to per-iBGC composite-Dice scores."""
+    """Resolve a similar-iBGC criterion to per-iBGC composite scores."""
     top_ids, top_scores = similar_top(params)
-    scores = {
-        nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)
-    }
+    scores = {nid: {"value": round(s, 4)} for nid, s in zip(top_ids, top_scores)}
     return CriterionResult(
         scores=scores,
         metrics=CRITERION_METRICS["similar"],
@@ -438,10 +415,11 @@ def run_sequence_search(
     Raises ``IndexNotBuiltError`` if the phmmer index is missing, so the failure
     is visible to the operator rather than silently returning an empty roster.
     """
-    from discovery.services.protein_search import phmmer_search
-    from discovery.services.protein_search.index import IndexNotBuiltError
     from django.conf import settings
     from django.db import connection
+
+    from discovery.services.protein_search import phmmer_search
+    from discovery.services.protein_search.index import IndexNotBuiltError
 
     seq = sequence.strip().upper()
     if not seq:
@@ -483,12 +461,10 @@ def run_sequence_search(
     sha_list = list(sha256_metrics.keys())
     with connection.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT i.id, c.protein_sha256, c.protein_id_str
             FROM discovery_cds c
-            JOIN discovery_ibgc i
-              ON i.contig_id = c.contig_id
-             AND i.bgc_range && c.cds_range
+            {IBGC_CDS_JOIN}
             WHERE c.protein_sha256 = ANY(%s::text[])
             """,
             [sha_list],
@@ -548,124 +524,6 @@ def resolve_sequence(params: SequenceParams) -> CriterionResult:
     )
 
 
-# ── Chemical similarity (ChemOnt BMA) ─────────────────────────────────────────
-
-
-def run_chemical_search(
-    smiles: str, similarity_threshold: float
-) -> dict[int, float]:
-    """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
-
-    The query SMILES is classified into ChemOnt terms via ClassyFire (cached by
-    InChIKey so known/repeat compounds skip the network), then compared with
-    IC-based (Resnik / Best Match Average) similarity against each iBGC's pooled
-    ChemOnt annotations. iBGC membership is decided by range overlap.
-
-    Returns ``{ibgc_id: similarity_score}``. Raises if the IC cache is missing or
-    ClassyFire is unreachable, so the failure is visible to the operator/user.
-    """
-    from collections import defaultdict
-
-    from common_core.chemont import classyfire_client as cf
-    from common_core.chemont.ontology import get_ontology
-    from common_core.chemont.similarity import semantic_similarity
-
-    from discovery.models import PrecomputedStats
-    from django.conf import settings
-    from django.core.cache import cache
-    from django.db import connection
-
-    ont = get_ontology()
-
-    # Classify the query SMILES → ChemOnt terms, cached by InChIKey.
-    inchikey = cf.smiles_to_inchikey(smiles)
-    if inchikey is None:
-        log.warning("Invalid SMILES for chemical search: %s", smiles[:50])
-        return {}
-    cache_key = f"chemont:classify:{inchikey}"
-    query_term_ids: list[str] | None = cache.get(cache_key)
-    if query_term_ids is None:
-        result = cf.classify(
-            smiles,
-            base_url=getattr(settings, "CLASSYFIRE_URL", cf.DEFAULT_BASE_URL),
-            timeout=getattr(settings, "CLASSYFIRE_TIMEOUT", 30.0),
-            poll_timeout=getattr(settings, "CLASSYFIRE_POLL_TIMEOUT", 90.0),
-        )
-        query_term_ids = result.chemont_ids if result else []
-        # Cache even an empty list: a structure ClassyFire can't classify won't
-        # classify on retry either, and this avoids re-submitting.
-        cache.set(
-            cache_key,
-            query_term_ids,
-            getattr(settings, "CHEMONT_CLASSIFY_CACHE_TTL", 60 * 60 * 24 * 30),
-        )
-    if not query_term_ids:
-        log.info("No ChemOnt terms for SMILES %s — no chemical matches", inchikey)
-        return {}
-
-    ic_row = PrecomputedStats.objects.filter(key="chemont_ic").first()
-    if not ic_row or not ic_row.data:
-        raise RuntimeError(
-            "ChemOnt IC values not precomputed — run recompute_all_scores "
-            "before chemical search can return results"
-        )
-    ic_values: dict[str, float] = ic_row.data
-
-    # Pool each iBGC's ChemOnt terms from two sources:
-    #   1. CHAMOIS gene-based predictions (CdsChemOnt), attributed via range
-    #      overlap — each CDS contributes to the iBGC whose bgc_range overlaps
-    #      its cds_range on the same contig (iBGCs are disjoint per contig).
-    #   2. Structure-derived classes (IbgcChemOnt) — ClassyFire on a known
-    #      compound's SMILES, attached directly to the iBGC.
-    ibgc_terms: dict[int, set[str]] = defaultdict(set)
-    with connection.cursor() as cur:
-        cur.execute(
-            """
-            SELECT i.id AS ibgc_id, ch.chemont_id
-            FROM discovery_cds_chemont ch
-            JOIN discovery_cds c ON c.id = ch.cds_id
-            JOIN discovery_ibgc i
-              ON i.contig_id = c.contig_id
-             AND i.bgc_range && c.cds_range
-            """
-        )
-        for ibgc_id, cid in cur.fetchall():
-            ibgc_terms[ibgc_id].add(cid)
-
-        cur.execute("SELECT ibgc_id, chemont_id FROM discovery_ibgc_chemont")
-        for ibgc_id, cid in cur.fetchall():
-            ibgc_terms[ibgc_id].add(cid)
-
-    # Symmetric BMA (Lin) over the query and each iBGC's pooled ChemOnt terms.
-    # Asymmetric coverage was evaluated and rejected: a fully-characterised query
-    # "explains" almost every cluster's sparse predicted classes, collapsing
-    # ranking. ``coverage_similarity`` remains available for other uses.
-    ibgc_similarities: dict[int, float] = {}
-    for ibgc_id, np_terms in ibgc_terms.items():
-        score = semantic_similarity(query_term_ids, list(np_terms), ic_values, ont)
-        if score >= similarity_threshold:
-            ibgc_similarities[ibgc_id] = round(score, 4)
-
-    log.info(
-        "Chemical query (ChemOnt): SMILES=%s threshold=%.2f matches=%d",
-        smiles[:50],
-        similarity_threshold,
-        len(ibgc_similarities),
-    )
-    return ibgc_similarities
-
-
-def resolve_chemical(params: ChemicalParams) -> CriterionResult:
-    """Resolve a chemical-similarity criterion to per-iBGC ChemOnt scores."""
-    raw = run_chemical_search(params.smiles, params.similarity_threshold)
-    scores = {nid: {"value": float(v)} for nid, v in raw.items()}
-    return CriterionResult(
-        scores=scores,
-        metrics=CRITERION_METRICS["chemical"],
-        total_matched=len(scores),
-    )
-
-
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 
@@ -673,7 +531,6 @@ _RESOLVERS = {
     "domain": resolve_domain,
     "architecture": resolve_architecture,
     "sequence": resolve_sequence,
-    "chemical": resolve_chemical,
     "similar": resolve_similar,
 }
 
@@ -687,5 +544,9 @@ def resolve_criterion(ctype: str, params: dict | object) -> CriterionResult:
     resolver = _RESOLVERS.get(ctype)
     if resolver is None:
         raise CriterionError(400, f"Unknown criterion type: {ctype!r}")
-    typed = params if isinstance(params, _PARAM_TYPES[ctype]) else build_params(ctype, params)
+    typed = (
+        params
+        if isinstance(params, _PARAM_TYPES[ctype])
+        else build_params(ctype, params)
+    )
     return resolver(typed)

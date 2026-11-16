@@ -1,9 +1,7 @@
 import { apiGet } from "./client";
 import type {
   BgcClassOption,
-  ChemOntClassNode,
-  NpClassLevel,
-  PaginatedDomainResponse,
+  NpcTreeNode,
   PaginatedGcfResponse,
   PaginatedSourceResponse,
   PaginatedDetectorResponse,
@@ -18,25 +16,8 @@ export function fetchBgcClasses() {
   return apiGet<BgcClassOption[]>("/filters/bgc-classes/");
 }
 
-export function fetchNpClasses() {
-  return apiGet<NpClassLevel[]>("/filters/np-classes/");
-}
-
-export function fetchChemOntClasses() {
-  return apiGet<ChemOntClassNode[]>("/filters/chemont-classes/");
-}
-
-export interface DomainSearchParams {
-  search?: string;
-  page?: number;
-  page_size?: number;
-}
-
-export function fetchDomains(params: DomainSearchParams = {}) {
-  return apiGet<PaginatedDomainResponse>(
-    "/filters/domains/",
-    params as Record<string, string | number | boolean | undefined>
-  );
+export function fetchNpcTree() {
+  return apiGet<NpcTreeNode[]>("/filters/npc-tree/");
 }
 
 export interface GcfSearchParams {
@@ -47,9 +28,9 @@ export interface GcfSearchParams {
 }
 
 export function fetchGcfs(params: GcfSearchParams = {}) {
-  return apiGet<PaginatedGcfResponse>(
+  return apiGet<PaginatedGcfResponse, GcfSearchParams>(
     "/filters/gcfs/",
-    params as Record<string, string | number | boolean | undefined>
+    params,
   );
 }
 
@@ -60,9 +41,9 @@ export interface SourceSearchParams {
 }
 
 export function fetchSources(params: SourceSearchParams = {}) {
-  return apiGet<PaginatedSourceResponse>(
+  return apiGet<PaginatedSourceResponse, SourceSearchParams>(
     "/filters/sources/",
-    params as Record<string, string | number | boolean | undefined>
+    params,
   );
 }
 
@@ -73,8 +54,8 @@ export interface DetectorSearchParams {
 }
 
 export function fetchDetectors(params: DetectorSearchParams = {}) {
-  return apiGet<PaginatedDetectorResponse>(
+  return apiGet<PaginatedDetectorResponse, DetectorSearchParams>(
     "/filters/detectors/",
-    params as Record<string, string | number | boolean | undefined>
+    params,
   );
 }

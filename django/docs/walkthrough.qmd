@@ -67,7 +67,7 @@ Click **GBKs (zip)** in the report header to download a GenBank file per cluster
 
 ## What you've done
 
-You started from one characterised compound, gathered its biosynthetic family, compared the relatives against the known reference, and exported the set — with a clear read on which clusters are novel and what machinery they share. The same path works from any starting point: a [sequence](sequence-search.qmd) or [chemical](chemical-search.qmd) search, a taxonomy or biome [filter](filtering.qmd), or your own [loaded assembly](load-asset.qmd) all lead into the same compare-and-report flow.
+You started from one characterised compound, gathered its biosynthetic family, compared the relatives against the known reference, and exported the set — with a clear read on which clusters are novel and what machinery they share. The same path works from any starting point: a [sequence](sequence-search.qmd) or [domain](domain-query.qmd) search, a taxonomy or biome [filter](filtering.qmd), or your own [loaded assembly](load-asset.qmd) all lead into the same compare-and-report flow.
 
 ## Related pages
 

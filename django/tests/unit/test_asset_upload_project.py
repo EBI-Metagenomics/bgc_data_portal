@@ -46,3 +46,38 @@ def test_build_virtual_ibgcs_assigns_unique_negative_ids():
     ids = [vb.neg_id for vb in vibgcs]
     assert all(i < 0 for i in ids)
     assert len(ids) == len(set(ids))
+
+
+def test_uploaded_partial_flag_is_replaced_by_the_gene_margin_rule():
+    """The upload's ``is_partial`` is ignored: an edge call that touches no
+    contig base but has a truncated edge gene becomes partial, and an
+    interior call flagged partial by the uploader is cleared."""
+    from discovery.services.asset_upload.schemas import (
+        AssetAssembly,
+        AssetBgc,
+        AssetCds,
+        AssetContig,
+        AssetData,
+        AssetDetector,
+    )
+
+    sha = "a" * 64
+    edge = AssetBgc(sha, "SanntiS v1", 300, 5_000, is_partial=False)
+    mid = AssetBgc(sha, "SanntiS v1", 50_000, 54_000, is_partial=True)
+    cds = [
+        AssetCds(edge.key, f"e{i}", s, s + 899, 1)
+        for i, s in enumerate((0, 1_000, 2_000, 3_000, 4_000))
+    ] + [
+        AssetCds(mid.key, f"m{i}", s, s + 899, 1)
+        for i, s in enumerate((50_000, 51_000, 52_000, 53_000))
+    ]
+    data = AssetData(
+        assemblies=[AssetAssembly("ASM1")],
+        contigs=[AssetContig("ASM1", sha, "ctg1", length=100_000)],
+        detectors=[AssetDetector("SanntiS v1", "SanntiS", "1")],
+        bgcs=[edge, mid],
+        cds=cds,
+    )
+    by_start = {vb.start_position: vb for vb in build_virtual_ibgcs(data)}
+    assert by_start[300].is_partial is True
+    assert by_start[50_000].is_partial is False

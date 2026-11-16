@@ -67,6 +67,10 @@ spec:
           env:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.django.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           envFrom:
             {{- if .Values.django.includeSecret }}
             - secretRef:
@@ -81,6 +85,10 @@ spec:
               containerPort: 8000
           {{- with .Values.django.readinessProbe }}
           readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.django.livenessProbe }}
+          livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.django.volumeMounts }}

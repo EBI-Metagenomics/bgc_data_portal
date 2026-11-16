@@ -21,14 +21,15 @@ export function ProteinInfoPanel() {
   const expanded =
     manualExpanded === null ? selectedCds !== null : manualExpanded;
 
-  // Briefly flash the card whenever the selected protein changes, so users
-  // notice the info has been updated.
+  // Briefly flash the card whenever the selected protein changes (keyed on
+  // the protein id, not the CDS object), so users notice the info updated.
+  const selectedProteinId = selectedCds?.protein_id ?? null;
   useEffect(() => {
-    if (!selectedCds) return;
+    if (selectedProteinId == null) return;
     setHighlight(true);
     const t = setTimeout(() => setHighlight(false), 900);
     return () => clearTimeout(t);
-  }, [selectedCds?.protein_id]);
+  }, [selectedProteinId]);
 
   return (
     <Card

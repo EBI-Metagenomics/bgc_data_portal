@@ -85,9 +85,7 @@ def dice_block(M_query: sp.csr_matrix, M_ref: sp.csr_matrix) -> sp.csr_matrix:
     if n_q == 0 or n_r == 0:
         return sp.csr_matrix((n_q, n_r), dtype=np.float32)
 
-    inter = (
-        M_query.astype(np.float32) @ M_ref.T.astype(np.float32)
-    ).tocoo(copy=False)
+    inter = (M_query.astype(np.float32) @ M_ref.T.astype(np.float32)).tocoo(copy=False)
     if inter.nnz == 0:
         return sp.csr_matrix((n_q, n_r), dtype=np.float32)
 

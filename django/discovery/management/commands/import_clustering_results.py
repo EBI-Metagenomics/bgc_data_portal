@@ -1,15 +1,22 @@
 """Apply an HPC clustering output tarball to the discovery database.
 
-Reads ``clustering_run.json`` + hierarchy/coords/scores/partial parquet files
-and writes:
+Reads ``clustering_run.json`` + hierarchy/scores/partial parquet files and
+writes:
 
   * a new (or updated-by-sha256) ``ClusteringRun`` row
   * ``DashboardGCF`` nodes for the tree (with ``representative_ibgc``)
   * ``IntegratedBgc`` per-row classification (primaries + partial projections)
   * ``IbgcClusteringSnapshot`` per-iBGC pre-import values for rollback
+  * for a weighted-metric run (schema v2, ADR 0003), the run's feature
+    weights + vocabularies under ``<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/weights/``,
+    which the scoring-cache rebuild then reuses verbatim
 
 Per-prediction (``SourceBgcPrediction``) rows are not modified — leaf path
-/ UMAP / scoring columns live on ``IntegratedBgc`` only in the v2 schema.
+and scoring columns live on ``IntegratedBgc`` only.
+
+Output tarballs of every schema version import: v1/v2 tarballs still carry a
+UMAP layout (``coords.parquet``, ``umap_x`` / ``umap_y`` partial columns),
+which ``common_core.clustering.io.read_outputs_tarball`` drops on read.
 
 The whole operation is wrapped in ``@transaction.atomic`` so a failure leaves
 the live state untouched. ``--dry-run`` validates the tarball and prints a
@@ -30,9 +37,7 @@ from django.utils import timezone
 log = logging.getLogger(__name__)
 
 IBGC_BULK_UPDATE_FIELDS = (
-    "umap_x",
-    "umap_y",
-    "umap_projected",
+    "is_partial",
     "gene_cluster_family",
     "novelty_score",
     "domain_novelty",
@@ -89,11 +94,32 @@ class Command(BaseCommand):
             f"  levels:       {run_meta.get('n_levels')}\n"
         )
 
+        params = run_meta.get("params") or {}
+        metric = params.get("similarity_metric", "dice")
+        self.stdout.write(
+            f"  metric:       {metric} (vocab={params.get('domain_vocab') or '-'}, "
+            f"enrichment={params.get('enrichment_version') or '-'}, "
+            f"idf_exponent={float(params.get('idf_exponent', 1.0)):g}, "
+            f"schema=v{params.get('schema_version', 1)})\n"
+        )
+        run_weights = _run_weights_from_payload(payload, metric)
+
         if options["dry_run"]:
             self.stdout.write(self.style.WARNING("--dry-run: no DB writes performed."))
             return
 
         run = self._apply(payload, force=options["force"])
+        if run_weights is not None:
+            from django.conf import settings
+
+            from discovery.services.clustering.feature_weights import (
+                persist_run_weights,
+            )
+
+            out = persist_run_weights(
+                Path(settings.CLUSTERING_ARTIFACTS_DIR) / sha[:12], run_weights
+            )
+            self.stdout.write(self.style.SUCCESS(f"Wrote run weights: {out}"))
         self.stdout.write(
             self.style.SUCCESS(f"Imported ClusteringRun pk={run.pk} sha256={sha[:12]}…")
         )
@@ -103,7 +129,7 @@ class Command(BaseCommand):
         # Reconstruct it from the just-committed DB state so the Find-similar
         # and architecture-search endpoints don't 503 on the imported run.
         try:
-            from discovery.services.clustering.pipeline import (
+            from discovery.services.clustering.run_support import (
                 rebuild_scoring_cache_from_db,
             )
 
@@ -173,6 +199,15 @@ class Command(BaseCommand):
             "knn_k": int(params.get("knn_k") or 0),
             "leiden_resolutions": params.get("leiden_resolutions", []),
             "seed": int(params.get("seed") or 42),
+            # v2 (ADR 0003); a v1 tarball has none of these → Dice defaults.
+            "similarity_metric": params.get("similarity_metric") or "dice",
+            "domain_vocab": params.get("domain_vocab") or "IPR_PROJECTED",
+            "enrichment_version": params.get("enrichment_version") or "",
+            "idf_exponent": float(params.get("idf_exponent", 1.0)),
+            "prune_below": float(params.get("prune_below", 0.05)),
+            "min_projection_similarity": float(
+                params.get("min_projection_similarity", 0.1)
+            ),
             "n_proteins": 0,
             "n_ibgcs": int(run_meta.get("n_ibgcs", 0)),
             "n_levels": int(run_meta.get("n_levels", 0)),
@@ -180,7 +215,6 @@ class Command(BaseCommand):
             "n_leaf_communities": int(run_meta.get("n_leaf_communities", 0)),
             "igraph_version": libs.get("igraph", ""),
             "leidenalg_version": libs.get("leidenalg", ""),
-            "umap_version": libs.get("umap-learn", "") or libs.get("cuml", ""),
             "scipy_version": libs.get("scipy", ""),
         }
         run, created = ClusteringRun.objects.update_or_create(
@@ -247,9 +281,8 @@ class Command(BaseCommand):
         existing = list(
             IntegratedBgc.objects.filter(id__in=_bigint_array_in(ibgc_ids)).only(
                 "id",
-                "umap_x",
-                "umap_y",
-                "umap_projected",
+                "accession",
+                "is_partial",
                 "gene_cluster_family",
                 "novelty_score",
                 "domain_novelty",
@@ -258,10 +291,8 @@ class Command(BaseCommand):
         snaps = [
             IbgcClusteringSnapshot(
                 clustering_run=run,
-                ibgc_id=ibgc.id,
-                umap_x=ibgc.umap_x,
-                umap_y=ibgc.umap_y,
-                umap_projected=ibgc.umap_projected,
+                ibgc_accession=ibgc.accession,
+                is_partial=ibgc.is_partial,
                 gene_cluster_family=ibgc.gene_cluster_family or "",
                 novelty_score=ibgc.novelty_score,
                 domain_novelty=ibgc.domain_novelty,
@@ -282,19 +313,11 @@ class Command(BaseCommand):
         from discovery.models import IntegratedBgc
 
         h = payload["hierarchy"]
-        coords = payload["coords"]
         scores = payload["scores"]
         n = len(h["ibgc_id"])
         if n == 0:
             return
 
-        coords_by_id = {
-            int(coords["ibgc_id"][i]): (
-                float(coords["umap_x"][i]),
-                float(coords["umap_y"][i]),
-            )
-            for i in range(len(coords["ibgc_id"]))
-        }
         scores_by_id = {
             int(scores["ibgc_id"][i]): (
                 scores["novelty_score"][i],
@@ -311,11 +334,8 @@ class Command(BaseCommand):
         # Clamp to 0 in case the HPC bundle predates the novelty fix.
         validated = _validated_ibgc_ids_subset(ibgc_ids)
         for ibgc in rows:
-            x, y = coords_by_id.get(ibgc.id, (None, None))
             nv, dn = scores_by_id.get(ibgc.id, (None, None))
-            ibgc.umap_x = x
-            ibgc.umap_y = y
-            ibgc.umap_projected = False
+            ibgc.is_partial = False
             ibgc.gene_cluster_family = leaf_by_id[ibgc.id]
             ibgc.novelty_score = 0.0 if ibgc.id in validated else nv
             ibgc.domain_novelty = dn
@@ -339,20 +359,16 @@ class Command(BaseCommand):
             return
         ids = [int(x) for x in p["ibgc_id"]]
         leaf = list(p["leaf_path"])
-        ux = [_maybe_float(x) for x in p["umap_x"]]
-        uy = [_maybe_float(x) for x in p["umap_y"]]
         nv = [_maybe_float(x) for x in p["novelty_score"]]
         dn = [_maybe_float(x) for x in p["domain_novelty"]]
-        by_id = {ids[i]: (leaf[i], ux[i], uy[i], nv[i], dn[i]) for i in range(n)}
+        by_id = {ids[i]: (leaf[i], nv[i], dn[i]) for i in range(n)}
 
         rows = list(IntegratedBgc.objects.filter(id__in=_bigint_array_in(ids)))
         # Backstop: clamp validated partials to novelty 0 (see primary path).
         validated = _validated_ibgc_ids_subset(ids)
         for ibgc in rows:
-            leaf_p, x, y, novelty, dom = by_id[ibgc.id]
-            ibgc.umap_x = x
-            ibgc.umap_y = y
-            ibgc.umap_projected = True
+            leaf_p, novelty, dom = by_id[ibgc.id]
+            ibgc.is_partial = True
             ibgc.gene_cluster_family = leaf_p or ""
             ibgc.novelty_score = 0.0 if ibgc.id in validated else novelty
             ibgc.domain_novelty = dom
@@ -393,3 +409,23 @@ def _maybe_float(x) -> float | None:
         return float(x)
     except (TypeError, ValueError):
         return None
+
+
+def _run_weights_from_payload(payload: dict, metric: str):
+    """Return the tarball's ``RunWeights`` for a weighted metric, else ``None``.
+
+    Raises ``CommandError`` before any DB write when a weighted-metric tarball
+    lacks its weights — the run could not be scored consistently later.
+    """
+    if metric == "dice":
+        return None
+    keys = ("domain_weights", "pair_weights", "domain_accs", "pair_vocab")
+    missing = [k for k in keys if payload.get(k) is None]
+    if missing:
+        raise CommandError(
+            f"similarity_metric={metric!r} but the tarball lacks {missing}; "
+            "it was produced by a pre-v2 bgc-cluster"
+        )
+    from discovery.services.clustering.feature_weights import RunWeights
+
+    return RunWeights(**{k: payload[k] for k in keys})

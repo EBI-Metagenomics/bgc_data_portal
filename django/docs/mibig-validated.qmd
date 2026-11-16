@@ -15,7 +15,7 @@ It is the most widely used reference database for BGCs and is maintained by the 
 
 In the platform, **validated** is applied to iBGCs that come from MIBiG (or another experimentally characterised reference set). A validated iBGC is one whose product is known. Everything else in the catalogue is a **candidate** — computationally predicted, but not yet experimentally tied to a product.
 
-The distinction is binary, and deliberately so: it provides a clean reference line for novelty. Validated iBGCs carry a **Validated** badge in the [roster](bgc-roster.qmd) and detail panels, and curated compound names and structures in their "compound features".
+The distinction is binary, and deliberately so: it provides a clean reference line for novelty. Validated iBGCs carry a **Validated** badge in the [roster](bgc-roster.qmd) and detail panels, and the curated NPClassifier labels of their product in the "NP class" chip.
 
 ## How validated BGCs anchor novelty
 

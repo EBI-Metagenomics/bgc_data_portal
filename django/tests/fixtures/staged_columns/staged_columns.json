@@ -1,0 +1,181 @@
+{
+  "description": "Columns of the staged bundle the BGC data portal loads. 'collector': the per-prefix TSVs GENOME_METADATA_COLLECTOR writes (natural_products.tsv is a pass-through of the curated input and is not listed). 'harmonised': the files etl.taxonomy.harmonise_contigs writes into the bundle before the merge (contigs.tsv replaces the collector's). 'taxonomy_mapping': the TSV the portal's apply_taxonomy_mapping reads. tests/test_staged_columns_contract.py keeps this file equal to the code; the portal keeps a copy in django/tests/fixtures/staged_columns.json.",
+  "collector": {
+    "assemblies.tsv": [
+      "assembly_accession",
+      "organism_name",
+      "source",
+      "assembly_type",
+      "biome_path",
+      "is_type_strain",
+      "type_strain_catalog_url",
+      "assembly_size_mb",
+      "url"
+    ],
+    "bgc_np_classes.tsv": [
+      "contig_sha256",
+      "bgc_start",
+      "bgc_end",
+      "detector_name",
+      "np_term_id",
+      "level",
+      "name",
+      "rank",
+      "score",
+      "confident",
+      "source"
+    ],
+    "bgcs.tsv": [
+      "contig_sha256",
+      "detector_name",
+      "start_position",
+      "end_position",
+      "classification_path",
+      "novelty_score",
+      "domain_novelty",
+      "size_kb",
+      "nearest_validated_accession",
+      "nearest_validated_distance",
+      "is_partial",
+      "is_validated",
+      "gene_cluster_family",
+      "score",
+      "probability",
+      "attributes_json"
+    ],
+    "cds.tsv": [
+      "contig_sha256",
+      "bgc_start",
+      "bgc_end",
+      "detector_name",
+      "protein_id_str",
+      "start_position",
+      "end_position",
+      "strand",
+      "protein_length",
+      "gene_caller",
+      "cluster_representative",
+      "protein_sha256"
+    ],
+    "cds_sequences.tsv": [
+      "contig_sha256",
+      "bgc_start",
+      "bgc_end",
+      "detector_name",
+      "protein_id_str",
+      "sequence_base64"
+    ],
+    "contig_sequences.tsv": [
+      "contig_sha256",
+      "sequence_base64"
+    ],
+    "contigs.tsv": [
+      "assembly_accession",
+      "sequence_sha256",
+      "accession",
+      "source_contig_id",
+      "length",
+      "taxonomy_path"
+    ],
+    "detectors.tsv": [
+      "name",
+      "tool",
+      "version"
+    ],
+    "domains.tsv": [
+      "contig_sha256",
+      "bgc_start",
+      "bgc_end",
+      "detector_name",
+      "protein_id_str",
+      "domain_acc",
+      "domain_name",
+      "domain_description",
+      "ref_db",
+      "start_position",
+      "end_position",
+      "score",
+      "url",
+      "interpro_entry_acc",
+      "interpro_entry_description",
+      "go_terms"
+    ]
+  },
+  "harmonised": {
+    "contigs.tsv": [
+      "assembly_accession",
+      "sequence_sha256",
+      "accession",
+      "source_contig_id",
+      "length",
+      "taxonomy_path",
+      "taxid"
+    ],
+    "taxa.tsv": [
+      "taxid",
+      "name",
+      "rank",
+      "parent_taxid",
+      "ltree_path",
+      "deepest_informative_rank",
+      "taxdump_version",
+      "domain_name",
+      "domain_taxid",
+      "kingdom_name",
+      "kingdom_taxid",
+      "phylum_name",
+      "phylum_taxid",
+      "class_name",
+      "class_taxid",
+      "order_name",
+      "order_taxid",
+      "family_name",
+      "family_taxid",
+      "genus_name",
+      "genus_taxid",
+      "species_name",
+      "species_taxid"
+    ]
+  },
+  "taxonomy_mapping": {
+    "columns": [
+      "old_taxonomy_path",
+      "contig_count",
+      "status",
+      "canonical_taxonomy_path",
+      "leaf_taxid",
+      "leaf_rank",
+      "leaf_name",
+      "deepest_informative_rank",
+      "d",
+      "d_taxid",
+      "k",
+      "k_taxid",
+      "p",
+      "p_taxid",
+      "c",
+      "c_taxid",
+      "o",
+      "o_taxid",
+      "f",
+      "f_taxid",
+      "g",
+      "g_taxid",
+      "s",
+      "s_taxid",
+      "n_labels",
+      "leaf_label_index",
+      "dropped_labels",
+      "reclassified_upstream",
+      "unknown_upstream",
+      "synonym_hits",
+      "ambiguous_labels"
+    ],
+    "status_values": [
+      "junk",
+      "resolved",
+      "resolved_partial",
+      "unresolved"
+    ]
+  }
+}

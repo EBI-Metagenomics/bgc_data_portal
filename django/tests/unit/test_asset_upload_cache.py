@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import pytest
 from discovery.services.asset_upload import cache as asset_cache
-
 from django.core.cache import cache
 
 

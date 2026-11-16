@@ -23,14 +23,9 @@ function showGlobalSpinner() {
   if (spinner) spinner.style.display = 'block';
 }
 
-function hideGlobalSpinner() {
-  var spinner = getGlobalSpinner();
-  if (spinner) spinner.style.display = 'none';
-}
-
 window.addEventListener('DOMContentLoaded', () => {
   // Attach spinner behavior to all known forms
-  const formIds = ['keyword-form', 'search-form', 'sequence-search-form', 'chemical-search-form'];
+  const formIds = ['keyword-form', 'search-form', 'sequence-search-form'];
   formIds.forEach(id => {
     const form = document.getElementById(id);
     if (!form) return;
@@ -41,61 +36,3 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
-
-
-// document.addEventListener('DOMContentLoaded', function () {
-//     const advancedForm = document.getElementById('search-form');
-//     const loader = document.querySelector('.bgcs-portal-spinner');
-
-//     if (advancedForm && loader) {
-//       advancedForm.addEventListener('submit', function (event) {
-//         console.log('Form submit event triggered');
-
-//         event.preventDefault();
-//         $('.bgcs-portal-spinner').show();
-
-//         const formData = new FormData(advancedForm);
-
-//         for (let [name, value] of formData.entries()) {
-//           console.log(name, value);
-//         }
-
-//         const serializedData = new URLSearchParams(formData).toString();
-//         const actionUrl = advancedForm.getAttribute('action');
-
-//         console.log(`${actionUrl}?${serializedData}`);
-//         window.location.href = `${actionUrl}?${$('#search-form').serialize()}`;
-//       });
-//     } else {
-//       console.error('Form or Loader not found');
-//     }
-//   });
-
-  // Handle pagination button clicks
-  $(document).on('click', '.pagination button', function (e) {
-    e.preventDefault();
-    var page = $(this).data('page');
-
-    // show spinner during pagination
-    showGlobalSpinner();
-
-    $.ajax({
-      url: $('#search-form').attr('action'),
-      type: 'GET',
-      data: serializedString + '&page=' + page,
-      success: function (response) {
-        $('#results').html(response);
-      },
-      error: function (xhr, status, error) {
-        console.error('AJAX Error:', status, error);
-        $('#results').html('<p>An error occurred. Please try again.</p>');
-      },
-      complete: function () {
-        hideGlobalSpinner();
-      },
-    });
-  });
-
-// Also toggle spinner automatically on any jQuery AJAX activity
-$(document).ajaxStart(function(){ showGlobalSpinner(); });
-$(document).ajaxStop(function(){ hideGlobalSpinner(); });

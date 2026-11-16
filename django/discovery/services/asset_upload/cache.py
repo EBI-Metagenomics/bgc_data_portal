@@ -24,6 +24,7 @@ value for the suffix to keep keys clean (``asset:abc:ibgc:42`` not ``…:-42``).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 from pathlib import Path
@@ -185,10 +186,8 @@ def read_upload(token: str) -> bytes | None:
 
 def evict_upload(token: str) -> None:
     """Delete the staged upload file — called by the worker once consumed."""
-    try:
+    with contextlib.suppress(ValueError):
         _upload_path(token).unlink(missing_ok=True)
-    except ValueError:
-        pass
 
 
 def evict_asset(token: str) -> None:

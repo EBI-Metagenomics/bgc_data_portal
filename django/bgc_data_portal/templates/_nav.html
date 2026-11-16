@@ -1,0 +1,38 @@
+{% comment %}
+Global header + navigation shared by base.html and dashboard.html.
+Pass ``active="dashboard"`` to mark the Discovery Platform link as the current page.
+``api_docs_url`` comes from bgc_data_portal.context_processors (SCRIPT_NAME-aware).
+{% endcomment %}
+<header class="vf-global-header">
+    <div class="vf-global-header__inner">
+        <a href="{% url 'landing_page' %}" class="vf-logo vf-logo--inline">
+            <span class="vf-logo__text">MGnify BGCs</span>
+        </a>
+        <span class="vf-badge vf-badge--primary">beta</span>
+        <nav class="vf-navigation vf-navigation--global | vf-cluster">
+            <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
+                <li class="vf-navigation__item">
+                    <a href="{% url 'dashboard' %}"
+                       class="vf-navigation__link"
+                       {% if active == "dashboard" %}aria-current="page"{% endif %}>Discovery Platform</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="{{ api_docs_url }}"
+                       class="vf-navigation__link"
+                       target="_blank"
+                       rel="noopener noreferrer">API</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="{% url 'about' %}" class="vf-navigation__link">About</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics"
+                       class="vf-navigation__link">Contact</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</header>

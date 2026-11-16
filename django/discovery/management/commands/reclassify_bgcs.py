@@ -1,13 +1,14 @@
 """Assign leaf family paths to non-primary BGCs against an existing ClusteringRun.
 
-Independent of ``run_bgc_clustering``: re-run whenever new partial BGCs
+Independent of the clustering import: re-run whenever new partial BGCs
 land or stale assignments need refreshing. Does not reshape the hierarchy.
 """
+
+from django.core.management.base import BaseCommand, CommandError
 
 from discovery.models import ClusteringRun
 from discovery.services.clustering import ALLOWED_SCOPES
 from discovery.tasks import reclassify_bgcs_task
-from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
@@ -34,13 +35,16 @@ class Command(BaseCommand):
         parser.add_argument(
             "--min-total-similarity",
             type=float,
-            default=0.1,
-            help="Minimum sum of top-K Dice required to commit an assignment",
+            default=None,
+            help=(
+                "Minimum sum of top-K similarity required to commit an "
+                "assignment (default: the run's min_projection_similarity)"
+            ),
         )
         parser.add_argument(
             "--sync",
             action="store_true",
-            help="Run synchronously in the current process instead of dispatching to Celery",
+            help="Run synchronously in the current process instead of enqueuing a worker task",
         )
         parser.add_argument(
             "--queue",
@@ -54,7 +58,7 @@ class Command(BaseCommand):
             latest = ClusteringRun.objects.order_by("-created_at").first()
             if latest is None:
                 raise CommandError(
-                    "No ClusteringRun exists; run `run_bgc_clustering` first"
+                    "No ClusteringRun exists; run `import_clustering_results` first"
                 )
             run_pk = latest.pk
             self.stdout.write(

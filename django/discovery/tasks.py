@@ -4,14 +4,15 @@ Each task dispatches to a service, mirrors its result/progress into the default
 cache under ``set_job_cache``, and returns its result (persisted by the
 django-tasks-db backend as the source of truth for terminal status).
 
-Celery's ``link=`` chaining has no django-tasks equivalent, so chains are
+There is no task-chaining canvas in django-tasks, so chains are
 expressed by enqueuing the successor at the end of the predecessor (guarded by
 a ``then_*`` flag where the task is also runnable on its own).
 
 Tasks are plain ``@task`` callables (no ``takes_context``) so they run
 identically under ``.enqueue()`` (worker) and ``.call()`` (synchronous, used by
 ``--sync`` management commands and tests). The diagnostic progress/result cache
-is keyed on a generated id; final status is owned by the django-tasks-db result.
+is keyed on a generated id (a plain task cannot see its own django-tasks result
+id); final status is owned by the django-tasks-db result.
 """
 
 from __future__ import annotations
@@ -25,59 +26,15 @@ from discovery.cache_utils import set_job_cache
 
 log = logging.getLogger(__name__)
 
-KEYWORD_TTL = 300  # 5 minutes
-CHEMICAL_QUERY_TTL = 3_600  # 1 hour
-
-
-@task()
-def keyword_resolve(search_key: str, keyword: str) -> bool:
-    """Resolve a landing-page keyword to a dashboard filter and cache the redirect URL."""
-    task_id = uuid4().hex
-    set_job_cache(search_key=search_key, task_id=task_id, timeout=KEYWORD_TTL)
-
-    from discovery.services.keyword_resolver import resolve_keyword
-
-    result = resolve_keyword(keyword)
-
-    set_job_cache(
-        search_key=search_key,
-        results=result,
-        task_id=task_id,
-        timeout=KEYWORD_TTL,
-    )
-    log.info(
-        "Keyword resolved: %r → %s (task %s)",
-        keyword,
-        result.get("match_type"),
-        task_id,
-    )
-    return True
-
 
 @task(queue_name="scores")
 def recompute_scores_task() -> bool:
-    """Recompute all discovery scores (novelty, assembly, GCF, catalogs, UMAP)."""
+    """Recompute all discovery scores (assembly, GCF, catalogs, iBGC classes)."""
     from discovery.services.scores import recompute_all_scores
 
     recompute_all_scores()
-    log.info("Score recomputation complete (task %s)", uuid4().hex)
+    log.info("Score recomputation complete")
     return True
-
-
-@task()
-def chemical_similarity_search(
-    smiles: str, similarity_threshold: float
-) -> dict[int, float]:
-    """Compute ChemOnt ontology-based semantic similarity of a SMILES query.
-
-    Thin task wrapper over ``discovery.services.query.run_chemical_search`` —
-    the canonical resolver shared with the combined multi-criterion query.
-    Returns ``{ibgc_id: similarity_score}``; raises if the IC cache is missing
-    or ClassyFire is unreachable so the failure is visible to the operator.
-    """
-    from discovery.services.query import run_chemical_search
-
-    return run_chemical_search(smiles, similarity_threshold)
 
 
 @task()
@@ -90,14 +47,20 @@ def combined_query(criteria: list[dict], filters: dict | None = None) -> dict:
     ``/query/combined/status`` + ``/scores`` endpoints render. Runs on the
     default (worker) queue so it has access to phmmer, rdkit and the scoring
     cache the individual criteria need.
+
+    A :class:`CriterionError` (bad input, e.g. a partial iBGC as the similarity
+    seed, or an unavailable index) is a user-facing outcome, not a task failure:
+    it is returned as ``{"error": {"status", "message"}}`` so the status
+    endpoints can answer with that status and message.
     """
-    from discovery.services.query import run_combined_query
+    from discovery.services.query import CriterionError, run_combined_query
 
-    return run_combined_query(criteria, filters or {})
+    try:
+        return run_combined_query(criteria, filters or {})
+    except CriterionError as exc:
+        return {"error": {"status": exc.status, "message": exc.message}}
 
 
-SEQUENCE_QUERY_TTL = 3_600  # 1 hour
-COMBINED_QUERY_TTL = 3_600  # 1 hour
 CLUSTERING_TTL = 86_400  # 24 hours
 
 
@@ -108,23 +71,23 @@ CLUSTERING_TTL = 86_400  # 24 hours
 def build_integrated_bgcs_task(
     *,
     then_update_stats: bool = False,
-    then_run_clustering: dict | None = None,
     stats_queue: str = "default",
-    clustering_queue: str = "scores",
 ) -> dict:
     """Rebuild the IntegratedBgc table from latest-version SourceBgcPrediction rows.
 
-    On success, optionally enqueues a follow-up: ``then_run_clustering`` (a kwargs
-    dict) chains ``run_bgc_clustering_task``; otherwise ``then_update_stats``
-    chains ``update_discovery_stats_task``. Chaining on success (vs dispatching
-    both up front) preserves the old Celery ``link=`` ordering — the clustering
-    task must not capture iBGC ids before the rebuild recreates them.
+    On success, ``then_update_stats`` chains ``update_discovery_stats_task`` so
+    the stats snapshot never captures a half-built table.
     """
     task_id = uuid4().hex
     search_key = "integrated_bgcs"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
     from discovery.services.clustering.integrated import build_integrated_bgcs
+    from discovery.services.ingestion.edge_partial import mark_edge_partials
+
+    # Contig-edge flags first: the ETL's exact-edge test depends on the gene
+    # caller; the gene-margin rule makes them comparable across datasets.
+    mark_edge_partials()
 
     def _progress(phase: str, processed: int, total: int) -> None:
         set_job_cache(
@@ -141,94 +104,9 @@ def build_integrated_bgcs_task(
         task_id=task_id,
         timeout=CLUSTERING_TTL,
     )
-    if then_run_clustering is not None:
-        run_bgc_clustering_task.using(queue_name=clustering_queue).enqueue(
-            **then_run_clustering
-        )
-    elif then_update_stats:
+    if then_update_stats:
         update_discovery_stats_task.using(queue_name=stats_queue).enqueue()
-    log.info("build_integrated_bgcs complete (task %s): %s", task_id, result)
-    return result
-
-
-# ── BGC clustering pipeline ───────────────────────────────────────────────────
-
-
-@task(queue_name="scores")
-def run_bgc_clustering_task(
-    *,
-    domain_sources: list[str] | None = None,
-    score_weights: list[float] | None = None,
-    knn_k: int | None = None,
-    leiden_resolutions: list[float] | tuple[float, ...] | None = None,
-    seed: int = 42,
-    apply: bool = False,
-    auto_reclassify: bool = True,
-    reclassify_scope: str = "all_non_primary",
-    score_ibgcs: bool = True,
-) -> dict:
-    """Domain+adjacency hierarchical-CPM-Leiden clustering over iBGCs.
-
-    Runs the orchestrator in ``services.clustering.pipeline``. If ``apply``
-    is True, writes leaf paths + umap coords to ``IntegratedBgc``, upserts
-    ``DashboardGCF`` rows, and emits MIBiG validation artifacts under
-    ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``. Optionally
-    chains a reclassify task to assign partial iBGCs and a projection task
-    that fills umap / leaf path / novelty for partials.
-    """
-    task_id = uuid4().hex
-    search_key = f"bgc_clustering:{task_id}"
-    set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
-
-    from discovery.services.clustering.pipeline import (
-        DEFAULT_DOMAIN_SOURCES,
-        DEFAULT_RESOLUTIONS,
-        DEFAULT_SCORE_WEIGHTS,
-        run_clustering_pipeline,
-    )
-
-    sources = tuple(s.upper() for s in (domain_sources or DEFAULT_DOMAIN_SOURCES))
-    weights = (
-        (float(score_weights[0]), float(score_weights[1]))
-        if score_weights
-        else DEFAULT_SCORE_WEIGHTS
-    )
-    resolutions = (
-        tuple(leiden_resolutions) if leiden_resolutions else DEFAULT_RESOLUTIONS
-    )
-
-    result = run_clustering_pipeline(
-        domain_sources=sources,
-        score_weights=weights,
-        knn_k=knn_k,
-        leiden_resolutions=resolutions,
-        seed=seed,
-        apply=apply,
-        score_ibgcs=score_ibgcs,
-    )
-
-    if apply and auto_reclassify and "run_pk" in result:
-        knn = result.get("knn_k") or knn_k or 5
-        # Enqueue reclassify on the scores queue; it chains the partial-iBGC
-        # projection itself when ``then_project`` is set (was a Celery link).
-        reclassify_result = reclassify_bgcs_task.enqueue(
-            clustering_run_pk=result["run_pk"],
-            scope=reclassify_scope,
-            knn_k=knn,
-            then_project=score_ibgcs,
-            project_knn_k=knn,
-        )
-        if score_ibgcs:
-            result["project_partial_ibgcs_chained"] = True
-        result["reclassify_task_id"] = reclassify_result.id
-
-    set_job_cache(
-        search_key=search_key,
-        results=result,
-        task_id=task_id,
-        timeout=CLUSTERING_TTL,
-    )
-    log.info("run_bgc_clustering complete (task %s): %s", task_id, result)
+    log.info("build_integrated_bgcs complete: %s", result)
     return result
 
 
@@ -241,16 +119,16 @@ def reclassify_bgcs_task(
     clustering_run_pk: int,
     scope: str = "partial",
     knn_k: int = 5,
-    min_total_similarity: float = 0.1,
+    min_total_similarity: float | None = None,
     then_project: bool = False,
     project_knn_k: int = 5,
 ) -> dict:
     """Assign leaf family paths to partial / non-primary iBGCs against an existing run.
 
-    Re-runnable independently of ``run_bgc_clustering_task``. Updates only
+    Re-runnable independently of a clustering import. Updates only
     classification fields on ``IntegratedBgc``; never touches the hierarchy.
-    When ``then_project`` is set, chains the partial-iBGC UMAP projection on
-    success (replaces the old Celery ``link=`` on the clustering chain).
+    When ``then_project`` is set, chains the partial-iBGC projection on
+    success.
     """
     task_id = uuid4().hex
     search_key = f"bgc_reclassify:{clustering_run_pk}"
@@ -285,11 +163,11 @@ def reclassify_bgcs_task(
             knn_k=project_knn_k,
             min_total_similarity=min_total_similarity,
         )
-    log.info("reclassify_bgcs complete (task %s): %s", task_id, result)
+    log.info("reclassify_bgcs complete: %s", result)
     return result
 
 
-# ── Partial-iBGC projection (umap coords + scores for non-primary iBGCs) ───────
+# ── Partial-iBGC projection (GCF + scores for non-primary iBGCs) ─────────────
 
 
 @task(queue_name="scores")
@@ -297,14 +175,14 @@ def project_partial_ibgcs_task(
     *,
     clustering_run_pk: int,
     knn_k: int = 5,
-    min_total_similarity: float = 0.1,
+    min_total_similarity: float | None = None,
 ) -> dict:
-    """Project partial / non-primary iBGCs onto a ClusteringRun's UMAP.
+    """Project partial / non-primary iBGCs onto a ClusteringRun.
 
-    Writes ``umap_x`` / ``umap_y`` (similarity-weighted average of top-K
-    primary neighbours), ``gene_cluster_family``, ``novelty_score``, and
-    ``domain_novelty`` on every ``IntegratedBgc`` whose ``classification_run``
-    differs from the target run. Marks ``umap_projected = True``.
+    Writes ``gene_cluster_family`` (weighted vote of the top-K primary
+    neighbours), ``novelty_score`` and ``domain_novelty`` on every
+    ``IntegratedBgc`` whose ``classification_run`` differs from the target
+    run. Marks ``is_partial = True``.
     """
     task_id = uuid4().hex
     search_key = f"bgc_project_partial:{clustering_run_pk}"
@@ -332,32 +210,8 @@ def project_partial_ibgcs_task(
         task_id=task_id,
         timeout=CLUSTERING_TTL,
     )
-    log.info("project_partial_ibgcs complete (task %s): %s", task_id, result)
+    log.info("project_partial_ibgcs complete: %s", result)
     return result
-
-
-@task()
-def sequence_similarity_search(
-    sequence: str,
-    min_bitscore: float = 30.0,
-    min_pident: float = 70.0,
-    min_qcov: float = 70.0,
-) -> dict[int, dict[str, float | str]]:
-    """Run phmmer for a query protein and return matching iBGCs.
-
-    Thin task wrapper over ``discovery.services.query.run_sequence_search`` —
-    the canonical resolver shared with the combined multi-criterion query.
-    Returns ``{ibgc_id: {"bitscore": ..., "pident": ..., "qcoverage": ...,
-    "protein_id": ...}}`` from the highest-bitscore matched protein per iBGC.
-    """
-    from discovery.services.query import run_sequence_search
-
-    return run_sequence_search(
-        sequence,
-        min_bitscore=min_bitscore,
-        min_pident=min_pident,
-        min_qcov=min_qcov,
-    )
 
 
 @task()
@@ -396,9 +250,10 @@ def update_protein_search_index_task(
 @task()
 def update_discovery_stats_task() -> bool:
     """Recompute platform-overview counts and append a new DiscoveryStats row."""
+    from django.db import transaction
+
     from discovery.models import DiscoveryStats
     from discovery.services.stats import generate_discovery_stats
-    from django.db import transaction
 
     stats = generate_discovery_stats()
     with transaction.atomic():
@@ -444,9 +299,7 @@ def process_asset_upload_task(token: str) -> dict:
         except AssetValidationError as exc:
             asset_cache.mark_failed(token, task_id=task_id, error=str(exc))
             return {"token": token, "state": "FAILED", "error": str(exc)}
-        except (
-            Exception
-        ) as exc:  # noqa: BLE001 — never let the UI hang on a 5-min poll timeout
+        except Exception as exc:  # noqa: BLE001 — never let the UI hang on a 5-min poll timeout
             log.exception(
                 "process_asset_upload: unexpected error during validate/parse"
             )

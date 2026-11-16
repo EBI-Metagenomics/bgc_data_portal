@@ -18,15 +18,8 @@ from discovery.services.asset_upload.matrices import (
 from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES as MEMBERSHIP_DEFAULTS,
 )
-from discovery.services.clustering.pipeline import (
-    DEFAULT_DOMAIN_SOURCES as PIPELINE_DEFAULTS,
-)
 
 PFAM_NCBIFAM = ("PFAM", "NCBIFAM", "TIGRFAM")
-
-
-def test_clustering_pipeline_default_sources_unchanged():
-    assert tuple(PIPELINE_DEFAULTS) == PFAM_NCBIFAM
 
 
 def test_clustering_membership_default_sources_unchanged():
@@ -44,3 +37,9 @@ def test_architecture_module_default_sources_unchanged():
     from discovery.services import architecture as arch_mod
 
     assert tuple(arch_mod.DEFAULT_DOMAIN_SOURCES) == PFAM_NCBIFAM
+
+
+# ── ADR 0003: the defaults stay the original binary-Dice behaviour ─────────
+# Rollback to an older run (and any caller that doesn't opt in) must keep
+# scoring exactly as before: Dice on the IPR-projected vocabulary, prune 0.05,
+# projection floor 0.1.

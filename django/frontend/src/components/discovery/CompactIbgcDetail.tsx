@@ -19,19 +19,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
-  ChemOntAnnotationNode,
-  NaturalProductSummary,
+  NpcLabel,
   ParentAssemblySummary,
 } from "@/api/types";
-
-function collectLeaves(node: ChemOntAnnotationNode): ChemOntAnnotationNode[] {
-  if (node.children.length === 0) return [node];
-  return node.children.flatMap(collectLeaves);
-}
-
-function molviewHref(smiles: string): string {
-  return `https://app.molview.com/?smiles=${encodeURIComponent(smiles)}`;
-}
 
 interface Props {
   ibgcId: number | null;
@@ -134,15 +124,14 @@ export function CompactIbgcDetail({ ibgcId, variant }: Props) {
           ibgcId={ibgc.id}
           ibgcLabel={ibgc.accession || ibgc.label}
           variant={variant}
-          isPartial={ibgc.umap_projected}
+          isPartial={ibgc.is_partial}
           isAsset={ibgc.id < 0}
         />
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">
         <KpiStrip
-          naturalProducts={ibgc.natural_products}
-          chemontTree={ibgc.chemont_tree}
+          npcLabels={ibgc.npc_labels ?? []}
           parentAssembly={ibgc.parent_assembly}
           bgcClass={ibgc.bgc_class}
           isValidated={ibgc.is_validated}
@@ -204,8 +193,7 @@ function RegionStrip({ ibgcId }: { ibgcId: number | null }) {
 }
 
 interface KpiStripProps {
-  naturalProducts: NaturalProductSummary[];
-  chemontTree: ChemOntAnnotationNode[];
+  npcLabels: NpcLabel[];
   parentAssembly: ParentAssemblySummary | null;
   bgcClass: string;
   isValidated: boolean;
@@ -220,8 +208,7 @@ const CHIP_BASE =
 const CHIP_CLICKABLE = "cursor-pointer transition-colors hover:bg-muted/60";
 
 function KpiStrip({
-  naturalProducts,
-  chemontTree,
+  npcLabels,
   parentAssembly,
   bgcClass,
   isValidated,
@@ -230,12 +217,6 @@ function KpiStrip({
   novelty,
   domainNovelty,
 }: KpiStripProps) {
-  // Compounds chip count = distinct deepest ChemOnt classes seen across the
-  // iBGC's CDSs, plus any curated NP names (deduped). Treat curated names
-  // (e.g. MIBiG compounds) and CHAMOIS classes as a single conceptual count.
-  const leaves = chemontTree.flatMap(collectLeaves);
-  const compoundsCount = naturalProducts.length + leaves.length;
-  const firstSmiles = naturalProducts.find((np) => np.smiles)?.smiles;
   const parentAcc = parentAssembly?.accession ?? "—";
   const setGcfPath = useFilterStore((s) => s.setGcfPath);
 
@@ -273,7 +254,7 @@ function KpiStrip({
         </span>
 
         {/* Completeness: partial iBGCs are incomplete clusters (e.g. at a
-            contig edge) projected into the map via nearest neighbours. */}
+            contig edge) left out of the primary clustering pass. */}
         <span className={CHIP_BASE}>
           <span className="text-muted-foreground">completeness</span>
           <span className="font-semibold">
@@ -310,142 +291,66 @@ function KpiStrip({
           <span className="font-semibold">{fmt(domainNovelty, 2)}</span>
         </span>
 
-        <CompoundsChip
-          count={compoundsCount}
-          naturalProducts={naturalProducts}
-          chemontTree={chemontTree}
-          molviewSmiles={firstSmiles}
-        />
+        <NpcChip labels={npcLabels} />
       </div>
     </TooltipProvider>
   );
 }
 
-function CompoundsChip({
-  count,
-  naturalProducts,
-  chemontTree,
-  molviewSmiles,
-}: {
-  count: number;
-  naturalProducts: NaturalProductSummary[];
-  chemontTree: ChemOntAnnotationNode[];
-  molviewSmiles: string | undefined;
-}) {
-  const chipBody = (
-    <>
-      <span className="text-muted-foreground">compound features</span>
-      <span className="font-semibold">{String(count)}</span>
-    </>
-  );
+/** NPClassifier product class of the iBGC: the confident pathway(s) in the
+ *  chip, every label (with score, confidence and provenance) in the tooltip.
+ *  Click a label to filter the dashboard by that term. */
+function NpcChip({ labels }: { labels: NpcLabel[] }) {
+  const setNpcTerms = useFilterStore((s) => s.setNpcTerms);
+  const pathways = labels.filter((l) => l.level === "pathway");
+  const confident = pathways.filter((l) => l.confident);
+  const shown = confident.length > 0 ? confident : pathways;
+  const text =
+    shown.length === 0
+      ? "—"
+      : shown.map((l) => l.name).join(" | ") +
+        (confident.length === 0 ? " ?" : "");
 
-  const trigger = molviewSmiles ? (
-    <a
-      href={molviewHref(molviewSmiles)}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
-    >
-      {chipBody}
-    </a>
-  ) : (
-    <span className={CHIP_BASE}>{chipBody}</span>
+  const body = (
+    <span className={cn(CHIP_BASE, labels.length > 0 && CHIP_CLICKABLE)}>
+      <span className="text-muted-foreground">NP class</span>
+      <span className="font-semibold">{text}</span>
+    </span>
   );
-
-  if (count === 0) return trigger;
+  if (labels.length === 0) return body;
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipTrigger asChild>{body}</TooltipTrigger>
       <TooltipContent
         side="bottom"
         className="max-w-sm border bg-popover text-popover-foreground shadow-md"
       >
-        <CompoundsTooltipBody
-          naturalProducts={naturalProducts}
-          chemontTree={chemontTree}
-        />
+        <div className="space-y-1 text-xs">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+            NPClassifier labels
+          </div>
+          {labels.map((l) => (
+            <button
+              key={l.term_id}
+              type="button"
+              className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-accent"
+              title={`Filter by ${l.level} ${l.name}`}
+              onClick={() => setNpcTerms([l.term_id])}
+            >
+              <span className="w-16 shrink-0 text-[10px] uppercase text-muted-foreground">
+                {l.level}
+              </span>
+              <span className="flex-1 truncate font-medium">{l.name}</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {l.score != null ? l.score.toFixed(2) : ""}
+                {l.confident ? "" : " (low)"}
+                {l.sources.includes("curated") ? " curated" : ""}
+              </span>
+            </button>
+          ))}
+        </div>
       </TooltipContent>
     </Tooltip>
-  );
-}
-
-function CompoundsTooltipBody({
-  naturalProducts,
-  chemontTree,
-}: {
-  naturalProducts: NaturalProductSummary[];
-  chemontTree: ChemOntAnnotationNode[];
-}) {
-  return (
-    <div className="space-y-3 text-xs">
-      {naturalProducts.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
-            Curated compounds
-          </div>
-          {naturalProducts.map((np) => (
-            <div
-              key={np.id}
-              className="space-y-1 border-b border-border/40 pb-2 last:border-0 last:pb-0"
-            >
-              <div className="font-medium">{np.name || "(unnamed)"}</div>
-              {np.np_class_path && (
-                <div className="text-[10px] text-muted-foreground">
-                  {np.np_class_path.replace(/\./g, " > ")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {chemontTree.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
-            CHAMOIS ChemOnt classes (aggregated across CDSs)
-          </div>
-          {chemontTree.map((root) => (
-            <ChemontGroup key={root.chemont_id} node={root} indent={0} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChemontGroup({
-  node,
-  indent,
-}: {
-  node: ChemOntAnnotationNode;
-  indent: number;
-}) {
-  const isLeaf = node.children.length === 0;
-  return (
-    <div style={{ paddingLeft: `${indent * 8}px` }} className="space-y-0.5">
-      <div
-        title={node.chemont_id}
-        className={cn(
-          "flex flex-wrap items-center gap-1",
-          isLeaf ? "font-medium" : "text-muted-foreground",
-        )}
-      >
-        <span>{node.name}</span>
-        {node.n_cds > 0 && (
-          <span className="rounded-sm bg-muted px-1 text-[10px] font-normal">
-            {node.n_cds} CDS
-          </span>
-        )}
-        {node.probability != null && (
-          <span className="text-[10px] font-normal text-muted-foreground">
-            {(node.probability * 100).toFixed(0)}%
-          </span>
-        )}
-      </div>
-      {node.children.map((child) => (
-        <ChemontGroup key={child.chemont_id} node={child} indent={indent + 1} />
-      ))}
-    </div>
   );
 }

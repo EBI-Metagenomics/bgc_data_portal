@@ -17,17 +17,9 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from discovery.services import query as q
 from discovery.services.query import combined as combined_mod
 from tests.factories.discovery_models import IntegratedBgcFactory
-
-from django.test import Client
-
-
-@pytest.fixture
-def client():
-    return Client()
 
 
 def _result(scores, ctype="domain", metrics=None):
@@ -41,7 +33,9 @@ def _result(scores, ctype="domain", metrics=None):
 def _stub_resolvers(monkeypatch, results):
     """Patch ``resolve_criterion`` to return ``results`` in criteria order."""
     it = iter(results)
-    monkeypatch.setattr(combined_mod, "resolve_criterion", lambda ctype, params: next(it))
+    monkeypatch.setattr(
+        combined_mod, "resolve_criterion", lambda ctype, params: next(it)
+    )
 
 
 # ── run_combined_query (orchestration) ───────────────────────────────────────
@@ -133,13 +127,9 @@ def test_sequence_criterion_carries_submetric_columns(monkeypatch):
 
 
 def test_filters_narrow_the_intersection(monkeypatch):
-    _stub_resolvers(
-        monkeypatch, [_result({1: {"value": 1.0}, 2: {"value": 1.0}})]
-    )
+    _stub_resolvers(monkeypatch, [_result({1: {"value": 1.0}, 2: {"value": 1.0}})])
     # Drop id 2 at the filter stage.
-    monkeypatch.setattr(
-        combined_mod, "_filter_candidate_ids", lambda ids, filters: {1}
-    )
+    monkeypatch.setattr(combined_mod, "_filter_candidate_ids", lambda ids, filters: {1})
     out = q.run_combined_query(
         [{"id": "d1", "type": "domain", "params": {"domains_text": "PF1"}}],
         {"validated_only": True},
@@ -171,9 +161,7 @@ class _FakeTask:
 
 
 def _post(client, body):
-    return client.post(
-        POST_URL, data=json.dumps(body), content_type="application/json"
-    )
+    return client.post(POST_URL, data=json.dumps(body), content_type="application/json")
 
 
 @pytest.mark.django_db
@@ -292,7 +280,7 @@ def test_status_returns_roster_with_per_criterion_scores(client, monkeypatch):
     ids = [a.id, b.id]
     monkeypatch.setattr("discovery.cache_utils.fetch_job", _ready(_cached_result(ids)))
 
-    resp = client.get(f"/api/discovery/query/combined/status/task/")
+    resp = client.get("/api/discovery/query/combined/status/task/")
     assert resp.status_code == 200
     body = resp.json()
     # Column descriptors propagate.
@@ -350,3 +338,30 @@ def test_scores_endpoint_returns_token_and_scores(client, monkeypatch):
     assert isinstance(body["ibgc_ids_token"], str) and body["ibgc_ids_token"]
     assert {row["id"] for row in body["items"]} == {a.id, b.id}
     assert [c["id"] for c in body["criteria"]] == ["d1", "s1"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("criterion_status", "http_status"), [(400, 400), (503, 500)])
+def test_status_and_scores_surface_criterion_errors(
+    client, monkeypatch, criterion_status, http_status
+):
+    error = {"error": {"status": criterion_status, "message": "Seed iBGC is partial"}}
+    monkeypatch.setattr("discovery.cache_utils.fetch_job", _ready(error))
+    for url in (
+        "/api/discovery/query/combined/status/t/",
+        "/api/discovery/query/combined/status/t/scores/",
+    ):
+        resp = client.get(url)
+        assert resp.status_code == http_status
+        assert resp.json()["detail"] == "Seed iBGC is partial"
+
+
+def test_task_returns_criterion_errors_instead_of_failing(monkeypatch):
+    from discovery import tasks
+
+    def boom(criteria, filters):
+        raise q.CriterionError(400, "Seed iBGC is partial")
+
+    monkeypatch.setattr("discovery.services.query.run_combined_query", boom)
+    out = tasks.combined_query.func([{"id": "s", "type": "similar", "params": {}}])
+    assert out == {"error": {"status": 400, "message": "Seed iBGC is partial"}}

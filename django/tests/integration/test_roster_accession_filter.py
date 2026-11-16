@@ -17,13 +17,6 @@ from tests.factories.discovery_models import (
     SourceBgcPredictionFactory,
 )
 
-from django.test import Client
-
-
-@pytest.fixture
-def client():
-    return Client()
-
 
 @pytest.fixture
 def ibgc(db):

@@ -15,13 +15,13 @@ Each GCF has a **dotted path** identifier reflecting its place in a hierarchy �
 
 The platform clusters all iBGCs from their **protein domains and domain arrangement** — the same composite similarity described in [Scores & Metrics](scores-metrics.qmd) — not from raw sequence. In outline:
 
-1. Each iBGC's domain content and neighbouring-domain pairs are compared to every other's, giving a composite-Dice similarity.
+1. Each iBGC's domain content and neighbouring-domain pairs are compared to every other's, giving a composite similarity (a weighted cosine that favours rare, core biosynthetic domains).
 2. A nearest-neighbour graph links each iBGC to its most similar peers.
 3. A hierarchical community-detection step partitions that graph into nested families, producing the dotted leaf paths.
 
 Because similarity is domain-based, the clustering groups iBGCs with the same biosynthetic logic even when their DNA or protein sequences have diverged beyond what alignment would detect — clusters with different gene order or gene count can still land in the same family.
 
-**Partial** iBGCs (truncated at a contig edge) are not clustered directly; they are assigned to the family of their nearest complete neighbours.
+**Partial** iBGCs (truncated at a contig edge) and iBGCs spanning 200 kb or more are not clustered directly; they are assigned to the family of their nearest complete neighbours. A prediction counts as partial when the stretch between its outermost gene and the contig end could hold at most one more gene (judged by the prediction's own median gene length), the same for every detector, for the reference data and for uploaded assets. MIBiG entries are never partial.
 
 ## Key family properties
 
@@ -44,7 +44,6 @@ GCF membership turns individual scores into decisions:
 
 - **Filter:** the **GCF** chip restricts the catalogue to a family and its descendants. See [Filtering](filtering.qmd).
 - **iBGC detail:** the GCF chip shows the cluster's family path; **click it** to filter the whole discovery platform to that family — a quick pivot from one cluster to its relatives.
-- **UMAP:** points are coloured by family, so a tight single-colour clump is one GCF. See [UMAP](umap.qmd).
 - **Report:** the **GCF distribution** sunburst shows how a shortlist spreads across families. See [The Report](report.qmd).
 - **Domain novelty:** computed within the leaf GCF — the fraction of a cluster's domains unique among its family members.
 
@@ -58,5 +57,5 @@ GCF membership turns individual scores into decisions:
 
 - [Scores & Metrics](scores-metrics.qmd) — domain novelty and the similarity behind clustering
 - [MIBiG & Validated BGCs](mibig-validated.qmd) — what "validated member" means
-- [UMAP](umap.qmd) · [Find Similar iBGCs](similar-ibgc.qmd)
+- [Find Similar iBGCs](similar-ibgc.qmd)
 - [Glossary](glossary.qmd)

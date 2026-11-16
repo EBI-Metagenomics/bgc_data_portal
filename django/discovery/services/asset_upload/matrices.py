@@ -5,7 +5,12 @@ These mirror :mod:`discovery.services.clustering.membership` and
 ``AssetData`` (the parsed upload) rather than querying the ORM. They emit
 sparse CSR matrices with the **same column ordering** as the persisted
 scoring cache so they can be horizontally stacked under the primary
-matrices for composite-Dice similarity.
+matrices for composite similarity.
+
+Label vocabulary: ``vocab`` selects the run's ``domain_vocab``
+(``IPR_PROJECTED`` or ``IPR_GAPFILLED``); both go through
+:func:`_kept_domain_labels`, which applies the same gap-fill rule as the
+persistent builders (``membership.gapfilled_labels``).
 
 Vocabulary handling: callers pass the primary run's ``domain_accs`` and
 ``pair_vocab`` (loaded from the scoring cache) so asset matrices use the
@@ -13,7 +18,8 @@ exact same column space; asset rows lose vocabulary not seen by the
 primary run, which is fine — that's what the projection math expects.
 
 The asset row order is determined by ``virtual_ibgcs`` — the same dict the
-projection step uses to walk results back into Redis. Row N in the
+projection step uses to walk results back into the default cache (Postgres
+DatabaseCache). Row N in the
 returned matrix corresponds to the Nth ``VirtualIbgc``.
 """
 
@@ -23,7 +29,15 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from discovery.services.clustering.membership import project_to_ipr
+from discovery.services.clustering.membership import (
+    DEFAULT_DOMAIN_SOURCES,
+    VOCAB_IPR_GAPFILLED,
+    VOCAB_IPR_PROJECTED,
+    _normalize_sources,
+    check_vocab,
+    gapfilled_labels,
+    project_to_ipr,
+)
 
 if TYPE_CHECKING:
     import scipy.sparse as sp
@@ -32,11 +46,47 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM", "TIGRFAM")
 
+def _kept_domain_labels(
+    vibgc: VirtualIbgc,
+    upper_sources: tuple[str, ...],
+    vocab: str,
+) -> list[tuple[tuple, int, str]]:
+    """``((bgc_key, cds_protein_id), dom_start, label)`` per kept asset domain.
 
-def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
-    return tuple(sorted({s.upper() for s in sources}))
+    A blank ``ref_db`` counts as a selected source (the upload may omit it),
+    as it always has for ``IPR_PROJECTED``. Not deduplicated for
+    ``IPR_PROJECTED``; :func:`gapfilled_labels` dedups for ``IPR_GAPFILLED``.
+    """
+    if check_vocab(vocab) == VOCAB_IPR_GAPFILLED:
+        rows = (
+            (
+                (d.bgc_key, d.cds_protein_id or ""),
+                d.ref_db or upper_sources[0],
+                d.domain_acc,
+                d.interpro_entry_acc,
+                d.start_position,
+                d.end_position,
+            )
+            for d in vibgc.domains
+        )
+        return gapfilled_labels(rows, sources=upper_sources)
+
+    out: list[tuple[tuple, int, str]] = []
+    for domain in vibgc.domains:
+        if not domain.domain_acc:
+            continue
+        if domain.ref_db and domain.ref_db.upper() not in upper_sources:
+            continue
+        label = project_to_ipr(domain.domain_acc, domain.interpro_entry_acc)
+        out.append(
+            (
+                (domain.bgc_key, domain.cds_protein_id or ""),
+                domain.start_position,
+                label,
+            )
+        )
+    return out
 
 
 def build_asset_domain_matrix(
@@ -44,6 +94,7 @@ def build_asset_domain_matrix(
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     domain_accs: Sequence[str],
+    vocab: str = VOCAB_IPR_PROJECTED,
 ) -> sp.csr_matrix:
     """Return the asset's iBGC × domain binary matrix on the given vocabulary.
 
@@ -68,16 +119,12 @@ def build_asset_domain_matrix(
     seen: set[tuple[int, int, str]] = set()
 
     for row_idx, vibgc in enumerate(virtual_ibgcs):
-        for domain in vibgc.domains:
-            if not domain.domain_acc:
-                continue
-            if domain.ref_db and domain.ref_db.upper() not in upper_sources:
-                continue
-            label = project_to_ipr(domain.domain_acc, domain.interpro_entry_acc)
+        for (_bgc_key, anchor), _start, label in _kept_domain_labels(
+            vibgc, upper_sources, vocab
+        ):
             col_idx = col_index.get(label)
             if col_idx is None:
                 continue
-            anchor = domain.cds_protein_id or ""
             key = (row_idx, col_idx, anchor)
             if key in seen:
                 continue
@@ -112,6 +159,7 @@ def build_asset_adjacency_pair_matrix(
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     pair_vocab: Sequence[tuple[str, str]],
+    vocab: str = VOCAB_IPR_PROJECTED,
 ) -> sp.csr_matrix:
     """Return the asset's iBGC × adjacent-domain-pair binary matrix.
 
@@ -126,7 +174,7 @@ def build_asset_adjacency_pair_matrix(
        a sorted tuple.
 
     Pairs outside the supplied ``pair_vocab`` are dropped (matches the
-    column projection used by ``reclassify._align_rows``).
+    column projection used by ``run_support._align_rows``).
     """
     import numpy as np
     import scipy.sparse as sp
@@ -147,17 +195,14 @@ def build_asset_adjacency_pair_matrix(
             cds_start_by_id[(cds.bgc_key, cds.protein_id_str)] = cds.start_position
 
         entries: list[tuple[int, int, str]] = []
-        for domain in vibgc.domains:
-            if not domain.domain_acc:
-                continue
-            if domain.ref_db and domain.ref_db.upper() not in upper_sources:
-                continue
-            cds_start = cds_start_by_id.get((domain.bgc_key, domain.cds_protein_id))
+        for cds_key, dom_start, label in _kept_domain_labels(
+            vibgc, upper_sources, vocab
+        ):
+            cds_start = cds_start_by_id.get(cds_key)
             if cds_start is None:
                 # No genomic anchor → can't sit in an adjacency.
                 continue
-            label = project_to_ipr(domain.domain_acc, domain.interpro_entry_acc)
-            entries.append((cds_start, domain.start_position, label))
+            entries.append((cds_start, dom_start, label))
 
         ordered = sorted(set(entries))
         if len(ordered) < 2:

@@ -4,7 +4,7 @@ These mirror the column layout that ``services/ingestion/loader.py``
 accepts for the persistent DB pipeline, but are kept entirely in memory.
 The asset projection step (``project.py``) reads them, builds virtual iBGCs
 using the same overlap-chain algorithm as ``integrated.py``, and
-materialises Redis payloads — nothing here ever touches the ORM.
+materialises cache payloads — nothing here ever touches the ORM.
 """
 
 from __future__ import annotations
@@ -46,8 +46,8 @@ class AssetDetector:
 class AssetBgc:
     """One BGC prediction row keyed by (contig_sha, start, end, detector_name).
 
-    ``classification_path``/``novelty_score``/``domain_novelty``/``umap_x``/
-    ``umap_y``/``gene_cluster_family`` are intentionally left at the inert
+    ``classification_path``/``novelty_score``/``domain_novelty``/
+    ``gene_cluster_family`` are intentionally left at the inert
     defaults from the TSV — the projection step recomputes them on the fly,
     so anything the user puts there in the upload is ignored.
     """
@@ -116,28 +116,6 @@ class AssetDomain:
 
 
 @dataclass
-class AssetNaturalProduct:
-    bgc_key: tuple[str, int, int, str]
-    name: str
-    smiles: str = ""
-    np_class_path: str = ""
-    structure_svg_base64: str = ""
-    morgan_fp_b64: str = ""
-
-
-@dataclass
-class AssetCdsChemOnt:
-    """Per-CDS ChemOnt classification (deepest class as emitted by CHAMOIS)."""
-
-    bgc_key: tuple[str, int, int, str]
-    protein_id_str: str
-    chemont_id: str
-    chemont_name: str = ""
-    probability: float = 0.0
-    weight: float = 0.0
-
-
-@dataclass
 class AssetData:
     """Fully-parsed in-memory asset, ready for the projection step."""
 
@@ -148,8 +126,6 @@ class AssetData:
     cds: list[AssetCds] = field(default_factory=list)
     contig_sequences: dict[str, str] = field(default_factory=dict)  # sha256 → zlib-b64
     domains: list[AssetDomain] = field(default_factory=list)
-    natural_products: list[AssetNaturalProduct] = field(default_factory=list)
-    cds_chemont: list[AssetCdsChemOnt] = field(default_factory=list)
 
     def assembly_lookup(self) -> dict[str, AssetAssembly]:
         return {a.assembly_accession: a for a in self.assemblies}
@@ -175,12 +151,6 @@ class AssetData:
             out.setdefault(c.bgc_key, []).append(c)
         return out
 
-    def nps_by_bgc(self) -> dict[tuple[str, int, int, str], list[AssetNaturalProduct]]:
-        out: dict[tuple[str, int, int, str], list[AssetNaturalProduct]] = {}
-        for n in self.natural_products:
-            out.setdefault(n.bgc_key, []).append(n)
-        return out
-
 
 # ── Limits (also referenced by validate.py) ──────────────────────────────────
 
@@ -202,9 +172,9 @@ OPTIONAL_FILES: tuple[str, ...] = (
     "cds_sequences.tsv",
     "contig_sequences.tsv",
     "domains.tsv",
-    "natural_products.tsv",
-    "cds_chemont.tsv",
 )
+# Legacy members of pre-removal bundles (CHAMOIS ChemOnt, ESM-C embeddings):
+# not allow-listed, so ``inspect_tarball`` skips them like any other extra TSV.
 ALLOWED_FILES: frozenset[str] = frozenset(REQUIRED_FILES + OPTIONAL_FILES)
 
 REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -250,21 +220,5 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
         "detector_name",
         "protein_id_str",
         "domain_acc",
-    ),
-    "natural_products.tsv": (
-        "contig_sha256",
-        "bgc_start",
-        "bgc_end",
-        "detector_name",
-        "name",
-    ),
-    "cds_chemont.tsv": (
-        "contig_sha256",
-        "bgc_start",
-        "bgc_end",
-        "detector_name",
-        "protein_id_str",
-        "chemont_id",
-        "chemont_name",
     ),
 }

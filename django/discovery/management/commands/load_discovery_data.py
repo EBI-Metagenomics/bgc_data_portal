@@ -4,20 +4,19 @@ Usage::
 
     python manage.py load_discovery_data --data-dir /path/to/tsvs/
     python manage.py load_discovery_data --data-dir /path/to/tsvs/ --truncate
-    python manage.py load_discovery_data --data-dir /path/to/tsvs/ --truncate --skip-stats
     python manage.py load_discovery_data --data-dir /path/to/tsvs/ --skip-discovery-stats
 
 By default a platform-overview ``DiscoveryStats`` refresh is enqueued after the
 load — chained onto the protein-index task so it only runs on its success.
-Suppress with ``--skip-discovery-stats``. (Distinct from ``--skip-stats``, which
-skips the in-process assembly-score / catalog computation inside the pipeline.)
+Suppress with ``--skip-discovery-stats``.
 """
 
 import logging
 import time
 
-from discovery.services.ingestion.loader import run_pipeline
 from django.core.management.base import BaseCommand
+
+from discovery.services.ingestion.loader import run_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +35,6 @@ class Command(BaseCommand):
             action="store_true",
             default=False,
             help="TRUNCATE all discovery tables before loading (full reload).",
-        )
-        parser.add_argument(
-            "--skip-stats",
-            action="store_true",
-            default=False,
-            help="Skip post-load assembly score and catalog count computation.",
         )
         parser.add_argument(
             "--skip-protein-index",
@@ -76,7 +69,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         data_dir = options["data_dir"]
         truncate = options["truncate"]
-        skip_stats = options["skip_stats"]
         skip_protein_index = options["skip_protein_index"]
         skip_discovery_stats = options["skip_discovery_stats"]
 
@@ -92,7 +84,6 @@ class Command(BaseCommand):
         run_pipeline(
             data_dir,
             truncate=truncate,
-            skip_stats=skip_stats,
             retaxonomy=options["retaxonomy"],
             allow_taxon_changes=options["allow_taxon_changes"],
         )
@@ -111,7 +102,7 @@ class Command(BaseCommand):
                 # ``truncate`` means the discovery tables were wiped, so the
                 # protein index must be rebuilt from scratch rather than appended.
                 # The task chains the DiscoveryStats refresh itself on success
-                # (no Celery canvas) when ``then_update_stats`` is set.
+                # when ``then_update_stats`` is set.
                 async_result = update_protein_search_index_task.enqueue(
                     rebuild=truncate,
                     then_update_stats=not skip_discovery_stats,

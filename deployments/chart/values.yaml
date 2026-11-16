@@ -24,7 +24,9 @@ secretName: bgc-data-portal-secret
 config:
   enabled: true
   name: app-config
-  data: {}
+  data:
+    # One reverse proxy (the ingress) in front of Django; see settings.py.
+    NINJA_NUM_PROXIES: "1"
 
 postgres:
   enabled: true
@@ -41,6 +43,8 @@ postgres:
   volumeMounts: []
   readinessProbe: {}
   livenessProbe: {}
+  containerSecurityContext: {}
+  resources: {}
 
 django:
   enabled: true
@@ -49,6 +53,7 @@ django:
   replicas: 1
   podSecurityContext: {}
   containerSecurityContext: {}
+  resources: {}
   includeSecret: true
   includeConfig: true
   workingDir: ""
@@ -58,12 +63,13 @@ django:
   volumes: []
   volumeMounts: []
   readinessProbe: {}
+  livenessProbe: {}
   service:
     type: ClusterIP
     port: 80
     targetPort: 8000
 
-# Background-task worker (django-tasks db_worker). Was the Celery worker.
+# Background-task worker (django-tasks db_worker).
 worker:
   enabled: true
   image: ""
@@ -71,6 +77,7 @@ worker:
   replicas: 1
   podSecurityContext: {}
   containerSecurityContext: {}
+  resources: {}
   includeSecret: true
   includeConfig: true
   workingDir: ""
@@ -85,6 +92,13 @@ staticNginx:
   image: nginx:alpine
   replicas: 1
   staticClaimName: ""
+  containerSecurityContext: {}
+  resources: {}
+
+# Restricts Postgres ingress to the django/worker pods. Needs a CNI that
+# enforces NetworkPolicy (k3d's default does not).
+networkPolicy:
+  enabled: false
 
 ingress:
   enabled: false
@@ -97,8 +111,3 @@ tests:
   enabled: false
   image: ""
   jobs: []
-
-# Isolated Claude Code workspace pod (dev only; enabled by the local-full flow).
-workspace:
-  enabled: false
-  image: bgc-data-portal-workspace

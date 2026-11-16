@@ -8,10 +8,10 @@
  * payload (the same field mapping the React panels use), not snapshotted from
  * the DOM, so the export does not depend on render timing.
  *
- * The full ``plotly.js-dist-min`` build is used (the app's runtime bundle is
- * the *basic* dist, which lacks the ``sunburst`` trace the report relies on).
- * It is fetched lazily from our own origin at click time, so it never bloats
- * the main app chunk.
+ * The ``plotly.js-dist-min`` build is inlined — the same package the app's
+ * runtime charts use (see ``src/lib/plotly.ts``), so both render the same
+ * trace types, including ``sunburst``. The dist file is fetched lazily from
+ * our own origin at click time, so it never bloats the main app chunk.
  */
 import type {
   CategoryCount,
@@ -54,7 +54,22 @@ function esc(v: unknown): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** ``href`` value for an untrusted URL: only absolute http(s) URLs pass
+ *  (``javascript:`` / ``data:`` and relative paths are dropped); the result is
+ *  attribute-escaped. ``null`` when the URL is unusable. */
+function safeHref(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return esc(parsed.href);
+  } catch {
+    return null;
+  }
 }
 
 function fmt(v: number | null | undefined, digits = 3): string {
@@ -296,8 +311,9 @@ function domainCompositionPanel(c: DomainCompositionSummary): string {
       // InterPro-entry-else-signature accession, linked to its InterPro page
       // (entry or member-DB) when one resolved server-side.
       const token = preferredDomainToken(d);
-      const cell = d.domain_url
-        ? `<a href="${esc(d.domain_url)}" target="_blank" rel="noopener noreferrer">${esc(
+      const href = safeHref(d.domain_url);
+      const cell = href
+        ? `<a href="${href}" target="_blank" rel="noopener noreferrer">${esc(
             token,
           )}</a>`
         : esc(token);
@@ -624,8 +640,15 @@ let cachedPlotlySource: string | null = null;
 
 async function loadPlotlySource(): Promise<string> {
   if (cachedPlotlySource) return cachedPlotlySource;
-  // Vite serves the dist file from our own origin; ``?url`` keeps the ~3.5MB
-  // library out of the main app chunk (loaded only on first HTML export).
+  // ``?url`` makes Vite emit the dist file as a static asset next to the app
+  // chunks (``assets/plotly.min.js``) and hands back its URL — the same
+  // ``plotly.js-dist-min`` package the runtime charts use (src/lib/plotly.ts).
+  // With the relative Vite ``base: "./"`` that URL is resolved at runtime
+  // against ``import.meta.url`` of the requesting chunk, i.e. relative to
+  // ``…/static/dashboard/assets/``, so the fetch works both at
+  // ``/static/dashboard/assets/plotly.min.js`` and behind the ingress prefix
+  // ``/finn-srv/mgnify-bgcs/static/dashboard/assets/plotly.min.js``. Loaded
+  // only on the first HTML export, so it never bloats the main chunk.
   const mod = (await import("plotly.js-dist-min/plotly.min.js?url")) as {
     default: string;
   };

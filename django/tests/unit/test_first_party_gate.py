@@ -11,18 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from django.test import Client
-
 
 @pytest.fixture(autouse=True)
 def _enable_gate(settings):
     settings.API_FIRST_PARTY_GATE_ENABLED = True
     settings.ALLOWED_HOSTS = ["testserver", "localhost"]
-
-
-@pytest.fixture
-def client():
-    return Client()
 
 
 # A gated GET that needs no seeded data (returns [] on an empty DB).

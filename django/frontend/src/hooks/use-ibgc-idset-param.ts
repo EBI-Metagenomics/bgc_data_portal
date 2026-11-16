@@ -28,7 +28,7 @@ export interface IbgcIdsetParam {
  * server-side when it would overflow the HTTP request line.
  *
  * Keyed on the joined id string, so react-query dedupes the mint across the
- * roster/UMAP/Variables/count consumers (one POST per unique ordering) and a
+ * roster/Variables/count consumers (one POST per unique ordering) and a
  * re-sort that changes the order mints a fresh token on demand. The mint is
  * idempotent server-side (token = hash of the ordered ids).
  */

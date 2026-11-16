@@ -98,14 +98,6 @@ def test_json_loaded_once_per_process():
     _clear_cache()
 
 
-def test_legacy_pfam_shim_returns_empty_list():
-    """``go_slim_for(domain_acc)`` is a deprecated shim; must not raise."""
-    from discovery.services.go_slim import go_slim_for
-
-    assert go_slim_for("PF00001") == []
-    assert go_slim_for("") == []
-
-
 def test_committed_map_drops_namespace_root_only_rollups():
     """Regression: terms whose only slim ancestor is the namespace root are
     dropped by ``refresh_go_slim_map.py`` rather than labelled with the bare

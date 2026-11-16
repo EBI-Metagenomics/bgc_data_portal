@@ -1,14 +1,16 @@
-"""Composite-Dice search over a user-supplied domain architecture.
+"""Composite-similarity search over a user-supplied domain architecture.
 
 Builds a single binary query row against the latest ClusteringRun's cached
 ``M_domains`` and ``M_pairs`` vocabs, then scores it against every primary
 iBGC without rebuilding the matrices:
 
-    score(r) = w · Dice(q_dom, M_domains[r]) + (1 - w) · Dice(q_pair, M_pairs[r])
+    score(r) = w · S(q_dom, M_domains[r]) + (1 - w) · S(q_pair, M_pairs[r])
 
-Dice for binary vectors collapses to ``2·|q ∩ r| / (|q| + |r|)`` — the
-numerator is a single sparse-matrix×vector product and the denominator is
-row sums (cached on the matrix) plus a scalar.
+``S`` is the run's ``similarity_metric`` (ADR 0003). Dice for binary vectors
+collapses to ``2·|q ∩ r| / (|q| + |r|)`` — the numerator is a single
+sparse-matrix×vector product and the denominator is row sums plus a scalar.
+The weighted cosine weights the query with the run's feature weights and
+takes one product with the cached ``rownorm(M · diag(w))``.
 
 Unknown accessions (not in the cache's domain vocab) are silently dropped.
 Adjacent pairs are formed via sliding window of size 2 over the input,
@@ -150,20 +152,22 @@ def architecture_search(
     k: int,
     cache: dict,
 ) -> dict:
-    """Return top-K iBGCs by composite-Dice to the supplied architecture.
+    """Return top-K iBGCs by composite similarity to the supplied architecture.
 
     Parameters
     ----------
     accs_ordered:
         Ordered domain accessions (upper-cased, already split).
     weight:
-        Sørensen-Dice share in ``[0, 1]``; ``1 - weight`` is the adjacency
-        Dice share. Values outside the range are clamped.
+        Domain-term share in ``[0, 1]``; ``1 - weight`` is the adjacency
+        share. Values outside the range are clamped.
     k:
         Maximum iBGCs returned. Clamped to ``[1, 500]`` to mirror
         ``/query/similar-ibgc/``.
     cache:
-        Output of :func:`discovery.services.clustering.ibgc_scoring.load_scoring_cache`.
+        Output of :func:`discovery.services.clustering.ibgc_scoring.load_scoring_cache`
+        or the active ``ScoringCache``; its ``similarity_metric`` (default
+        ``"dice"``) and feature weights select the kernel.
 
     Returns
     -------
@@ -212,8 +216,29 @@ def architecture_search(
     n_rows = M_dom.shape[0]
     dice_d = np.zeros(n_rows, dtype=np.float32)
     dice_a = np.zeros(n_rows, dtype=np.float32)
+    metric = cache.get("similarity_metric") or "dice"
 
-    if w > 0.0 and n_q_dom > 0:
+    if metric != "dice":
+        from common_core.clustering.similarity import weighted_rows
+
+        from discovery.services.clustering.similarity_on_demand import (
+            weighted_cosine_scores,
+        )
+
+        dom_w, pair_w = cache.get("domain_weights"), cache.get("pair_weights")
+        if dom_w is None or pair_w is None:
+            raise ValueError(f"{metric!r} scoring cache lacks its feature weights")
+        if w > 0.0 and n_q_dom > 0:
+            X_dom = cache.get("X_domains")
+            if X_dom is None:
+                X_dom = weighted_rows(M_dom, dom_w)
+            dice_d = weighted_cosine_scores(q_dom, dom_w, X_dom)
+        if w_a > 0.0 and n_q_pair > 0:
+            X_pair = cache.get("X_pairs")
+            if X_pair is None:
+                X_pair = weighted_rows(M_pair, pair_w)
+            dice_a = weighted_cosine_scores(q_pair, pair_w, X_pair)
+    elif w > 0.0 and n_q_dom > 0:
         # |q ∩ r| as 1×n vector
         num_d = np.asarray((q_dom @ M_dom.T).todense()).reshape(-1).astype(np.float32)
         row_sums_d = np.asarray(M_dom.sum(axis=1)).reshape(-1).astype(np.float32)
@@ -223,7 +248,7 @@ def architecture_search(
                 np.float32
             )
 
-    if w_a > 0.0 and n_q_pair > 0:
+    if metric == "dice" and w_a > 0.0 and n_q_pair > 0:
         num_a = np.asarray((q_pair @ M_pair.T).todense()).reshape(-1).astype(np.float32)
         row_sums_a = np.asarray(M_pair.sum(axis=1)).reshape(-1).astype(np.float32)
         denom_a = row_sums_a + float(n_q_pair)
@@ -252,7 +277,9 @@ def architecture_search(
     out_scores = [float(score[i]) for i in top_sorted.tolist()]
 
     log.info(
-        "architecture_search: q_dom=%d q_pair=%d unmatched=%d top_k=%d (w=%.2f)",
+        "architecture_search: metric=%s q_dom=%d q_pair=%d unmatched=%d top_k=%d "
+        "(w=%.2f)",
+        metric,
         n_q_dom,
         n_q_pair,
         len(unmatched),

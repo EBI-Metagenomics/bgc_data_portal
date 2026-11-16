@@ -9,7 +9,7 @@ The discovery platform works on one screen: you build a query, run it, and triag
 
 The screen has a top strip and two working columns: results on the left, detail on the right.
 
-![Top strip with the filter chips and Run Query; the results panel (left) with its three tabs; and the stacked detail panels (right).](images/overview.png)
+![Top strip with the filter chips and Run Query; the results panel (left) with its tabs; and the stacked detail panels (right).](images/overview.png)
 
 ### Top strip
 
@@ -17,11 +17,10 @@ Holds the database stat badges (validated, integrated, and predicted BGC counts;
 
 ### Results panel (left)
 
-One panel, three tabs over the same result set:
+One panel, two tabs over the same result set:
 
 - **[BGC roster](bgc-roster.qmd)** — a sortable table, one row per iBGC.
 - **[Variables map](variables-map.qmd)** — a scatter plot of any two metrics you choose.
-- **[UMAP](umap.qmd)** — a 2-D map where similar iBGCs cluster together.
 
 Switching tabs does not change which iBGCs are shown — only how they're displayed.
 
@@ -37,7 +36,7 @@ Both detail cards share the same layout; see [iBGC Detail](ibgc-detail.qmd).
 
 ## The core interactions
 
-The discovery platform is driven by clicks on iBGCs, whether in the roster or on a map:
+The discovery platform is driven by clicks on iBGCs, whether in the roster or on the Variables map:
 
 | Action | Result |
 |--------|--------|
@@ -55,10 +54,10 @@ The result panels stay empty until you press **Run Query**. This lets you assemb
 
 ## Result caps and sampling
 
-A query can match more iBGCs than the maps can plot at once. When the result set exceeds the display cap, the maps show a representative sample and the banner reports the true total. Narrow the filters to see every match, or work from your shortlist — the [report](report.qmd) export uses the iBGCs you selected, not the sampled view.
+A query can match more iBGCs than the Variables map can plot at once. When the result set exceeds the display cap, the map shows a representative sample and the banner reports the true total. Narrow the filters to see every match, or work from your shortlist — the [report](report.qmd) export uses the iBGCs you selected, not the sampled view.
 
 ## Related pages
 
-- [BGC Roster](bgc-roster.qmd) · [Variables Map](variables-map.qmd) · [UMAP](umap.qmd)
+- [BGC Roster](bgc-roster.qmd) · [Variables Map](variables-map.qmd)
 - [iBGC Detail](ibgc-detail.qmd) · [Protein Panel](protein-panel.qmd)
 - [Filtering](filtering.qmd) · [Search Overview](search-overview.qmd)

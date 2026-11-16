@@ -1,6 +1,6 @@
 """Worker-local cache of the on-disk protein DB.
 
-The DB lives at ``settings.PROTEIN_SEARCH_INDEX_DIR/proteins.faa``. Each Celery
+The DB lives at ``settings.PROTEIN_SEARCH_INDEX_DIR/proteins.faa``. Each worker
 worker process loads it lazily on first use into a ``DigitalSequenceBlock`` and
 keeps it resident. A ``VERSION`` file next to the FASTA is consulted at every
 search call; when the stamp changes, the worker reloads.
@@ -157,5 +157,5 @@ def _split_block(
     ]
 
 
-# Process-wide singleton used by the Celery search task.
+# Process-wide singleton used by the search task.
 protein_search_index = ProteinSearchIndex()

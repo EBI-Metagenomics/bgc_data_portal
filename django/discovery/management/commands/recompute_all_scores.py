@@ -1,6 +1,6 @@
 """Management command to recompute all discovery scores.
 
-By default dispatches to Celery on the ``scores`` queue.
+By default enqueues a worker task on the ``scores`` queue.
 Use ``--sync`` for synchronous execution.
 """
 
@@ -8,13 +8,13 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Recompute all discovery scores (novelty, assembly aggregates, GCF, catalogs, UMAP)"
+    help = "Recompute all discovery scores (assembly aggregates, GCF, catalogs, iBGC classes)"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--sync",
             action="store_true",
-            help="Run synchronously instead of dispatching to Celery",
+            help="Run synchronously instead of enqueuing a worker task",
         )
 
     def handle(self, *args, **options):

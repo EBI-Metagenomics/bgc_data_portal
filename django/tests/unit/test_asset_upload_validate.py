@@ -172,7 +172,7 @@ def test_rejects_bad_header_in_required_tsv():
     members = _minimal_required()
     # Drop the required "start_position" column.
     members["bgcs.tsv"] = (
-        b"contig_sha256\tdetector_name\tend_position\n" b"deadbeef\tantiSMASH:1\t100\n"
+        b"contig_sha256\tdetector_name\tend_position\ndeadbeef\tantiSMASH:1\t100\n"
     )
     raw = _build_tarball(members)
     with pytest.raises(AssetValidationError, match="missing required column"):

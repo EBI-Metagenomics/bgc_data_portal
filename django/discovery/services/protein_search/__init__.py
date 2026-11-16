@@ -1,7 +1,7 @@
 """On-disk phmmer-based protein search for the Discovery Dashboard.
 
 The reference DB is a FASTA file (sha256-keyed) plus an Easel SSI index, stored
-on the ``PROTEIN_SEARCH_INDEX_DIR`` volume so all Celery workers share it.
+on the ``PROTEIN_SEARCH_INDEX_DIR`` volume so all worker pods share it.
 A ``VERSION`` stamp next to the FASTA lets each worker detect updates and
 swap in a fresh ``DigitalSequenceBlock`` on the next query.
 

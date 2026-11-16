@@ -6,7 +6,9 @@ run in this exact order:
 1. **Pool domain hits** by joining ``ContigDomain → ContigCds → IntegratedBgc``
    on the same contig with ``bgc_range && cds_range``. Filter by ``ref_db``
    against the supplied ``sources`` set (case-insensitive). Drop rows where
-   ``domain_acc`` is empty.
+   ``domain_acc`` is empty. Under the ``IPR_GAPFILLED`` vocabulary the
+   Gene3D / PRINTS / ProSitePatterns gap-fill hits join the pool (see
+   :func:`discovery.services.clustering.membership.gapfilled_labels`).
 2. **Sort** by ``(cds_start, dom_start)``. Duplicate ``(cds_start, dom_start,
    domain_acc)`` tuples collapse to a single position.
 3. **Project** each entry's accession to ``interpro_entry_acc`` when set,
@@ -34,13 +36,12 @@ if TYPE_CHECKING:
 
 from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES,
+    VOCAB_IPR_PROJECTED,
     _normalize_sources,
-    project_to_ipr,
+    iter_ibgc_domain_labels,
 )
 
 log = logging.getLogger(__name__)
-
-CHUNK = 200_000
 
 
 def build_ibgc_adjacency_pair_matrix(
@@ -48,6 +49,7 @@ def build_ibgc_adjacency_pair_matrix(
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     ibgc_ids_subset: Sequence[int] | None = None,
     pair_vocab_subset: Sequence[tuple[str, str]] | None = None,
+    vocab: str = VOCAB_IPR_PROJECTED,
 ) -> tuple[sp.csr_matrix, np.ndarray, np.ndarray]:
     """Build the iBGC × adjacent-pair binary matrix.
 
@@ -61,47 +63,17 @@ def build_ibgc_adjacency_pair_matrix(
     import numpy as np
     import scipy.sparse as sp
 
-    from django.db import connection
-
     upper_sources = _normalize_sources(sources)
-
-    sql = """
-        SELECT i.id              AS ibgc_id,
-               lower(cc.cds_range) AS cds_start,
-               cd.start_position AS dom_start,
-               cd.domain_acc     AS domain_acc,
-               cd.interpro_entry_acc AS ipr_acc
-        FROM discovery_domain_hit cd
-        JOIN discovery_cds cc ON cc.id = cd.cds_id
-        JOIN discovery_ibgc i
-          ON i.contig_id = cc.contig_id
-         AND i.bgc_range && cc.cds_range
-        WHERE UPPER(cd.ref_db) = ANY(%s::text[])
-    """
-    params: list = [list(upper_sources)]
-    if ibgc_ids_subset is not None:
-        sql += " AND i.id = ANY(%s::bigint[])"
-        params.append(list(ibgc_ids_subset))
 
     # Sequence rows per row_id: (cds_start, dom_start, label) tuples.
     seq_rows: dict[int, list[tuple[int, int, str]]] = defaultdict(list)
-    n = 0
-    with connection.cursor() as cur:
-        cur.execute(sql, params)
-        while True:
-            rows = cur.fetchmany(CHUNK)
-            if not rows:
-                break
-            for row_id, cds_start, dom_start, acc, ipr_acc in rows:
-                if not acc:
-                    continue
-                label = project_to_ipr(acc, ipr_acc)
-                seq_rows[int(row_id)].append(
-                    (int(cds_start or 0), int(dom_start or 0), label),
-                )
-                n += 1
-            if n // 1_000_000 and (n // 1_000_000) != ((n - len(rows)) // 1_000_000):
-                log.info("build_ibgc_adjacency_pair_matrix: streamed %d rows", n)
+    for row_id, cds_start, dom_start, label in iter_ibgc_domain_labels(
+        sources=upper_sources,
+        ibgc_ids_subset=ibgc_ids_subset,
+        vocab=vocab,
+        log_name="build_ibgc_adjacency_pair_matrix",
+    ):
+        seq_rows[row_id].append((cds_start, dom_start, label))
 
     # Build per-row pair sets and accumulate global vocab.
     row_pairs: dict[int, set[tuple[str, str]]] = {}
@@ -173,11 +145,13 @@ def build_ibgc_adjacency_pair_matrix(
         pair_labels[idx] = pair
 
     log.info(
-        "build_ibgc_adjacency_pair_matrix: %d rows × %d pairs, nnz=%d (sources=%s)",
+        "build_ibgc_adjacency_pair_matrix: %d rows × %d pairs, nnz=%d "
+        "(sources=%s vocab=%s)",
         M.shape[0],
         M.shape[1],
         M.nnz,
         upper_sources,
+        vocab,
     )
     return (
         M,

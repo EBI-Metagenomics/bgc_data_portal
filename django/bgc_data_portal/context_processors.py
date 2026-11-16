@@ -16,16 +16,14 @@ from django.conf import settings
 
 def use_matomo(request):
     """
-    Context processor to determine if Matomo analytics should be used.
+    Context processor: whether Matomo analytics should be used, plus the
+    prefix-aware URL of the API docs (``api_docs_url``) shared by the templates.
     """
+    # Honour a reverse-proxy prefix (SCRIPT_NAME / FORCE_SCRIPT_NAME) so the
+    # link works both at ``/api/docs`` and ``/finn-srv/mgnify-bgcs/api/docs``.
+    api_docs_url = f"{request.META.get('SCRIPT_NAME', '')}/api/docs"
     try:
-        return {"use_matomo": settings.MATOMO_URL and settings.MATOMO_SITE_ID}
+        use_matomo = settings.MATOMO_URL and settings.MATOMO_SITE_ID
     except AttributeError:
-        return {"use_matomo": False}
-
-
-def base_path(request):
-    """
-    Context processor to provide the base path for the application.
-    """
-    return {"base_path": settings.FORCE_SCRIPT_NAME}
+        use_matomo = False
+    return {"use_matomo": use_matomo, "api_docs_url": api_docs_url}

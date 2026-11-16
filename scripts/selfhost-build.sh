@@ -41,8 +41,8 @@ WORKER_IMG="bgc-data-portal-django-worker:${TAG}"
 KCTX="k3d-${CLUSTER}"
 
 echo ">> [1/5] Build images from source (public base images only)"
-docker build -t "$DJANGO_IMG" -f django/Dockerfile        django
-docker build -t "$WORKER_IMG" -f django/Dockerfile.worker django
+docker build -t "$DJANGO_IMG" --target web django
+docker build -t "$WORKER_IMG" --target worker django
 
 echo ">> [2/5] Ensure k3d cluster '${CLUSTER}' (NodePort 30080 -> host :8080)"
 if ! k3d cluster list "$CLUSTER" >/dev/null 2>&1; then
@@ -64,7 +64,7 @@ echo ">> [5/5] helm upgrade --install (canonical chart, locally-built images)"
 # does not apply here). Override with HELM=/path/to/helm if needed.
 HELM="${HELM:-helm}"
 "$HELM" --kube-context "$KCTX" upgrade --install bgc "$CHART" \
-  -f "$CHART/values-laptop.yaml" \
+  -f "$CHART/values-laptop.yaml" -f "$CHART/values-selfhost.yaml" \
   --set django.image="$DJANGO_IMG" --set django.imagePullPolicy=IfNotPresent \
   --set worker.image="$WORKER_IMG" --set worker.imagePullPolicy=IfNotPresent \
   --namespace "$NS"

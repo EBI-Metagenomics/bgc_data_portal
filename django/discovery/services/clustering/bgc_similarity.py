@@ -1,6 +1,15 @@
 """Composite weighted-mean BGC × BGC similarity.
 
-The composite score is ``w_d · Dice(M_domains) + w_a · Dice(M_pairs)`` where:
+The composite score is ``w_d · S(M_domains) + w_a · S(M_pairs)`` where ``S``
+is the run's ``similarity_metric`` (ADR 0003):
+
+* ``"dice"`` — Sørensen–Dice on the binary rows (computed here, unchanged so
+  older runs score exactly as they always have);
+* ``"cosine_idf_enrich"`` — weighted cosine ``X Xᵀ`` with
+  ``X = rownorm(M · diag(w))`` and the run's per-feature weights; delegated to
+  :mod:`common_core.clustering.similarity`, the implementation the HPC job uses.
+
+and:
 
 * ``M_domains`` is the iBGC × domain-accession binary matrix.
 * ``M_pairs``   is the iBGC × adjacent-pair binary matrix.
@@ -16,6 +25,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import numpy as np
     import scipy.sparse as sp
 
 from discovery.services.clustering.metrics import dice_block, dice_similarity
@@ -29,8 +39,11 @@ def compute_composite_similarity(
     *,
     weights: tuple[float, float] = (0.5, 0.5),
     prune_below: float = 0.0,
+    metric: str = "dice",
+    domain_weights: np.ndarray | None = None,
+    pair_weights: np.ndarray | None = None,
 ) -> sp.csr_matrix:
-    """Return weighted-mean Sørensen–Dice similarity on two binary matrices.
+    """Return the weighted-mean composite similarity on two binary matrices.
 
     Parameters
     ----------
@@ -40,12 +53,30 @@ def compute_composite_similarity(
                 so the output range stays in [0, 1] even if the caller
                 supplies un-normalized weights.
     prune_below: drop entries strictly less than this value from the result.
+    metric, domain_weights, pair_weights:
+                ``"dice"`` (default) or ``"cosine_idf_enrich"`` with the run's
+                per-feature weights aligned to the matrix columns.
 
     Returns
     -------
     sparse CSR symmetric iBGC × iBGC similarity, diagonal zeroed.
     """
     import scipy.sparse as sp
+
+    if metric != "dice":
+        from common_core.clustering.similarity import (
+            compute_composite_similarity as compute_weighted,
+        )
+
+        return compute_weighted(
+            M_domains,
+            M_pairs,
+            weights=weights,
+            prune_below=prune_below,
+            metric=metric,
+            domain_weights=domain_weights,
+            pair_weights=pair_weights,
+        )
 
     if M_domains.shape[0] != M_pairs.shape[0]:
         raise ValueError(
@@ -104,8 +135,11 @@ def compute_composite_similarity_block(
     M_pair_ref: sp.csr_matrix,
     *,
     weights: tuple[float, float] = (0.5, 0.5),
+    metric: str = "dice",
+    domain_weights: np.ndarray | None = None,
+    pair_weights: np.ndarray | None = None,
 ) -> sp.csr_matrix:
-    """Composite weighted-mean Dice of query rows vs. reference rows only.
+    """Composite weighted-mean similarity of query rows vs. reference rows only.
 
     Equivalent to the ``[n_ref:, :n_ref]`` block of::
 
@@ -120,7 +154,9 @@ def compute_composite_similarity_block(
     set squared. The diagonal-zeroing / symmetrisation that
     ``compute_composite_similarity`` applies do not affect this off-diagonal
     block (query and reference rows are disjoint, and the closed-form Dice is
-    already symmetric), so the two paths agree to float tolerance.
+    already symmetric), so the two paths agree to float tolerance. The same
+    holds for ``metric="cosine_idf_enrich"``, whose block is
+    ``rownorm(Q·diag(w)) · rownorm(R·diag(w))ᵀ``.
 
     Returns a ``(n_query, n_ref)`` CSR matrix.
     """
@@ -141,8 +177,23 @@ def compute_composite_similarity_block(
         raise ValueError(f"weights must sum > 0, got {weights}")
     w_d, w_a = w_d / total, w_a / total
 
-    sim_d = dice_block(M_dom_query, M_dom_ref) if w_d > 0 else None
-    sim_a = dice_block(M_pair_query, M_pair_ref) if w_a > 0 else None
+    if metric == "dice":
+        sim_d = dice_block(M_dom_query, M_dom_ref) if w_d > 0 else None
+        sim_a = dice_block(M_pair_query, M_pair_ref) if w_a > 0 else None
+    else:
+        from common_core.clustering.similarity import check_metric
+
+        check_metric(metric, M_dom_ref, M_pair_ref, domain_weights, pair_weights)
+        sim_d = (
+            weighted_cosine_block(M_dom_query, M_dom_ref, domain_weights)
+            if w_d > 0
+            else None
+        )
+        sim_a = (
+            weighted_cosine_block(M_pair_query, M_pair_ref, pair_weights)
+            if w_a > 0
+            else None
+        )
 
     if sim_d is not None and sim_a is not None:
         sim = (w_d * sim_d) + (w_a * sim_a)
@@ -155,10 +206,26 @@ def compute_composite_similarity_block(
 
     sim = sim.tocsr()
     log.info(
-        "compute_composite_similarity_block: shape=%s nnz=%d weights=(%.3f, %.3f)",
+        "compute_composite_similarity_block: metric=%s shape=%s nnz=%d "
+        "weights=(%.3f, %.3f)",
+        metric,
         sim.shape,
         sim.nnz,
         w_d,
         w_a,
     )
+    return sim
+
+
+def weighted_cosine_block(
+    M_query: sp.csr_matrix, M_ref: sp.csr_matrix, w: np.ndarray
+) -> sp.csr_matrix:
+    """``(n_query, n_ref)`` weighted cosine, clipped to 1.0 like the full matrix."""
+    import numpy as np
+    from common_core.clustering.similarity import weighted_rows
+
+    sim = (weighted_rows(M_query, w) @ weighted_rows(M_ref, w).T).tocsr()
+    sim = sim.astype(np.float32)
+    np.minimum(sim.data, 1.0, out=sim.data)
+    sim.eliminate_zeros()
     return sim

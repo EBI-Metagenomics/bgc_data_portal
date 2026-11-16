@@ -7,9 +7,7 @@ from .models import (
     DashboardBgcClass,
     DashboardDomain,
     DashboardGCF,
-    IbgcNaturalProduct,
     IntegratedBgc,
-    PrecomputedStats,
     SourceBgcPrediction,
 )
 
@@ -94,15 +92,8 @@ class ClusteringRunAdmin(admin.ModelAdmin):
         "n_leaf_communities",
         "igraph_version",
         "leidenalg_version",
-        "umap_version",
         "scipy_version",
     )
-
-
-@admin.register(IbgcNaturalProduct)
-class IbgcNaturalProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "ibgc_id", "np_class_path")
-    search_fields = ("name", "smiles")
 
 
 @admin.register(DashboardBgcClass)
@@ -114,8 +105,3 @@ class DashboardBgcClassAdmin(admin.ModelAdmin):
 class DashboardDomainAdmin(admin.ModelAdmin):
     list_display = ("acc", "name", "bgc_count")
     search_fields = ("acc", "name")
-
-
-@admin.register(PrecomputedStats)
-class PrecomputedStatsAdmin(admin.ModelAdmin):
-    list_display = ("key", "updated_at")

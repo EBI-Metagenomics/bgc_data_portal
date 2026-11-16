@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import Shepherd from "shepherd.js";
+import Shepherd, { type Tour } from "shepherd.js";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { getTourSteps } from "./tour-steps";
 import "shepherd.js/dist/css/shepherd.css";
@@ -8,7 +8,7 @@ import "./shepherd-theme.css";
 export function GuidedTour() {
   const tourActive = useOnboardingStore((s) => s.tourActive);
   const endTour = useOnboardingStore((s) => s.endTour);
-  const tourRef = useRef<Shepherd.Tour | null>(null);
+  const tourRef = useRef<Tour | null>(null);
 
   useEffect(() => {
     if (!tourActive) {
@@ -24,26 +24,10 @@ export function GuidedTour() {
       defaultStepOptions: {
         scrollTo: { behavior: "smooth", block: "center" },
         cancelIcon: { enabled: true },
-        // Use Popper.js modifiers to keep popover in the viewport
-        // even when the target is inside a scrollable sidebar
-        popperOptions: {
-          modifiers: [
-            {
-              name: "preventOverflow",
-              options: {
-                boundary: "viewport",
-                padding: 16,
-              },
-            },
-            {
-              name: "offset",
-              options: {
-                offset: [0, 12],
-              },
-            },
-          ],
-        },
-      } as Shepherd.Step.StepOptions,
+        // Shepherd >= 11 positions with Floating UI (``floatingUIOptions``);
+        // its default middleware already shifts the popover into the
+        // viewport, so no positioning overrides are needed here.
+      },
     });
 
     const steps = getTourSteps();
