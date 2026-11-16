@@ -25,7 +25,7 @@ config:
     MATOMO_SITE_ID: ""
 
 django:
-  image: quay.io/microbiome-informatics/bgc-data-portal-website:3.11.1
+  image: quay.io/microbiome-informatics/bgc-data-portal-website:4.0.0
   imagePullPolicy: IfNotPresent
   command:
     - sh
@@ -52,7 +52,7 @@ django:
     periodSeconds: 30
 
 worker:
-  image: quay.io/microbiome-informatics/bgc-data-portal-website-worker:3.11.1
+  image: quay.io/microbiome-informatics/bgc-data-portal-website-worker:4.0.0
   imagePullPolicy: IfNotPresent
   podSecurityContext:
     runAsUser: 7123
