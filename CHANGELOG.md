@@ -1,5 +1,15 @@
 # Changelog
 
+## [4.0.1](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v4.0.0...bgc_data_portal-v4.0.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **portal:** return freed protein-search memory to the OS after each search ([a5e553f](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/a5e553fbafa63c5af4cc2b435fd31d69b86e58d0))
+* **portal:** return freed protein-search memory to the OS after each search ([0f070b8](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/0f070b8fe923af1768004476a83b35bed1f9a75f))
+* **portal:** stream the protein-search index instead of holding it resident ([35babaa](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/35babaac29419e1f5a51683b5174eca3130c61b7))
+* **portal:** stream the protein-search index instead of holding it resident ([ccc5540](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/ccc554068f2e9e5b2a2ba153125525d32715463c))
+
 ## [4.0.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.11.1...bgc_data_portal-v4.0.0) (2026-11-16)
 
 
