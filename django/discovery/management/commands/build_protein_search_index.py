@@ -11,7 +11,7 @@ Usage::
 The artifacts land at ``settings.PROTEIN_SEARCH_INDEX_DIR``:
 
     proteins.faa       FASTA, sha256 as record id
-    VERSION            monotonic integer; workers reload when it changes
+    VERSION            monotonic integer, bumped after each build
 """
 
 from __future__ import annotations

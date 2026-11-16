@@ -2,18 +2,33 @@
 
 from __future__ import annotations
 
+import contextlib
+import ctypes
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 
 from pyhmmer.easel import Alphabet, DigitalSequence, DigitalSequenceBlock, TextSequence
 from pyhmmer.hmmer import phmmer
 
-from .index import _split_block, protein_search_index
+from .index import DEFAULT_BLOCK_SIZE, _split_block, iter_index_blocks
 
 log = logging.getLogger(__name__)
 
 QUERY_NAME = b"query"
+
+
+def _release_freed_memory() -> None:
+    """Hand freed heap pages back to the OS (glibc ``malloc_trim``).
+
+    Each scan thread allocates its own phmmer pipeline and blocks; glibc keeps
+    the freed arenas, so without this a worker idles at its last search's peak
+    (1–2 GiB at 4–8 threads) instead of ~150 MiB. No-op where glibc is absent.
+    """
+    with contextlib.suppress(OSError, AttributeError):
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+
 
 # Permissive E-value passed to phmmer itself. We do not filter on e-value;
 # the real cutoffs are applied below via bitscore / %identity / query coverage.
@@ -134,6 +149,7 @@ def phmmer_search(
     min_qcov: float = 70.0,
     cpus: int = 1,
     block: DigitalSequenceBlock | None = None,
+    block_size: int = DEFAULT_BLOCK_SIZE,
 ) -> dict[str, ProteinHitMetrics]:
     """Run phmmer with ``sequence`` against the on-disk protein DB and return
     per-target metrics for hits that pass all three thresholds.
@@ -152,15 +168,16 @@ def phmmer_search(
         Drop hits whose query coverage (union of domain envelopes / query
         length) is below this. 0–100.
     cpus
-        Number of threads to split the scan across. The target DB is divided
-        into ``cpus`` slices, each scanned on its own thread; results are
-        merged. Default 1 (no split). One phmmer search at a time is assumed
-        (one task at a time per worker), so these threads have the pod to
-        themselves.
+        Number of threads scanning blocks in parallel. The DB is streamed from
+        disk in ``block_size`` blocks; at most ``cpus`` scans run at once and
+        one more block is read ahead, so peak memory is about ``cpus + 1``
+        blocks. Default 1. One phmmer search at a time is assumed (one task at
+        a time per worker), so these threads have the pod to themselves.
     block
-        Override the target block (used by tests). When omitted, loads the
-        shared worker-local index. When passed, it is split on the fly; the
-        index path uses the singleton's cached split.
+        Override the target (used by tests): an in-memory block, split into
+        ``cpus`` slices instead of streaming the on-disk index.
+    block_size
+        Sequences per streamed block (ignored when ``block`` is given).
 
     Returns
     -------
@@ -172,14 +189,12 @@ def phmmer_search(
     query_len = len(seq)
     alphabet = Alphabet.amino()
 
-    # Target slices for the (optionally parallel) scan. Prefer the index's
-    # cached split; fall back to splitting a test-supplied block on the fly.
+    # Stream the on-disk index block by block (bounded memory), or slice a
+    # test-supplied in-memory block.
     if block is not None:
-        target_blocks = _split_block(block, cpus)
-    elif cpus > 1:
-        target_blocks = protein_search_index.get_blocks(cpus)
+        target_blocks = iter(_split_block(block, cpus))
     else:
-        target_blocks = [protein_search_index.get_block()]
+        target_blocks = iter_index_blocks(block_size)
 
     query_seq = TextSequence(name=QUERY_NAME, sequence=seq).digitize(alphabet)
 
@@ -193,19 +208,27 @@ def phmmer_search(
             min_qcov=min_qcov,
         )
 
-    if len(target_blocks) == 1:
-        partials = [scan(target_blocks[0])]
-    else:
-        with ThreadPoolExecutor(max_workers=len(target_blocks)) as ex:
-            partials = list(ex.map(scan, target_blocks))
-
-    # Merge per-chunk results, keeping the higher-bitscore record per sha256.
+    # Merge per-block results, keeping the higher-bitscore record per sha256.
     results: dict[str, ProteinHitMetrics] = {}
-    for partial in partials:
+
+    def merge(partial: dict[str, ProteinHitMetrics]) -> None:
         for sha256, metrics in partial.items():
             existing = results.get(sha256)
             if existing is None or metrics.bitscore > existing.bitscore:
                 results[sha256] = metrics
+
+    workers = max(1, cpus)
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        in_flight: deque[Future] = deque()
+        for target in target_blocks:
+            in_flight.append(ex.submit(scan, target))
+            # Bound the blocks held in memory: wait for the oldest scan before
+            # reading further once every thread is busy.
+            if len(in_flight) >= workers:
+                merge(in_flight.popleft().result())
+        while in_flight:
+            merge(in_flight.popleft().result())
+    _release_freed_memory()
 
     log.info(
         "phmmer_search: query_len=%d min_bitscore=%g min_pident=%g min_qcov=%g hits=%d",
