@@ -36,7 +36,7 @@
     "shepherd.js": "^14.0.0",
     "sonner": "^1.7.0",
     "tailwind-merge": "^2.6.0",
-    "zustand": "^5.0.0"
+    "zustand": "^5.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
