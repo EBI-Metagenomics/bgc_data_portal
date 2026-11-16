@@ -215,7 +215,9 @@ PROTEIN_SEARCH_INDEX_DIR: Path = Path(
 # One worker handles one task at a time, but that task uses all the pod's
 # cores. NB: pyhmmer's own `cpus=` param
 # parallelises across *queries*, so it does nothing for a single query — the
-# split is done by us. Defaults to the pod's core count, capped at 8.
+# split is done by us. Defaults to the pod's core count, capped at 8. Each
+# thread costs ~250 MiB at peak (phmmer pipeline + a streamed block): 4 threads
+# peak at ~1.2 GiB, 8 at ~2.3 GiB on the 2026-11 index (5.04 M proteins).
 PROTEIN_SEARCH_CPUS: int = int(
     os.environ.get("PROTEIN_SEARCH_CPUS", str(min((os.cpu_count() or 1), 8)))
 )

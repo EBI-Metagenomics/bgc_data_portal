@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import ctypes
 import logging
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -15,6 +17,18 @@ from .index import DEFAULT_BLOCK_SIZE, _split_block, iter_index_blocks
 log = logging.getLogger(__name__)
 
 QUERY_NAME = b"query"
+
+
+def _release_freed_memory() -> None:
+    """Hand freed heap pages back to the OS (glibc ``malloc_trim``).
+
+    Each scan thread allocates its own phmmer pipeline and blocks; glibc keeps
+    the freed arenas, so without this a worker idles at its last search's peak
+    (1–2 GiB at 4–8 threads) instead of ~150 MiB. No-op where glibc is absent.
+    """
+    with contextlib.suppress(OSError, AttributeError):
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+
 
 # Permissive E-value passed to phmmer itself. We do not filter on e-value;
 # the real cutoffs are applied below via bitscore / %identity / query coverage.
@@ -214,6 +228,7 @@ def phmmer_search(
                 merge(in_flight.popleft().result())
         while in_flight:
             merge(in_flight.popleft().result())
+    _release_freed_memory()
 
     log.info(
         "phmmer_search: query_len=%d min_bitscore=%g min_pident=%g min_qcov=%g hits=%d",
