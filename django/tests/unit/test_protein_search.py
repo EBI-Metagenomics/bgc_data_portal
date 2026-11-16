@@ -23,8 +23,8 @@ from discovery.services.protein_search.build import (
 )
 from discovery.services.protein_search.index import (
     IndexNotBuiltError,
-    ProteinSearchIndex,
     _split_block,
+    iter_index_blocks,
 )
 from discovery.services.protein_search.search import (
     ProteinHitMetrics,
@@ -290,70 +290,75 @@ def test_phmmer_search_chunked_matches_unchunked(built_index):
         assert pm.qcoverage == pytest.approx(m.qcoverage)
 
 
-# ── ProteinSearchIndex (worker-local cache) ────────────────────────────────────
+# ── Streaming the on-disk index ────────────────────────────────────────────────
 
 
-def test_index_not_built_raises_clear_error(index_dir, monkeypatch):
-    """Calling get_block() before the FASTA exists must raise IndexNotBuiltError."""
-    monkeypatch.setattr(
-        "discovery.services.protein_search.build.settings.PROTEIN_SEARCH_INDEX_DIR",
-        index_dir,
-    )
-    psi = ProteinSearchIndex()
+@pytest.fixture
+def index_settings(monkeypatch):
+    """Point PROTEIN_SEARCH_INDEX_DIR at a test directory."""
+
+    def _point(path):
+        monkeypatch.setattr(
+            "discovery.services.protein_search.build.settings.PROTEIN_SEARCH_INDEX_DIR",
+            path,
+        )
+
+    return _point
+
+
+def test_index_not_built_raises_clear_error(index_dir, index_settings):
+    """Searching before the FASTA exists must raise IndexNotBuiltError."""
+    index_settings(index_dir)
     with pytest.raises(IndexNotBuiltError):
-        psi.get_block()
+        next(iter_index_blocks())
+    with pytest.raises(IndexNotBuiltError):
+        phmmer_search(_PROTEIN_A)
 
 
-def test_index_reloads_on_version_bump(built_index, monkeypatch):
-    """Bumping the VERSION stamp triggers a reload on the next get_block()."""
+@pytest.mark.parametrize("block_size", [1, 2, 3, 100])
+def test_iter_index_blocks_yields_every_sequence_once(built_index, block_size):
+    """Streaming partitions the FASTA into ≤block_size blocks, in file order."""
+    paths, records = built_index
+    blocks = list(iter_index_blocks(block_size, base_dir=paths.base_dir))
+    assert all(0 < len(b) <= block_size for b in blocks)
+    names = [s.name.decode("ascii") for b in blocks for s in b]
+    assert names == [sha for sha, _ in records]
+
+
+@pytest.mark.parametrize("cpus", [1, 2, 4])
+@pytest.mark.parametrize("block_size", [1, 2, 100])
+def test_streamed_search_matches_in_memory_search(
+    built_index, index_settings, cpus, block_size
+):
+    """Streaming the index (any block size, any thread count) returns the same
+    hits and metrics as a scan of the whole block held in memory."""
     paths, _ = built_index
-    monkeypatch.setattr(
-        "discovery.services.protein_search.build.settings.PROTEIN_SEARCH_INDEX_DIR",
-        paths.base_dir,
-    )
-    psi = ProteinSearchIndex()
+    index_settings(paths.base_dir)
+    common = {"min_bitscore": 0.0, "min_pident": 0.0, "min_qcov": 0.0}
 
-    block_v1 = psi.get_block()
-    v1 = psi.loaded_version()
-    assert v1 > 0
-    # Same call again returns the same cached block, no reload.
-    assert psi.get_block() is block_v1
-    assert psi.loaded_version() == v1
+    expected = phmmer_search(_PROTEIN_A, cpus=1, block=_load_block(paths), **common)
+    streamed = phmmer_search(_PROTEIN_A, cpus=cpus, block_size=block_size, **common)
 
-    # Append a new protein and bump version.
-    extra_sha = _sha256("MYAAAAA")
-    with paths.fasta.open("a") as fh:
-        fh.write(f">{extra_sha}\nMYAAAAA\n")
-    v2 = bump_version(paths)
-    assert v2 > v1
-
-    block_v2 = psi.get_block()
-    assert psi.loaded_version() == v2
-    assert block_v2 is not block_v1
-    assert len(block_v2) == len(block_v1) + 1
+    assert set(streamed) == set(expected)
+    for sha, m in expected.items():
+        assert streamed[sha].bitscore == pytest.approx(m.bitscore)
+        assert streamed[sha].pident == pytest.approx(m.pident)
+        assert streamed[sha].qcoverage == pytest.approx(m.qcoverage)
 
 
-def test_get_blocks_caches_and_invalidates_on_reload(built_index, monkeypatch):
-    """get_blocks() caches the split for a given chunk count and rebuilds it
-    only when the underlying block reloads."""
+def test_search_sees_appended_proteins_without_reload(built_index, index_settings):
+    """Each search reads the FASTA as it is on disk, so an appended protein is
+    found by the next query with no reload step."""
     paths, _ = built_index
-    monkeypatch.setattr(
-        "discovery.services.protein_search.build.settings.PROTEIN_SEARCH_INDEX_DIR",
-        paths.base_dir,
-    )
-    psi = ProteinSearchIndex()
+    index_settings(paths.base_dir)
+    extra = _PROTEIN_B[::-1]
+    extra_sha = _sha256(extra)
+    assert extra_sha not in phmmer_search(extra, block_size=1)
 
-    chunks_a = psi.get_blocks(2)
-    assert len(chunks_a) <= 2
-    # Same request → same cached list object (no re-split).
-    assert psi.get_blocks(2) is chunks_a
-    # n_chunks=1 short-circuits to the whole block, never the cached split.
-    assert psi.get_blocks(1) == [psi.get_block()]
-
-    # A version bump must invalidate the cached split.
-    extra_sha = _sha256("MYAAAAA")
     with paths.fasta.open("a") as fh:
-        fh.write(f">{extra_sha}\nMYAAAAA\n")
+        fh.write(f">{extra_sha}\n{extra}\n")
     bump_version(paths)
-    chunks_b = psi.get_blocks(2)
-    assert chunks_b is not chunks_a
+
+    assert extra_sha in phmmer_search(extra, block_size=1)
+    # Appended, not replaced: the three original records are still streamed.
+    assert len(list(iter_index_blocks(1, base_dir=paths.base_dir))) == 4

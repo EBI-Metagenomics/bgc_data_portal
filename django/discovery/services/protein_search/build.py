@@ -5,9 +5,9 @@ Layout (all under ``settings.PROTEIN_SEARCH_INDEX_DIR``)::
     proteins.faa        FASTA, one record per unique protein_sha256
     VERSION             monotonic integer, bumped after each successful write
 
-Workers stat ``VERSION`` and reload their in-memory block when it changes.
-The FASTA is read sequentially into a ``DigitalSequenceBlock`` at load time;
-no random-access index is required.
+Each search streams the FASTA sequentially in fixed-size blocks
+(``index.iter_index_blocks``), so a rewritten file is used by the next query;
+no random-access index or worker reload is required.
 """
 
 from __future__ import annotations
