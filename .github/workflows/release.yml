@@ -143,7 +143,7 @@ jobs:
 
       - name: Build and Push Docker Image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./django
           file: ./django/Dockerfile
